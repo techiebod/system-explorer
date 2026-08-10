@@ -122,7 +122,19 @@ def _disk_counters() -> dict:
         if DISKSTATS_SKIP.match(name) or not os.path.isdir(f"/sys/block/{name}"):
             continue
         out[name] = {"ReadBytes": int(fields[5]) * 512,
-                     "WriteBytes": int(fields[9]) * 512}
+                     "WriteBytes": int(fields[9]) * 512,
+                     # Field 10 (ms spent doing I/O) is what separates a
+                     # saturated device from a merely busy one: bytes/s cannot
+                     # tell them apart, because a small-random workload
+                     # saturates a disk at a throughput a sequential one would
+                     # call idle. A counter, not a rate — the client derives
+                     # utilisation across its own poll window, exactly as it
+                     # already does for bytes (SPEC rules 4/12).
+                     "IoTicksMs": int(fields[12]),
+                     # Weighted time in queue: rises faster than IoTicksMs
+                     # when requests are queueing, so the pair distinguishes
+                     # "busy" from "backed up".
+                     "WeightedIoMs": int(fields[13])}
     return out
 
 

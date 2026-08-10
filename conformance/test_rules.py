@@ -133,6 +133,23 @@ CASES = [
     ("unit-healthy", units.unit_opinions,
      {"ActiveState": "active", "SubState": "running", "NRestarts": 0},
      set()),
+    # Per-unit PSI: attribution for host-level stall. A running unit is not
+    # "healthy" if it spends the minute waiting on a saturated device.
+    ("unit-io-stalled", units.unit_opinions,
+     {"ActiveState": "active", "SubState": "running",
+      "PsiIoFullAvg60": units.UNIT_IO_STALL_WARN},
+     {("unit-io-stall", "warn")}),
+    ("unit-memory-stalled", units.unit_opinions,
+     {"ActiveState": "active", "SubState": "running",
+      "PsiMemoryFullAvg60": units.UNIT_MEMORY_STALL_WARN},
+     {("unit-memory-stall", "warn")}),
+    # Below threshold, and a kernel with PSI reporting genuine calm: the
+    # facts are present and the unit stays silent, which is what makes the
+    # opinion mean something when it does fire.
+    ("unit-not-stalled", units.unit_opinions,
+     {"ActiveState": "active", "SubState": "running",
+      "PsiIoFullAvg60": 0.0, "PsiCpuSomeAvg60": 0.0, "PsiMemoryFullAvg60": 0.0},
+     set()),
 
     # docker containers.
     ("container-restarting", docker.container_opinions,
