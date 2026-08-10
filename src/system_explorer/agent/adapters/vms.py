@@ -25,14 +25,41 @@ STATES = {0: "nostate", 1: "running", 2: "blocked", 3: "paused",
 REFERENCE = ["virsh list --all", "virsh dominfo <name>", "virsh dumpxml <name>"]
 
 
+# Which source an address came from is a provenance fact the operator needs:
+# a lease is a record with a lifetime, ARP is a cache that expires, and the
+# guest agent sees interfaces the host cannot.
+ADDRESS_SOURCE_NOTES = {
+    "guest-agent": None,
+    "dhcp-lease": "IP addresses from the DHCP lease libvirt holds for this "
+                  "guest (the guest agent needs more than read-only access).",
+    "arp": "IP addresses from the host ARP table, which expires when a guest "
+           "goes idle (the guest agent needs more than read-only access).",
+}
+
+
 def _interface_addresses(dom) -> tuple[dict[str, list[str]], str | None]:
-    """IPs by MAC. Guest-agent data is richest but usually needs more than a
-    read-only connection; the host ARP table covers bridged guests. Returns
-    (mac -> ips, note-when-degraded)."""
+    """IPs by MAC, from the best source that will answer.
+
+    Three sources, deliberately in this order (mac -> ips, note-when-degraded):
+
+    - guest-agent is richest (every interface the guest itself sees), and
+      libvirt refuses it outright on a read-only connection: "operation
+      forbidden: read only access prevents virDomainInterfaceAddresses". This
+      agent only ever opens read-only, so in practice it never answers — it
+      stays first so a future privileged deployment gets the better data.
+    - DHCP lease is authoritative for guests on a libvirt-managed network and
+      works read-only. It was missing, and its absence is what made a running
+      guest show a blank address: the guest had gone quiet, its ARP entry
+      aged out, and the row emptied while dnsmasq still held a valid lease.
+      A lease is a statement of record with a lifetime; ARP is a cache.
+    - ARP covers guests on a bridge this host does not manage a lease file
+      for, which the lease source cannot see at all.
+    """
     import libvirt
 
     for source, label in (
         (libvirt.VIR_DOMAIN_INTERFACE_ADDRESSES_SRC_AGENT, "guest-agent"),
+        (libvirt.VIR_DOMAIN_INTERFACE_ADDRESSES_SRC_LEASE, "dhcp-lease"),
         (libvirt.VIR_DOMAIN_INTERFACE_ADDRESSES_SRC_ARP, "arp"),
     ):
         try:
@@ -48,11 +75,14 @@ def _interface_addresses(dom) -> tuple[dict[str, list[str]], str | None]:
             if ips:
                 by_mac.setdefault(mac, []).extend(ips)
         if by_mac:
-            note = None if label == "guest-agent" else (
-                "IP addresses from the host ARP table "
-                "(guest agent needs more than read-only access).")
-            return by_mac, note
-    return {}, "No IP source available (no guest agent access, nothing in ARP)."
+            return by_mac, ADDRESS_SOURCE_NOTES.get(label)
+    # Say which sources were asked, so a blank address column is traceable
+    # rather than mysterious — an empty list here means "nobody could tell us",
+    # not "this guest has no address".
+    return {}, ("No address source answered: the guest agent is unavailable on "
+                "a read-only libvirt connection, no DHCP lease is held for this "
+                "guest, and the host ARP table has no entry for it (an idle "
+                "guest's entry expires).")
 
 
 def _probe_connection() -> None:

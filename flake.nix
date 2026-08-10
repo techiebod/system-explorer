@@ -51,12 +51,20 @@
           lib.mkDefault self.packages.${pkgs.stdenv.hostPlatform.system}.se-hub;
       };
 
-      # The conformance suite (SPEC section 11) already runs inside every
-      # package build via pytestCheckHook, so the check is the build — this
-      # keeps `nix flake check` meaningful without running the suite twice
-      # against a different sys.path than the installed package sees.
+      # Two checks, deliberately different in kind.
+      #
+      # conformance is the contract against the source (SPEC section 11). It
+      # already runs inside every package build via pytestCheckHook, so the
+      # check IS the build — that way the suite runs against the same sys.path
+      # the installed package sees, rather than a second, luckier one.
+      #
+      # module boots a NixOS VM, installs via nixosModules.default with nothing
+      # but `enable = true`, and asserts the install path a stranger is told to
+      # use plus honest degradation on a host that has almost nothing. It needs
+      # KVM, so it is a Linux-only check.
       checks = forEach (pkgs: {
         conformance = self.packages.${pkgs.stdenv.hostPlatform.system}.system-explorer;
+        module = pkgs.callPackage ./nix/tests/module.nix { inherit self; };
       });
 
       devShells = forEach (pkgs: {

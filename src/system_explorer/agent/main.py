@@ -424,7 +424,12 @@ async def changes(since: str | None = None, subsystem: str | None = None) -> dic
     return out
 
 
-async def _unavailable_reason(adapter, collection: str) -> str | None:
+# Returned when the adapter has never heard of the name at all — a client
+# error (404), as distinct from a collection it knows and cannot answer.
+UNKNOWN_COLLECTION = object()
+
+
+async def _collection_state(adapter, collection: str):
     """Why this collection cannot be answered here, or None if it can.
 
     SPEC section 2 rule 7: an absence is reported with a reason, never as a
@@ -445,28 +450,39 @@ async def _unavailable_reason(adapter, collection: str) -> str | None:
     capabilities, /v1/status, the UI and the snapshot task all declined it
     correctly (ROADMAP section 5, 2026-08-10). The raw collection route is
     the one an MCP client reaches first.
+
+    Returns UNKNOWN_COLLECTION for a name the subsystem does not have at all.
+    The unavailability check comes FIRST, deliberately: a collection the
+    capability names with a reason is one the agent knows about, so it must
+    answer with that reason even when it is not in collections() — which is
+    how a planned-but-unimplemented collection (network/conntrack-summary)
+    stops answering "unknown collection" while a perfectly good explanation
+    sits one call away.
     """
     try:
         cap = await adapter.capability()
     except Exception as exc:  # noqa: BLE001 - a broken adapter is itself a fact
         return f"capability discovery failed: {type(exc).__name__}: {exc}"
+    reason = cap.get("unavailable_collections", {}).get(collection)
+    if reason is not None:
+        return reason
+    if collection not in adapter.collections():
+        return UNKNOWN_COLLECTION
     if not cap.get("available", False):
         return cap.get("reason") or "subsystem unavailable"
-    return cap.get("unavailable_collections", {}).get(collection)
+    return None
 
 
-def _known_collection(adapter, collection: str) -> None:
-    """404 for a name the adapter does not serve, before availability is
-    considered — an unknown collection is a client error, not an absence."""
-    if collection not in adapter.collections():
-        raise HTTPException(status_code=404, detail=f"unknown collection: {collection}")
+def _unknown(collection: str) -> HTTPException:
+    return HTTPException(status_code=404, detail=f"unknown collection: {collection}")
 
 
 @app.get("/v1/{subsystem}/{collection}/{object_id:path}/evidence")
 async def evidence(subsystem: str, collection: str, object_id: str) -> dict:
     adapter = _adapter(subsystem)
-    _known_collection(adapter, collection)
-    reason = await _unavailable_reason(adapter, collection)
+    reason = await _collection_state(adapter, collection)
+    if reason is UNKNOWN_COLLECTION:
+        raise _unknown(collection)
     if reason is not None:
         return {"object_id": object_id, "captured_at": env.utc_now(), "error": reason}
     try:
@@ -486,8 +502,9 @@ async def evidence(subsystem: str, collection: str, object_id: str) -> dict:
 @app.get("/v1/{subsystem}/{collection}/{object_id:path}")
 async def get_object(subsystem: str, collection: str, object_id: str) -> dict:
     adapter = _adapter(subsystem)
-    _known_collection(adapter, collection)
-    reason = await _unavailable_reason(adapter, collection)
+    reason = await _collection_state(adapter, collection)
+    if reason is UNKNOWN_COLLECTION:
+        raise _unknown(collection)
     if reason is not None:
         return env.observation(
             subsystem,
@@ -515,9 +532,10 @@ async def get_object(subsystem: str, collection: str, object_id: str) -> dict:
 @app.get("/v1/{subsystem}/{collection}")
 async def get_collection(subsystem: str, collection: str, request: Request) -> dict:
     adapter = _adapter(subsystem)
-    _known_collection(adapter, collection)
+    reason = await _collection_state(adapter, collection)
+    if reason is UNKNOWN_COLLECTION:
+        raise _unknown(collection)
     filters, limit, cursor = _query(request)
-    reason = await _unavailable_reason(adapter, collection)
     if reason is not None:
         return env.collection_page(
             subsystem, collection,

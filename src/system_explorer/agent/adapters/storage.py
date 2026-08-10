@@ -357,8 +357,15 @@ class Adapter:
         self._zfs_probed_at: float = 0.0
 
     def collections(self) -> list[str]:
-        base = ["block-devices", "mounts", "arrays"]
-        return base + (["pools", "datasets", "lookups"] if self._zfs else [])
+        # Static, like every other adapter: this is what the subsystem HAS,
+        # not what it can answer on this host. Availability belongs to
+        # capability() alone. While this list was conditional, a host without
+        # OpenZFS got two silent absences instead of one honest reason —
+        # /v1/storage/pools answered 404 "unknown collection" although the
+        # reason existed, and /v1/status omitted the row altogether rather
+        # than declining it. Both are exactly what SPEC section 2 rule 7
+        # forbids, in the roll-up whose whole job is honest absence.
+        return ["block-devices", "mounts", "arrays", "pools", "datasets", "lookups"]
 
     async def _zfs_readable(self) -> tuple[bool, str]:
         """zpool being on PATH says nothing about /dev/zfs permissions or a
@@ -377,20 +384,19 @@ class Adapter:
         return self._zfs_probe
 
     async def capability(self) -> dict:
-        cap: dict = {"available": True, "collections": self.collections()}
+        unavailable: dict[str, str] = {}
         if not self._zfs:
             reason = "zpool not on PATH (OpenZFS not installed on this host)"
-            cap["unavailable_collections"] = {
-                "pools": reason, "datasets": reason, "lookups": reason,
-            }
+            unavailable = {"pools": reason, "datasets": reason, "lookups": reason}
         else:
             ok, reason = await self._zfs_readable()
             if not ok:
-                cap["collections"] = ["block-devices", "mounts", "arrays"]
-                cap["unavailable_collections"] = {
-                    "pools": reason, "datasets": reason, "lookups": reason,
-                }
-        return cap
+                unavailable = {"pools": reason, "datasets": reason, "lookups": reason}
+        return {
+            "available": True,
+            "collections": [c for c in self.collections() if c not in unavailable],
+            "unavailable_collections": unavailable,
+        }
 
     async def _zpool_member_map(self) -> dict[str, str]:
         """kname -> pool name; empty when zfs is absent or unreadable."""
