@@ -10,11 +10,17 @@ the top of `systemctl status`: slices nest, services and scopes hang from
 their slice, and everything else (sockets, timers, targets, …) follows flat,
 grouped by type. Slice membership is one pipelined property read per
 service/scope; the hierarchy itself is native, not invented here.
+
+Evidence redaction: a service's Environment= carries credentials as a matter
+of routine, so evidence keeps the variable names and redacts the values, and
+the envelope records which paths were altered — the same contract the docker
+adapter applies to Config.Env.
 """
 
 from __future__ import annotations
 
 import asyncio
+import copy
 import os
 
 import anyio
@@ -161,6 +167,40 @@ TYPED_IFACES = {
 SERVICE_FACTS = ["MainPID", "NRestarts", "Result", "TasksCurrent"]
 
 REFERENCE = ["systemctl list-units --all", "systemctl status <unit>", "systemctl show <unit>"]
+
+
+# Unit properties whose values are secrets-adjacent by construction. A
+# service's Environment= is the obvious one: sops-provisioned credentials,
+# API tokens and database URLs land there routinely, and the raw D-Bus
+# property was being served verbatim on an unauthenticated API — the exact
+# exposure the docker adapter already refuses for Config.Env.
+#
+# Same contract as docker.py: keep the variable NAMES, which are what make
+# evidence diagnostically useful ("is DATABASE_URL even set?"), redact the
+# values, and declare in the envelope that redaction happened. Redaction
+# that hides its own existence would break the provenance contract.
+SECRET_LIST_PROPERTIES = ("Environment", "UnsetEnvironment", "PassEnvironment")
+# EnvironmentFiles carries (path, ignore-errors) tuples — paths are not
+# secret and naming them is how an operator finds the credential source.
+
+
+def _redact_secrets(payload: dict) -> tuple[dict, list[str]]:
+    """Redact secret-bearing property values. Returns (copy, altered paths)."""
+    out = copy.deepcopy(payload)
+    paths: list[str] = []
+    for iface, props in out.items():
+        if not isinstance(props, dict):
+            continue
+        for key in SECRET_LIST_PROPERTIES:
+            value = props.get(key)
+            if isinstance(value, list) and value:
+                props[key] = [
+                    f"{str(item).split('=', 1)[0]}=«redacted»" if "=" in str(item)
+                    else str(item)
+                    for item in value
+                ]
+                paths.append(f"{iface}.{key}")
+    return out, paths
 
 
 def _unit_type(name: str) -> str:
@@ -356,10 +396,16 @@ class Adapter:
     async def get_evidence(self, collection: str, object_id: str) -> dict:
         self._check(collection)
         name, unit, typed = await self._unit_props(object_id)
-        return {
+        payload = {UNIT_IFACE: unit,
+                   **({TYPED_IFACES[_unit_type(name)]: typed} if typed else {})}
+        payload, redacted = _redact_secrets(payload)
+        out = {
             "object_id": object_id,
             "captured_at": env.utc_now(),
             "interface": SYSTEMD,
             "method": "org.freedesktop.DBus.Properties.GetAll",
-            "payload": {UNIT_IFACE: unit, **({TYPED_IFACES[_unit_type(name)]: typed} if typed else {})},
+            "payload": payload,
         }
+        if redacted:
+            out["redacted"] = redacted
+        return out
