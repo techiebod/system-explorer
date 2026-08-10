@@ -1,0 +1,36 @@
+{
+  "schema": "se.observation/1",
+  "host": { "machine_id": "0123456789abcdef0123456789abcdef", "hostname": "host-a" },
+  "subsystem": "units",
+  "object": { "id": "unit:sshd.service", "type": "service", "native_id": "sshd.service", "name": "sshd.service" },
+  "observed_at": "2026-08-07T15:04:05Z",
+  "status": "ok",
+  "source": {
+    "adapter": "systemd-dbus",
+    "interface": "org.freedesktop.systemd1",
+    "method": "org.freedesktop.DBus.Properties.GetAll",
+    "reference_commands": ["systemctl status sshd.service", "systemctl show sshd.service"]
+  },
+  "facts": {
+    "LoadState": "loaded",
+    "ActiveState": "active",
+    "SubState": "running",
+    "UnitFileState": "enabled",
+    "MainPID": 812,
+    "NRestarts": 0,
+    "ExecMainStartTimestamp": "2026-08-07T06:12:31Z"
+  },
+  "opinions": [
+    {
+      "key": "unit-health",
+      "level": "info",
+      "message": "Unit is active and running.",
+      "evidence": ["ActiveState", "SubState"]
+    }
+  ],
+  "relationships": [
+    { "type": "after", "direction": "out", "target": { "id": "unit:network-online.target" } },
+    { "type": "wants", "direction": "in", "target": { "id": "unit:multi-user.target" } }
+  ],
+  "evidence_ref": "/v1/units/units/unit:sshd.service/evidence"
+}

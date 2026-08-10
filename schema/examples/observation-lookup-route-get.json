@@ -1,0 +1,32 @@
+{
+  "schema": "se.observation/1",
+  "host": { "machine_id": "0123456789abcdef0123456789abcdef", "hostname": "host-b" },
+  "subsystem": "network",
+  "object": {
+    "id": "lookup:route-get/1.1.1.1",
+    "type": "lookup",
+    "native_id": "route-get/1.1.1.1"
+  },
+  "observed_at": "2026-08-08T20:00:00Z",
+  "status": "ok",
+  "source": {
+    "adapter": "ip-json",
+    "interface": "ip -j route get (rtnetlink)",
+    "reference_commands": ["ip route get 1.1.1.1"]
+  },
+  "facts": {
+    "Destination": "1.1.1.1",
+    "RouteFound": true,
+    "Gateway": "192.0.2.1",
+    "Device": "br0",
+    "PreferredSource": "192.0.2.85",
+    "Table": null,
+    "Protocol": null,
+    "Scope": null,
+    "Metric": null
+  },
+  "relationships": [
+    { "type": "routes-via", "direction": "out", "target": { "id": "link:br0" } }
+  ],
+  "evidence_ref": "/v1/network/lookups/lookup:route-get/1.1.1.1/evidence"
+}

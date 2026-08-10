@@ -1,0 +1,856 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly ROOT_DIR
+readonly STATE_DIR="${VM_LAB_STATE_DIR:-${ROOT_DIR}/.state}"
+readonly STORAGE_DIR="${VM_LAB_STORAGE_DIR:-/var/lib/libvirt/images/system-explorer-vm-lab}"
+# The hypervisor host. Empty means "this machine"; an ssh destination
+# (user@vmhost) means the lab runs wherever the operator works and drives a
+# remote KVM host — which is the point: cloud-init user-data is rendered
+# HERE, where the operator's keys and agent live, so no key material is ever
+# written to the VM host, and guests are reached by jumping through it.
+readonly VM_HOST="${VM_LAB_VM_HOST:-}"
+# Always the local URI, even in remote mode: virsh and virt-install are
+# executed ON the hypervisor (see host_run), so from their point of view
+# libvirt is local. Handing them qemu+ssh:// instead makes root on the VM
+# host ssh back to the VM host and fail host-key verification.
+readonly LIBVIRT_URI="${VM_LAB_LIBVIRT_URI:-qemu:///system}"
+# For the nixos guest in remote mode: a checkout on the VM host, because the
+# image must be built for the guest's architecture on a machine that can.
+readonly REMOTE_ROOT="${VM_LAB_REMOTE_ROOT:-system-explorer/test/vm-lab}"
+readonly NETWORK="${VM_LAB_NETWORK:-bridge=br0,model=virtio}"
+readonly LAB_USER="${VM_LAB_USER:-${USER:?USER must be set when VM_LAB_USER is unset}}"
+readonly DOMAIN_PREFIX="${VM_LAB_DOMAIN_PREFIX:-se-test}"
+readonly SSH_PUBLIC_KEY_OVERRIDE="${VM_LAB_SSH_PUBLIC_KEY:-}"
+readonly SSH_CONFIG_HOST="${VM_LAB_SSH_CONFIG_HOST:-${DOMAIN_PREFIX}-fedora}"
+readonly MEMORY_MIB="${VM_LAB_MEMORY_MIB:-2048}"
+readonly VCPUS="${VM_LAB_VCPUS:-2}"
+readonly DISK_GIB="${VM_LAB_DISK_GIB:-16}"
+readonly TIMEOUT_SECONDS="${VM_LAB_TIMEOUT_SECONDS:-600}"
+readonly DISTROS=(fedora debian ubuntu ubuntu2604 nixos)
+
+PUBLIC_KEY=""
+
+if (( EUID == 0 )); then
+  default_privilege_command=""
+else
+  default_privilege_command="sudo"
+fi
+readonly PRIVILEGE_COMMAND="${VM_LAB_PRIVILEGE_COMMAND-${default_privilege_command}}"
+
+log() {
+  printf '[vm-lab] %s\n' "$*" >&2
+}
+
+die() {
+  log "error: $*"
+  exit 1
+}
+
+usage() {
+  cat <<'EOF'
+Disposable cloud-init VM matrix
+
+Usage:
+  vm-lab up DISTRO|all       Create fresh VM(s) and wait for SSH + sudo
+  vm-lab reset DISTRO|all    Destroy and recreate VM(s) from clean overlays
+  vm-lab down DISTRO|all     Destroy VM(s) and their disposable disks
+  vm-lab status [DISTRO|all] Show state and IPv4 address
+  vm-lab ip DISTRO           Print one guest's IPv4 address
+  vm-lab ssh DISTRO [CMD...] Open a shell or run a command
+  vm-lab exec DISTRO CMD...  Run a non-interactive command
+  vm-lab ssh-config          Print generated OpenSSH configuration
+  vm-lab inventory           Print generated JSON inventory
+  vm-lab help                Show this help
+
+Distros: fedora, debian, ubuntu (24.04), ubuntu2604 (26.04 LTS), nixos
+
+Important environment variables:
+  VM_LAB_VM_HOST             ssh destination of the KVM host; empty = local.
+                             Set it to drive a remote hypervisor from here.
+  VM_LAB_USER                Guest user (default: current $USER)
+  VM_LAB_SSH_CONFIG_HOST     Host alias used with ssh -G to resolve identity
+                             (default: se-test-fedora)
+  VM_LAB_SSH_PUBLIC_KEY      Explicit public-key file override
+  VM_LAB_NETWORK             virt-install network argument
+                             (default: bridge=br0,model=virtio)
+  VM_LAB_STORAGE_DIR         qemu-readable image directory
+  VM_LAB_PRIVILEGE_COMMAND   sudo/doas command; empty when unneeded
+EOF
+}
+
+# Every command that touches the hypervisor's filesystem or libvirt goes
+# through one of these two, so remote mode is a property of the runner rather
+# than something each call site has to remember. Arguments are re-parsed by
+# the remote shell, so they are quoted for it; stdin still flows through ssh,
+# which is how the checksum marker gets written.
+quote_args() {
+  local arg out=""
+  for arg in "$@"; do
+    out+="$(printf '%q' "${arg}") "
+  done
+  printf '%s' "${out}"
+}
+
+host_run() {
+  if [[ -z "${VM_HOST}" ]]; then
+    "$@"
+  else
+    # Expanding here is the point: quote_args has already made every argument
+    # safe for the remote shell to re-parse.
+    # shellcheck disable=SC2029
+    ssh "${VM_HOST}" "$(quote_args "$@")"
+  fi
+}
+
+privileged() {
+  if [[ -n "${PRIVILEGE_COMMAND}" ]]; then
+    host_run "${PRIVILEGE_COMMAND}" "$@"
+  else
+    host_run "$@"
+  fi
+}
+
+need_command() {
+  command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
+}
+
+expand_identity_path() {
+  local path="$1"
+  local login_user="${USER:-$(id -un)}"
+  if [[ "${path}" == \~/* ]]; then
+    path="${HOME}/${path:2}"
+  fi
+  path="${path//%d/${HOME}}"
+  path="${path//%u/${login_user}}"
+  printf '%s\n' "${path}"
+}
+
+validate_public_key() {
+  case "${PUBLIC_KEY}" in
+    ssh-*|ecdsa-*|sk-*) ;;
+    *) die "resolved value is not a supported OpenSSH public key" ;;
+  esac
+}
+
+resolve_ssh_public_key() {
+  local effective_config keyword value identity_path public_path
+  local agent_keys agent_key_count
+
+  if [[ -n "${SSH_PUBLIC_KEY_OVERRIDE}" ]]; then
+    [[ -r "${SSH_PUBLIC_KEY_OVERRIDE}" ]] ||
+      die "public key not readable: ${SSH_PUBLIC_KEY_OVERRIDE}"
+    IFS= read -r PUBLIC_KEY < "${SSH_PUBLIC_KEY_OVERRIDE}"
+    validate_public_key
+    log "using public key override ${SSH_PUBLIC_KEY_OVERRIDE}"
+    return
+  fi
+
+  effective_config="$(ssh -G "${SSH_CONFIG_HOST}" 2>/dev/null)" ||
+    die "ssh could not resolve configuration for ${SSH_CONFIG_HOST}"
+  while read -r keyword value; do
+    [[ "${keyword}" == "identityfile" ]] || continue
+    identity_path="$(expand_identity_path "${value}")"
+    if [[ "${identity_path}" == *.pub ]]; then
+      public_path="${identity_path}"
+    else
+      public_path="${identity_path}.pub"
+    fi
+    if [[ -r "${public_path}" ]]; then
+      IFS= read -r PUBLIC_KEY < "${public_path}"
+      validate_public_key
+      log "using public key resolved by ssh -G: ${public_path}"
+      return
+    fi
+  done <<< "${effective_config}"
+
+  agent_keys="$(ssh-add -L 2>/dev/null | awk '$1 ~ /^(ssh-|ecdsa-|sk-)/' || true)"
+  agent_key_count="$(awk 'NF { count++ } END { print count + 0 }' <<< "${agent_keys}")"
+  if [[ "${agent_key_count}" == "1" ]]; then
+    IFS= read -r PUBLIC_KEY <<< "${agent_keys}"
+    validate_public_key
+    log "using the sole public key exposed by ssh-agent"
+    return
+  fi
+
+  if [[ "${agent_key_count}" == "0" ]]; then
+    die "ssh -G ${SSH_CONFIG_HOST} found no readable public identity and ssh-agent has no keys; set VM_LAB_SSH_PUBLIC_KEY"
+  fi
+  die "ssh-agent exposes ${agent_key_count} keys and ssh -G ${SSH_CONFIG_HOST} found no readable public identity; set VM_LAB_SSH_PUBLIC_KEY or VM_LAB_SSH_CONFIG_HOST"
+}
+
+validate_distro() {
+  case "${1:-}" in
+    fedora|debian|ubuntu|ubuntu2604|nixos) ;;
+    *) die "unknown distro '${1:-}'; expected fedora, debian, ubuntu, ubuntu2604, or nixos" ;;
+  esac
+}
+
+validate_target() {
+  [[ "${1:-}" == "all" ]] || validate_distro "${1:-}"
+}
+
+validate_config() {
+  local mode="${1:-basic}"
+  [[ "${LAB_USER}" =~ ^[a-z_][a-z0-9_-]*$ ]] ||
+    die "VM_LAB_USER must be a conventional Linux user name"
+  [[ "${DOMAIN_PREFIX}" =~ ^[a-z0-9][a-z0-9-]*$ ]] ||
+    die "VM_LAB_DOMAIN_PREFIX may contain lowercase letters, digits, and dashes"
+  if [[ "${mode}" != "full" ]]; then
+    return
+  fi
+  [[ "${MEMORY_MIB}" =~ ^[0-9]+$ && "${VCPUS}" =~ ^[0-9]+$ && "${DISK_GIB}" =~ ^[0-9]+$ ]] ||
+    die "memory, CPU, and disk settings must be positive integers"
+}
+
+preflight() {
+  local mode="${1:-basic}"
+  validate_config "${mode}"
+  # Local tools are the ones this machine really runs. In remote mode the
+  # hypervisor's tools are checked on the hypervisor, named in the error, so
+  # a missing virt-install on the VM host does not read as a local problem.
+  # (macOS has no sha256sum/sha512sum, and in remote mode it needs neither.)
+  for command_name in awk grep jq ssh ssh-keygen; do
+    need_command "${command_name}"
+  done
+  if [[ -z "${VM_HOST}" ]]; then
+    need_command virsh
+  else
+    need_command scp
+  fi
+  if [[ "${mode}" == "full" ]]; then
+    local -a host_tools=(cloud-localds curl find qemu-img sha256sum sha512sum virsh virt-install)
+    if [[ -z "${VM_HOST}" ]]; then
+      for command_name in "${host_tools[@]}" ssh-add; do
+        need_command "${command_name}"
+      done
+    else
+      need_command ssh-add
+      for command_name in "${host_tools[@]}"; do
+        host_run command -v "${command_name}" >/dev/null 2>&1 ||
+          die "missing required command on ${VM_HOST}: ${command_name}"
+      done
+    fi
+    resolve_ssh_public_key
+  fi
+  if [[ -n "${PRIVILEGE_COMMAND}" ]]; then
+    if [[ -z "${VM_HOST}" ]]; then
+      need_command "${PRIVILEGE_COMMAND}"
+      [[ "${PRIVILEGE_COMMAND}" != "sudo" ]] || sudo -v
+    else
+      # Non-interactive by necessity: there is no tty on the far side of ssh.
+      privileged true 2>/dev/null ||
+        die "${PRIVILEGE_COMMAND} on ${VM_HOST} is not usable non-interactively (passwordless sudo?)"
+    fi
+  fi
+  mkdir -p -- "${STATE_DIR}"
+  if [[ "${mode}" == "full" ]]; then
+    privileged install -d -m 0755 -- "${STORAGE_DIR}/base" "${STORAGE_DIR}/run"
+  fi
+}
+
+domain_name() {
+  printf '%s-%s\n' "${DOMAIN_PREFIX}" "$1"
+}
+
+disk_path() {
+  printf '%s/run/%s.qcow2\n' "${STORAGE_DIR}" "$(domain_name "$1")"
+}
+
+seed_path() {
+  printf '%s/run/%s-seed.img\n' "${STORAGE_DIR}" "$(domain_name "$1")"
+}
+
+domain_exists() {
+  privileged virsh --connect "${LIBVIRT_URI}" dominfo "$(domain_name "$1")" >/dev/null 2>&1
+}
+
+domain_active() {
+  privileged virsh --connect "${LIBVIRT_URI}" domstate "$(domain_name "$1")" 2>/dev/null |
+    grep -qi '^running'
+}
+
+# Upstream "latest"/rolling directories are NOT atomically consistent: on
+# 2026-08-10 the Debian manifest and image were fetched either side of a new
+# snapshot going live, so a byte-perfect download failed verification. Dated
+# snapshots are immutable, make a test run reproducible, and turn "upstream
+# moved" into a deliberate bump here rather than a random failure. Refresh
+# with the newest directory from:
+#   https://cloud.debian.org/images/cloud/trixie/
+#   https://cloud-images.ubuntu.com/releases/{noble,resolute}/
+#   https://download.fedoraproject.org/pub/fedora/linux/releases/44/Cloud/x86_64/images/
+readonly DEBIAN_SNAPSHOT="${VM_LAB_DEBIAN_SNAPSHOT:-20260810-2566}"
+readonly UBUNTU_SNAPSHOT="${VM_LAB_UBUNTU_SNAPSHOT:-release-20260801}"
+readonly UBUNTU2604_SNAPSHOT="${VM_LAB_UBUNTU2604_SNAPSHOT:-release-20260731}"
+
+load_image() {
+  local distro="$1"
+  IMAGE_URL=""
+  IMAGE_FILE=""
+  IMAGE_SHA256=""
+  IMAGE_CHECKSUM_URL=""
+  # Debian's cloud directory publishes SHA512SUMS and no SHA256SUMS, so the
+  # manifest algorithm is per-distro, not a constant (2026-08-10: the old
+  # SHA256SUMS URL 404'd and took the whole `up` with it).
+  IMAGE_CHECKSUM_ALGO="sha256"
+  IMAGE_BOOT="uefi"
+
+  case "${distro}" in
+    fedora)
+      IMAGE_FILE="Fedora-Cloud-Base-Generic-44-1.7.x86_64.qcow2"
+      IMAGE_URL="${VM_LAB_FEDORA_IMAGE_URL:-https://download.fedoraproject.org/pub/fedora/linux/releases/44/Cloud/x86_64/images/${IMAGE_FILE}}"
+      IMAGE_SHA256="${VM_LAB_FEDORA_SHA256:-28680fe5b371a5a82ebf43a31926e086a168e59949d03969c5093e7071f90b7f}"
+      ;;
+    debian)
+      # "generic", not "genericcloud": genericcloud drops drivers for
+      # physical hardware, including ATA — and virt-install attaches the
+      # cloud-init seed as an IDE cdrom, which such a guest cannot see. It
+      # boots and starts sshd, then has no datasource and creates no user,
+      # which presents as a bare "Permission denied (publickey)"
+      # (2026-08-10). generic is built to work anywhere, bare metal included.
+      IMAGE_FILE="debian-13-generic-amd64-${DEBIAN_SNAPSHOT}.qcow2"
+      IMAGE_URL="${VM_LAB_DEBIAN_IMAGE_URL:-https://cloud.debian.org/images/cloud/trixie/${DEBIAN_SNAPSHOT}/${IMAGE_FILE}}"
+      IMAGE_CHECKSUM_URL="${VM_LAB_DEBIAN_CHECKSUM_URL:-https://cloud.debian.org/images/cloud/trixie/${DEBIAN_SNAPSHOT}/SHA512SUMS}"
+      IMAGE_CHECKSUM_ALGO="sha512"
+      ;;
+    ubuntu)
+      # Ubuntu publishes ubuntu-<version>-… now, not <codename>-… .
+      IMAGE_FILE="ubuntu-24.04-server-cloudimg-amd64.img"
+      IMAGE_URL="${VM_LAB_UBUNTU_IMAGE_URL:-https://cloud-images.ubuntu.com/releases/noble/${UBUNTU_SNAPSHOT}/${IMAGE_FILE}}"
+      IMAGE_CHECKSUM_URL="${VM_LAB_UBUNTU_CHECKSUM_URL:-https://cloud-images.ubuntu.com/releases/noble/${UBUNTU_SNAPSHOT}/SHA256SUMS}"
+      ;;
+    ubuntu2604)
+      # The current LTS, and where system-explorer's users will actually be.
+      IMAGE_FILE="ubuntu-26.04-server-cloudimg-amd64.img"
+      IMAGE_URL="${VM_LAB_UBUNTU2604_IMAGE_URL:-https://cloud-images.ubuntu.com/releases/resolute/${UBUNTU2604_SNAPSHOT}/${IMAGE_FILE}}"
+      IMAGE_CHECKSUM_URL="${VM_LAB_UBUNTU2604_CHECKSUM_URL:-https://cloud-images.ubuntu.com/releases/resolute/${UBUNTU2604_SNAPSHOT}/SHA256SUMS}"
+      ;;
+    nixos)
+      IMAGE_FILE="nixos-26.05-cloud-x86_64.qcow2"
+      IMAGE_BOOT="bios"
+      ;;
+  esac
+}
+
+remote_checksum() {
+  local checksum_file
+  local expected
+  checksum_file="$(mktemp "${TMPDIR:-/tmp}/vm-lab-checksum.XXXXXX")"
+  curl --fail --silent --show-error --location "${IMAGE_CHECKSUM_URL}" -o "${checksum_file}"
+  expected="$(awk -v wanted="${IMAGE_FILE}" '{ name=$2; sub(/^\*/, "", name); if (name == wanted) { print $1; exit } }' "${checksum_file}")"
+  rm -f -- "${checksum_file}"
+  local want_length=64
+  [[ "${IMAGE_CHECKSUM_ALGO}" == "sha512" ]] && want_length=128
+  [[ "${expected}" =~ ^[0-9a-fA-F]+$ && "${#expected}" -eq "${want_length}" ]] ||
+    die "could not find a ${IMAGE_CHECKSUM_ALGO} for ${IMAGE_FILE} in ${IMAGE_CHECKSUM_URL}"
+  printf '%s\n' "${expected,,}"
+}
+
+download_base_image() {
+  local base_path="${STORAGE_DIR}/base/${IMAGE_FILE}"
+  local marker_path="${base_path}.sha256"
+  local expected actual cached
+  local temp_dir temp_image
+
+  if [[ -n "${IMAGE_SHA256}" ]]; then
+    expected="${IMAGE_SHA256,,}"
+  else
+    expected="$(remote_checksum)"
+  fi
+
+  cached="$(privileged cat "${marker_path}" 2>/dev/null || true)"
+  if privileged test -f "${base_path}" && [[ "${cached}" == "${expected}" ]]; then
+    BASE_IMAGE="${base_path}"
+    return
+  fi
+
+  # Fetch and verify on the hypervisor host: the image is hundreds of
+  # megabytes and has no business making a round trip through the operator's
+  # machine. --continue-at is deliberately absent — a resumed partial from a
+  # different upstream snapshot is exactly how you get a checksum mismatch
+  # you cannot explain.
+  log "downloading ${IMAGE_URL}${VM_HOST:+ on ${VM_HOST}}"
+  temp_dir="$(host_run mktemp -d /tmp/vm-lab-image.XXXXXX)"
+  temp_image="${temp_dir}/${IMAGE_FILE}"
+  host_run curl --fail --location --retry 3 "${IMAGE_URL}" -o "${temp_image}"
+  actual="$(host_run "${IMAGE_CHECKSUM_ALGO}sum" "${temp_image}" | awk '{ print $1 }')"
+  if [[ "${actual}" != "${expected}" ]]; then
+    host_run rm -rf -- "${temp_dir}"
+    die "checksum mismatch for ${IMAGE_FILE}: expected ${expected}, got ${actual}"
+  fi
+
+  privileged install -m 0644 -- "${temp_image}" "${base_path}"
+  printf '%s\n' "${expected}" | privileged tee "${marker_path}" >/dev/null
+  host_run rm -rf -- "${temp_dir}"
+  BASE_IMAGE="${base_path}"
+}
+
+build_nixos_base_image() {
+  local base_path="${STORAGE_DIR}/base/${IMAGE_FILE}"
+  local marker_path="${base_path}.source"
+  local source_hash cached output_path image_path
+
+  # In remote mode the image is built on the VM host from a checkout there:
+  # an aarch64 workstation cannot build an x86-64 guest image, and shipping a
+  # cross-build through the operator's machine is not the lab's job.
+  local build_root="${ROOT_DIR}"
+  if [[ -n "${VM_HOST}" ]]; then
+    build_root="${REMOTE_ROOT}"
+    host_run test -f "${build_root}/flake.nix" ||
+      die "the nixos guest needs a checkout on ${VM_HOST}: ${build_root}/flake.nix not found (set VM_LAB_REMOTE_ROOT)"
+  else
+    need_command nix
+  fi
+  source_hash="$(host_run sha256sum "${build_root}/flake.nix" "${build_root}/flake.lock" \
+    "${build_root}/nixos/cloud-image.nix" | sha256sum | awk '{ print $1 }')"
+  cached="$(privileged cat "${marker_path}" 2>/dev/null || true)"
+  if privileged test -f "${base_path}" && [[ "${cached}" == "${source_hash}" ]]; then
+    BASE_IMAGE="${base_path}"
+    return
+  fi
+
+  log "building the NixOS cloud image${VM_HOST:+ on ${VM_HOST}}"
+  output_path="$(host_run nix build "path:${build_root}#nixos-image" --no-link --print-out-paths)"
+  image_path="$(host_run find "${output_path}" -type f -name '*.qcow2' -print -quit)"
+  [[ -n "${image_path}" ]] || die "Nix build did not produce a qcow2 image under ${output_path}"
+
+  privileged install -m 0644 -- "${image_path}" "${base_path}"
+  printf '%s\n' "${source_hash}" | privileged tee "${marker_path}" >/dev/null
+  BASE_IMAGE="${base_path}"
+}
+
+prepare_base_image() {
+  local distro="$1"
+  load_image "${distro}"
+  if [[ "${distro}" == "nixos" ]]; then
+    build_nixos_base_image
+  else
+    download_base_image
+  fi
+}
+
+render_cloud_init() {
+  local distro="$1"
+  local guest_dir="${STATE_DIR}/${distro}"
+  local name key instance_id
+  name="$(domain_name "${distro}")"
+  instance_id="${name}-$(date +%s)-${RANDOM}"
+  key="${PUBLIC_KEY}"
+  [[ -n "${key}" ]] || die "internal error: SSH public key was not resolved"
+
+  mkdir -p -- "${guest_dir}"
+  cat > "${guest_dir}/meta-data" <<EOF
+instance-id: ${instance_id}
+local-hostname: ${name}
+EOF
+
+  {
+    cat <<EOF
+#cloud-config
+preserve_hostname: false
+hostname: ${name}
+manage_etc_hosts: true
+disable_root: true
+ssh_pwauth: false
+users:
+  - name: ${LAB_USER}
+    gecos: VM install test user
+    shell: /bin/bash
+    lock_passwd: true
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    ssh_authorized_keys:
+      - ${key}
+EOF
+    # No package_update and no qemu-guest-agent: first boot would then depend
+    # on distro mirrors being reachable and fast, which cost Fedora more than
+    # the readiness budget (dnf metadata, 2026-08-10) for no benefit — the
+    # address comes from the libvirt lease/arp tables, and a disposable guest
+    # needs no graceful shutdown. A test controller installs what it needs at
+    # test time, when a failure to reach a mirror is a result rather than a
+    # mysterious timeout.
+    cat <<'EOF'
+runcmd:
+  - [ touch, /var/lib/cloud/instance/vm-lab-ready ]
+EOF
+    cat <<'EOF'
+final_message: "vm-lab cloud-init complete"
+EOF
+  } > "${guest_dir}/user-data"
+}
+
+# Locally the rendered directory is already where virt-install can read it;
+# remotely it is copied to a temp dir on the VM host and echoed back so the
+# caller can point virt-install at it (and clean it up).
+stage_cloud_init() {
+  local distro="$1"
+  local guest_dir="${STATE_DIR}/${distro}"
+  local remote_dir
+  if [[ -z "${VM_HOST}" ]]; then
+    printf '%s\n' "${guest_dir}"
+    return
+  fi
+  remote_dir="$(host_run mktemp -d /tmp/vm-lab-seed.XXXXXX)"
+  scp -q "${guest_dir}/user-data" "${guest_dir}/meta-data" "${VM_HOST}:${remote_dir}/"
+  printf '%s\n' "${remote_dir}"
+}
+
+unstage_cloud_init() {
+  local dir="${1:-}"
+  [[ -n "${VM_HOST}" && -n "${dir}" && "${dir}" == /tmp/vm-lab-seed.* ]] || return 0
+  host_run rm -rf -- "${dir}" || true
+}
+
+# The guest agent enumerates every interface the guest has, loopback and
+# link-local included, and it lists lo first — so taking the first ipv4 line
+# yielded 127.0.0.1 and an ssh_config that quietly pointed at the VM host
+# instead of the guest (2026-08-10). Reachability is the whole point of this
+# address; only a routable one qualifies.
+routable_ipv4() {
+  awk '$0 ~ /ipv4/ {
+    split($4, parts, "/")
+    addr = parts[1]
+    if (addr ~ /^127\./ || addr ~ /^169\.254\./) next
+    print addr
+    exit
+  }'
+}
+
+domain_ip() {
+  local distro="$1"
+  local source output ip
+  for source in agent arp lease; do
+    output="$(privileged virsh --connect "${LIBVIRT_URI}" domifaddr \
+      "$(domain_name "${distro}")" --source "${source}" 2>/dev/null || true)"
+    ip="$(routable_ipv4 <<<"${output}")"
+    [[ -n "${ip}" ]] && break
+  done
+  [[ -n "${ip}" ]] || return 1
+  printf '%s\n' "${ip}"
+}
+
+forget_host_key() {
+  local ip="$1"
+  local known_hosts="${STATE_DIR}/known_hosts"
+  touch "${known_hosts}"
+  ssh-keygen -q -R "${ip}" -f "${known_hosts}" >/dev/null 2>&1 || true
+  ssh-keygen -q -R "[${ip}]:22" -f "${known_hosts}" >/dev/null 2>&1 || true
+}
+
+ssh_args() {
+  local ip="$1"
+  SSH_ARGS=(
+    -o "HostName=${ip}"
+    -o "User=${LAB_USER}"
+    -o BatchMode=yes
+    -o ConnectTimeout=5
+    -o "UserKnownHostsFile=${STATE_DIR}/known_hosts"
+    -o StrictHostKeyChecking=accept-new
+  )
+  # Guests sit on the VM host's NAT segment, unrouteable from here, so every
+  # connection jumps through it. Authentication stays end-to-end from this
+  # machine's agent — the jump host never sees a private key.
+  [[ -z "${VM_HOST}" ]] || SSH_ARGS+=( -o "ProxyJump=${VM_HOST}" )
+}
+
+ssh_to_guest() {
+  local distro="$1"
+  local ip="$2"
+  shift 2
+  ssh_args "${ip}"
+  # The remaining arguments are deliberately interpreted by the guest shell.
+  # shellcheck disable=SC2029
+  ssh "${SSH_ARGS[@]}" "$(domain_name "${distro}")" "$@"
+}
+
+wait_until_ready() {
+  local distro="$1"
+  local deadline ip=""
+  deadline=$((SECONDS + TIMEOUT_SECONDS))
+  log "waiting for $(domain_name "${distro}") to publish an address"
+
+  while (( SECONDS < deadline )); do
+    ip="$(domain_ip "${distro}" || true)"
+    [[ -n "${ip}" ]] && break
+    sleep 2
+  done
+  [[ -n "${ip}" ]] || die "timed out waiting for ${distro} guest address"
+
+  printf '%s\n' "${ip}" > "${STATE_DIR}/${distro}/ip"
+  forget_host_key "${ip}"
+  log "waiting for ${LAB_USER}@${ip}, cloud-init, and passwordless sudo"
+
+  while (( SECONDS < deadline )); do
+    if ssh_to_guest "${distro}" "${ip}" "sudo -n cloud-init status --wait >/dev/null && sudo -n true && test \"\$(id -un)\" = '${LAB_USER}'" >/dev/null 2>&1; then
+      log "${distro} ready at ${ip}"
+      return
+    fi
+    sleep 3
+  done
+  die "timed out waiting for SSH/cloud-init/sudo on ${distro} (${ip})"
+}
+
+refresh_outputs() {
+  local inventory_tmp config_tmp next_tmp distro ip alias
+  mkdir -p -- "${STATE_DIR}"
+  inventory_tmp="$(mktemp "${STATE_DIR}/inventory.XXXXXX")"
+  config_tmp="$(mktemp "${STATE_DIR}/ssh-config.XXXXXX")"
+  printf '{}\n' > "${inventory_tmp}"
+  : > "${config_tmp}"
+
+  for distro in "${DISTROS[@]}"; do
+    if ! domain_exists "${distro}"; then
+      continue
+    fi
+    ip="$(domain_ip "${distro}" || true)"
+    if [[ -z "${ip}" && -r "${STATE_DIR}/${distro}/ip" ]]; then
+      ip="$(<"${STATE_DIR}/${distro}/ip")"
+    fi
+    [[ -n "${ip}" ]] || continue
+    printf '%s\n' "${ip}" > "${STATE_DIR}/${distro}/ip"
+    alias="${DOMAIN_PREFIX}-${distro}"
+
+    next_tmp="${inventory_tmp}.next"
+    jq \
+      --arg distro "${distro}" \
+      --arg host "${ip}" \
+      --arg user "${LAB_USER}" \
+      --arg alias "${alias}" \
+      '. + {($distro): {host: $host, port: 22, user: $user, ssh_config_host: $alias}}' \
+      "${inventory_tmp}" > "${next_tmp}"
+    mv -- "${next_tmp}" "${inventory_tmp}"
+
+    {
+      printf 'Host %s\n' "${alias}"
+      printf '  HostName %s\n' "${ip}"
+      printf '  User %s\n' "${LAB_USER}"
+      printf '  Port 22\n'
+      printf '  BatchMode yes\n'
+      printf '  StrictHostKeyChecking accept-new\n'
+      printf '  UserKnownHostsFile %s\n' "${STATE_DIR}/known_hosts"
+      [[ -z "${VM_HOST}" ]] || printf '  ProxyJump %s\n' "${VM_HOST}"
+      printf '\n'
+    } >> "${config_tmp}"
+  done
+
+  {
+    printf 'Host *\n'
+    printf '  Include ~/.ssh/config\n'
+  } >> "${config_tmp}"
+
+  mv -- "${inventory_tmp}" "${STATE_DIR}/inventory.json"
+  mv -- "${config_tmp}" "${STATE_DIR}/ssh_config"
+}
+
+up_one() {
+  local distro="$1"
+  local name disk guest_dir cloud_init_dir seed
+  local -a install_args
+  validate_distro "${distro}"
+  name="$(domain_name "${distro}")"
+  disk="$(disk_path "${distro}")"
+  guest_dir="${STATE_DIR}/${distro}"
+
+  domain_exists "${distro}" && die "${name} already exists; use reset for a clean VM"
+  privileged test ! -e "${disk}" || die "stale disk exists at ${disk}; use reset"
+  privileged rm -f -- "$(seed_path "${distro}")"
+
+  prepare_base_image "${distro}"
+  render_cloud_init "${distro}"
+  # The rendered seed is copied to the VM host for virt-install to read; it
+  # carries only the public key, and stage_cloud_init removes it afterwards.
+  cloud_init_dir="$(stage_cloud_init "${distro}")"
+  seed="$(seed_path "${distro}")"
+  privileged cloud-localds "${seed}" \
+    "${cloud_init_dir}/user-data" "${cloud_init_dir}/meta-data"
+  log "creating clean overlay for ${distro}"
+  privileged qemu-img create -q -f qcow2 -F qcow2 -b "${BASE_IMAGE}" "${disk}"
+  privileged qemu-img resize -q "${disk}" "${DISK_GIB}G"
+
+  install_args=(
+    --connect "${LIBVIRT_URI}"
+    --name "${name}"
+    --memory "${MEMORY_MIB}"
+    --vcpus "${VCPUS}"
+    --cpu host-passthrough
+    --import
+    --disk "path=${disk},format=qcow2,bus=virtio"
+    --network "${NETWORK}"
+    --channel "unix,target_type=virtio,name=org.qemu.guest_agent.0"
+    --graphics none
+    --console "pty,target_type=serial"
+    --noautoconsole
+    --osinfo "detect=off,require=off"
+    # The NoCloud seed as a virtio disk, not virt-install's --cloud-init.
+    # That option attaches an IDE cdrom, and these cloud images have no ATA
+    # driver: cloud-init searched for LABEL=cidata, found nothing, fell back
+    # to the empty DMI seed virt-install also sets, and created only the
+    # image's default user (verified in the guest's cloud-init.log,
+    # 2026-08-10). Every cloud image can see virtio — it is how its root disk
+    # is attached — and NoCloud matches on the filesystem label, not the bus.
+    --disk "path=${seed},format=raw,bus=virtio,readonly=on"
+  )
+  if [[ "${IMAGE_BOOT}" == "uefi" ]]; then
+    install_args+=( --boot uefi )
+  fi
+
+  log "starting ${name}"
+  if ! privileged virt-install "${install_args[@]}"; then
+    unstage_cloud_init "${cloud_init_dir}"
+    down_one "${distro}" || true
+    die "virt-install failed for ${distro}"
+  fi
+  unstage_cloud_init "${cloud_init_dir}"
+  wait_until_ready "${distro}"
+}
+
+down_one() {
+  local distro="$1"
+  local name disk old_ip=""
+  validate_distro "${distro}"
+  name="$(domain_name "${distro}")"
+  disk="$(disk_path "${distro}")"
+  if [[ -r "${STATE_DIR}/${distro}/ip" ]]; then
+    old_ip="$(<"${STATE_DIR}/${distro}/ip")"
+  fi
+
+  if domain_exists "${distro}"; then
+    log "destroying ${name}"
+    if domain_active "${distro}"; then
+      privileged virsh --connect "${LIBVIRT_URI}" destroy "${name}" >/dev/null
+    fi
+    privileged virsh --connect "${LIBVIRT_URI}" undefine "${name}" --nvram >/dev/null 2>&1 ||
+      privileged virsh --connect "${LIBVIRT_URI}" undefine "${name}" >/dev/null
+  fi
+  privileged rm -f -- "${disk}" "$(seed_path "${distro}")"
+  rm -rf -- "${STATE_DIR:?}/${distro}"
+  [[ -z "${old_ip}" ]] || forget_host_key "${old_ip}"
+}
+
+for_target() {
+  local target="$1"
+  local function_name="$2"
+  local distro
+  validate_target "${target}"
+  if [[ "${target}" == "all" ]]; then
+    for distro in "${DISTROS[@]}"; do
+      "${function_name}" "${distro}"
+    done
+  else
+    "${function_name}" "${target}"
+  fi
+}
+
+status_one() {
+  local distro="$1"
+  local state ip="-"
+  if ! domain_exists "${distro}"; then
+    printf '%-8s %-12s %s\n' "${distro}" "absent" "-"
+    return
+  fi
+  state="$(privileged virsh --connect "${LIBVIRT_URI}" domstate "$(domain_name "${distro}")" 2>/dev/null |
+    tr '[:upper:]' '[:lower:]')"
+  ip="$(domain_ip "${distro}" || printf '-')"
+  printf '%-8s %-12s %s\n' "${distro}" "${state}" "${ip}"
+}
+
+status_target() {
+  local target="${1:-all}"
+  printf '%-8s %-12s %s\n' "DISTRO" "STATE" "IPV4"
+  for_target "${target}" status_one
+}
+
+require_guest_ip() {
+  local distro="$1"
+  local ip
+  validate_distro "${distro}"
+  domain_exists "${distro}" || die "$(domain_name "${distro}") does not exist"
+  ip="$(domain_ip "${distro}" || true)"
+  if [[ -z "${ip}" && -r "${STATE_DIR}/${distro}/ip" ]]; then
+    ip="$(<"${STATE_DIR}/${distro}/ip")"
+  fi
+  [[ -n "${ip}" ]] || die "no address available for ${distro}"
+  printf '%s\n' "${ip}"
+}
+
+main() {
+  local command="${1:-help}"
+  local target
+  shift || true
+
+  case "${command}" in
+    help|-h|--help)
+      usage
+      ;;
+    up)
+      target="${1:-}"
+      [[ -n "${target}" ]] || die "up requires a distro or all"
+      preflight full
+      for_target "${target}" up_one
+      refresh_outputs
+      ;;
+    reset)
+      target="${1:-}"
+      [[ -n "${target}" ]] || die "reset requires a distro or all"
+      preflight full
+      for_target "${target}" down_one
+      for_target "${target}" up_one
+      refresh_outputs
+      ;;
+    down)
+      target="${1:-}"
+      [[ -n "${target}" ]] || die "down requires a distro or all"
+      preflight
+      for_target "${target}" down_one
+      refresh_outputs
+      ;;
+    status)
+      preflight
+      status_target "${1:-all}"
+      refresh_outputs
+      ;;
+    ip)
+      preflight
+      require_guest_ip "${1:-}"
+      ;;
+    ssh)
+      target="${1:-}"
+      [[ -n "${target}" ]] || die "ssh requires a distro"
+      shift || true
+      preflight
+      need_command ssh
+      ip="$(require_guest_ip "${target}")"
+      if (( $# == 0 )); then
+        ssh_args "${ip}"
+        ssh -t "${SSH_ARGS[@]}" "$(domain_name "${target}")"
+      else
+        ssh_to_guest "${target}" "${ip}" "$@"
+      fi
+      ;;
+    exec)
+      target="${1:-}"
+      [[ -n "${target}" ]] || die "exec requires a distro and command"
+      shift || true
+      (( $# > 0 )) || die "exec requires a command"
+      preflight
+      need_command ssh
+      ip="$(require_guest_ip "${target}")"
+      ssh_to_guest "${target}" "${ip}" "$@"
+      ;;
+    ssh-config)
+      preflight
+      refresh_outputs
+      cat "${STATE_DIR}/ssh_config"
+      ;;
+    inventory)
+      preflight
+      refresh_outputs
+      cat "${STATE_DIR}/inventory.json"
+      ;;
+    *)
+      die "unknown command: ${command}"
+      ;;
+  esac
+}
+
+main "$@"

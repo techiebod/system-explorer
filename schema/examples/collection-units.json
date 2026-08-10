@@ -1,0 +1,42 @@
+{
+  "schema": "se.collection/1",
+  "host": { "machine_id": "0123456789abcdef0123456789abcdef", "hostname": "host-a" },
+  "subsystem": "units",
+  "collection": "units",
+  "observed_at": "2026-08-07T16:20:00Z",
+  "status": "ok",
+  "source": {
+    "adapter": "systemd-dbus",
+    "interface": "org.freedesktop.systemd1",
+    "method": "ListUnits",
+    "reference_commands": ["systemctl list-units --type=service --all"]
+  },
+  "filters": { "type": "service" },
+  "requested_limit": 500,
+  "applied_limit": 500,
+  "total": 3,
+  "next_cursor": null,
+  "items": [
+    {
+      "id": "unit:sshd.service",
+      "type": "service",
+      "native_id": "sshd.service",
+      "facts": { "LoadState": "loaded", "ActiveState": "active", "SubState": "running" },
+      "worst_opinion_level": "info"
+    },
+    {
+      "id": "unit:compose-stack-hello.service",
+      "type": "service",
+      "native_id": "compose-stack-hello.service",
+      "facts": { "LoadState": "loaded", "ActiveState": "active", "SubState": "exited" },
+      "worst_opinion_level": "info"
+    },
+    {
+      "id": "unit:systemd-observer.service",
+      "type": "service",
+      "native_id": "systemd-observer.service",
+      "facts": { "LoadState": "loaded", "ActiveState": "failed", "SubState": "failed", "NRestarts": 4 },
+      "worst_opinion_level": "critical"
+    }
+  ]
+}

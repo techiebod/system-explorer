@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>System Explorer</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='3.2' fill='%236aa1ff'/%3E%3Ccircle cx='8' cy='8' r='6.6' fill='none' stroke='%236aa1ff' stroke-opacity='.45' stroke-width='1.4'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/ui/styles.css">
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <header id="host-card">
+      <div class="host-name" id="host-name">…</div>
+      <select id="host-select" title="Switch host" hidden></select>
+      <div class="host-meta" id="host-meta"></div>
+    </header>
+    <nav id="nav"></nav>
+    <footer id="side-foot">
+      <button id="theme-toggle" title="Toggle theme (t)">◐</button>
+      <span class="hints"><kbd>/</kbd> filter <kbd>l</kbd> lookup <kbd>j</kbd><kbd>k</kbd> rows <kbd>[</kbd><kbd>]</kbd> collections <kbd>e</kbd> evidence <kbd>esc</kbd> close</span>
+    </footer>
+  </aside>
+
+  <main id="main">
+    <div id="toolbar">
+      <div id="crumb"></div>
+      <input id="filter" type="search" placeholder="filter…" spellcheck="false" autocomplete="off">
+      <button id="lookup-btn" title="Run a lookup (l)">⌕ lookup</button>
+      <div id="age" title="Age of the current observation"></div>
+      <button id="refresh" title="Refresh now (r)">↻</button>
+    </div>
+    <div id="banner" hidden></div>
+    <div id="facets" hidden></div>
+    <div id="content">
+      <section id="overview" hidden></section>
+      <section id="collection-pane">
+        <table id="grid">
+          <thead id="grid-head"></thead>
+          <tbody id="grid-body"></tbody>
+        </table>
+        <div id="grid-empty" class="empty" hidden></div>
+      </section>
+    </div>
+  </main>
+</div>
+<div id="palette" hidden></div>
+<script src="/ui/app.js"></script>
+</body>
+</html>

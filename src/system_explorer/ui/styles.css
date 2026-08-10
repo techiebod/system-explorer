@@ -1,0 +1,591 @@
+/* System Explorer — operator UI.
+   Design contract: SPEC §8. Calm density; monospace identifiers; color is
+   semantic only; dark is the primary target, light derives from the same
+   token set. No decorative color, no chart kitsch. */
+
+:root {
+  --bg:        #0e1116;
+  --panel:     #141922;
+  --panel-2:   #1a212c;
+  --border:    #232b37;
+  --border-2:  #2d3745;
+  --text:      #d9e1ea;
+  --text-dim:  #8a97a6;
+  --text-faint:#5c6875;
+  --ident:     #c7d3e2;
+  --accent:    #6aa1ff;
+  --accent-bg: rgba(106,161,255,.10);
+  --ok:        #55b98a;
+  --warn:      #e0b640;
+  --crit:      #ef6d6d;
+  --sel:       rgba(106,161,255,.14);
+  --shadow:    0 8px 28px rgba(0,0,0,.45);
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Single source of truth for layout math: everything that must fit beside
+     the sidebar (the sticky expansion box, most of all) derives from this. */
+  --sidebar-w: 232px;
+}
+:root[data-theme="light"] {
+  --bg:        #f4f6f9;
+  --panel:     #ffffff;
+  --panel-2:   #eef1f5;
+  --border:    #dde3ea;
+  --border-2:  #cbd4de;
+  --text:      #1c2530;
+  --text-dim:  #5b6877;
+  --text-faint:#93a0ae;
+  --ident:     #253141;
+  --accent:    #2f6fdb;
+  --accent-bg: rgba(47,111,219,.09);
+  --ok:        #218a5f;
+  --warn:      #a97d0a;
+  --crit:      #c94a4a;
+  --sel:       rgba(47,111,219,.10);
+  --shadow:    0 8px 28px rgba(30,40,60,.12);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 13px/1.45 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+::selection { background: var(--accent-bg); }
+
+#app { display: grid; grid-template-columns: var(--sidebar-w) 1fr; height: 100vh; }
+
+/* ── sidebar ─────────────────────────────────────────────── */
+#sidebar {
+  display: flex; flex-direction: column;
+  background: var(--panel); border-right: 1px solid var(--border);
+  min-height: 0;
+}
+#host-card { padding: 16px 16px 12px; border-bottom: 1px solid var(--border); }
+.host-name { font-size: 15px; font-weight: 650; letter-spacing: .01em; }
+.host-name::before {
+  /* Connectivity marker, not a health claim — no envelope backs a health
+     assertion here, so it stays neutral. */
+  content: ""; display: inline-block; width: 8px; height: 8px;
+  border-radius: 50%; background: var(--text-faint); margin-right: 8px;
+  vertical-align: 1px;
+}
+.host-meta { margin-top: 3px; color: var(--text-faint); font-family: var(--mono); font-size: 11px; }
+
+/* Hub mode: the card's hostname becomes a host selector — same calm card,
+   monospace names, unreachable hosts labelled but still listed. */
+#host-select {
+  width: 100%; min-width: 90px;
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--border-2); border-radius: 6px;
+  padding: 4px 6px; font: 650 13px var(--mono); cursor: pointer;
+}
+#host-select:focus {
+  outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+#nav { flex: 1; overflow-y: auto; padding: 10px 8px; }
+.nav-sub { margin-bottom: 2px; }
+.nav-sub > .sub-label {
+  display: flex; align-items: center; gap: 7px;
+  padding: 6px 8px; color: var(--text-dim);
+  font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .07em;
+}
+.nav-sub.unavailable > .sub-label { color: var(--text-faint); }
+.nav-sub.unavailable > .sub-label::after { content: "·"; }
+.nav-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px 5px 22px; margin: 1px 0;
+  border-radius: 6px; color: var(--text); text-decoration: none;
+  font-size: 12.5px; cursor: pointer; border-left: 2px solid transparent;
+}
+.nav-item:hover { background: var(--panel-2); }
+.nav-item.active {
+  background: var(--accent-bg); border-left-color: var(--accent);
+  color: var(--accent); font-weight: 600;
+}
+
+/* Per-collection attention badges (/v1/status): warn+critical row counts,
+   colored by the worst of the two — the same semantic palette as .dot,
+   nothing decorative (SPEC §8). .err is a failed roll-up, muted, with the
+   error in its title. The subsystem label carries a plain .dot instead. */
+.nav-badge {
+  margin-left: auto; padding: 0 6px; border-radius: 9px;
+  font-family: var(--mono); font-size: 10px; line-height: 1.7;
+}
+.nav-badge.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 13%, transparent); }
+.nav-badge.critical { color: var(--crit); background: color-mix(in srgb, var(--crit) 13%, transparent); }
+.nav-badge.err { color: var(--text-faint); border: 1px solid var(--border-2); line-height: 1.5; padding: 0 5px; }
+.sub-label > .dot { margin-right: 0; }
+#side-foot {
+  padding: 10px 12px; border-top: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+  color: var(--text-faint); font-size: 11px;
+}
+#theme-toggle {
+  background: none; border: 1px solid var(--border-2); color: var(--text-dim);
+  border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-size: 13px;
+}
+#theme-toggle:hover { color: var(--text); border-color: var(--text-faint); }
+kbd {
+  font-family: var(--mono); font-size: 10px;
+  border: 1px solid var(--border-2); border-bottom-width: 2px;
+  border-radius: 4px; padding: 0 4px; margin: 0 1px;
+  color: var(--text-dim); background: var(--panel-2);
+}
+
+/* ── main ────────────────────────────────────────────────── */
+#main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+
+#toolbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px; border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+#crumb { font-size: 13px; color: var(--text-dim); white-space: nowrap; }
+#crumb b { color: var(--text); font-weight: 600; }
+#crumb .count { color: var(--text-faint); font-family: var(--mono); font-size: 11.5px; margin-left: 6px; }
+#filter {
+  flex: 1; max-width: 340px;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--border-2); border-radius: 7px;
+  padding: 5px 10px; font: 12.5px var(--sans); outline: none;
+}
+#filter:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); }
+#age { margin-left: auto; color: var(--text-faint); font-family: var(--mono); font-size: 11px; white-space: nowrap; }
+#refresh {
+  background: none; border: 1px solid var(--border-2); color: var(--text-dim);
+  border-radius: 6px; width: 26px; height: 26px; cursor: pointer;
+}
+#refresh:hover { color: var(--text); }
+#refresh.spin { animation: spin .6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+#banner {
+  padding: 8px 16px; font-size: 12.5px;
+  background: color-mix(in srgb, var(--crit) 12%, var(--panel));
+  color: var(--crit); border-bottom: 1px solid var(--border);
+}
+
+#content { flex: 1; display: grid; grid-template-columns: minmax(0,1fr); min-height: 0; }
+
+/* ── collection table ────────────────────────────────────── */
+#collection-pane { overflow: auto; min-height: 0; }
+#grid { width: 100%; border-collapse: collapse; }
+#grid th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--bg); color: var(--text-dim);
+  font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em;
+  text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--border-2);
+  cursor: pointer; user-select: none; white-space: nowrap;
+}
+#grid th:hover { color: var(--text); }
+#grid th .dir { color: var(--accent); margin-left: 3px; }
+#grid td {
+  padding: 5.5px 12px; border-bottom: 1px solid var(--border);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: min(380px, 55vw);   /* narrow screens still see >1 column */
+  vertical-align: middle;
+}
+#grid tbody tr { cursor: pointer; }
+#grid tbody tr:hover { background: var(--panel-2); }
+#grid tbody tr.selected { background: var(--sel); box-shadow: inset 2px 0 var(--accent); }
+
+/* The object column stays pinned while a wide table scrolls horizontally —
+   without it, scrolled rows lose their identity. Sticky cells need opaque
+   backgrounds (the row's own tint is translucent), so each row state gets a
+   solid equivalent. */
+#grid th:first-child { position: sticky; left: 0; z-index: 2; }
+#grid td.ident { position: sticky; left: 0; z-index: 1; background: var(--bg); }
+#grid tbody tr:hover td.ident { background: var(--panel-2); }
+#grid tbody tr.selected td.ident {
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg));
+}
+td.ident, .mono { font-family: var(--mono); font-size: 12px; color: var(--ident); }
+td .dim, .dim { color: var(--text-faint); }
+
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 8px; vertical-align: 1px; }
+.dot.ok { background: var(--ok); }
+.dot.info { background: var(--text-faint); opacity: .6; }
+.dot.warn { background: var(--warn); }
+.dot.critical { background: var(--crit); box-shadow: 0 0 6px color-mix(in srgb, var(--crit) 60%, transparent); }
+
+.badge {
+  display: inline-block; padding: 1px 7px; border-radius: 10px;
+  font-family: var(--mono); font-size: 10.5px; line-height: 1.6;
+}
+.badge.ok, .badge.active, .badge.running { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); }
+.badge.warn, .badge.partial, .badge.exited { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); }
+.badge.crit, .badge.error, .badge.failed { color: var(--crit); background: color-mix(in srgb, var(--crit) 12%, transparent); }
+.badge.neutral { color: var(--text-dim); background: var(--panel-2); }
+
+.usebar { display: inline-flex; align-items: center; gap: 7px; }
+.usebar .track { width: 44px; height: 4px; border-radius: 2px; background: var(--border-2); overflow: hidden; }
+/* display:block — the fill is a span inside a plain (non-flex) track, and
+   inline boxes ignore width; without this the gauge renders empty forever. */
+.usebar .fill { display: block; height: 100%; border-radius: 2px; background: var(--ok); }
+.usebar.warn .fill { background: var(--warn); }
+.usebar.crit .fill { background: var(--crit); }
+
+.empty { padding: 48px; text-align: center; color: var(--text-faint); }
+
+.tree { color: var(--text-faint); font-family: var(--mono); }
+
+#facets {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 8px 16px; border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none; border: 1px solid var(--border-2); color: var(--text-dim);
+  border-radius: 20px; padding: 2px 10px; cursor: pointer;
+  font: 11.5px var(--mono);
+}
+.chip:hover { color: var(--text); border-color: var(--text-faint); }
+.chip.on { color: var(--accent); border-color: var(--accent); background: var(--accent-bg); }
+.chip.ghost { margin-left: auto; border-style: dashed; }
+.chip-n { color: var(--text-faint); font-size: 10px; }
+.chip.on .chip-n { color: var(--accent); opacity: .7; }
+
+/* ── inline detail expansion ─────────────────────────────── */
+/* #grid prefix matters: without it this loses specificity to `#grid td`
+   above, whose white-space: nowrap then inherits into the whole expansion
+   and no fact value can ever wrap. */
+#grid tr.expand > td {
+  padding: 0; max-width: none; white-space: normal; overflow: visible;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border-2);
+  box-shadow: inset 2px 0 var(--accent);
+}
+.d-box {
+  padding: 16px 20px 22px;
+  /* The td spans the full (possibly overflowing) table width; keep the
+     content readable inside the visible pane instead. */
+  position: sticky; left: 0;
+  max-width: calc(100vw - var(--sidebar-w));
+  box-sizing: border-box;
+}
+.d-cols {
+  display: grid; grid-template-columns: minmax(340px, 1.7fr) minmax(280px, 1fr);
+  gap: 0 28px; align-items: start;
+}
+.d-cols > * { min-width: 0; }
+@media (max-width: 900px) { .d-cols { grid-template-columns: 1fr; } }
+.d-head { margin-bottom: 10px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.d-id { font-family: var(--mono); font-size: 14px; font-weight: 600; color: var(--ident); word-break: break-all; }
+.d-close {
+  margin-left: auto; background: none; border: none; color: var(--text-faint);
+  font-size: 15px; cursor: pointer; padding: 2px 6px;
+}
+.d-close:hover { color: var(--text); }
+.d-sub { color: var(--text-faint); font-size: 11.5px; font-family: var(--mono); }
+
+.d-section { margin-top: 18px; }
+.d-section > h3 {
+  margin: 0 0 8px; font-size: 10.5px; font-weight: 650;
+  text-transform: uppercase; letter-spacing: .07em; color: var(--text-dim);
+}
+
+.facts { display: grid; grid-template-columns: minmax(110px,22%) 1fr; gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.facts > div { padding: 6px 10px; border-bottom: 1px solid var(--border); font-size: 12px; }
+.facts > div:nth-last-child(-n+2) { border-bottom: none; }
+.facts .k { color: var(--text-dim); background: color-mix(in srgb, var(--panel-2) 55%, transparent); }
+/* overflow-wrap: anywhere (not break-word): store paths and digests are one
+   long token, and only 'anywhere' also collapses min-content width — inside
+   the table-cell expansion, break-word lets the token push the layout past
+   the pane edge where it clips unwrapped. */
+.facts .v { font-family: var(--mono); color: var(--ident); overflow-wrap: anywhere; min-width: 0; }
+
+.v-list { margin: 0; padding: 0; list-style: none; }
+.v-list li { line-height: 1.65; }
+
+.v-kv { display: grid; grid-template-columns: max-content minmax(0,1fr); gap: 2px 14px; }
+.v-kv-k { color: var(--text-dim); }
+.v-kv-v { min-width: 0; overflow-wrap: anywhere; }
+.v-kv .v-kv { border-left: 1px solid var(--border-2); padding-left: 10px; margin: 2px 0 4px; }
+
+/* display:block so a wide table scrolls inside the facts grid instead of
+   being clipped — the Device column vanished off-screen this way once. */
+.v-table { border-collapse: collapse; margin: 2px 0; display: block; overflow-x: auto; max-width: 100%; }
+.v-table th {
+  text-align: left; color: var(--text-dim); font-weight: 600;
+  font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em;
+  padding: 2px 14px 3px 0; border-bottom: 1px solid var(--border-2);
+}
+.v-table td { padding: 3px 14px 3px 0; border-bottom: 1px solid var(--border); vertical-align: top; font-size: 11.5px; overflow-wrap: anywhere; }
+.v-table tr:last-child td { border-bottom: none; }
+
+pre.v-json { margin: 0; font: 11px/1.5 var(--mono); color: var(--ident); white-space: pre-wrap; }
+.facts .v.null { color: var(--text-faint); }
+.facts > div.cited { background: color-mix(in srgb, var(--warn) 8%, transparent); }
+
+.opinion {
+  border: 1px solid var(--border); border-left: 3px solid var(--text-faint);
+  border-radius: 8px; padding: 9px 12px; margin-bottom: 8px; font-size: 12.5px;
+}
+.opinion.warn { border-left-color: var(--warn); }
+.opinion.critical { border-left-color: var(--crit); }
+.opinion .msg { margin-bottom: 5px; }
+.opinion .ev { display: flex; gap: 5px; flex-wrap: wrap; }
+.ev-chip {
+  font-family: var(--mono); font-size: 10.5px; color: var(--text-dim);
+  border: 1px solid var(--border-2); border-radius: 5px; padding: 0 6px;
+  cursor: default;
+}
+.ev-chip:hover { color: var(--text); border-color: var(--text-faint); }
+
+.rel-group { margin-bottom: 10px; }
+.rel-type { font-family: var(--mono); font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }
+.rel-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.rel {
+  font-family: var(--mono); font-size: 11.5px; text-decoration: none;
+  color: var(--ident); background: var(--panel-2);
+  border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px;
+}
+.rel .arrow { color: var(--text-faint); margin-right: 4px; }
+a.rel:hover { border-color: var(--accent); color: var(--accent); }
+span.rel { color: var(--text-dim); }
+
+#lookup-btn {
+  background: none; border: 1px solid var(--border-2); color: var(--text-dim);
+  border-radius: 6px; height: 26px; padding: 0 10px; cursor: pointer;
+  font: 12px var(--sans); white-space: nowrap;
+}
+#lookup-btn:hover { color: var(--text); border-color: var(--text-faint); }
+
+#palette {
+  position: fixed; inset: 0; z-index: 50;
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+  backdrop-filter: blur(2px);
+  display: flex; align-items: flex-start; justify-content: center;
+}
+/* display:flex above would defeat the hidden attribute's display:none. */
+#palette[hidden] { display: none; }
+.pal-box {
+  margin-top: 16vh; width: min(560px, calc(100vw - 48px));
+  background: var(--panel); border: 1px solid var(--border-2);
+  border-radius: 12px; padding: 14px;
+  box-shadow: 0 12px 40px color-mix(in srgb, #000 35%, transparent);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.pal-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.pal-input {
+  background: var(--bg); color: var(--text); width: 100%;
+  border: 1px solid var(--border-2); border-radius: 7px;
+  padding: 7px 10px; font: 13px var(--mono); outline: none;
+}
+.pal-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); }
+.pal-hint { color: var(--text-dim); font-size: 12px; min-height: 1.2em; }
+
+.lookup-form { display: flex; align-items: center; gap: 8px; margin: 2px 0 14px; }
+.lookup-form input {
+  flex: 1; max-width: 380px;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--border-2); border-radius: 7px;
+  padding: 5px 10px; font: 12.5px var(--mono); outline: none;
+}
+.lookup-form input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); }
+.lookup-run {
+  background: var(--accent-bg); color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 7px;
+  padding: 4px 12px; font: 12px var(--sans); cursor: pointer; white-space: nowrap;
+}
+.lookup-run:hover { filter: brightness(1.1); }
+
+.d-evidence { margin-top: 20px; }
+.ev-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ev-tab {
+  background: none; border: 1px solid var(--border-2); color: var(--text-dim);
+  border-radius: 6px; padding: 4px 10px; font: 11.5px var(--mono); cursor: pointer;
+}
+.ev-tab.on { color: var(--accent); border-color: var(--accent); background: var(--accent-bg); }
+
+.evidence-btn {
+  background: none; border: 1px solid var(--border-2); color: var(--text-dim);
+  border-radius: 7px; padding: 5px 12px; font: 12px var(--sans); cursor: pointer;
+}
+.evidence-btn:hover { color: var(--text); border-color: var(--text-faint); }
+pre.evidence {
+  margin: 10px 0 0; padding: 12px; border-radius: 8px;
+  background: var(--bg); border: 1px solid var(--border);
+  font: 11px/1.5 var(--mono); color: var(--text-dim);
+  overflow-x: auto; max-height: 420px;
+}
+.src-line { font-family: var(--mono); font-size: 11px; color: var(--text-faint); margin-top: 6px; word-break: break-all; }
+.src-line b { color: var(--text-dim); font-weight: 500; }
+
+/* ── responsive ──────────────────────────────────────────── */
+
+@media (max-width: 980px) {
+  :root { --sidebar-w: 172px; }
+  #sidebar .host-meta, #sidebar .hints { display: none; }
+}
+
+/* Phones and split-screen: the sidebar becomes a top strip — host on the
+   left, subsystems as a horizontally scrollable rail. Keyboard hints and
+   footer chrome earn nothing on touch and go. */
+@media (max-width: 700px) {
+  :root { --sidebar-w: 0px; }
+  #app { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+  #sidebar {
+    flex-direction: row; align-items: center;
+    border-right: none; border-bottom: 1px solid var(--border);
+  }
+  #host-card { border-bottom: none; padding: 8px 12px; flex: none; }
+  #host-select { width: auto; }   /* the strip's card shrinks to fit */
+  #nav {
+    flex: 1; display: flex; align-items: center; gap: 8px;
+    overflow-x: auto; overflow-y: hidden; padding: 6px 8px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .nav-sub { display: flex; align-items: center; margin: 0; flex: none; }
+  .nav-sub > .sub-label { padding: 2px 4px; }
+  .nav-item {
+    padding: 4px 8px; margin: 0 1px; border-left: none; white-space: nowrap;
+  }
+  .nav-item.active { border-left: none; }
+  #side-foot { display: none; }
+
+  #toolbar { flex-wrap: wrap; row-gap: 6px; padding: 8px 12px; }
+  #crumb { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  #filter { max-width: none; min-width: 140px; }
+  #age { margin-left: 0; }
+
+  .d-box { padding: 12px 12px 16px; }
+}
+
+/* Fact values that link to other objects (factLeaf) — quiet until hovered. */
+.fact-link {
+  color: var(--text);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.fact-link:hover { color: var(--accent, #7cb7ff); }
+
+/* Column picker menu in the facet bar. */
+.col-menu {
+  flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px;
+  padding: 6px 0 2px; border-top: 1px solid var(--line, #2a2f3a);
+  margin-top: 6px;
+}
+.col-opt {
+  font-family: var(--mono); font-size: 11px; padding: 2px 8px;
+  background: none; border: 1px solid var(--line, #2a2f3a);
+  border-radius: 6px; color: var(--text-dim); cursor: pointer;
+}
+.col-opt.on { color: var(--text); border-color: var(--text-faint); }
+.col-opt .tick { display: inline-block; width: 12px; }
+
+/* "+N more" relationship expander is a real button. */
+button.rel { cursor: pointer; background: none; }
+button.rel:hover { color: var(--text); }
+
+/* Pool detail: scalar facts beside capacity meters, vdev table below. */
+.pool-top { display: flex; gap: 24px; align-items: flex-start; }
+.pool-top > .facts { flex: 1 1 52%; min-width: 0; }
+.cap-panel { flex: 1 1 48%; min-width: 230px; }
+.cap-panel > h3 {
+  margin: 0 0 10px; font-size: 10.5px; font-weight: 650;
+  text-transform: uppercase; letter-spacing: .07em; color: var(--text-dim);
+}
+.cap-row {
+  display: grid; grid-template-columns: minmax(46px, auto) 1fr auto;
+  gap: 10px; align-items: center; margin-bottom: 9px;
+}
+.cap-name { font-family: var(--mono); font-size: 11.5px; color: var(--ident); }
+.cap-bar { height: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden; }
+.cap-fill { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.cap-fill.warn { background: var(--warn); }
+.cap-fill.crit { background: var(--crit); }
+
+/* ── host overview (system/overview) ─────────────────────────
+   A designed panel, not the generic grid: one meter per resource area.
+   Severity never comes from thresholds duplicated here — each meter is
+   coloured by the agent's own opinion on the overview object (the shared
+   rulebook, SPEC rule 14); neutral fill is the accent, the same idiom as
+   the pool capacity panel. Track = a lighter step of the same surface;
+   fills carry a 4px data-end and stay square at the baseline. */
+#overview { padding: 14px 16px 20px; overflow-y: auto; }
+.ov-attention { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.ov-chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 3px 10px; border-radius: 20px; cursor: pointer;
+  border: 1px solid var(--border-2); background: var(--panel);
+  color: var(--text); font-size: 12px; text-decoration: none;
+}
+.ov-chip:hover { border-color: var(--accent); }
+.ov-chip .n { font-family: var(--mono); font-weight: 650; }
+.ov-chip.warn .n { color: var(--warn); }
+.ov-chip.critical .n { color: var(--crit); }
+.ov-grid {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  max-width: 1080px;
+}
+.ov-panel {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 14px 13px;
+}
+.ov-panel h3 {
+  margin: 0 0 9px; font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .06em; color: var(--text-dim);
+}
+.ov-row { display: flex; align-items: center; gap: 10px; margin-top: 7px; }
+.ov-row:first-of-type { margin-top: 0; }
+.ov-row .lbl { width: 52px; flex: none; color: var(--text-dim); font-size: 12px; }
+.ov-row .lbl.wide { width: 108px; font-family: var(--mono); overflow: hidden;
+                    text-overflow: ellipsis; white-space: nowrap; }
+.ov-row a.lbl { color: var(--text-dim); text-decoration: none; }
+.ov-row a.lbl:hover { color: var(--accent); }
+/* One grid for the whole I/O panel, five columns: name | verb value |
+   verb value. Per-row grids sized their columns independently and the
+   figures jagged; a single grid aligns every row like a table. */
+.ov-io-grid { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+              gap: 5px 8px; align-items: baseline; }
+.ov-io-grid .io-head { grid-column: 1 / -1; font-size: 10px; font-weight: 600;
+                       text-transform: uppercase; letter-spacing: .07em;
+                       color: var(--text-faint); margin-top: 4px; }
+.ov-io-grid .io-head:first-child { margin-top: 0; }
+.ov-io-grid .io-name { color: var(--text-dim); font-family: var(--mono); font-size: 12px;
+                       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-io-grid .io-verb { color: var(--text-faint); font-size: 11px; text-align: right; }
+.ov-io-grid .io-val { font-family: var(--mono); font-size: 12px; color: var(--text);
+                      text-align: right; white-space: nowrap;
+                      font-variant-numeric: tabular-nums; min-width: 74px; }
+.ov-row .dot { flex: none; margin-right: 0; }
+.ov-kpis { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-bottom: 14px;
+           max-width: 1080px; align-items: baseline; }
+.ov-kpi { text-decoration: none; font-size: 12px; }
+.ov-kpi .k { color: var(--text-faint); margin-right: 6px; }
+.ov-kpi .v { color: var(--text); font-family: var(--mono); }
+.ov-kpi .v.critical { color: var(--crit); font-weight: 650; }
+a.ov-kpi:hover .v { color: var(--accent); }
+a.ov-sub { text-decoration: none; }
+a.ov-sub:hover { color: var(--accent); }
+.ov-row .val { flex: none; font-family: var(--mono); font-size: 12px; color: var(--text); min-width: 68px; text-align: right; }
+.ov-row .side { flex: none; font-family: var(--mono); font-size: 11px; color: var(--text-faint); min-width: 44px; }
+.meter { position: relative; flex: 1; height: 10px; border-radius: 4px;
+         background: var(--panel-2); border: 1px solid var(--border);
+         display: flex; overflow: hidden; }
+.meter .seg { display: block; height: 100%; background: var(--accent);
+              border-radius: 0 4px 4px 0; min-width: 0; }
+.meter .seg + .seg { margin-left: 2px; }         /* surface gap between segments */
+.meter .seg.aux { background: color-mix(in srgb, var(--accent) 38%, var(--panel-2)); }
+.meter.warn .seg:not(.aux) { background: var(--warn); }
+.meter.critical .seg:not(.aux) { background: var(--crit); }
+.meter .tick { position: absolute; top: 0; bottom: 0; width: 1px;
+               background: var(--border-2); }
+.ov-sub { margin-top: 7px; color: var(--text-faint); font-size: 11px; }
+.ov-sub .k { color: var(--text-dim); }
+.ov-foot { margin-top: 14px; color: var(--text-faint); font-size: 12px;
+           display: flex; gap: 16px; flex-wrap: wrap; max-width: 1080px; }
+.ov-foot .k { color: var(--text-dim); }
+.ov-opinions { margin-top: 12px; max-width: 1080px; }
+#overview details.ov-facts { margin-top: 14px; max-width: 1080px; color: var(--text-dim); }
+#overview details.ov-facts summary { cursor: pointer; font-size: 12px; color: var(--text-faint); }
+.ov-facts table { border-collapse: collapse; margin-top: 8px; }
+.ov-facts td { padding: 2px 14px 2px 0; font-family: var(--mono); font-size: 12px; }
+.ov-facts td:first-child { color: var(--text-dim); }
+.cap-val { font-family: var(--mono); font-size: 11px; color: var(--text-dim); white-space: nowrap; }

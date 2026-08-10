@@ -1,0 +1,24 @@
+__pycache__/
+*.py[cod]
+
+# Python build artifacts (pyproject.toml landed 2026-08-10)
+/build/
+/dist/
+*.egg-info/
+
+# nix build symlinks
+/result
+/result-*
+.direnv/
+
+# Editor and OS cruft. Listed deliberately rather than left to a global
+# ignore file: this repo is developed on macOS, and a single Finder visit
+# would otherwise commit .DS_Store into a public tree.
+.DS_Store
+._*
+.venv/
+venv/
+.idea/
+.vscode/
+*.swp
+*~

@@ -1,0 +1,26 @@
+{
+  "schema": "se.status/1",
+  "host": { "machine_id": "0123456789abcdef0123456789abcdef", "hostname": "host-a" },
+  "observed_at": "2026-08-09T15:04:11Z",
+  "status": "partial",
+  "errors": [
+    "docker/containers: ConnectError: [Errno 111] Connection refused",
+    "docker/volumes: ConnectError: [Errno 111] Connection refused",
+    "docker/networks: ConnectError: [Errno 111] Connection refused"
+  ],
+  "subsystems": {
+    "storage": {
+      "block-devices": { "worst": "ok", "counts": { "ok": 11, "info": 1 }, "total": 12, "observed_at": "2026-08-09T15:04:09Z" },
+      "mounts": { "worst": "info", "counts": { "none": 28 }, "total": 28, "observed_at": "2026-08-09T15:04:09Z" },
+      "arrays": { "worst": null, "counts": {}, "total": 0, "observed_at": "2026-08-09T15:04:09Z" },
+      "pools": { "worst": "warn", "counts": { "warn": 1, "ok": 1 }, "total": 2, "observed_at": "2026-08-09T15:04:10Z" },
+      "datasets": { "worst": "ok", "counts": { "ok": 37, "none": 3 }, "total": 40, "observed_at": "2026-08-09T15:04:10Z" },
+      "lookups": { "worst": null, "reason": "parameterised catalog" }
+    },
+    "docker": {
+      "containers": { "worst": null, "error": "ConnectError: [Errno 111] Connection refused" },
+      "volumes": { "worst": null, "error": "ConnectError: [Errno 111] Connection refused" },
+      "networks": { "worst": null, "error": "ConnectError: [Errno 111] Connection refused" }
+    }
+  }
+}

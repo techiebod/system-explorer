@@ -1,0 +1,35 @@
+{
+  "schema": "se.observation/1",
+  "host": { "machine_id": "abcdef0123456789abcdef0123456789", "hostname": "host-c" },
+  "subsystem": "storage",
+  "object": { "id": "pool:backup", "type": "pool", "native_id": "backup", "name": "backup" },
+  "observed_at": "2026-08-07T16:20:00Z",
+  "status": "partial",
+  "errors": ["zpool iostat sampling timed out; utilisation facts omitted"],
+  "source": {
+    "adapter": "zfs-json",
+    "interface": "zpool-json-output",
+    "method": "zpool status -j backup",
+    "reference_commands": ["zpool status backup", "zpool list backup"],
+    "notes": ["JSON output requires OpenZFS >= 2.3; capability-gated per host."]
+  },
+  "facts": {
+    "state": "DEGRADED",
+    "errors": "No known data errors",
+    "vdevs": { "online": 1, "degraded": 1 },
+    "scan": "resilver in progress"
+  },
+  "opinions": [
+    {
+      "key": "pool-health",
+      "level": "critical",
+      "message": "Pool is DEGRADED: one vdev member is unavailable and a resilver is in progress.",
+      "evidence": ["state", "vdevs.degraded", "scan"]
+    }
+  ],
+  "relationships": [
+    { "type": "member-of", "direction": "in", "target": { "id": "dataset:backup/apps", "subsystem": "storage" } },
+    { "type": "backs", "direction": "in", "target": { "id": "block-device:sda", "subsystem": "storage" } }
+  ],
+  "evidence_ref": "/v1/storage/pools/pool:backup/evidence"
+}

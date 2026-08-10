@@ -1,0 +1,77 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "system-explorer"
+dynamic = ["version"]  # from system_explorer.__version__ — see [tool.setuptools.dynamic]
+description = "Read-only infrastructure observation: host agent, envelope API, operator UI"
+readme = "README.md"
+license = "GPL-3.0-or-later"
+requires-python = ">=3.10"
+authors = [{ name = "Henry" }]
+keywords = ["observability", "systemd", "infrastructure", "mcp", "read-only"]
+classifiers = [
+  "Environment :: No Input/Output (Daemon)",
+  "Intended Audience :: System Administrators",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Topic :: System :: Monitoring",
+  "Topic :: System :: Systems Administration",
+]
+
+# THE dependency truth. nix/package.nix feeds this list to
+# buildPythonApplication, whose pythonRuntimeDepsCheckHook then *fails the
+# build* if the nix inputs and this list disagree — which is the point of
+# declaring them here rather than in three hand-maintained derivations.
+# Deliberately unpinned: distro packaging cannot honour upper bounds, and the
+# lab measured the agent working across fastapi 0.101 (Ubuntu 24.04) to
+# 0.136 (Fedora 44) and dbus-fast 2.21 to 2.45.
+dependencies = [
+  "anyio",
+  "dbus-fast",
+  "fastapi",
+  "httpx",
+  "starlette",
+  "uvicorn",
+]
+
+[project.optional-dependencies]
+# libvirt-python is a C extension against libvirt itself: heavy, and useless
+# on a host with no hypervisor. The vms adapter is gated at runtime anyway,
+# so this stays opt-in and hub/mcp-only installs skip the closure entirely.
+vms = ["libvirt-python"]
+# The one pin that earns its keep: SDK 2.0 deleted mcp.server.fastmcp, which
+# server.py imports. Only nixpkgs' pin was holding this up. An extra rather
+# than a base dependency because Debian and Ubuntu do not package the SDK at
+# all yet (ROADMAP section 5, phase 5 backports it).
+mcp = ["mcp>=1,<2"]
+test = ["pytest", "jsonschema"]
+
+[project.scripts]
+# Names unchanged across the 0.4 restructure: nix/module.nix and
+# nix/hub-module.nix name them in ExecStart, so deployed units keep working.
+system-explorer-agent = "system_explorer.cli:agent"
+se-hub = "system_explorer.cli:hub"
+se-mcp = "system_explorer.mcp.server:main"
+
+[project.urls]
+Homepage = "https://github.com/techiebod/system-explorer"
+Source = "https://github.com/techiebod/system-explorer"
+
+[tool.setuptools.dynamic]
+version = { attr = "system_explorer.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+# The operator UI is package data, not a sibling directory: an installed
+# agent has no repo root to walk up to.
+system_explorer = ["ui/*"]
+
+[tool.pytest.ini_options]
+# src/ so the conformance suite imports system_explorer without an install;
+# conformance/ so `from common import ...` keeps working from any cwd.
+pythonpath = ["src", "conformance"]
+testpaths = ["conformance"]

@@ -1,0 +1,1910 @@
+/* System Explorer — operator UI (SPEC §8).
+   Vanilla, no build step. Consumes only the public /v1 API; renders only
+   what is in the envelope. Deep links: #/subsystem/collection[/object-id] —
+   behind the per-site hub (hub/server.py) a host name is the first segment
+   (#/host/…) and every agent call is proxied through /agents/<host>.
+
+   Detail is an inline expansion beneath the row that produced it. Evidence
+   offers two views of one captured payload — a command-style rendering and
+   raw JSON; nothing is ever executed to produce either.
+
+   Concurrency: every fetch captures state.epoch (bumped on collection
+   change) and its own target; responses that no longer match current state
+   are discarded. The last *wanted* response wins, not the last to arrive. */
+
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+
+const state = {
+  hub: null,             // /hub/hosts payload when the hub serves us, else null
+  currentHost: null,     // hub mode: the agent every api() call is proxied to
+  capabilities: null,
+  status: null,          // /v1/status roll-up for the current host (nav badges)
+  subsystem: null,
+  collection: null,
+  page: null,
+  selectedId: null,
+  detailObs: null,
+  evidence: null,        // {data, view}
+  sortKey: null,
+  sortDir: 1,
+  filterText: "",
+  facet: null,
+  showHidden: false,     // reveal rows a HIDDEN rule suppresses by default
+  colPicker: false,      // the columns dropdown in the facet bar
+  lookupDraft: null,     // in-progress lookup input, preserved across refresh
+  lookupCatalog: null,   // launcher entries, fetched once per host
+  ovIdentity: null,      // overview KPI identity facts, cached per host
+  ovPrev: null,          // overview's previous counter sample (client-side rates)
+  observedAt: null,
+  refreshTimer: null,
+  suppressAutoOpen: false,
+  epoch: 0,
+};
+
+const COLUMNS = {
+  "units/units": ["ActiveState", "SubState", "Description"],
+  "logs/journal": ["Timestamp", "Priority", "SyslogIdentifier", "Message"],
+  "docker/containers": ["State", "Status", "Image", "ComposeProject"],
+  "docker/volumes": ["Driver", "Mountpoint", "ComposeProject"],
+  "docker/networks": ["Driver", "Scope", "Internal"],
+  "storage/mounts": ["Source", "FsType", "UsePercent", "SizeBytes", "AvailBytes"],
+  "storage/block-devices": ["Type", "Size", "FsType", "Mountpoints", "Model"],
+  "storage/arrays": ["Status", "Level", "SyncPercent", "RaidDisks", "SizeBytes"],
+  "storage/pools": ["State", "CapacityPercent", "ScanFunction", "Errors"],
+  "storage/datasets": ["UsedBytes", "SnapshotUsedBytes", "AvailBytes", "UsePercent", "Mountpoint", "ReadOnly", "Mounted"],
+  "system/generations": ["NixosVersion", "Kernel", "ConfigurationRevision", "Created", "Current", "Booted", "Profile"],
+  "system/packages": ["Version", "StorePath"],
+  "system/overview": ["LoadAvg1", "LoadPerCpu1", "MemUsedPercent", "MemAvailableBytes", "SwapUsedPercent", "UptimeSeconds"],
+  "hardware/platform": ["ProductName", "CPUModel", "CPUs", "MemoryTotalBytes", "BiosVersion"],
+  "hardware/pci": ["Class", "Vendor", "Model", "Driver"],
+  "hardware/usb": ["Vendor", "Product", "SpeedMbps", "USBVersion"],
+  "hardware/scsi": ["Vendor", "Transport", "Model", "SizeBytes", "State", "Block", "EnclosureSlot", "SmartTemperatureC"],
+  "hardware/nvme": ["Model", "FirmwareRev", "Serial", "State", "SmartTemperatureC", "Namespaces"],
+  "network/links": ["OperState", "Kind", "MTU", "MACAddress", "Addresses"],
+  "network/routes": ["Gateway", "Device", "Protocol", "Scope", "Family"],
+  "network/lookups": ["Question", "Input", "Example"],
+  "storage/lookups": ["Question", "Input", "Example"],
+  "network/resolver": ["CurrentDNSServer", "DNSServersInUse", "SearchDomains", "DNSSEC"],
+  "network/tailscale": ["TailscaleIPs", "Online", "Relay", "CurAddr", "OS", "LastSeen"],
+  "network/nft-tables": ["Family", "ChainCount", "RuleCount", "Chains"],
+  "vms/domains": ["State", "IPAddresses", "MemoryMiB", "VCPUs", "Autostart"],
+};
+
+const FACETS = {
+  "units/units": (item) => item.type,
+  "logs/journal": (item) => item.facts.SyslogIdentifier,
+  "docker/containers": (item) => item.facts.State,
+  "hardware/pci": (item) => item.facts.Class,
+  "hardware/scsi": (item) => item.type,
+};
+
+/* Rows hidden by default, systemctl-status style: the default view is what
+   is running (plus anything failed — that is never hidden). A toggle chip
+   in the facet bar reveals the rest; the API always returns everything. */
+const HIDDEN = {
+  "units/units": { label: "inactive", match: (item) => item.facts.ActiveState === "inactive" },
+  "hardware/scsi": { label: "empty hosts",
+                     match: (item) => item.type === "scsi-host" && !item.facts.Devices },
+};
+
+const PREFIX_ROUTE = {
+  unit: ["units", "units"],
+  entry: ["logs", "journal"],
+  "block-device": ["storage", "block-devices"],
+  mount: ["storage", "mounts"],
+  array: ["storage", "arrays"],
+  pool: ["storage", "pools"],
+  dataset: ["storage", "datasets"],
+  container: ["docker", "containers"],
+  volume: ["docker", "volumes"],
+  "docker-network": ["docker", "networks"],
+  identity: ["system", "identity"],
+  time: ["system", "time"],
+  boot: ["system", "boot"],
+  overview: ["system", "overview"],
+  generation: ["system", "generations"],
+  package: ["system", "packages"],
+  platform: ["hardware", "platform"],
+  pci: ["hardware", "pci"],
+  usb: ["hardware", "usb"],
+  scsi: ["hardware", "scsi"],
+  nvme: ["hardware", "nvme"],
+  link: ["network", "links"],
+  route: ["network", "routes"],
+  lookup: ["network", "lookups"],
+  resolver: ["network", "resolver"],
+  "nft-table": ["network", "nft-tables"],
+  domain: ["vms", "domains"],
+};
+
+const VALUE_CLASS = {
+  active: "ok", running: "ok", up: "ok", online: "ok", loaded: "ok", enabled: "ok",
+  failed: "crit", crashed: "crit", unhealthy: "crit", degraded: "crit",
+  down: "warn", exited: "warn", paused: "warn", blocked: "warn", restarting: "warn",
+  inactive: "neutral", shutoff: "neutral", dead: "neutral", unknown: "neutral",
+};
+
+const PRIORITY_NAMES = ["emerg", "alert", "crit", "err", "warning", "notice", "info", "debug"];
+const NBSP = "\u00a0";
+
+/* ── helpers ─────────────────────────────────────────────── */
+
+function el(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined && text !== null) node.textContent = text;
+  return node;
+}
+
+function idPath(objectId) {
+  return encodeURIComponent(objectId).replace(/%2F/gi, "/").replace(/%3A/gi, ":");
+}
+
+function safeDecode(part) {
+  try { return decodeURIComponent(part); } catch { return part; }
+}
+
+/* A lookup result (lookup:route-get/1.1.1.1) is not a row of its own; it
+   anchors to the descriptor row (lookup:route-get) that produced it. */
+function anchorRowId() {
+  const id = state.selectedId;
+  return id && id.startsWith("lookup:") ? id.split("/")[0] : id;
+}
+
+async function api(path) {
+  // Hub mode reaches each agent same-origin through the proxy; the paths
+  // themselves (including evidence_ref values) stay agent-relative.
+  const res = await fetch(state.hub ? `/agents/${state.currentHost}${path}` : path);
+  if (!res.ok) throw new Error(`${res.status} ${await res.text().then(t => t.slice(0, 140))}`);
+  return res.json();
+}
+
+function humanBytes(n) {
+  if (typeof n !== "number") return String(n);
+  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
+  let i = 0, v = n;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return `${v >= 10 || i === 0 ? Math.round(v) : v.toFixed(1)} ${units[i]}`;
+}
+
+function ageOf(iso) {
+  if (!iso) return "";
+  const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
+  if (s < 90) return `${s}s ago`;
+  if (s < 5400) return `${Math.round(s / 60)}m ago`;
+  return `${Math.round(s / 3600)}h ago`;
+}
+
+/* ageOf's ladder with wider stops — durations (uptimes) rather than ages. */
+function humanSeconds(n) {
+  if (n < 120) return `${Math.round(n)}s`;
+  if (n < 7200) return `${Math.round(n / 60)}m`;
+  if (n < 172800) return `${Math.round(n / 3600)}h`;
+  return `${Math.round(n / 86400)}d`;
+}
+
+/* Unit-aware scalar formatting, keyed on fact-name conventions: *Bytes
+   humanizes, *Seconds becomes a duration, *Percent / *Pct wears its % sign.
+   Returns null when the key carries no unit convention — callers fall
+   through to generic rendering. */
+const PERCENT_KEY_RE = /(Percent|Pct)/;
+function scalarText(key, value, exact = false) {
+  if (typeof value !== "number") return null;
+  if (key.endsWith("Bytes")) return exact ? `${humanBytes(value)}  (${value})` : humanBytes(value);
+  if (key.endsWith("Seconds")) return exact ? `${humanSeconds(value)}  (${value})` : humanSeconds(value);
+  if (PERCENT_KEY_RE.test(key)) return `${value}%`;
+  return null;
+}
+
+function vstr(v) {
+  if (v === null || v === undefined) return "";
+  if (Array.isArray(v)) return v.map(vstr).join(" ");
+  if (typeof v === "object") {
+    if ("__bytes_base64__" in v) {
+      const b64 = v.__bytes_base64__;
+      const bytes = Math.floor(b64.length * 3 / 4) - (b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0);
+      return `<binary ${bytes} bytes>`;
+    }
+    return JSON.stringify(v);
+  }
+  return String(v);
+}
+
+/* ── boot ────────────────────────────────────────────────── */
+
+async function boot() {
+  initTheme();
+  // One UI, two servers: each agent serves it single-host, the per-site hub
+  // serves the same files with /hub/hosts in front. That route existing is
+  // the mode switch — an agent 404s it and everything behaves as before.
+  try {
+    const res = await fetch("/hub/hosts");
+    if (res.ok) state.hub = await res.json();
+  } catch { /* server unreachable entirely; loadHost reports it below */ }
+  if (state.hub && !Object.keys(state.hub.hosts).length) {
+    banner("The hub has no agents configured (SE_HUB_AGENTS).");
+    return;
+  }
+  if (state.hub) {
+    const first = location.hash.replace(/^#\/?/, "").split("/")[0];
+    state.currentHost = knownHost(first) ? first : defaultHost();
+    $("host-select").onchange = onHostSelect;
+  }
+  const ok = await loadHost();
+  window.addEventListener("hashchange", route);
+  if (ok) route();
+  setInterval(() => { $("age").textContent = state.observedAt ? `observed ${ageOf(state.observedAt)}` : ""; }, 5000);
+  // The status poll keeps its own, slower clock: every tick re-collects
+  // every collection server-side (statelessness's deliberate cost), so 60s
+  // against the collection view's 15s, and only while visible.
+  setInterval(() => { if (!document.hidden) refreshStatus(); }, 60000);
+}
+
+function knownHost(name) {
+  return !!state.hub && !!name && Object.hasOwn(state.hub.hosts, name);
+}
+
+function defaultHost() {
+  const names = Object.keys(state.hub.hosts);
+  return names.find(n => state.hub.hosts[n].reachable) ?? names[0];
+}
+
+/* Fetch the current host's capabilities and rebuild the chrome around them.
+   Everything host-scoped resets here; in-flight responses from the previous
+   host die on the epoch bump. */
+async function loadHost() {
+  const epoch = ++state.epoch;
+  state.lookupCatalog = null;
+  state.status = null;
+  state.ovPrev = null;         // counter deltas never span two hosts
+  state.capabilities = null;   // stale caps must not describe the new host
+  renderHostCard();
+  let caps;
+  try {
+    caps = await api("/v1/capabilities");
+  } catch (err) {
+    if (epoch !== state.epoch) return false;
+    state.capabilities = null;
+    renderNav();
+    banner(state.hub
+      ? `${state.currentHost} is unreachable: ${err.message}`
+      : `Cannot reach the agent: ${err.message}`);
+    return false;
+  }
+  if (epoch !== state.epoch) return false;
+  state.capabilities = caps;
+  banner(null);
+  renderHostCard();
+  renderNav();
+  refreshStatus();   // deliberately unawaited: badges land when the roll-up does
+  return true;
+}
+
+function onHostSelect() {
+  // Switching host is navigation: the URL stays the one source of truth.
+  const rest = state.subsystem && state.collection
+    ? `/${state.subsystem}/${state.collection}` : "";
+  location.hash = `#/${$("host-select").value}${rest}`;
+}
+
+function renderHostCard() {
+  if (!state.hub) {
+    const host = state.capabilities?.host;
+    if (host) {
+      $("host-name").textContent = host.hostname;
+      $("host-meta").textContent = host.machine_id.slice(0, 12) + "…";
+    }
+    return;
+  }
+  const select = $("host-select");
+  $("host-name").hidden = true;
+  select.hidden = false;
+  select.textContent = "";
+  for (const [name, probe] of Object.entries(state.hub.hosts)) {
+    // Unreachable hosts stay listed and selectable — picking one shows the
+    // error banner rather than silently hiding the host.
+    const opt = el("option", null, probe.reachable ? name : `${name} — unreachable`);
+    opt.value = name;
+    select.appendChild(opt);
+  }
+  select.value = state.currentHost;
+  const probe = state.hub.hosts[state.currentHost];
+  const machineId = state.capabilities?.host?.machine_id ?? probe?.host?.machine_id;
+  $("host-meta").textContent = (state.hub.site ? `${state.hub.site} · ` : "")
+    + (machineId ? machineId.slice(0, 12) + "…" : "unreachable");
+}
+
+function navRoutes() {
+  const out = [];
+  for (const [name, cap] of Object.entries(state.capabilities?.subsystems || {})) {
+    for (const coll of cap.collections || []) out.push([name, coll]);
+  }
+  return out;
+}
+
+function renderNav() {
+  const nav = $("nav");
+  nav.textContent = "";
+  for (const [name, cap] of Object.entries(state.capabilities?.subsystems || {})) {
+    const box = el("div", "nav-sub" + (cap.available ? "" : " unavailable"));
+    const label = el("div", "sub-label", name);
+    if (!cap.available) label.title = cap.reason || "unavailable";
+    box.appendChild(label);
+    for (const coll of cap.collections || []) {
+      const item = el("a", "nav-item", coll);
+      item.href = hashFor(name, coll);
+      item.dataset.route = `${name}/${coll}`;
+      box.appendChild(item);
+    }
+    nav.appendChild(box);
+  }
+  applyNavBadges();
+}
+
+/* ── status badges ───────────────────────────────────────── */
+
+/* The nav's attention layer (ROADMAP slice 1). Failures clear the badges
+   rather than freeze them — a stale count is worse than none. */
+async function refreshStatus() {
+  const host = state.currentHost;
+  let status = null;
+  try { status = await api("/v1/status"); }
+  catch { /* no roll-up (old agent, dead host) → no badges */ }
+  if (host !== state.currentHost) return;   // host switched mid-flight
+  state.status = status;
+  applyNavBadges();
+}
+
+/* Applied onto the built nav rather than rebuilding it: warn+critical row
+   counts on the collection link, a dot on the subsystem label. worst:null
+   with a reason is silence by design (the roll-up is nullable); a failed
+   roll-up is a muted "!" carrying the error as its title. */
+function applyNavBadges() {
+  const subsystems = state.status?.subsystems || {};
+  for (const box of document.querySelectorAll("#nav .nav-sub")) {
+    let subLevel = null;
+    let visible = 0;
+    for (const link of box.querySelectorAll(".nav-item")) {
+      link.querySelector(".nav-badge")?.remove();
+      const [sub, coll] = link.dataset.route.split("/");
+      const entry = subsystems[sub]?.[coll];
+      // A collection that observed fine and found nothing (total 0, no
+      // verdict, no decline reason) has nothing to navigate to — hide it
+      // until an object exists (a host with no md arrays never shows
+      // "arrays"). The current route stays visible so deep links and the
+      // open view never lose their nav anchor; declined and unavailable
+      // entries keep their row — absence of data and inability to look
+      // are different statements.
+      const empty = entry && entry.total === 0 && entry.worst === null
+        && !entry.reason && !entry.error;
+      link.hidden = !!empty && link.dataset.route !== `${state.subsystem}/${state.collection}`;
+      if (!link.hidden) visible++;
+      if (!entry) continue;
+      if (entry.error) {
+        const badge = el("span", "nav-badge err", "!");
+        badge.title = entry.error;
+        link.appendChild(badge);
+      } else if (entry.counts) {
+        const crit = entry.counts.critical || 0;
+        const warn = entry.counts.warn || 0;
+        if (!crit && !warn) continue;
+        const badge = el("span", `nav-badge ${crit ? "critical" : "warn"}`, String(crit + warn));
+        badge.title = [crit && `${crit} critical`, warn && `${warn} warn`].filter(Boolean).join(", ");
+        link.appendChild(badge);
+        subLevel = crit ? "critical" : subLevel ?? "warn";
+      }
+    }
+    // A subsystem whose every collection is hidden-empty disappears with
+    // them (an all-empty group label would navigate to nothing).
+    box.hidden = visible === 0;
+    const label = box.querySelector(".sub-label");
+    label.querySelector(".dot")?.remove();
+    if (subLevel) label.appendChild(el("span", `dot ${subLevel}`));
+  }
+}
+
+/* ── routing ─────────────────────────────────────────────── */
+
+function defaultRoute() {
+  // Landing view: the host overview when this host serves one — a degraded
+  // object is visible without knowing which collection to open (ROADMAP
+  // slice 1). Agents predating overview land on units as before.
+  const system = state.capabilities?.subsystems?.system;
+  return system?.available && (system.collections || []).includes("overview")
+    ? ["system", "overview"] : ["units", "units"];
+}
+
+function route() {
+  let parts = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
+  if (state.hub) {
+    if (!knownHost(parts[0])) {
+      // Deep-link migration (ROADMAP slice 1): a hash whose first segment is
+      // no known host is a legacy single-agent link; give it a host once and
+      // keep the rest verbatim.
+      history.replaceState(null, "", "#/" + [state.currentHost, ...parts].join("/"));
+      parts = [state.currentHost, ...parts];
+    }
+    const host = parts.shift();
+    if (host !== state.currentHost) { switchHost(host, parts); return; }
+  }
+  const [defSub, defColl] = defaultRoute();
+  const subsystem = parts[0] || defSub;
+  const collection = parts[1] ||
+    (parts[0] ? state.capabilities?.subsystems?.[subsystem]?.collections?.[0] ?? "units" : defColl);
+  let objectId = parts.length > 2 ? safeDecode(parts.slice(2).join("/")) : null;
+  if (subsystem === "system" && collection === "overview" && objectId) {
+    // The overview is a designed panel, not a row expansion; its single
+    // object adds nothing a deep link needs. Normalise old object links.
+    objectId = null;
+    history.replaceState(null, "", hashFor("system", "overview"));
+  }
+
+  const changedCollection = subsystem !== state.subsystem || collection !== state.collection;
+  state.subsystem = subsystem;
+  state.collection = collection;
+
+  document.querySelectorAll(".nav-item").forEach(a =>
+    a.classList.toggle("active", a.dataset.route === `${subsystem}/${collection}`));
+
+  if (changedCollection) {
+    state.epoch++;
+    Object.assign(state, { sortKey: null, filterText: "", facet: null,
+                           selectedId: null, detailObs: null, evidence: null,
+                           suppressAutoOpen: false, page: null, lookupDraft: null,
+                           showHidden: false, colPicker: false });
+    $("filter").value = "";
+    // The facet bar describes a collection's rows; on a route change the
+    // old chips are stale immediately — clear now, not when the new data
+    // lands (they used to linger over the overview until touched).
+    renderFacets();
+    loadCollection(objectId);
+    armAutoRefresh();
+  } else if (objectId && objectId !== state.selectedId) {
+    openDetail(objectId);
+  } else if (!objectId && state.selectedId) {
+    collapseDetail();
+  }
+}
+
+/* The host changed under the route. Rebuild the host-scoped chrome, then
+   re-route: the subsystem/collection carries over when the new host serves
+   it, else falls back to that host's default. */
+async function switchHost(host, rest) {
+  state.currentHost = host;
+  clearInterval(state.refreshTimer);   // no polls of the old route mid-switch
+  const ok = await loadHost();
+  if (state.currentHost !== host) return;   // switched again while loading
+  if (!ok) {
+    // Unreachable host: the banner (set by loadHost) plus an emptied grid;
+    // the select still lists it, so recovery is one change event away.
+    Object.assign(state, { page: null, selectedId: null, detailObs: null,
+                           evidence: null, observedAt: null,
+                           subsystem: rest[0] || null,
+                           collection: rest[1] || null });
+    $("grid-head").textContent = ""; $("grid-body").textContent = "";
+    $("grid-empty").hidden = true;
+    $("overview").hidden = true; $("collection-pane").hidden = false;
+    renderCrumb(); renderFacets();
+    return;
+  }
+  const cols = state.capabilities.subsystems[rest[0]]?.collections || [];
+  if (!rest[0] || !(rest[1] ? cols.includes(rest[1]) : cols.length)) {
+    history.replaceState(null, "", hashFor(...defaultRoute()));
+  }
+  state.subsystem = null;                   // force a reload on the new host
+  state.collection = null;
+  route();
+}
+
+function hashFor(subsystem, collection, objectId) {
+  const path = objectId
+    ? `${subsystem}/${collection}/${idPath(objectId)}`
+    : `${subsystem}/${collection}`;
+  return state.hub ? `#/${state.currentHost}/${path}` : `#/${path}`;
+}
+
+function goTo(subsystem, collection, objectId, { replace = false } = {}) {
+  const hash = hashFor(subsystem, collection, objectId);
+  if (location.hash === hash) return route();
+  if (replace) {
+    history.replaceState(null, "", hash);
+    route();
+  } else {
+    location.hash = hash;
+  }
+}
+
+function stripObjectFromHash() {
+  history.replaceState(null, "", hashFor(state.subsystem, state.collection));
+}
+
+/* ── collection view ─────────────────────────────────────── */
+
+const PAGE_LIMIT = 500;
+const MAX_ROWS = 2000;   // client-side ceiling; the crumb says when it's hit
+
+async function loadCollection(deepLinkId = null) {
+  if (state.subsystem === "system" && state.collection === "overview")
+    return loadOverview();
+  $("overview").hidden = true;
+  $("collection-pane").hidden = false;
+  const { subsystem, collection, epoch } = state;
+  $("refresh").classList.add("spin");
+  let page;
+  try {
+    page = await api(`/v1/${subsystem}/${collection}?limit=${PAGE_LIMIT}`);
+    // Follow the server's explicit cursor so filtering and facets see the
+    // whole collection, not just the first page — bounded, because the
+    // journal's history is effectively endless.
+    while (page.next_cursor && page.items.length < MAX_ROWS && epoch === state.epoch) {
+      const more = await api(`/v1/${subsystem}/${collection}?limit=${PAGE_LIMIT}` +
+                             `&cursor=${encodeURIComponent(page.next_cursor)}`);
+      page.items = page.items.concat(more.items);
+      page.next_cursor = more.next_cursor;
+      if (!more.items.length) break;
+    }
+  } catch (err) {
+    if (epoch === state.epoch) {
+      banner(`Failed to load ${subsystem}/${collection}: ${err.message}`);
+      state.page = null;
+      renderCrumb(); renderFacets(); renderGrid();
+    }
+    $("refresh").classList.remove("spin");
+    return;
+  }
+  $("refresh").classList.remove("spin");
+  if (epoch !== state.epoch) return;   // user navigated away; stale response
+
+  state.page = page;
+  state.observedAt = page.observed_at;
+  banner(page.status !== "ok" ? (page.errors || []).join("; ") : null);
+  renderCrumb();
+  renderFacets();
+  renderGrid();
+
+  if (deepLinkId) {
+    openDetail(deepLinkId);
+  } else if (state.selectedId && state.detailObs) {
+    // Keep an open expansion current with the rows around it — except a
+    // lookup result, which runs only when asked, never on the poll.
+    if (!(state.selectedId.startsWith("lookup:") && state.selectedId.includes("/")))
+      openDetail(state.selectedId, { quiet: true });
+  } else if (!state.selectedId && !state.suppressAutoOpen
+             && page.items.length === 1 && page.total === 1) {
+    openDetail(page.items[0].id, { quiet: true });
+  }
+}
+
+/* ── host overview: a designed panel, not the generic grid ──
+   One meter per resource area. Meter severity comes from the agent's own
+   opinions on the overview object (shared rulebook, SPEC rule 14) — the UI
+   holds scales, never thresholds. */
+
+const OPINION_METER = {
+  "load-pressure": "load", "memory-available": "mem", "swap-pressure": "swap",
+  "psi-cpu": "psi-cpu", "psi-memory": "psi-memory", "psi-io": "psi-io",
+};
+
+async function loadOverview() {
+  const { epoch } = state;
+  $("refresh").classList.add("spin");
+  // The overview composes from the same public collections everything else
+  // reads (two consumers, one contract) — each ask is capability-guarded
+  // and individually allowed to fail; a missing source is an absent
+  // section, never a broken page.
+  const subs = state.capabilities?.subsystems || {};
+  const has = (s, c) => subs[s]?.available && (subs[s].collections || []).includes(c);
+  const asks = { obs: api("/v1/system/overview/overview:host") };
+  if (has("network", "links")) asks.links = api("/v1/network/links?limit=100");
+  if (has("storage", "mounts")) asks.mounts = api("/v1/storage/mounts?limit=100");
+  if (has("storage", "pools")) asks.pools = api("/v1/storage/pools?limit=100");
+  if (has("docker", "containers")) {
+    asks.crun = api("/v1/docker/containers?State=running&limit=1");
+    asks.call = api("/v1/docker/containers?limit=1");
+  }
+  if (has("vms", "domains")) {
+    asks.vrun = api("/v1/vms/domains?State=running&limit=1");
+    asks.vall = api("/v1/vms/domains?limit=1");
+  }
+  if (has("units", "units")) asks.ufail = api("/v1/units/units?ActiveState=failed&limit=1");
+  if (has("system", "identity") && state.ovIdentity?.host !== state.currentHost)
+    asks.identity = api("/v1/system/identity");
+  const keys = Object.keys(asks);
+  const settled = await Promise.allSettled(Object.values(asks));
+  $("refresh").classList.remove("spin");
+  if (epoch !== state.epoch) return;
+  const got = {};
+  keys.forEach((k, i) => { if (settled[i].status === "fulfilled") got[k] = settled[i].value; });
+  if (!got.obs) {
+    banner(`Failed to load overview: ${settled[0].reason?.message || "unreachable"}`);
+    return;
+  }
+  if (got.identity?.items?.length)
+    state.ovIdentity = { host: state.currentHost, facts: got.identity.items[0].facts };
+  const obs = got.obs;
+  state.page = { items: [], total: 1, observed_at: obs.observed_at,
+                 status: obs.status, next_cursor: null };
+  state.observedAt = obs.observed_at;
+  banner(obs.status !== "ok" ? (obs.errors || []).join("; ") : null);
+  renderCrumb();
+  $("facets").hidden = true;
+  $("collection-pane").hidden = true;
+  $("overview").hidden = false;
+  renderOverview(obs, got);
+}
+
+function meter(pct, cls, ticks = [], segments = null) {
+  const m = el("div", `meter${cls ? " " + cls : ""}`);
+  for (const at of ticks) {
+    const t = el("span", "tick");
+    t.style.left = `${at}%`;
+    m.appendChild(t);
+  }
+  const clamp = (v) => `${Math.max(0, Math.min(100, v))}%`;
+  if (segments) {
+    for (const seg of segments) {
+      const s = el("span", `seg${seg.aux ? " aux" : ""}`);
+      s.style.width = clamp(seg.pct);
+      if (seg.title) s.title = seg.title;
+      m.appendChild(s);
+    }
+  } else {
+    const s = el("span", "seg");
+    s.style.width = clamp(pct);
+    m.appendChild(s);
+  }
+  return m;
+}
+
+function ovRow(label, meterNode, value, side) {
+  const row = el("div", "ov-row");
+  row.appendChild(el("span", "lbl", label));
+  if (side !== undefined) row.appendChild(el("span", "side", side));
+  row.appendChild(meterNode);
+  row.appendChild(el("span", "val", value));
+  return row;
+}
+
+function ovKpi(parent, label, value, { href = null, level = null } = {}) {
+  const kpi = href ? el("a", "ov-kpi") : el("span", "ov-kpi");
+  if (href) kpi.href = href;
+  kpi.appendChild(el("span", "k", label));
+  kpi.appendChild(el("span", `v${level ? " " + level : ""}`, value));
+  parent.appendChild(kpi);
+}
+
+function hostAddresses(links) {
+  // Global addresses of up links, IPv4 first — the ones an operator dials.
+  // Container-plumbing gateways (docker0, compose's br-<hex>) are addresses
+  // nobody dials the host by; the links collection still lists them.
+  const v4 = [], v6 = [];
+  for (const item of links?.items || []) {
+    if (item.facts.OperState !== "up") continue;
+    if (/^(docker0|br-[0-9a-f]{12})$/.test(item.native_id)) continue;
+    for (const cidr of item.facts.Addresses || []) {
+      const addr = String(cidr).split("/")[0];
+      if (addr.startsWith("127.") || addr === "::1" || addr.startsWith("fe80")) continue;
+      (addr.includes(":") ? v6 : v4).push(addr);
+    }
+  }
+  return [...new Set([...v4, ...v6])];
+}
+
+function renderOverview(obs, got = {}) {
+  const root = $("overview");
+  root.textContent = "";
+  const f = obs.facts || {};
+  const levels = {};
+  for (const op of obs.opinions || []) {
+    const target = OPINION_METER[op.key];
+    if (target) levels[target] = op.level === "critical" ? "critical" : "warn";
+  }
+
+  // Key-info line: identity, addresses, workload counts — every value a
+  // door into the collection that backs it.
+  const kpis = el("div", "ov-kpis");
+  const ident = state.ovIdentity?.host === state.currentHost ? state.ovIdentity.facts : null;
+  if (ident) {
+    ovKpi(kpis, "os", ident.OperatingSystemPrettyName || "?",
+          { href: hashFor("system", "identity") });
+    ovKpi(kpis, "kernel", ident.KernelRelease || "?", { href: hashFor("system", "identity") });
+  }
+  const addrs = hostAddresses(got.links);
+  if (addrs.length)
+    ovKpi(kpis, "ip", addrs.slice(0, 3).join("  "), { href: hashFor("network", "links") });
+  if (got.call?.total !== undefined)
+    ovKpi(kpis, "containers", `${got.crun?.total ?? "?"}/${got.call.total} running`,
+          { href: hashFor("docker", "containers") });
+  if (got.vall?.total !== undefined)
+    ovKpi(kpis, "vms", `${got.vrun?.total ?? "?"}/${got.vall.total} running`,
+          { href: hashFor("vms", "domains") });
+  if (got.ufail?.total !== undefined)
+    ovKpi(kpis, "failed units", String(got.ufail.total),
+          { href: hashFor("units", "units"),
+            level: got.ufail.total ? "critical" : null });
+  if (kpis.childNodes.length) root.appendChild(kpis);
+
+  // Attention strip: the /v1/status roll-up the nav badges already fetch —
+  // what needs looking at, before any resource detail.
+  const attention = [];
+  for (const [sub, colls] of Object.entries(state.status?.subsystems || {})) {
+    for (const [coll, v] of Object.entries(colls)) {
+      if (v.worst !== "warn" && v.worst !== "critical") continue;
+      const n = (v.counts?.critical || 0) + (v.counts?.warn || 0);
+      attention.push({ sub, coll, worst: v.worst, n });
+    }
+  }
+  if (attention.length) {
+    const strip = el("div", "ov-attention");
+    attention.sort((a, b) => (a.worst === b.worst ? 0 : a.worst === "critical" ? -1 : 1));
+    for (const a of attention) {
+      const chip = el("a", `ov-chip ${a.worst}`);
+      chip.href = hashFor(a.sub, a.coll);
+      chip.appendChild(el("span", "n", String(a.n)));
+      chip.appendChild(el("span", null, `${a.sub}/${a.coll}`));
+      strip.appendChild(chip);
+    }
+    root.appendChild(strip);
+  }
+
+  const grid = el("div", "ov-grid");
+
+  // Load: scale runs 0..4× per-cpu — the rulebook's critical threshold —
+  // with hairline ticks at 1× (saturated) and 2× (its warn threshold).
+  if (f.LoadAvg1 !== undefined) {
+    const p = el("div", "ov-panel");
+    p.appendChild(el("h3", null, `Load · ${f.CpuCount ?? "?"} cpus`));
+    const per = f.LoadPerCpu1 ?? 0;
+    p.appendChild(ovRow("1 min", meter(per / 4 * 100, levels.load, [25, 50]),
+                        String(f.LoadAvg1)));
+    p.appendChild(ovRow("5 min", meter((f.CpuCount ? f.LoadAvg5 / f.CpuCount : 0) / 4 * 100, null, [25, 50]),
+                        String(f.LoadAvg5)));
+    p.appendChild(ovRow("15 min", meter((f.CpuCount ? f.LoadAvg15 / f.CpuCount : 0) / 4 * 100, null, [25, 50]),
+                        String(f.LoadAvg15)));
+    grid.appendChild(p);
+  }
+
+  // Memory: one stacked meter — the ARC rides as its own segment (it is
+  // reclaimable cache wearing "used" clothes) and never takes severity.
+  if (f.MemTotalBytes) {
+    const p = el("div", "ov-panel");
+    p.appendChild(el("h3", null, "Memory"));
+    const arc = f.ArcSizeBytes || 0;
+    const apps = Math.max(0, (f.MemUsedBytes || 0) - arc);
+    const segs = [{ pct: apps * 100 / f.MemTotalBytes, title: "in use" }];
+    if (arc) segs.push({ pct: arc * 100 / f.MemTotalBytes, aux: true, title: "ZFS ARC (reclaimable)" });
+    p.appendChild(ovRow("used", meter(null, levels.mem, [], segs),
+                        `${f.MemUsedPercent}%`));
+    const sub = el("div", "ov-sub");
+    sub.append(el("span", "k", `${humanBytes(f.MemUsedBytes)} used`),
+               ` of ${humanBytes(f.MemTotalBytes)} · ${humanBytes(f.MemAvailableBytes)} available`);
+    if (arc) sub.append(` · ARC ${humanBytes(arc)}`);
+    p.appendChild(sub);
+    if (f.SwapTotalBytes) {
+      p.appendChild(ovRow("swap", meter((f.SwapUsedPercent ?? 0), levels.swap),
+                          `${f.SwapUsedPercent ?? 0}%`));
+      p.appendChild(el("div", "ov-sub",
+        `${humanBytes(f.SwapUsedBytes)} of ${humanBytes(f.SwapTotalBytes)} swap`));
+    } else if (f.SwapTotalBytes === 0) {
+      p.appendChild(el("div", "ov-sub", "no swap configured"));
+    }
+    grid.appendChild(p);
+  }
+
+  // Pressure: the kernel's own stall shares. The meter carries the share
+  // the rulebook judges (cpu some / memory full / io full) over the last
+  // minute; the flanks give the 10s and 5m readings of the same share.
+  const psi = [
+    ["cpu", f.PsiCpuSomeAvg60, f.PsiCpuSomeAvg10, f.PsiCpuSomeAvg300, "psi-cpu"],
+    ["memory", f.PsiMemoryFullAvg60, f.PsiMemoryFullAvg10, f.PsiMemoryFullAvg300, "psi-memory"],
+    ["io", f.PsiIoFullAvg60, f.PsiIoFullAvg10, f.PsiIoFullAvg300, "psi-io"],
+  ].filter(([, v]) => v !== undefined);
+  if (psi.length) {
+    const p = el("div", "ov-panel");
+    p.appendChild(el("h3", null, "Pressure · stall share, 60s"));
+    for (const [name, v60, v10, v300, key] of psi)
+      p.appendChild(ovRow(name, meter(v60, levels[key]), `${v60}%`, `${v10}%`));
+    p.appendChild(el("div", "ov-sub",
+      "left flank: 10s · meter and value: 60s (what the rules judge)"));
+    grid.appendChild(p);
+  }
+
+  // I/O: the agent ships cumulative counters (it holds no previous sample —
+  // SPEC rules 4/10); the rates here are deltas across this page's own
+  // polls, and the window is stated rather than implied. First sample
+  // honestly reads "measuring".
+  const now = Date.parse(obs.observed_at);
+  const prev = state.ovPrev?.host === state.currentHost ? state.ovPrev : null;
+  const dt = prev ? (now - prev.t) / 1000 : 0;
+  const rate = (cur, old) => (dt > 0 && cur >= old ? (cur - old) / dt : null);
+  const perSec = (v) => v === null ? "—" : `${humanBytes(Math.round(v))}/s`;
+  if (f.NetCounters || f.DiskCounters) {
+    const p = el("div", "ov-panel");
+    p.appendChild(el("h3", null, dt > 0 ? `I/O · over the last ${Math.round(dt)}s` : "I/O · measuring"));
+    const io = el("div", "ov-io-grid");
+    const ioRow = (name, verbA, a, verbB, b) => {
+      io.appendChild(el("span", "io-name", name));
+      io.appendChild(el("span", "io-verb", verbA));
+      io.appendChild(el("span", "io-val", perSec(a)));
+      io.appendChild(el("span", "io-verb", verbB));
+      io.appendChild(el("span", "io-val", perSec(b)));
+    };
+    const rows = [];
+    for (const [name, c] of Object.entries(f.NetCounters || {})) {
+      if (name === "lo") continue;
+      const rx = rate(c.RxBytes, prev?.net?.[name]?.RxBytes ?? Infinity);
+      const tx = rate(c.TxBytes, prev?.net?.[name]?.TxBytes ?? Infinity);
+      rows.push({ name, a: rx, b: tx, sum: (rx || 0) + (tx || 0) });
+    }
+    rows.sort((x, y) => y.sum - x.sum);
+    if (rows.length) io.appendChild(el("span", "io-head", "network"));
+    for (const r of rows.slice(0, 3)) ioRow(r.name, "rx", r.a, "tx", r.b);
+    const drows = [];
+    for (const [name, c] of Object.entries(f.DiskCounters || {})) {
+      const rd = rate(c.ReadBytes, prev?.disk?.[name]?.ReadBytes ?? Infinity);
+      const wr = rate(c.WriteBytes, prev?.disk?.[name]?.WriteBytes ?? Infinity);
+      drows.push({ name, a: rd, b: wr, sum: (rd || 0) + (wr || 0) });
+    }
+    drows.sort((x, y) => y.sum - x.sum);
+    if (drows.length) io.appendChild(el("span", "io-head", "disk"));
+    for (const r of drows.slice(0, 4)) ioRow(r.name, "read", r.a, "write", r.b);
+    p.appendChild(io);
+    grid.appendChild(p);
+  }
+  state.ovPrev = { host: state.currentHost, t: now,
+                   net: f.NetCounters, disk: f.DiskCounters };
+
+  // Storage: pools and the biggest real filesystems — rows wear the same
+  // rule-driven severity their collections carry; nothing is re-judged here.
+  if (got.pools?.items?.length || got.mounts?.items?.length) {
+    const p = el("div", "ov-panel");
+    p.appendChild(el("h3", null, "Storage"));
+    for (const item of got.pools?.items || []) {
+      const cap = item.facts.CapacityPercent;
+      // A pool's worst level can come from any of its rules (a stale scrub,
+      // vdev errors), so it must not colour the capacity meter — a warm bar
+      // at 54% would read as a fullness problem. The dot carries overall
+      // severity; the meter stays a magnitude.
+      const lvl = item.worst_opinion_level;
+      const row = el("div", "ov-row");
+      const lbl = el("a", "lbl wide", item.native_id);
+      lbl.href = hashFor("storage", "pools", item.id);
+      row.appendChild(lbl);
+      if (["warn", "critical"].includes(lvl)) row.appendChild(el("span", `dot ${lvl}`));
+      row.appendChild(meter(cap ?? 0, null));
+      row.appendChild(el("span", "val",
+        cap !== null && cap !== undefined ? `${cap}%` : "—"));
+      p.appendChild(row);
+      if (item.facts.SizeBytes)
+        p.appendChild(el("div", "ov-sub",
+          `${humanBytes(item.facts.AllocatedBytes)} of ${humanBytes(item.facts.SizeBytes)} · pool ${item.facts.State}`));
+    }
+    const mounts = (got.mounts?.items || [])
+      .filter(m => m.facts.SizeBytes && m.facts.UsePercent !== null)
+      .sort((a, b) => (b.facts.SizeBytes || 0) - (a.facts.SizeBytes || 0));
+    const seen = new Set();
+    let shown = 0;
+    for (const m of mounts) {
+      if (seen.has(m.facts.Source) || shown >= 5) continue;
+      seen.add(m.facts.Source); shown++;
+      const lvl = ["warn", "critical"].includes(m.worst_opinion_level)
+        ? (m.worst_opinion_level === "critical" ? "critical" : "warn") : null;
+      const row = el("div", "ov-row");
+      const lbl = el("a", "lbl wide", m.native_id);
+      lbl.title = `${m.native_id} (${m.facts.Source})`;
+      lbl.href = hashFor("storage", "mounts", m.id);
+      row.appendChild(lbl);
+      row.appendChild(meter(m.facts.UsePercent, lvl));
+      row.appendChild(el("span", "val", `${m.facts.UsePercent}%`));
+      p.appendChild(row);
+    }
+    if (mounts.length > shown) {
+      const more = el("a", "ov-sub", `+ ${mounts.length - shown} more filesystems`);
+      more.href = hashFor("storage", "mounts");
+      more.style.display = "block";
+      p.appendChild(more);
+    }
+    grid.appendChild(p);
+  }
+
+  root.appendChild(grid);
+
+  const foot = el("div", "ov-foot");
+  if (f.UptimeSeconds !== undefined)
+    foot.append(el("span", "k", "up "), humanSeconds(f.UptimeSeconds));
+  if (f.BootedAt) foot.append(el("span", "k", " · booted "), f.BootedAt);
+  root.appendChild(foot);
+
+  // Opinions verbatim, same rendering contract as the detail pane: the
+  // meters above are these opinions' visual form, not a replacement.
+  if ((obs.opinions || []).length) {
+    const box = el("div", "ov-opinions");
+    for (const op of obs.opinions)
+      box.appendChild(el("div", `opinion ${op.level}`, `${op.key} — ${op.message}`));
+    root.appendChild(box);
+  }
+
+  // Everything else the object carries, without leaving the designed view.
+  const details = el("details", "ov-facts");
+  details.appendChild(el("summary", null, "all facts"));
+  const table = el("table");
+  for (const [k, v] of Object.entries(f)) {
+    const tr = el("tr");
+    tr.appendChild(el("td", null, k));
+    tr.appendChild(el("td", null, k.endsWith("Bytes") ? `${humanBytes(v)} (${v})` : String(v)));
+    table.appendChild(tr);
+  }
+  details.appendChild(table);
+  root.appendChild(details);
+}
+
+function renderCrumb() {
+  const crumb = $("crumb");
+  crumb.textContent = "";
+  crumb.append(el("b", null, state.subsystem || ""), " / ", state.collection || "");
+  const p = state.page;
+  if (p) {
+    const shown = visibleItems().length;
+    const total = p.total ?? p.items.length;
+    crumb.appendChild(el("span", "count", shown === total ? `${total}` : `${shown} of ${total}`));
+    if (p.next_cursor) crumb.appendChild(el("span", "count", `(first ${p.items.length} loaded; history continues)`));
+  }
+  $("age").textContent = state.observedAt ? `observed ${ageOf(state.observedAt)}` : "";
+}
+
+function renderFacets() {
+  const bar = $("facets");
+  const route = `${state.subsystem}/${state.collection}`;
+  const facetOf = FACETS[route];
+  const hidden = HIDDEN[route];
+  // The overview is a designed panel with no rows to facet; its pseudo-page
+  // must not resurrect the bar.
+  bar.hidden = !state.page || route === "system/overview";
+  bar.textContent = "";
+  if (bar.hidden) return;
+  // Facet counts describe what is on screen, so they respect the hide rule.
+  const base = hidden && !state.showHidden
+    ? state.page.items.filter(it => !hidden.match(it)) : state.page.items;
+  if (facetOf) {
+    const counts = new Map();
+    for (const item of base) {
+      const key = facetOf(item);
+      if (key) counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    const entries = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    const all = el("button", "chip" + (state.facet ? "" : " on"), `all ${base.length}`);
+    all.onclick = () => { state.facet = null; renderFacets(); renderGrid(); renderCrumb(); };
+    bar.appendChild(all);
+    for (const [key, count] of entries.slice(0, 14)) {
+      const chip = el("button", "chip" + (state.facet === key ? " on" : ""));
+      chip.append(key, el("span", "chip-n", String(count)));
+      chip.onclick = () => {
+        state.facet = state.facet === key ? null : key;
+        renderFacets(); renderGrid(); renderCrumb();
+      };
+      bar.appendChild(chip);
+    }
+  }
+  if (hidden) {
+    const n = state.page.items.filter(hidden.match).length;
+    if (n) {
+      const chip = el("button", "chip ghost" + (state.showHidden ? " on" : ""));
+      chip.append(`${state.showHidden ? "hide" : "show"} ${hidden.label}`,
+                  el("span", "chip-n", String(n)));
+      chip.onclick = () => {
+        state.showHidden = !state.showHidden;
+        renderFacets(); renderGrid(); renderCrumb();
+      };
+      bar.appendChild(chip);
+    }
+  }
+
+  // Column picker: any fact key can be a column; choices stick per
+  // collection (localStorage), so every identifier a disk carries is one
+  // toggle away without bloating the defaults.
+  const picker = el("button", "chip ghost" + (state.colPicker ? " on" : ""), "columns ▾");
+  picker.onclick = () => { state.colPicker = !state.colPicker; renderFacets(); };
+  bar.appendChild(picker);
+  if (state.colPicker) {
+    const menu = el("div", "col-menu");
+    const current = new Set(columnsFor());
+    const preset = baseColumnsFor(route);
+    for (const key of allFactKeys()) {
+      const opt = el("button", "col-opt" + (current.has(key) ? " on" : ""));
+      opt.append(el("span", "tick", current.has(key) ? "✓" : NBSP), key);
+      opt.onclick = () => {
+        const prefs = colPrefs(route);
+        if (current.has(key)) {
+          if (preset.includes(key)) prefs.remove = [...(prefs.remove || []), key];
+          prefs.add = (prefs.add || []).filter(k => k !== key);
+        } else {
+          prefs.remove = (prefs.remove || []).filter(k => k !== key);
+          if (!preset.includes(key)) prefs.add = [...(prefs.add || []), key];
+        }
+        setColPrefs(route, prefs);
+        renderFacets(); renderGrid();
+      };
+      menu.appendChild(opt);
+    }
+    bar.appendChild(menu);
+  }
+}
+
+/* Column choices stick per collection: presets (or the first item's keys)
+   are the base, and the picker's additions/removals live in localStorage.
+   Keys stay route-scoped with no host segment, deliberately: a collection's
+   fact vocabulary is the same on every host, so preferences travel. */
+function colPrefs(route) {
+  try { return JSON.parse(localStorage.getItem("se-cols:" + route)) || {}; }
+  catch { return {}; }
+}
+
+function setColPrefs(route, prefs) {
+  localStorage.setItem("se-cols:" + route, JSON.stringify(prefs));
+}
+
+function baseColumnsFor(route) {
+  const preset = COLUMNS[route];
+  if (preset) return preset;
+  const first = state.page?.items?.[0];
+  return first ? Object.keys(first.facts).slice(0, 5) : [];
+}
+
+function columnsFor() {
+  const route = `${state.subsystem}/${state.collection}`;
+  const prefs = colPrefs(route);
+  const removed = new Set(prefs.remove || []);
+  const cols = baseColumnsFor(route).filter(c => !removed.has(c));
+  for (const extra of prefs.add || []) if (!cols.includes(extra)) cols.push(extra);
+  return cols;
+}
+
+function allFactKeys() {
+  const keys = new Set();
+  for (const item of state.page?.items ?? []) {
+    for (const k of Object.keys(item.facts)) keys.add(k);
+  }
+  return [...keys].sort();
+}
+
+function visibleItems() {
+  let items = state.page?.items ?? [];
+  const hidden = HIDDEN[`${state.subsystem}/${state.collection}`];
+  if (hidden && !state.showHidden) items = items.filter(it => !hidden.match(it));
+  const facetOf = FACETS[`${state.subsystem}/${state.collection}`];
+  if (facetOf && state.facet) items = items.filter(it => facetOf(it) === state.facet);
+  const q = state.filterText.toLowerCase();
+  if (q) {
+    items = items.filter(it =>
+      it.id.toLowerCase().includes(q) ||
+      Object.values(it.facts).some(v => v !== null && vstr(v).toLowerCase().includes(q)));
+  }
+  if (state.sortKey) {
+    const k = state.sortKey, dir = state.sortDir;
+    items = [...items].sort((a, b) => {
+      const av = k === "id" ? a.id : a.facts[k];
+      const bv = k === "id" ? b.id : b.facts[k];
+      if (av === bv) return 0;
+      if (av === null || av === undefined) return 1;
+      if (bv === null || bv === undefined) return -1;
+      return (typeof av === "number" && typeof bv === "number")
+        ? (av - bv) * dir
+        : naturalCompare(vstr(av), vstr(bv)) * dir;
+    });
+  }
+  return items;
+}
+
+/* 2:0:10:0 belongs after 2:0:9:0 and slot 10 after slot 9 — digit runs
+   compare as numbers, everything else as text. */
+function naturalCompare(a, b) {
+  const ax = String(a).split(/(\d+)/), bx = String(b).split(/(\d+)/);
+  for (let i = 0; i < Math.max(ax.length, bx.length); i++) {
+    const as = ax[i] ?? "", bs = bx[i] ?? "";
+    if (as === bs) continue;
+    if (/^\d+$/.test(as) && /^\d+$/.test(bs)) return Number(as) - Number(bs);
+    return as.localeCompare(bs);
+  }
+  return 0;
+}
+
+let lookupHadFocus = false;
+
+function renderGrid() {
+  // Rebuilding the body destroys a focused lookup input; remember so the
+  // rebuilt form can restore focus (its text survives in state.lookupDraft).
+  lookupHadFocus = !!document.activeElement?.closest?.(".lookup-form");
+  const cols = columnsFor();
+  const head = $("grid-head");
+  head.textContent = "";
+  const hr = el("tr");
+  for (const key of ["id", ...cols]) {
+    const th = el("th", null, key === "id" ? "object" : key);
+    if (state.sortKey === key) th.appendChild(el("span", "dir", state.sortDir > 0 ? "↑" : "↓"));
+    th.onclick = () => {
+      state.sortDir = state.sortKey === key ? -state.sortDir : 1;
+      state.sortKey = key;
+      renderGrid(); renderCrumb();
+    };
+    hr.appendChild(th);
+  }
+  head.appendChild(hr);
+
+  const body = $("grid-body");
+  body.textContent = "";
+  const items = visibleItems();
+  $("grid-empty").hidden = items.length > 0 || !!state.detailObs;
+  $("grid-empty").textContent = state.filterText || state.facet
+    ? "Nothing matches the filter." : "Collection is empty.";
+
+  const treeable = !state.sortKey && !state.filterText && !state.facet;
+  const anchorId = anchorRowId();
+  let expansionPlaced = false;
+  for (const item of items) {
+    const tr = el("tr");
+    tr.dataset.id = item.id;
+    tr.classList.toggle("selected", item.id === anchorId);
+
+    const idCell = el("td", "ident");
+    if (treeable && typeof item.depth === "number" && item.depth > 0) {
+      idCell.appendChild(el("span", "tree", NBSP.repeat((item.depth - 1) * 3) + "└ "));
+    }
+    idCell.appendChild(el("span", `dot ${item.worst_opinion_level || "info"}`));
+    idCell.appendChild(document.createTextNode(item.native_id));
+    idCell.title = item.id;
+    tr.appendChild(idCell);
+
+    for (const key of cols) tr.appendChild(renderCell(key, item.facts[key], item));
+    tr.onclick = () => {
+      if (item.id === anchorRowId()) {
+        collapseDetail(); stripObjectFromHash();
+      } else {
+        goTo(state.subsystem, state.collection, item.id);
+      }
+    };
+    body.appendChild(tr);
+
+    if (item.id === anchorId && state.detailObs) {
+      body.appendChild(renderExpansion(cols.length + 1));
+      expansionPlaced = true;
+    }
+  }
+  // A deep-linked object may not be among the visible rows (filtered out or
+  // beyond the page); its observation still deserves a home.
+  if (!expansionPlaced && state.selectedId && state.detailObs) {
+    body.insertBefore(renderExpansion(cols.length + 1), body.firstChild);
+  }
+}
+
+function renderCell(key, value, item) {
+  const td = el("td");
+  if (value === null || value === undefined || value === "" ||
+      (Array.isArray(value) && value.length === 0)) {
+    td.appendChild(el("span", "dim", "—"));
+    return td;
+  }
+  // Snapshot weight doubles as the door to the snapshot list.
+  if (key === "SnapshotUsedBytes" && typeof value === "number" && value > 0 && item) {
+    const a = el("a", "fact-link", humanBytes(value));
+    a.href = hashFor(state.subsystem, "lookups", "lookup:snapshots-of/" + item.native_id);
+    a.title = `${value} bytes held by snapshots — click to list them`;
+    a.onclick = (e) => e.stopPropagation();
+    td.appendChild(a);
+    return td;
+  }
+  if (key === "UsePercent" && typeof value === "number") {
+    const wrap = el("span", `usebar${value >= 95 ? " crit" : value >= 90 ? " warn" : ""}`);
+    const track = el("span", "track");
+    const fill = el("span", "fill");
+    fill.style.width = `${Math.min(100, value)}%`;
+    track.appendChild(fill);
+    wrap.append(track, el("span", "mono", `${value}%`));
+    td.appendChild(wrap);
+    return td;
+  }
+  if (key === "Priority" && typeof value === "number") {
+    const cls = value <= 3 ? "crit" : value === 4 ? "warn" : "neutral";
+    td.appendChild(el("span", `badge ${cls}`, PRIORITY_NAMES[value] ?? value));
+    return td;
+  }
+  const unit = scalarText(key, value);
+  if (unit !== null) {
+    td.appendChild(el("span", "mono", unit));
+    td.title = String(value);
+    return td;
+  }
+  if (["ActiveState", "SubState", "State", "Health", "OperState", "LoadState"].includes(key)) {
+    const cls = VALUE_CLASS[String(value).toLowerCase()] || "neutral";
+    td.appendChild(el("span", `badge ${cls}`, String(value)));
+    return td;
+  }
+  if (key.endsWith("Bytes") && typeof value === "number") {
+    td.className = "mono"; td.textContent = humanBytes(value); td.title = String(value);
+    return td;
+  }
+  if (Array.isArray(value)) { td.className = "mono"; td.textContent = value.map(vstr).join(", "); return td; }
+  if (typeof value === "boolean") { td.appendChild(el("span", "dim", value ? "true" : "false")); return td; }
+  if (typeof value === "object") { td.className = "mono"; td.textContent = vstr(value); td.title = vstr(value); return td; }
+  td.textContent = String(value);
+  if (!["Description", "Message", "Status"].includes(key)) td.className = "mono";
+  td.title = String(value);
+  return td;
+}
+
+/* ── detail expansion ────────────────────────────────────── */
+
+async function openDetail(objectId, { quiet = false } = {}) {
+  const { subsystem, collection, epoch } = state;
+  if (state.selectedId !== objectId) state.lookupDraft = null;
+  state.selectedId = objectId;      // optimistic: j/k walks rows per keypress
+  let obs;
+  try {
+    obs = await api(`/v1/${subsystem}/${collection}/${idPath(objectId)}`);
+  } catch (err) {
+    if (epoch === state.epoch && state.selectedId === objectId) {
+      banner(`Failed to load ${objectId}: ${err.message}`);
+    }
+    return;
+  }
+  // Discard if the user navigated elsewhere while this was in flight.
+  if (epoch !== state.epoch || state.selectedId !== objectId) return;
+  state.detailObs = obs;
+  if (!quiet) state.evidence = null;
+  renderGrid();
+  if (!quiet) {
+    document.querySelector("tr.expand")?.previousSibling?.scrollIntoView({ block: "nearest" });
+    // A lookup descriptor's next act is typing the input — hand it focus.
+    const lookupInput = document.querySelector(".lookup-form input");
+    if (lookupInput && !lookupInput.value) lookupInput.focus({ preventScroll: true });
+  }
+}
+
+function collapseDetail() {
+  state.selectedId = null;
+  state.detailObs = null;
+  state.evidence = null;
+  state.lookupDraft = null;
+  state.suppressAutoOpen = true;
+  renderGrid();
+}
+
+function renderExpansion(colspan) {
+  const obs = state.detailObs;
+  const tr = el("tr", "expand");
+  const td = el("td");
+  td.colSpan = colspan;
+  const box = el("div", "d-box");
+
+  const head = el("div", "d-head");
+  head.appendChild(el("span", "d-id", obs.object.id));
+  head.appendChild(el("span",
+    `badge ${obs.status === "ok" ? "ok" : obs.status === "partial" ? "warn" : "crit"}`, obs.status));
+  head.appendChild(el("span", "d-sub", `${obs.object.type} · observed ${ageOf(obs.observed_at)}`));
+  const close = el("button", "d-close", "✕");
+  close.title = "Collapse (Esc)";
+  close.onclick = (e) => { e.stopPropagation(); collapseDetail(); stripObjectFromHash(); };
+  head.appendChild(close);
+  box.appendChild(head);
+
+  if (obs.object.type === "lookup") box.appendChild(renderLookupForm(obs));
+
+  if (obs.errors?.length) {
+    for (const msg of obs.errors) box.appendChild(el("div", "opinion critical", msg));
+  }
+  for (const op of obs.opinions || []) {
+    const o = el("div", `opinion ${op.level}`);
+    o.appendChild(el("div", "msg", op.message));
+    const ev = el("div", "ev");
+    for (const path of op.evidence) {
+      const chip = el("span", "ev-chip", path);
+      chip.onmouseenter = () => citeFacts(path, true);
+      chip.onmouseleave = () => citeFacts(path, false);
+      ev.appendChild(chip);
+    }
+    o.appendChild(ev);
+    box.appendChild(o);
+  }
+
+  const cols = el("div", "d-cols");
+
+  const factsSec = el("div", "d-section");
+  factsSec.appendChild(el("h3", null, "Facts"));
+  // Pools get a bespoke layout: scalar facts left, capacity meters in the
+  // otherwise-dead space to their right, and the vdev table full-width
+  // below — fullness readable at a glance, per top-level vdev.
+  const isPool = obs.subsystem === "storage" && obs.object.type === "pool";
+  const grid = el("div", "facts");
+  for (const [key, value] of Object.entries(obs.facts)) {
+    if (isPool && key === "Vdevs") continue;
+    const k = el("div", "k", key);
+    const v = el("div", `v${value === null || value === undefined ? " null" : ""}`);
+    const unit = scalarText(key, value, true);
+    if (unit !== null) {
+      v.textContent = unit;
+    } else {
+      v.appendChild(renderFactValue(value));
+    }
+    k.dataset.fact = key; v.dataset.fact = key;
+    grid.append(k, v);
+  }
+  if (isPool && typeof obs.facts.SizeBytes === "number") {
+    const top = el("div", "pool-top");
+    top.appendChild(grid);
+    top.appendChild(capacityPanel(obs.facts));
+    factsSec.appendChild(top);
+  } else {
+    factsSec.appendChild(grid);
+  }
+  if (isPool && obs.facts.Vdevs) {
+    const vh = el("h3", null, "Vdevs");
+    vh.style.marginTop = "14px";
+    factsSec.appendChild(vh);
+    const v = el("div", "v");
+    v.dataset.fact = "Vdevs";
+    v.appendChild(renderFactValue(obs.facts.Vdevs));
+    factsSec.appendChild(v);
+  }
+  cols.appendChild(factsSec);
+
+  const side = el("div", "d-side");
+  if (obs.relationships?.length) {
+    const sec = el("div", "d-section");
+    sec.appendChild(el("h3", null, "Relationships"));
+    const groups = {};
+    for (const r of obs.relationships) (groups[`${r.type}/${r.direction}`] ??= []).push(r);
+    for (const [key, rels] of Object.entries(groups)) {
+      const [type, direction] = key.split("/");
+      const g = el("div", "rel-group");
+      g.appendChild(el("div", "rel-type", `${direction === "out" ? "→" : "←"} ${type}`));
+      const chips = el("div", "rel-chips");
+      const REL_CAP = 100;
+      const addChips = (list) => {
+        for (const r of list) {
+          const targetId = r.target.id;
+          const prefix = targetId.split(":", 1)[0];
+          const routeTo = PREFIX_ROUTE[prefix];
+          const node = el(routeTo ? "a" : "span", "rel");
+          node.appendChild(el("span", "arrow", direction === "out" ? "→" : "←"));
+          node.appendChild(document.createTextNode(targetId));
+          if (routeTo) node.href = hashFor(routeTo[0], routeTo[1], targetId);
+          chips.appendChild(node);
+        }
+      };
+      addChips(rels.slice(0, REL_CAP));
+      if (rels.length > REL_CAP) {
+        const more = el("button", "rel dim", `+${rels.length - REL_CAP} more`);
+        more.onclick = (e) => { e.stopPropagation(); more.remove(); addChips(rels.slice(REL_CAP)); };
+        chips.appendChild(more);
+      }
+      g.appendChild(chips);
+      sec.appendChild(g);
+    }
+    side.appendChild(sec);
+  }
+
+  const src = obs.source;
+  const srcSec = el("div", "d-section");
+  srcSec.appendChild(el("h3", null, "Source"));
+  const line = el("div", "src-line");
+  line.append(el("b", null, src.interface), src.method ? ` · ${src.method}` : "");
+  srcSec.appendChild(line);
+  for (const cmd of src.reference_commands || [])
+    srcSec.appendChild(el("div", "src-line", `$ ${cmd}`));
+  for (const note of src.notes || [])
+    srcSec.appendChild(el("div", "src-line dim", note));
+  side.appendChild(srcSec);
+  cols.appendChild(side);
+  box.appendChild(cols);
+
+  if (obs.evidence_ref) box.appendChild(renderEvidenceSection(obs));
+
+  td.appendChild(box);
+  tr.appendChild(td);
+  tr.onclick = (e) => e.stopPropagation();
+  return tr;
+}
+
+/* ── lookup launcher ─────────────────────────────────────── */
+
+/* Every subsystem that advertises a `lookups` collection contributes its
+   questions; the launcher is how a lookup is reachable from any view. The
+   catalog is discovered from the same public API, never hardcoded. */
+async function lookupCatalog() {
+  if (state.lookupCatalog) return state.lookupCatalog;
+  const subs = Object.entries(state.capabilities?.subsystems || {})
+    .filter(([, cap]) => (cap.collections || []).includes("lookups"))
+    .map(([name]) => name);
+  const entries = [];
+  for (const sub of subs) {
+    try {
+      const page = await api(`/v1/${sub}/lookups`);
+      for (const item of page.items)
+        entries.push({ subsystem: sub, id: item.id, name: item.native_id, facts: item.facts });
+    } catch { /* one subsystem failing does not take the launcher down */ }
+  }
+  state.lookupCatalog = entries;
+  return entries;
+}
+
+function closePalette() {
+  const pal = $("palette");
+  pal.hidden = true;
+  pal.textContent = "";
+}
+
+async function openPalette() {
+  const pal = $("palette");
+  if (!pal.hidden) return closePalette();
+  pal.hidden = false;
+  pal.textContent = "";
+  pal.onclick = (e) => { if (e.target === pal) closePalette(); };
+  const box = el("div", "pal-box");
+  pal.appendChild(box);
+
+  const entries = await lookupCatalog();
+  if (pal.hidden) return;                       // closed while loading
+  if (!entries.length) {
+    box.appendChild(el("div", "pal-hint", "This host advertises no lookups."));
+    return;
+  }
+
+  const chipRow = el("div", "pal-chips");
+  const input = el("input", "pal-input");
+  input.type = "text"; input.spellcheck = false; input.autocomplete = "off";
+  const hint = el("div", "pal-hint");
+  let sel = 0;
+
+  const select = (i) => {
+    sel = (i + entries.length) % entries.length;
+    [...chipRow.children].forEach((c, j) => c.classList.toggle("on", j === sel));
+    const entry = entries[sel];
+    input.placeholder = entry.facts.Example ? `e.g. ${entry.facts.Example}` : "input…";
+    hint.textContent = (entry.facts.Question || "") +
+      (entry.facts.Available === false
+        ? ` — unavailable here: ${entry.facts.Note || "no acquisition path"}` : "");
+  };
+  entries.forEach((entry, i) => {
+    const chip = el("button", "chip", `${entry.subsystem} · ${entry.name}`);
+    chip.onclick = () => { select(i); input.focus(); };
+    chipRow.appendChild(chip);
+  });
+
+  input.onkeydown = (event) => {
+    event.stopPropagation();
+    if (event.key === "Escape") {
+      closePalette();
+    } else if (event.key === "Enter") {
+      const value = input.value.trim();
+      if (!value) return;
+      const entry = entries[sel];
+      closePalette();
+      goTo(entry.subsystem, "lookups", `${entry.id}/${value}`);
+    } else if (event.key === "Tab" || event.key === "ArrowDown") {
+      event.preventDefault(); select(sel + 1);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault(); select(sel - 1);
+    }
+  };
+
+  box.append(chipRow, input, hint);
+  select(0);
+  input.focus();
+}
+
+/* ── lookups ─────────────────────────────────────────────── */
+
+/* The input row for a lookup expansion. The descriptor observation invites
+   the first input; a result keeps the form so the next query is one edit
+   away. Running is navigation — the result is a deep-linkable observation. */
+function renderLookupForm(obs) {
+  const base = obs.object.id.split("/")[0];
+  const fromId = obs.object.id.includes("/")
+    ? obs.object.id.slice(base.length + 1) : "";
+
+  const form = el("div", "lookup-form");
+  const input = el("input");
+  input.type = "text";
+  input.spellcheck = false;
+  input.autocomplete = "off";
+  input.placeholder = obs.facts.Example ? `e.g. ${obs.facts.Example}` : "input…";
+  input.value = state.lookupDraft ?? fromId;
+  input.oninput = () => { state.lookupDraft = input.value; };
+
+  const run = () => {
+    const value = input.value.trim();
+    if (value) goTo(state.subsystem, state.collection, `${base}/${value}`);
+  };
+  input.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); run(); } };
+
+  const btn = el("button", "lookup-run", "Look up");
+  btn.onclick = (e) => { e.stopPropagation(); run(); };
+
+  form.append(input, btn);
+  if (obs.facts.Available === false) {
+    form.appendChild(el("span", "src-line dim", obs.facts.Note || "unavailable on this host"));
+  }
+  if (lookupHadFocus) {
+    input.focus({ preventScroll: true });
+    input.setSelectionRange(input.value.length, input.value.length);
+  }
+  return form;
+}
+
+const INLINE_LIST_MAX = 64;
+
+/* Capacity meters for a pool: one bar for the pool, one per top-level vdev.
+   Status color only at the same thresholds the pool opinions use (>=80 warn,
+   >=90 crit); the numbers are always printed, so color never stands alone. */
+function capacityPanel(facts) {
+  const panel = el("div", "cap-panel");
+  panel.appendChild(el("h3", null, "Capacity"));
+  const rows = [["pool", facts.AllocatedBytes, facts.SizeBytes, facts.CapacityPercent]];
+  for (const vd of facts.Vdevs || []) {
+    if (typeof vd.CapacityPercent === "number") {
+      rows.push([vd.Name, vd.AllocatedBytes, vd.SizeBytes, vd.CapacityPercent]);
+    }
+  }
+  for (const [label, alloc, size, pct] of rows) {
+    if (typeof pct !== "number") continue;
+    const row = el("div", "cap-row");
+    row.appendChild(el("div", "cap-name", String(label)));
+    const bar = el("div", "cap-bar");
+    const fill = el("span", `cap-fill${pct >= 90 ? " crit" : pct >= 80 ? " warn" : ""}`);
+    fill.style.width = `${Math.min(100, Math.max(0, pct))}%`;
+    bar.appendChild(fill);
+    row.appendChild(bar);
+    row.appendChild(el("div", "cap-val",
+      `${humanBytes(alloc)} / ${humanBytes(size)} · ${pct}%`));
+    row.title = `${alloc} / ${size} bytes allocated`;
+    panel.appendChild(row);
+  }
+  return panel;
+}
+
+/* Fact values that name another object ("block-device:sdc") become links,
+   the same routing the relationship chips use. */
+function factLeaf(value, short = false) {
+  if (typeof value !== "string") return null;
+  const sep = value.indexOf(":");
+  if (sep <= 0) return null;
+  const prefix = value.slice(0, sep);
+  // lookup ids are subsystem-relative: every subsystem may carry a lookups
+  // collection, and a fact naming one means "this subsystem's".
+  const routeTo = prefix === "lookup"
+    ? [state.subsystem, "lookups"] : PREFIX_ROUTE[prefix];
+  if (!routeTo || !routeTo[0]) return null;
+  const a = el("a", "fact-link", short ? value.slice(sep + 1) : value);
+  a.title = value;
+  a.href = hashFor(routeTo[0], routeTo[1], value);
+  a.onclick = (e) => e.stopPropagation();
+  return a;
+}
+
+/* Structured fact values earn structure: scalar lists stack when long,
+   uniform object lists become mini-tables (NICs, LLDP neighbours, vdevs),
+   plain objects become nested key/value grids (PerLinkDNS), and anything
+   deeper falls back to readable JSON. A "Depth" key in a mini-table row is
+   tree indentation (vdev trees), not a column. */
+function renderFactValue(value, depth = 0) {
+  if (value === null || value === undefined ||
+      (Array.isArray(value) && value.length === 0) ||
+      (typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0)) {
+    return el("span", "null", "—");
+  }
+  if (Array.isArray(value)) {
+    const scalars = value.every(v => typeof v !== "object" || v === null);
+    if (scalars) {
+      const joined = value.map(vstr).join(", ");
+      if (joined.length <= INLINE_LIST_MAX) return el("span", null, joined);
+      const ul = el("ul", "v-list");
+      for (const v of value) ul.appendChild(el("li", null, vstr(v)));
+      return ul;
+    }
+    const keys = [...new Set(value.flatMap(o => Object.keys(o || {})))]
+      .filter(k => k !== "Depth").slice(0, 8);
+    const flatRows = value.every(o => o && typeof o === "object" && !Array.isArray(o) &&
+      keys.every(k => o[k] === undefined || o[k] === null || typeof o[k] !== "object" || Array.isArray(o[k])));
+    if (flatRows && keys.length && depth < 2) {
+      const table = el("table", "v-table");
+      const thr = el("tr");
+      for (const k of keys) thr.appendChild(el("th", null, k));
+      table.appendChild(thr);
+      for (const o of value) {
+        const tr = el("tr");
+        keys.forEach((k, idx) => {
+          const cell = o[k];
+          const td = el("td");
+          if (idx === 0 && typeof o.Depth === "number" && o.Depth > 1) {
+            td.appendChild(el("span", "tree", NBSP.repeat((o.Depth - 1) * 3) + "└ "));
+          }
+          if (cell === undefined || cell === null) {
+            td.appendChild(el("span", "null", "—"));
+          } else {
+            const link = factLeaf(cell, true);
+            const unit = link ? null : scalarText(k, cell);
+            if (link) td.appendChild(link);
+            else td.appendChild(document.createTextNode(unit ?? vstr(cell)));
+          }
+          tr.appendChild(td);
+        });
+        table.appendChild(tr);
+      }
+      return table;
+    }
+  }
+  if (typeof value === "object" && !Array.isArray(value)) {
+    if ("__bytes_base64__" in value) return el("span", null, vstr(value));
+    if (depth < 2) {
+      const kv = el("div", "v-kv");
+      for (const [k, v] of Object.entries(value)) {
+        kv.appendChild(el("div", "v-kv-k", k));
+        const vd = el("div", "v-kv-v");
+        const unit = scalarText(k, v);
+        if (unit !== null) vd.textContent = unit;
+        else vd.appendChild(renderFactValue(v, depth + 1));
+        kv.appendChild(vd);
+      }
+      return kv;
+    }
+  }
+  if (typeof value === "object") {
+    return el("pre", "v-json", JSON.stringify(value, null, 2));
+  }
+  return factLeaf(value) || el("span", null, String(value));
+}
+
+function citeFacts(path, on) {
+  const root = path.split(".")[0];
+  document.querySelectorAll(`.facts [data-fact="${CSS.escape(root)}"]`)
+    .forEach(n => n.classList.toggle("cited", on));
+}
+
+/* ── evidence ────────────────────────────────────────────── */
+
+function renderEvidenceSection(obs) {
+  const sec = el("div", "d-section d-evidence");
+  const bar = el("div", "ev-bar");
+  const btn = el("button", "evidence-btn",
+    state.evidence ? "Hide native evidence" : "Show native evidence");
+  btn.onclick = async () => {
+    if (state.evidence) { state.evidence = null; renderGrid(); return; }
+    btn.textContent = "Loading…";
+    let data;
+    try {
+      data = await api(obs.evidence_ref);
+    } catch (err) {
+      if (state.detailObs === obs) { btn.textContent = `Evidence failed: ${err.message}`; }
+      return;
+    }
+    if (state.detailObs !== obs) return;   // moved on; not our expansion any more
+    state.evidence = { data, view: "text" };
+    renderGrid();
+  };
+  bar.appendChild(btn);
+
+  if (state.evidence) {
+    for (const view of ["text", "json"]) {
+      const tab = el("button",
+        "ev-tab" + (state.evidence.view === view ? " on" : ""),
+        view === "text" ? "command view" : "json");
+      tab.onclick = () => { state.evidence.view = view; renderGrid(); };
+      bar.appendChild(tab);
+    }
+    bar.appendChild(el("span", "src-line dim",
+      `captured ${ageOf(state.evidence.data.captured_at)} · rendered from the captured payload — nothing was executed`));
+  }
+  sec.appendChild(bar);
+
+  if (state.evidence) {
+    const { data, view } = state.evidence;
+    const text = data.error
+      ? `evidence acquisition failed: ${data.error}`
+      : view === "json" ? JSON.stringify(data, null, 2)
+      : evidenceText(state.subsystem, data.payload);
+    sec.appendChild(el("pre", "evidence", text));
+  }
+  return sec;
+}
+
+/* Command-style rendering of captured payloads — approximations of what the
+   reference tools print, produced purely from the evidence JSON. */
+function evidenceText(subsystem, payload) {
+  if (payload === null || payload === undefined) return "(empty payload)";
+
+  if (payload.domain_xml) {
+    const info = Object.entries(payload.info || {})
+      .filter(([k]) => k !== "ips_by_mac")
+      .map(([k, v]) => `${k}: ${vstr(v)}`).join("\n");
+    return `${info}\n\n${payload.domain_xml}`;
+  }
+  if (payload.__CURSOR) {
+    const ts = payload.__REALTIME_TIMESTAMP
+      ? new Date(Number(payload.__REALTIME_TIMESTAMP) / 1000).toISOString() : "";
+    const head = `${ts} ${payload._HOSTNAME ?? ""} ${payload.SYSLOG_IDENTIFIER ?? payload._COMM ?? ""}` +
+      `${payload._PID ? `[${payload._PID}]` : ""}: ${payload.MESSAGE ?? ""}`;
+    const rest = Object.entries(payload)
+      .filter(([k]) => k !== "MESSAGE")
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}=${vstr(v)}`).join("\n");
+    return `${head}\n\n${rest}`;
+  }
+  if (payload.blockdevices) return treeText(payload.blockdevices,
+    n => `${n.name}  ${n.size ?? ""}  ${n.type ?? ""}  ${n.fstype ?? ""}  ${(n.mountpoints || []).filter(Boolean).join(",")}`);
+  if (payload.filesystems) return treeText(payload.filesystems,
+    n => `${n.target}  ${n.source ?? ""}  ${n.fstype ?? ""}  ${n.options ?? ""}`);
+  if (payload.route_get) {
+    return payload.route_get.map(r =>
+      [r.dst ?? "?", r.gateway ? `via ${r.gateway}` : "", r.dev ? `dev ${r.dev}` : "",
+       r.prefsrc ? `src ${r.prefsrc}` : "", r.table ? `table ${r.table}` : "",
+       r.uid !== undefined ? `uid ${r.uid}` : "", (r.flags || []).join(",")]
+      .filter(Boolean).join(" ")).join("\n");
+  }
+  if (payload.ipv4 || payload.ipv6) {
+    const lines = [];
+    for (const fam of ["ipv4", "ipv6"]) {
+      for (const r of payload[fam] || []) {
+        lines.push([r.dst ?? "default", r.gateway ? `via ${r.gateway}` : "",
+                    r.dev ? `dev ${r.dev}` : "", r.protocol ? `proto ${r.protocol}` : "",
+                    r.scope ? `scope ${r.scope}` : "", r.prefsrc ? `src ${r.prefsrc}` : "",
+                    r.metric !== undefined ? `metric ${r.metric}` : ""]
+                   .filter(Boolean).join(" "));
+      }
+    }
+    return lines.join("\n");
+  }
+  if (payload.ip_addr) {
+    const blocks = payload.ip_addr.map(l => {
+      const lines = [`${l.ifindex}: ${l.ifname}: <${(l.flags || []).join(",")}> mtu ${l.mtu} state ${l.operstate}`];
+      if (l.address) lines.push(`    link/${l.link_type} ${l.address}`);
+      for (const a of l.addr_info || [])
+        lines.push(`    ${a.family === "inet6" ? "inet6" : "inet"} ${a.local}/${a.prefixlen}${a.scope ? ` scope ${a.scope}` : ""}`);
+      return lines.join("\n");
+    });
+    const lldp = Object.entries(payload.lldp || {}).map(([ifname, ns]) =>
+      `${ifname}:\n` + ns.map(n => `    ${n.SystemName ?? "?"}  ${n.PortDescription ?? ""}  ${n.ChassisID ?? ""}`).join("\n"));
+    return blocks.join("\n") + (lldp.length ? `\n\nLLDP neighbours:\n${lldp.join("\n")}` : "");
+  }
+  if (payload.nftables) {
+    const lines = [];
+    let openTable = false, openChain = false;
+    const closeChain = () => { if (openChain) { lines.push("  }"); openChain = false; } };
+    const closeTable = () => { closeChain(); if (openTable) { lines.push("}"); openTable = false; } };
+    for (const entry of payload.nftables) {
+      if (entry.table) {
+        closeTable();
+        lines.push(`table ${entry.table.family} ${entry.table.name} {`);
+        openTable = true;
+      } else if (entry.chain) {
+        closeChain();
+        const c = entry.chain;
+        lines.push(`  chain ${c.name} {` +
+          (c.type ? ` type ${c.type} hook ${c.hook} priority ${c.prio};` : "") +
+          (c.policy ? ` policy ${c.policy};` : ""));
+        openChain = true;
+      } else if (entry.rule) {
+        lines.push(`    ${JSON.stringify(entry.rule.expr)}`);
+      }
+    }
+    closeTable();
+    return lines.join("\n");
+  }
+  if (typeof payload === "object" && !Array.isArray(payload)) {
+    const flat = Object.values(payload).every(v => typeof v !== "object" || v === null ||
+      Array.isArray(v) || "__bytes_base64__" in (v || {}));
+    if (flat) {
+      return Object.entries(payload).sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => `${k}=${vstr(v)}`).join("\n");
+    }
+    const sections = [];
+    for (const [section, props] of Object.entries(payload)) {
+      if (typeof props === "object" && props !== null && !Array.isArray(props)) {
+        sections.push(`# ${section}\n` + Object.entries(props)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([k, v]) => `${k}=${vstr(v)}`).join("\n"));
+      } else {
+        sections.push(`# ${section}\n${vstr(props)}`);
+      }
+    }
+    return sections.join("\n\n");
+  }
+  return JSON.stringify(payload, null, 2);
+}
+
+function treeText(nodes, lineOf, depth = 0) {
+  const out = [];
+  for (const n of nodes) {
+    out.push(`${"  ".repeat(depth)}${depth ? "└ " : ""}${lineOf(n)}`);
+    if (n.children) out.push(treeText(n.children, lineOf, depth + 1));
+  }
+  return out.join("\n");
+}
+
+/* ── chrome ──────────────────────────────────────────────── */
+
+function banner(text) {
+  const node = $("banner");
+  node.hidden = !text;
+  node.textContent = text || "";
+}
+
+function armAutoRefresh() {
+  clearInterval(state.refreshTimer);
+  state.refreshTimer = setInterval(() => {
+    if (!document.hidden) loadCollection();
+  }, 15000);
+}
+
+function initTheme() {
+  const saved = localStorage.getItem("se-theme");
+  if (saved) document.documentElement.dataset.theme = saved;
+  $("theme-toggle").onclick = toggleTheme;
+}
+
+function toggleTheme() {
+  const current = document.documentElement.dataset.theme
+    || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+  const next = current === "light" ? "dark" : "light";
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem("se-theme", next);
+}
+
+function cycleCollection(step) {
+  const routes = navRoutes();
+  const idx = routes.findIndex(([s, c]) => s === state.subsystem && c === state.collection);
+  const next = routes[(idx + step + routes.length) % routes.length];
+  if (next) goTo(next[0], next[1], null);
+}
+
+document.addEventListener("keydown", (event) => {
+  if (!$("palette").hidden) {           // palette input stops its own keys;
+    if (event.key === "Escape") closePalette();   // this catches the rest
+    return;
+  }
+  if (event.target.matches?.("input, textarea, select")) {
+    if (event.key === "Escape") event.target.blur();
+    return;
+  }
+  if (event.metaKey || event.ctrlKey || event.altKey) return;
+  const rows = [...document.querySelectorAll("#grid-body tr:not(.expand)")];
+  const idx = rows.findIndex(r => r.dataset.id === anchorRowId());
+  switch (event.key) {
+    case "/": event.preventDefault(); $("filter").focus(); break;
+    case "j": case "ArrowDown": {
+      if (event.key === "ArrowDown") event.preventDefault();
+      const next = rows[Math.min(idx + 1, rows.length - 1)];
+      if (next && next.dataset.id !== state.selectedId) {
+        goTo(state.subsystem, state.collection, next.dataset.id, { replace: true });
+        next.scrollIntoView({ block: "nearest" });
+      }
+      break;
+    }
+    case "k": case "ArrowUp": {
+      if (event.key === "ArrowUp") event.preventDefault();
+      const prev = rows[Math.max(idx - 1, 0)];
+      if (prev && prev.dataset.id !== state.selectedId) {
+        goTo(state.subsystem, state.collection, prev.dataset.id, { replace: true });
+        prev.scrollIntoView({ block: "nearest" });
+      }
+      break;
+    }
+    case "[": cycleCollection(-1); break;
+    case "]": cycleCollection(1); break;
+    case "l": openPalette(); break;
+    case "Escape": collapseDetail(); stripObjectFromHash(); break;
+    case "r": loadCollection(); break;
+    case "t": toggleTheme(); break;
+    case "e": document.querySelector(".evidence-btn")?.click(); break;
+  }
+});
+
+$("filter").addEventListener("input", (event) => {
+  state.filterText = event.target.value.trim();
+  renderGrid();
+  renderCrumb();
+});
+$("refresh").onclick = () => loadCollection();
+$("lookup-btn").onclick = () => openPalette();
+
+boot();

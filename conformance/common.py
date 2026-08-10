@@ -1,0 +1,109 @@
+"""Shared paths, schema loading, and invariant helpers for the conformance suite.
+
+The suite is the teeth of docs/SPEC.md section 11: adapters cannot merge red.
+It exercises the contract three ways: schema validity, fixture invariants,
+and source lint over the agent and UI sources. Rule evaluators
+(system_explorer/agent/rules/) are pure and are tested directly in
+test_rules.py.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any, Callable
+
+CONFORMANCE_DIR = Path(__file__).resolve().parent
+PROJECT_DIR = CONFORMANCE_DIR.parent
+SRC_DIR = PROJECT_DIR / "src"
+PACKAGE_DIR = SRC_DIR / "system_explorer"
+# The schemas stay at the repo root: they are the published contract, read by
+# these tests and by anyone implementing against it, and nothing serves them
+# at runtime — so they are not package data.
+SCHEMA_DIR = PROJECT_DIR / "schema"
+EXAMPLES_DIR = SCHEMA_DIR / "examples"
+AGENT_DIR = PACKAGE_DIR / "agent"
+UI_DIR = PACKAGE_DIR / "ui"
+
+SCHEMA_FILES = {
+    "se.observation/1": SCHEMA_DIR / "observation.schema.json",
+    "se.collection/1": SCHEMA_DIR / "collection.schema.json",
+    "se.status/1": SCHEMA_DIR / "status.schema.json",
+    "se.changes/1": SCHEMA_DIR / "changes.schema.json",
+}
+
+SCHEMAS: dict[str, dict] = {
+    schema_id: json.loads(path.read_text()) for schema_id, path in SCHEMA_FILES.items()
+}
+
+# SPEC section 2 rule 8 / section 11 rule 5: parsing human-readable command
+# output is forbidden. subprocess is permitted only for these commands, and
+# only with their structured-output flag present in the same argv literal.
+# Adapters add entries here deliberately, in review — never by broadening a
+# pattern. (smartctl joined 2026-08-09 when the lint learned to extract argv
+# heads; it had been invoked unlisted since the hardware adapter landed —
+# the exact ride-along the old some-command-appears check could not see.)
+SUBPROCESS_ALLOWLIST: dict[str, str] = {
+    "zpool": "-j",
+    "zfs": "-j",
+    "lsblk": "-J",
+    "findmnt": "-J",
+    "ip": "-j",
+    "nft": "-j",
+    "journalctl": "-o json",
+    "networkctl": "--json=short",
+    "udevadm": "--json=short",
+    "lscpu": "-J",
+    "smartctl": "--json=c",
+}
+
+
+def example_files() -> list[Path]:
+    return sorted(EXAMPLES_DIR.glob("*.json"))
+
+
+def load_example(path: Path) -> dict:
+    return json.loads(path.read_text())
+
+
+def resolve_fact_path(facts: dict, path: str) -> Any:
+    """Resolve a dotted evidence path ('vdevs.degraded') within facts.
+
+    Raises KeyError with a useful message when the path does not resolve —
+    an opinion citing evidence that is not in the envelope is a contract
+    violation, not a soft miss.
+    """
+    node: Any = facts
+    walked: list[str] = []
+    for part in path.split("."):
+        walked.append(part)
+        if isinstance(node, dict) and part in node:
+            node = node[part]
+        elif isinstance(node, list) and part.isdigit() and int(part) < len(node):
+            node = node[int(part)]
+        else:
+            raise KeyError(
+                f"evidence path {path!r} does not resolve: "
+                f"{'.'.join(walked)!r} not found in facts"
+            )
+    return node
+
+
+def assert_stable_ids(collect: Callable[[], dict], rounds: int = 2) -> None:
+    """SPEC section 11 rule 7: unchanged objects keep their IDs across collections.
+
+    Phase 1 adapter tests call this with a live collect() function. Object
+    churn between rounds is tolerated (units genuinely start and stop); an
+    ID appearing in every round under a different native_id, or a native_id
+    changing its ID, is not.
+    """
+    pages = [collect() for _ in range(rounds)]
+    mappings: list[dict[str, str]] = [
+        {item["id"]: item["native_id"] for item in page["items"]} for page in pages
+    ]
+    for later in mappings[1:]:
+        for object_id in mappings[0].keys() & later.keys():
+            assert mappings[0][object_id] == later[object_id], (
+                f"object id {object_id!r} changed native identity between "
+                f"collections: {mappings[0][object_id]!r} -> {later[object_id]!r}"
+            )

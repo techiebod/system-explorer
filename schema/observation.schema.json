@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "se/observation.v1",
+  "title": "System Explorer object observation",
+  "description": "One observation of one native object at one moment. See docs/SPEC.md section 5.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "host", "subsystem", "object", "observed_at", "status", "source", "facts"],
+  "properties": {
+    "schema": { "const": "se.observation/1" },
+    "host": { "$ref": "#/$defs/host" },
+    "subsystem": { "$ref": "#/$defs/subsystemName" },
+    "object": { "$ref": "#/$defs/objectRef" },
+    "observed_at": { "$ref": "#/$defs/utcTimestamp" },
+    "status": { "enum": ["ok", "partial", "error"] },
+    "errors": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "source": { "$ref": "#/$defs/source" },
+    "facts": {
+      "type": "object",
+      "description": "Native property names and native types. Labels are a client concern. Per-subsystem schemas may tighten this."
+    },
+    "opinions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/opinion" }
+    },
+    "relationships": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/relationship" }
+    },
+    "evidence_ref": {
+      "type": "string",
+      "description": "Path that returns fresh native evidence for this object.",
+      "pattern": "^/v1/"
+    }
+  },
+  "allOf": [
+    {
+      "description": "An error envelope must say what failed.",
+      "if": { "properties": { "status": { "const": "error" } } },
+      "then": { "required": ["errors"] }
+    },
+    {
+      "if": { "properties": { "status": { "const": "partial" } } },
+      "then": { "required": ["errors"] }
+    }
+  ],
+  "$defs": {
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["machine_id", "hostname"],
+      "properties": {
+        "machine_id": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+        "hostname": { "type": "string", "minLength": 1 }
+      }
+    },
+    "subsystemName": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "objectId": {
+      "type": "string",
+      "description": "<collection-singular>:<native-id>, e.g. unit:sshd.service, dataset:tank/photos",
+      "pattern": "^[a-z][a-z0-9-]*:\\S+$"
+    },
+    "objectRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "native_id"],
+      "properties": {
+        "id": { "$ref": "#/$defs/objectId" },
+        "type": { "type": "string", "minLength": 1 },
+        "native_id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adapter", "interface", "reference_commands"],
+      "properties": {
+        "adapter": { "type": "string", "minLength": 1 },
+        "interface": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The native interface observed, e.g. org.freedesktop.systemd1, docker-engine-api, netlink, zfs-json."
+        },
+        "method": { "type": "string" },
+        "reference_commands": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Commands an administrator could run to reproduce this observation. Documentation only; never executed."
+        },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "opinion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "level", "message", "evidence"],
+      "properties": {
+        "key": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "level": { "enum": ["info", "warn", "critical"] },
+        "message": { "type": "string", "minLength": 1 },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Fact paths this opinion derives from. Conformance requires each to resolve within facts."
+        }
+      }
+    },
+    "relationship": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "direction", "target"],
+      "properties": {
+        "type": {
+          "enum": ["requires", "wants", "after", "member-of", "mounts", "attached-to", "backs", "routes-via"]
+        },
+        "direction": { "enum": ["out", "in"] },
+        "target": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id"],
+          "properties": {
+            "id": { "$ref": "#/$defs/objectId" },
+            "subsystem": { "$ref": "#/$defs/subsystemName" },
+            "machine_id": { "type": "string", "pattern": "^[0-9a-f]{32}$" }
+          }
+        }
+      }
+    },
+    "utcTimestamp": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"
+    }
+  }
+}

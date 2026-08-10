@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "se/status.v1",
+  "title": "System Explorer status roll-up",
+  "description": "Per-collection severity roll-up for one host (ROADMAP slice 1): the worst row level and level counts for every collection the host exposes, so a degraded object is visible without knowing which collection to open. The roll-up is nullable by design — a collection may decline with a reason (a bounded log query has no current health) or fail with an error, degrading the envelope to partial rather than failing it. Shared $defs are duplicated from observation.schema.json deliberately so each schema file is standalone.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "host", "observed_at", "status", "subsystems"],
+  "properties": {
+    "schema": { "const": "se.status/1" },
+    "host": { "$ref": "#/$defs/host" },
+    "observed_at": { "$ref": "#/$defs/utcTimestamp" },
+    "status": {
+      "enum": ["ok", "partial"],
+      "description": "partial when at least one collection's acquisition failed; errors lists each failure. Never error — a failed collection degrades one entry, not the envelope (SPEC section 2, rule 7)."
+    },
+    "errors": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "subsystems": {
+      "type": "object",
+      "description": "Subsystem name -> collection name -> roll-up entry.",
+      "propertyNames": { "$ref": "#/$defs/subsystemName" },
+      "additionalProperties": {
+        "type": "object",
+        "propertyNames": { "$ref": "#/$defs/subsystemName" },
+        "additionalProperties": { "$ref": "#/$defs/collectionStatus" }
+      }
+    }
+  },
+  "$defs": {
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["machine_id", "hostname"],
+      "properties": {
+        "machine_id": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+        "hostname": { "type": "string", "minLength": 1 }
+      }
+    },
+    "subsystemName": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "collectionStatus": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["worst", "counts", "total", "observed_at"],
+          "properties": {
+            "worst": {
+              "enum": ["ok", "info", "warn", "critical", null],
+              "description": "critical > warn > ok when any row is positively healthy > info when rows exist but none is vouched for > null for an empty collection."
+            },
+            "counts": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Rows per worst_opinion_level; only nonzero levels appear. none counts rows that carry no severity field.",
+              "properties": {
+                "critical": { "type": "integer", "minimum": 1 },
+                "warn": { "type": "integer", "minimum": 1 },
+                "info": { "type": "integer", "minimum": 1 },
+                "ok": { "type": "integer", "minimum": 1 },
+                "none": { "type": "integer", "minimum": 1 }
+              }
+            },
+            "total": { "type": "integer", "minimum": 0 },
+            "observed_at": { "$ref": "#/$defs/utcTimestamp" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["worst", "reason"],
+          "properties": {
+            "worst": { "const": null },
+            "reason": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Why this collection has no roll-up: declined by design (no health semantics) or unavailable per capability discovery. Not a failure."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["worst", "error"],
+          "properties": {
+            "worst": { "const": null },
+            "error": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The acquisition failure; mirrored in the top-level errors, which sets status partial."
+            }
+          }
+        }
+      ]
+    },
+    "utcTimestamp": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"
+    }
+  }
+}
