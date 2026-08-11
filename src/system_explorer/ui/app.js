@@ -462,62 +462,89 @@ function renderHostCard() {
    Falls back to capabilities if the nav is empty — renderNav is wrapped in a
    catch, so a rendering fault must not also cost keyboard navigation. */
 function navRoutes() {
-  const out = [];
+  // Order from the model — one source of truth with the sidebar — and the hidden
+  // state from the DOM, which is the only place that knows what the roll-up
+  // suppressed as honestly empty. Without that filter the keys could land on a
+  // collection the nav deliberately refuses to offer.
+  const hidden = new Set();
   for (const box of document.querySelectorAll("#nav .nav-sub")) {
-    if (box.hidden) continue;
     for (const link of box.querySelectorAll(".nav-item")) {
-      if (link.hidden) continue;
-      const [sub, coll] = link.dataset.route.split("/");
-      out.push([sub, coll]);
+      if (link.hidden || box.hidden) hidden.add(link.dataset.route);
     }
   }
-  if (out.length) return out;
-  for (const [name, cap] of Object.entries(state.capabilities?.subsystems || {})) {
-    for (const coll of cap.collections || []) out.push([name, coll]);
+  const out = [];
+  for (const section of navModel()) {
+    for (const item of section.items) {
+      if (!hidden.has(item.route)) out.push([item.sub, item.coll]);
+    }
   }
   return out;
 }
 
 /* The overview is its own section, above the subsystems, because it already is
    one everywhere else in the code: the landing view, a designed panel rather
-   than a grid, no rows to facet, a pseudo-page in the router. Only the nav
-   still listed it as a peer of identity and time, which made the host summary
-   look like one more system fact rather than the way in. Its route stays
+   than a grid, no rows to facet, a pseudo-page in the router. Its route stays
    system/overview — this is presentation, not a contract change. */
 const STANDALONE = [["system", "overview", "overview"]];
 
-function renderNav() {
-  const nav = $("nav");
-  nav.textContent = "";
-  const subsystems = state.capabilities?.subsystems || {};
+/* THE nav structure, computed once and consumed by everything.
 
+   Three bugs came out of not having this. renderNav built the sidebar while
+   applyNavBadges and navRoutes each re-derived the same structure with their own
+   assumptions — so promoting overview out of `system` tripped a null dereference
+   in one (blanking the entire page) and an ordering assumption in the other
+   ([ and ] walking a position nobody could see). Both were the same mistake:
+   adding a rendering variant without updating what reads the shape.
+
+   So the shape is data. This decides sections, order, membership and headings;
+   renderNav only draws it and the consumers only read it. Another promoted
+   section, a group, a divider — one edit here. And it is testable with no DOM at
+   all, which is what the smoke test now exercises. */
+function navModel() {
+  const subsystems = state.capabilities?.subsystems || {};
+  const sections = [];
   const promoted = new Set();
+
   for (const [sub, coll, label] of STANDALONE) {
     const cap = subsystems[sub];
     if (!cap?.available || !(cap.collections || []).includes(coll)) continue;
     promoted.add(`${sub}/${coll}`);
-    const box = el("div", "nav-sub nav-solo");
-    const item = el("a", "nav-item", label);
-    item.href = hashFor(sub, coll);
-    item.dataset.route = `${sub}/${coll}`;
-    box.appendChild(item);
-    nav.appendChild(box);
+    // No heading, deliberately: separated by space rather than by a label it
+    // does not need. Consumers must tolerate a headless section — which is
+    // precisely what one of them did not.
+    sections.push({ solo: true, heading: null, available: true,
+                    items: [{ sub, coll, label, route: `${sub}/${coll}` }] });
   }
 
   for (const [name, cap] of Object.entries(subsystems)) {
-    const collections = (cap.collections || [])
-      .filter(coll => !promoted.has(`${name}/${coll}`));
+    const items = (cap.collections || [])
+      .filter(coll => !promoted.has(`${name}/${coll}`))
+      .map(coll => ({ sub: name, coll, label: coll, route: `${name}/${coll}` }));
     // A subsystem whose only collection was promoted has nothing left to head.
-    if (!collections.length && cap.available) continue;
-    const box = el("div", "nav-sub" + (cap.available ? "" : " unavailable"));
-    const label = el("div", "sub-label", name);
-    if (!cap.available) label.title = cap.reason || "unavailable";
-    box.appendChild(label);
-    for (const coll of collections) {
-      const item = el("a", "nav-item", coll);
-      item.href = hashFor(name, coll);
-      item.dataset.route = `${name}/${coll}`;
-      box.appendChild(item);
+    if (!items.length && cap.available) continue;
+    sections.push({ solo: false, heading: name, available: !!cap.available,
+                    reason: cap.reason, items });
+  }
+  return sections;
+}
+
+function renderNav() {
+  const nav = $("nav");
+  nav.textContent = "";
+  for (const section of navModel()) {
+    const box = el("div", "nav-sub"
+      + (section.solo ? " nav-solo" : "")
+      + (section.available ? "" : " unavailable"));
+    if (section.heading) {
+      const label = el("div", "sub-label", section.heading);
+      if (!section.available) label.title = section.reason || "unavailable";
+      box.appendChild(label);
+    }
+    for (const item of section.items) {
+      const link = el("a", "nav-item", item.label);
+      link.href = hashFor(item.sub, item.coll);
+      link.dataset.route = item.route;
+      box.appendChild(link);
     }
     nav.appendChild(box);
   }

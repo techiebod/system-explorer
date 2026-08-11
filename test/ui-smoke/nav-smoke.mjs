@@ -141,7 +141,7 @@ const context = vm.createContext(sandbox);
 // its state and helpers with const, which in a vm script are lexically scoped
 // and never become properties of the sandbox. Only code inside that script can
 // see them.
-const EXPORTS = "\n;globalThis.__ui = { state, renderNav, applyNavBadges, renderBuild, navRoutes };";
+const EXPORTS = "\n;globalThis.__ui = { state, renderNav, applyNavBadges, renderBuild, navRoutes, navModel };";
 vm.runInContext(readFileSync(APP, "utf8") + EXPORTS, context, { filename: "app.js" });
 const ui = sandbox.__ui;
 
@@ -234,6 +234,23 @@ check("the keys skip a collection the nav hides as honestly empty", () => {
   const walked = ui.navRoutes().map(([s, c]) => `${s}/${c}`);
   if (walked.includes("storage/arrays"))
     throw new Error("storage/arrays is hidden in the nav but reachable by keyboard");
+});
+
+// The model is the structure, so assert over it directly — no DOM needed, which
+// is the point: the three bugs all came from consumers re-deriving the shape.
+check("navModel is the single structure both the sidebar and the keys use", () => {
+  const model = ui.navModel();
+  const fromModel = model.flatMap(s => s.items.map(i => i.route));
+  const rendered = [];
+  for (const box of document.getElementById("nav").querySelectorAll("nav-sub")) {
+    for (const link of box.querySelectorAll("nav-item")) rendered.push(link.dataset.route);
+  }
+  if (fromModel.join(",") !== rendered.join(","))
+    throw new Error(`model\n  ${fromModel.join(", ")}\nrendered\n  ${rendered.join(", ")}`);
+  // A headless section is legal and must stay legal: that is the shape that
+  // blanked the page when a consumer assumed every section has a heading.
+  if (!model.some(s => s.solo && s.heading === null))
+    throw new Error("no headless promoted section in the model");
 });
 
 if (failures.length) {
