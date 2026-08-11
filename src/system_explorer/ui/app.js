@@ -195,10 +195,37 @@ const PREFIX_ROUTE = {
   domain: ["vms", "domains"],
 };
 
+/* State badges. One table, several vocabularies — `dead` is a normal systemd
+   SubState and a warned-about docker container; `down` is a fault on a NIC
+   carrying addresses and correct on an empty bridge — so the badge may only
+   colour a word whose severity does NOT depend on which collection said it.
+
+   The rule this settles on: the badge may never claim MORE than the rulebook
+   can. Under-claiming is safe, because the row's dot carries the verdict and
+   comes from rules/ per collection; over-claiming puts a warning beside a row
+   the rulebook deliberately declined to judge, which is how a table in the
+   browser becomes a second opinion nobody wrote down.
+
+   Two words used to over-claim, and both re-asserted a judgement the rulebook
+   had specifically removed:
+
+   `down` — rules/network.py calls a down link INFO in three of its four
+   shapes: a veth (its health is the container's), an empty bridge (down by
+   design, the docker0 false positive of 2026-08-10), and a link with nothing
+   configured on it (an unwired spare NIC — "inventory, not trouble", an
+   operator call). Only a down link carrying addresses warns. Ambering all four
+   is the cry-wolf that call was made to stop.
+
+   `exited` — rules/docker.py warns only when the exit code is not 0 or absent.
+   A cleanly-exited container earns no opinion at all and the adapter gives its
+   row `info`, so an amber badge sat beside its own faint info dot. */
 const VALUE_CLASS = {
   active: "ok", running: "ok", up: "ok", online: "ok", loaded: "ok", enabled: "ok",
+  // Unambiguous across every collection that can emit them.
   failed: "crit", crashed: "crit", unhealthy: "crit", degraded: "crit",
-  down: "warn", exited: "warn", paused: "warn", blocked: "warn", restarting: "warn",
+  paused: "warn", blocked: "warn", restarting: "warn",
+  // Context-dependent: the dot says whether these are trouble.
+  down: "neutral", exited: "neutral",
   inactive: "neutral", shutoff: "neutral", dead: "neutral", unknown: "neutral",
 };
 

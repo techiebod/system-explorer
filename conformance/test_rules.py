@@ -783,6 +783,63 @@ def test_ui_priority_badge_matches_the_rulebook_threshold():
     )
 
 
+# VALUE_CLASS colours a raw state word — ActiveState, SubState, State, Health,
+# OperState, LoadState — with ONE table shared across every collection. That is
+# the difficulty: `dead` is a normal systemd SubState and a warned-about docker
+# container, `down` is a fault on a NIC with addresses and correct on an empty
+# bridge. A word whose severity depends on who said it cannot be coloured.
+#
+# The badge may under-claim freely: the row's dot carries the rulebook's verdict
+# per collection. It may not over-claim, because a warning beside a row the
+# rulebook declined to judge is a second opinion nobody wrote down.
+#
+# So attention colours are a reviewed list, and adding one is a decision — the
+# same discipline as SUBPROCESS_ALLOWLIST. Each entry names why the word means
+# trouble no matter which collection emitted it.
+UI_ATTENTION_STATES = {
+    "failed": "systemd's own verdict on a unit, and rules/units.py warns on it",
+    "crashed": "no collection uses this word for a healthy object",
+    "unhealthy": "a docker healthcheck that reports failure; critical in rules/docker.py",
+    "degraded": "an array or pool missing redundancy; critical in rules/storage.py",
+    "paused": "a deliberately suspended container; warned in rules/docker.py",
+    "blocked": "a scsi device the kernel has stopped issuing to; warned in rules/hardware.py",
+    "restarting": "a container stuck in a restart loop; critical in rules/docker.py",
+}
+
+
+def test_the_ui_colours_no_state_the_rulebook_declines_to_judge():
+    """`down` and `exited` used to be ambered here, and both re-asserted a
+    judgement the rulebook had specifically removed: rules/network.py calls a
+    down link info in three of its four shapes (the docker0 false positive and
+    the unwired-spare-NIC operator call), and rules/docker.py warns on an exit
+    only when the code is non-zero, so a clean exit wore an amber badge beside
+    its own faint info dot."""
+    source = (UI_DIR / "app.js").read_text()
+    block = re.search(r"^const VALUE_CLASS = \{(.*?)^\};", source, re.M | re.S)
+    assert block, "app.js no longer declares VALUE_CLASS at top level"
+    coloured = dict(re.findall(r"(\w+):\s*\"(\w+)\"", block.group(1)))
+    assert coloured, "VALUE_CLASS parsed as empty — the lint would pass vacuously"
+    attention = {state for state, cls in coloured.items() if cls in ("warn", "crit")}
+    undeclared = sorted(attention - set(UI_ATTENTION_STATES))
+    assert not undeclared, (
+        f"app.js colours {undeclared} as attention, but they are not in "
+        "UI_ATTENTION_STATES. A state word only earns a colour if it means "
+        "trouble whatever collection emitted it — otherwise the row's dot, "
+        "which comes from rules/ per collection, is what says so."
+    )
+
+
+def test_the_attention_list_does_not_outlive_its_use():
+    """A debt register, not a wish list: a word nobody colours any more must
+    come off, or the reasons stop describing the code."""
+    source = (UI_DIR / "app.js").read_text()
+    block = re.search(r"^const VALUE_CLASS = \{(.*?)^\};", source, re.M | re.S)
+    coloured = dict(re.findall(r"(\w+):\s*\"(\w+)\"", block.group(1)))
+    stale = sorted(state for state in UI_ATTENTION_STATES
+                   if coloured.get(state) not in ("warn", "crit"))
+    assert not stale, f"UI_ATTENTION_STATES justifies {stale}, which the UI no longer colours"
+
+
 # ---------------------------------------------------------------------------
 # The link kind, which is a shaping decision rather than a rule but has the same
 # failure mode: a value the kernel did not say. Pure, so it is tested directly.
