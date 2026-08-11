@@ -11,11 +11,12 @@ agent/rules/, so a new evaluator is born under both invariants.
 import ast
 import importlib
 import pkgutil
+import re
 import sys
 
 import pytest
 
-from common import AGENT_DIR, resolve_fact_path
+from common import AGENT_DIR, UI_DIR, resolve_fact_path
 
 from system_explorer.agent import rules
 from system_explorer.agent.rules import (docker, hardware, logs, network, nix,
@@ -696,3 +697,71 @@ def test_rules_modules_import_only_stdlib_and_envelope(source):
                     f"(level={node.level}, {target!r}) — only agent.envelope "
                     "is permitted"
                 )
+
+
+# ---------------------------------------------------------------------------
+# The rulebook's vocabulary, as the operator UI holds it.
+#
+# No endpoint publishes the level enum, so app.js is forced to keep its own
+# copy — and app.js's own comment says a fourth copy of something the agent
+# knows is a fourth thing to disagree with it. It was right: three severity
+# tables in that file had already drifted, and one of them painted an `info`
+# opinion warn-yellow directly above a sentence saying the reading was not
+# alarming. The copy is unavoidable; a SILENT copy is not. Conformance is
+# pytest and cannot execute JavaScript, so these read it as text.
+# ---------------------------------------------------------------------------
+
+def test_ui_mirrors_the_rulebook_level_order():
+    source = (UI_DIR / "app.js").read_text()
+    match = re.search(r"^const OPINION_LEVELS = \[([^\]]*)\];", source, re.M)
+    assert match, (
+        "app.js no longer declares OPINION_LEVELS at top level — the operator "
+        "UI's severity order must stay greppable so this lint can check it"
+    )
+    mirrored = tuple(re.findall(r'"([a-z]+)"', match.group(1)))
+    assert mirrored == rules.OPINION_LEVELS, (
+        f"app.js orders opinion levels {mirrored}; the rulebook says "
+        f"{rules.OPINION_LEVELS} (agent/rules/__init__.py)"
+    )
+
+
+def test_ui_keeps_info_out_of_the_attention_channels():
+    """`info` says "recorded, explained, not claiming your attention".
+
+    Badging it rebuilds the noise the three-level taxonomy was built to escape
+    (rules/logs.py records the audit). This is policy rather than ordering, so
+    it is asserted separately from the level order above.
+    """
+    source = (UI_DIR / "app.js").read_text()
+    match = re.search(r"^const ATTENTION_LEVELS = \[([^\]]*)\];", source, re.M)
+    assert match, "app.js no longer declares ATTENTION_LEVELS at top level"
+    attention = tuple(re.findall(r'"([a-z]+)"', match.group(1)))
+    assert "info" not in attention, (
+        f"ATTENTION_LEVELS is {attention} — an info opinion must not earn a nav "
+        "badge, a subsystem dot or an attention chip"
+    )
+    unknown = set(attention) - set(rules.OPINION_LEVELS)
+    assert not unknown, (
+        f"ATTENTION_LEVELS names {sorted(unknown)}, which the rulebook cannot "
+        f"emit (levels are {rules.OPINION_LEVELS})"
+    )
+
+
+# Every class the JS emits for a severity must have a rule behind it. The node
+# smoke test asserts the class reaches the DOM; only this can see whether the
+# stylesheet says anything about it — and .dot.none's entire behaviour is one
+# CSS line, so an unstyled one is an invisible regression.
+SEVERITY_SELECTORS = [
+    ".dot.none",       # absent severity: an unfilled ring, not a neutral verdict
+    ".dot.info",
+    ".opinion.info",   # restates the base border, so neutrality is a decision
+    ".meter.info",     # ditto for the overview meters
+]
+
+
+@pytest.mark.parametrize("selector", SEVERITY_SELECTORS)
+def test_every_severity_class_the_ui_emits_is_styled(selector):
+    styles = (UI_DIR / "styles.css").read_text()
+    assert selector in styles, (
+        f"app.js can emit {selector} but styles.css never mentions it"
+    )
