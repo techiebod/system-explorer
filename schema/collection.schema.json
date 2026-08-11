@@ -4,7 +4,6 @@
   "title": "System Explorer collection page",
   "description": "One page of object summaries from a collection. Pagination is explicit: the server never silently truncates, the client never infers truncation. Shared $defs are duplicated from observation.schema.json deliberately so each schema file is standalone.",
   "type": "object",
-  "additionalProperties": false,
   "required": ["schema", "host", "subsystem", "collection", "observed_at", "status", "source", "applied_limit", "next_cursor", "items"],
   "properties": {
     "schema": { "const": "se.collection/1" },
@@ -19,7 +18,6 @@
     },
     "source": {
       "type": "object",
-      "additionalProperties": false,
       "required": ["adapter", "interface", "reference_commands"],
       "properties": {
         "adapter": { "type": "string", "minLength": 1 },
@@ -57,7 +55,6 @@
   "$defs": {
     "host": {
       "type": "object",
-      "additionalProperties": false,
       "required": ["machine_id", "hostname"],
       "properties": {
         "machine_id": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
@@ -74,7 +71,6 @@
     },
     "objectSummary": {
       "type": "object",
-      "additionalProperties": false,
       "required": ["id", "type", "native_id", "facts"],
       "properties": {
         "id": { "$ref": "#/$defs/objectId" },

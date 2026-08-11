@@ -36,6 +36,31 @@ SCHEMAS: dict[str, dict] = {
     schema_id: json.loads(path.read_text()) for schema_id, path in SCHEMA_FILES.items()
 }
 
+# The published schemas deliberately permit unknown members, because a hub
+# fans out across agents of different versions and a consumer that rejects an
+# envelope for carrying a field it does not know is not conformant (SPEC
+# section 5.1). Losing that check on the wire must not license this agent to
+# emit whatever it likes, so strictness moves to the producer: the same
+# schemas, every declared object closed, applied only to our own fixtures.
+#
+# Published schema = the consumer contract. Strict profile = the producer
+# contract. An undeclared or misspelt field still fails CI.
+#
+# Anything already carrying additionalProperties is left alone, which is how
+# status.schema.json's `counts` stays closed in both profiles: its keys ARE
+# the severity levels, so a new one is a break and must fail everywhere.
+def strict(schema: Any) -> Any:
+    """A copy of `schema` with every object that declares properties closed."""
+    if isinstance(schema, list):
+        return [strict(item) for item in schema]
+    if not isinstance(schema, dict):
+        return schema
+    out = {key: strict(value) for key, value in schema.items()}
+    if (out.get("type") == "object" and "properties" in out
+            and "additionalProperties" not in out):
+        out["additionalProperties"] = False
+    return out
+
 # SPEC section 2 rule 8 / section 11 rule 5: parsing human-readable command
 # output is forbidden. subprocess is permitted only for these commands, and
 # only with their structured-output flag present in the same argv literal.

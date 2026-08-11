@@ -4,7 +4,6 @@
   "title": "System Explorer status roll-up",
   "description": "Per-collection severity roll-up for one host (ROADMAP slice 1): the worst row level and level counts for every collection the host exposes, so a degraded object is visible without knowing which collection to open. The roll-up is nullable by design — a collection may decline with a reason (a bounded log query has no current health) or fail with an error, degrading the envelope to partial rather than failing it. Shared $defs are duplicated from observation.schema.json deliberately so each schema file is standalone.",
   "type": "object",
-  "additionalProperties": false,
   "required": ["schema", "host", "observed_at", "status", "subsystems"],
   "properties": {
     "schema": { "const": "se.status/1" },
@@ -32,7 +31,6 @@
   "$defs": {
     "host": {
       "type": "object",
-      "additionalProperties": false,
       "required": ["machine_id", "hostname"],
       "properties": {
         "machine_id": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
@@ -44,10 +42,9 @@
       "pattern": "^[a-z][a-z0-9-]*$"
     },
     "collectionStatus": {
-      "oneOf": [
+      "anyOf": [
         {
           "type": "object",
-          "additionalProperties": false,
           "required": ["worst", "counts", "total", "observed_at"],
           "properties": {
             "worst": {
@@ -72,7 +69,6 @@
         },
         {
           "type": "object",
-          "additionalProperties": false,
           "required": ["worst", "reason"],
           "properties": {
             "worst": { "const": null },
@@ -85,7 +81,6 @@
         },
         {
           "type": "object",
-          "additionalProperties": false,
           "required": ["worst", "error"],
           "properties": {
             "worst": { "const": null },

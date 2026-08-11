@@ -4,7 +4,6 @@
   "title": "System Explorer what-changed diff",
   "description": "What changed on one host between a stored snapshot and now (SPEC section 10): added and removed object ids plus changed objects with the dotted paths that differ, per collection, computed by diff-on-read. Changed paths use the evidence-path language, so a change entry cites facts the way an opinion does. Empty diff sections are omitted: a collection with no changes does not appear. Shared $defs are duplicated from observation.schema.json deliberately so each schema file is standalone.",
   "type": "object",
-  "additionalProperties": false,
   "required": ["schema", "host", "observed_at", "status"],
   "properties": {
     "schema": { "const": "se.changes/1" },
@@ -16,7 +15,6 @@
     },
     "baseline": {
       "type": "object",
-      "additionalProperties": false,
       "required": ["snapshot_at", "boot_id"],
       "properties": {
         "snapshot_at": { "$ref": "#/$defs/utcTimestamp" },
@@ -70,7 +68,6 @@
   "$defs": {
     "host": {
       "type": "object",
-      "additionalProperties": false,
       "required": ["machine_id", "hostname"],
       "properties": {
         "machine_id": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
@@ -92,7 +89,6 @@
     },
     "collectionDiff": {
       "type": "object",
-      "additionalProperties": false,
       "minProperties": 1,
       "properties": {
         "added": {
@@ -110,7 +106,6 @@
           "minItems": 1,
           "items": {
             "type": "object",
-            "additionalProperties": false,
             "required": ["id", "paths"],
             "properties": {
               "id": { "$ref": "#/$defs/objectId" },

@@ -260,6 +260,57 @@ Field semantics:
 - Freshness is the client's judgment from `observed_at`; the envelope does
   not claim it.
 
+### 5.1 Envelope evolution (additive fields)
+
+The `N` in `se.<name>/N` is a compatibility contract, not a build number.
+Hosts deploy at different times, so at any moment a hub or aggregator is
+fanning out across several agent versions at once. Eight rules make that safe.
+
+1. **Every response body carries a `schema` discriminator.** A response
+   without one cannot be versioned at all, and is a defect.
+2. **Additive changes keep `N`.** Adding an optional field, adding a key to an
+   open map, or relaxing a constraint does not change the version: a consumer
+   written against `se.observation/1` last month keeps working against
+   `se.observation/1` today.
+3. **Consumers must ignore unknown fields**, and the published schemas must
+   make that legal — they may not say `additionalProperties: false` on
+   anything an agent fills. A consumer that rejects an envelope for carrying
+   a member it does not know is not conformant.
+4. **`N` changes only on a break:** removing or renaming a field, changing its
+   type or units, adding a required field, making a required field optional,
+   redefining an existing field's meaning, or removing an enum value. A break
+   ships as a new schema id, and the old id keeps being served until every
+   host has moved.
+5. **A rename is an addition followed by a removal, never an edit:** emit
+   both, document the old one deprecated, switch consumers, remove one release
+   later. Two releases, not one.
+6. **New enum members are additive only where the consumer already has a
+   fallback.** `opinions[].level` is closed at three values by §2 rule 3 — a
+   fourth is a break. `relationships[].type` is a closed set extended
+   deliberately (§3): adding a member is additive, because a consumer renders
+   an unknown type as itself rather than dropping the edge. `status` values
+   and roll-up `worst` values are closed.
+7. **Absence is documented at the point of addition.** A new optional field
+   states what its absence means — "not a NixOS host", "this agent predates
+   the field" — because during a rollout both are true somewhere. Skew is
+   discoverable, never guessed: every agent reports `version` in `/health`
+   and `/v1/capabilities`.
+8. **Strictness moves to the producer.** Losing `additionalProperties: false`
+   on the wire does not license the agent to emit whatever it likes. The
+   conformance suite validates this project's own fixtures against a *strict
+   profile* of the same schemas — every declared object closed — so an
+   undeclared or misspelt field still fails CI. The published schema is the
+   consumer contract; the strict profile is the producer contract.
+
+One exception, closed on purpose: `se.status/1`'s `counts` map. Its keys *are*
+the severity levels, so an unknown key there is a new level, which rule 6
+makes a break. It stays closed in both profiles and fails loudly.
+
+This was overdue rather than hypothetical: with the roots closed, an envelope
+from a newer agent carrying one added field was rejected outright by a
+consumer validating against this version — mid-rollout, across five hosts.
+Rules 3 and 8 are executable in [conformance/test_schemas.py](../conformance/test_schemas.py).
+
 ---
 
 ## 6. API
@@ -505,7 +556,10 @@ archaeology; with history it is one `what_changed` call.
 The contract is executable. A pytest suite enforces, for every adapter, on
 every collection it exposes:
 
-1. Every envelope validates against the schemas.
+1. Every envelope validates against the schemas — twice: the published
+   schemas, which permit members a newer agent might add, and a strict
+   profile of them with every declared object closed, which is what stops
+   this agent inventing a field (§5.1 rule 8).
 2. Every `opinions[].evidence` path resolves to an existing fact.
 3. Every relationship target is a well-formed object reference.
 4. Every `source` has ≥ 1 `reference_command`.

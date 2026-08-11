@@ -4,7 +4,6 @@
   "title": "System Explorer object observation",
   "description": "One observation of one native object at one moment. See docs/SPEC.md section 5.",
   "type": "object",
-  "additionalProperties": false,
   "required": ["schema", "host", "subsystem", "object", "observed_at", "status", "source", "facts"],
   "properties": {
     "schema": { "const": "se.observation/1" },
@@ -50,7 +49,6 @@
   "$defs": {
     "host": {
       "type": "object",
-      "additionalProperties": false,
       "required": ["machine_id", "hostname"],
       "properties": {
         "machine_id": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
@@ -68,7 +66,6 @@
     },
     "objectRef": {
       "type": "object",
-      "additionalProperties": false,
       "required": ["id", "type", "native_id"],
       "properties": {
         "id": { "$ref": "#/$defs/objectId" },
@@ -79,7 +76,6 @@
     },
     "source": {
       "type": "object",
-      "additionalProperties": false,
       "required": ["adapter", "interface", "reference_commands"],
       "properties": {
         "adapter": { "type": "string", "minLength": 1 },
@@ -103,7 +99,6 @@
     },
     "opinion": {
       "type": "object",
-      "additionalProperties": false,
       "required": ["key", "level", "message", "evidence"],
       "properties": {
         "key": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
@@ -119,7 +114,6 @@
     },
     "relationship": {
       "type": "object",
-      "additionalProperties": false,
       "required": ["type", "direction", "target"],
       "properties": {
         "type": {
@@ -128,7 +122,6 @@
         "direction": { "enum": ["out", "in"] },
         "target": {
           "type": "object",
-          "additionalProperties": false,
           "required": ["id"],
           "properties": {
             "id": { "$ref": "#/$defs/objectId" },
