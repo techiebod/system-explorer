@@ -200,7 +200,7 @@ def link_opinions(facts: dict) -> list[dict]:
     because it halves bandwidth, but nothing an operator can act on. The same
     numbers where the slot ALSO offers four mean the link trained down, which is
     a fault. Reporting both as a warning was a false positive on a real host —
-    jar's M.2 socket provides two lanes and always will.
+    the M.2 socket provides two lanes and always will.
 
     So severity follows the explanation: info when the slot accounts for it,
     warn when both ends could do better. Comparisons are string equality because

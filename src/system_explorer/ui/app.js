@@ -1067,7 +1067,7 @@ function emptyMessage() {
    The kernel names virtual plumbing after itself, never after what runs on
    it: vnet4, br-ae307a67bed8, veth960eb05, docker-59286b95….scope. That cost
    a real diagnosis — per-unit PSI correctly identified the scope stalling
-   silo on I/O and the operator could not tell it was syncthing.
+   a host on I/O and the operator could not tell which workload it was.
 
    Only the owning subsystem can name these, so each publishes its half as a
    fact (vms: HostTaps; docker: BridgeInterface and ContainerID; units:
@@ -1094,7 +1094,7 @@ async function loadOwners() {
       //
       // The guest's address rides along, because the row without it actively
       // misleads: a tap's own Addresses are its link-local and nothing else, so
-      // "vnet1 unifi-os  fe80::fc00:ff:fe00:80/64" reads as a VM with no IPv4
+      // "vnet1 appliance  fe80::fc00:ff:fe00:80/64" reads as a VM with no IPv4
       // when the VM is sitting on 192.168.200.80. The address belongs to the
       // guest, not the link, so it renders inside the attribution rather than
       // in the link's own Addresses column. Absent when libvirt could not see

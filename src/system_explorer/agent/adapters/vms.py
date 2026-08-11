@@ -248,14 +248,14 @@ class Adapter:
             # derive it — a tap carries no domain identity in sysfs, and the
             # fe:54:/52:54: MAC resemblance is a QEMU convention, not a
             # record. Without this the operator meets four unattributed vnet
-            # rows and a bridge (seen on silo, 2026-08-11).
+            # rows and a bridge (seen on a VM host, 2026-08-11).
             "HostTaps": sorted({n["HostTap"] for n in nics if n.get("HostTap")}),
             "PassedThroughDevices": hostdevs,
         }
         # SPEC section 2 rule 7, third arm: the value exists and this agent
         # cannot see it, so the fact is null and a sibling carries the reason.
         # An empty list said "this guest has no addresses", which is a different
-        # and false claim — tub's unifi-os read [] while sitting on
+        # and false claim — an appliance guest read [] while sitting on
         # 192.168.200.80, because all three libvirt sources happened to be
         # silent at once. For a BRIDGED guest that is the normal case, not a
         # transient one: the guest agent needs more than a read-only connection,

@@ -96,11 +96,11 @@ function makeDocument(ids) {
   };
 }
 
-/* ── realistic inputs, matching what silo actually serves ─────────────── */
+/* ── realistic inputs, the shape a storage host actually serves ───────── */
 
 const CAPABILITIES = {
   version: "0.4.0", revision: "abc1234",
-  host: { hostname: "silo", machine_id: "f0d5c28d8b5845a1bddbe46a87f9415a" },
+  host: { hostname: "host-a", machine_id: "0123456789abcdef0123456789abcdef" },
   subsystems: {
     system: { available: true, collections: ["identity", "time", "boot", "overview"] },
     nix: { available: true, collections: ["generations", "packages"] },
@@ -511,8 +511,8 @@ check("a row with no severity is not drawn as a neutral verdict", () => {
 
 check("a tap or veth shows the workload's address, not just its name", () => {
   /* The row that prompted this: network/links on a VM host renders
-     "vnet1 unifi-os  fe80::fc00:ff:fe00:80/64". The fe80 is genuinely all the
-     TAP has — the guest's 192.168.200.80 lives on the guest — so the reader
+     "vnet1 appliance  fe80::fc00:ff:fe00:80/64". The fe80 is genuinely all the
+     TAP has — the guest's own address lives on the guest — so the reader
      concludes the VM has no IPv4. The join already knows the address; it just
      stopped at the name. Docker veths have the identical problem. */
   Object.assign(ui.state, {
@@ -526,7 +526,7 @@ check("a tap or veth shows the workload's address, not just its name", () => {
                  Addresses: ["fe80::dead/64"] } },
     ] },
     owners: {
-      vnet1: { parts: [{ label: "unifi-os", href: "#/x", addrs: ["192.168.200.80"] }] },
+      vnet1: { parts: [{ label: "appliance", href: "#/x", addrs: ["10.0.0.80"] }] },
       // libvirt saw no address for this one: no lease, no ARP entry. Silence
       // is the honest render — never another workload's address.
       vnet9: { parts: [{ label: "quiet-vm", href: "#/y", addrs: [] }] },
@@ -537,9 +537,9 @@ check("a tap or veth shows the workload's address, not just its name", () => {
   ui.renderGrid();
   const rows = document.getElementById("grid-body").querySelectorAll("ident");
   const text = rows.map(r => r.textContent);
-  if (!text[0].includes("unifi-os"))
+  if (!text[0].includes("appliance"))
     throw new Error(`owner name missing: ${text[0]}`);
-  if (!text[0].includes("192.168.200.80"))
+  if (!text[0].includes("10.0.0.80"))
     throw new Error(`the guest's address is not on the row: ${text[0]}`);
   // It must be the OWNER's address, marked as such — not folded into the
   // link's own Addresses column, which belongs to the interface.
@@ -614,7 +614,7 @@ const marks = (panel) => {
 };
 
 check("the link equation states speed, lanes and the product", () => {
-  // jar: an x4-capable card in an M.2 socket wired for two lanes.
+  // An x4-capable card in an M.2 socket wired for two lanes.
   const panel = ui.linkPanel({
     LinkSpeed: "8.0 GT/s PCIe", LinkSpeedMax: "8.0 GT/s PCIe",
     LinkWidth: 2, LinkWidthMax: 4, SlotLinkWidthMax: 2,

@@ -554,7 +554,7 @@ class Adapter:
         reported. It made a whole class of fault invisible: a host on a tailnet
         gets policy table 52 consulted at rule preference 5270 while main waits
         until 32766, so an accepted route for a segment the host is ON silently
-        outranks its own connected route. That took the Red House LAN down twice
+        outranks its own connected route. That took a site LAN down twice
         on 2026-08-09 and again on 2026-08-11, and on every occasion this
         collection showed a healthy main table and nothing else — the shadowing
         route was not in the envelope at all, so no rule could see it and no

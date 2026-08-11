@@ -19,11 +19,13 @@ lint is armed from the first adapter file onward.
 """
 
 import ast
+import pathlib
 import re
+import subprocess
 
 import pytest
 
-from common import AGENT_DIR, SUBPROCESS_ALLOWLIST, UI_DIR
+from common import AGENT_DIR, PROJECT_DIR, SUBPROCESS_ALLOWLIST, UI_DIR
 
 FORBIDDEN_CALLS = {
     ("os", "system"),
@@ -223,3 +225,99 @@ def test_no_self_attribute_survives_its_definition(source):
             "the class does not define — a helper was moved or renamed and a call "
             "site was left behind (SPEC section 11: the suite is the teeth)"
         )
+
+
+# ---------------------------------------------------------------------------
+# This is a public product repo. Estate records — host names, machine ids, real
+# addresses — live with the deployment that raised them, not here: each finding
+# only makes sense with its evidence, and that evidence is somebody's
+# infrastructure. Comments kept citing the host that raised them because it
+# made them credible, which is true and still the wrong place; the finding
+# survives the rename intact.
+#
+# 20 instances had accumulated before this existed, including one real,
+# stable machine-id in a UI fixture.
+# ---------------------------------------------------------------------------
+
+# Deliberately a list rather than a clever pattern: a reviewer must be able to
+# see what is banned. Add a host here when the estate gains one.
+ESTATE_NAMES = ("silo", "vat", "jar", "tub", "mess", "naxos", "red house",
+                "redhouse", "unifi-os", "haos")
+
+# The org name is unavoidable — it is the repository URL, the flake input and
+# the package metadata. Everything else is fair game.
+ESTATE_EXEMPT_FILES = {"README.md", "AGENTS.md", "pyproject.toml",
+                       "nix/package.nix", "flake.nix", "flake.lock"}
+
+
+def _repo_sources():
+    """Tracked files only — .venv, result symlinks and build output are not the
+    repository, and scanning them produces nothing but false positives (httpx
+    has a cookie `jar`)."""
+    listed = subprocess.run(["git", "ls-files"], cwd=PROJECT_DIR,
+                            capture_output=True, text=True, check=False).stdout.split()
+    exts = {".py", ".js", ".mjs", ".md", ".sh", ".json", ".nix", ".css", ".html"}
+    for name in listed:
+        rel = pathlib.Path(name)
+        if rel.suffix not in exts or str(rel) in ESTATE_EXEMPT_FILES:
+            continue
+        path = PROJECT_DIR / rel
+        if path.is_file():
+            yield rel, path
+
+
+@pytest.mark.parametrize("name", ESTATE_NAMES)
+def test_no_estate_hostnames_in_the_public_repo(name):
+    """A host name in a comment is a small leak that compounds: it names a
+    machine, and the finding beside it says what is wrong with it."""
+    pattern = re.compile(rf"\b{re.escape(name)}\b", re.I)
+    hits = []
+    for rel, path in _repo_sources():
+        # This file necessarily contains the list.
+        if rel.name == "test_adapter_lint.py":
+            continue
+        for number, line in enumerate(path.read_text(errors="ignore").splitlines(), 1):
+            if pattern.search(line):
+                hits.append(f"{rel}:{number}: {line.strip()[:90]}")
+    assert not hits, (
+        f"estate host name {name!r} in a public repo:\n  " + "\n  ".join(hits[:10])
+        + "\nDescribe the role instead — 'a storage host', 'a bridged guest'. "
+        "The finding does not need the hostname to be true."
+    )
+
+
+def test_no_real_machine_ids_in_the_public_repo():
+    """A machine-id is stable and unique — the one identifier that follows a
+    host forever.
+
+    Scoped to lines that actually name machine_id: a bare 32-hex literal is
+    also how systemd spells a catalog MessageId, and those are public
+    constants that belong in fixtures (the coredump and duplicate-name ids
+    are both used by the log rules' characteristic cases).
+    """
+    # A reviewed list, not a pattern: every one of these is visibly synthetic,
+    # and a new entry should be a decision somebody made rather than something
+    # a regex happened to wave through.
+    placeholder = {
+        "0123456789abcdef0123456789abcdef",
+        "fedcba9876543210fedcba9876543210",
+        "abcdef0123456789abcdef0123456789",
+        "00112233445566778899aabbccddeeff",
+        "0" * 32, "f" * 32,
+    }
+    line_pat = re.compile(r"machine[_-]?id", re.I)
+    hexes = re.compile(r"\b[0-9a-f]{32}\b")
+    hits = []
+    for rel, path in _repo_sources():
+        if rel.name == "test_adapter_lint.py":
+            continue
+        for number, line in enumerate(path.read_text(errors="ignore").splitlines(), 1):
+            if not line_pat.search(line):
+                continue
+            for found in hexes.findall(line):
+                if found not in placeholder:
+                    hits.append(f"{rel}:{number}: {found}")
+    assert not hits, (
+        "a real machine-id in the public repo:\n  " + "\n  ".join(hits[:10])
+        + "\nUse 0123456789abcdef0123456789abcdef in fixtures."
+    )

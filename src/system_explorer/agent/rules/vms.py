@@ -32,7 +32,7 @@ def domain_address_opinions(facts: dict) -> list[dict]:
 
     The row used to say `ok` beside an empty address list, which is the shape
     this whole level exists to prevent: the agent vouching for something it
-    could not see. tub's unifi-os read `IPAddresses: []` with a healthy row
+    could not see. A bridged appliance guest read `IPAddresses: []` with a healthy row
     while answering on 192.168.200.80 — and the very next poll showed the
     address, because a ping in between had repopulated the host's ARP table.
     An observation that changes when you observe it is not a health verdict.

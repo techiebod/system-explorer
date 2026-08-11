@@ -120,7 +120,7 @@ CASES = [
      set()),
 
     # network: a policy-table route that outranks the host's own connected
-    # route. The Red House LAN went dark three times on this before the routes
+    # route. A site LAN went dark three times on this before the routes
     # collection could even see the shadowing route — it read main only.
     ("route-shadows-own-lan", network.route_opinions,
      {"Table": "52", "RulePreference": 5270, "Destination": "192.168.123.0/24",
@@ -142,7 +142,8 @@ CASES = [
       "Gateway": "192.168.200.1", "Family": "ipv4"},
      set()),
 
-    # units: a .mount unit systemd invented from the mount table. silo carried
+    # units: a .mount unit systemd invented from the mount table. A storage host
+    # carried
     # this for two days with five stacks believing they depended on it.
     # Silent by design: the fact is reported, no opinion is drawn from it. On a
     # container host 50 of these are docker's own overlay mounts.
@@ -421,7 +422,7 @@ CASES = [
      {("smart-snapshot-stale", "warn")}),
     # Stale BECAUSE the collector deliberately did not wake a sleeping disk.
     # info, not warn: that is normal operation on a spun-down bulk drive, and
-    # a warning there trains the operator to ignore the rule. Observed on vat,
+    # a warning there trains the operator to ignore the rule. Observed in the wild,
     # whose pool disks idle into standby (2026-08-11).
     ("smart-snapshot-stale-drive-asleep", hardware.smart_opinions,
      {"SmartSnapshotAt": "2026-08-09T11:00:00Z",
@@ -442,12 +443,12 @@ CASES = [
     # link_opinions. The slot's capability is what separates "wired that way"
     # from "trained down", and severity follows it: warning about an immutable
     # board property is warning about something nobody can act on, which is what
-    # the first version did to jar.
+    # the first version did to a real host.
     ("link-at-full-rate-quiet", hardware.link_opinions,
      {"LinkSpeed": "6.0 Gbit", "LinkSpeedMax": "6.0 Gbit"}, set()),
     ("link-speed-alone-is-not-a-verdict", hardware.link_opinions,
      {"LinkSpeed": "6.0 Gbps"}, set()),
-    # jar: an x4 drive in an M.2 socket that provides two lanes. Permanent,
+    # An x4 drive in an M.2 socket that provides two lanes. Permanent,
     # so INFO — it caps bandwidth and no operator can change it.
     ("pcie-width-explained-by-the-slot", hardware.link_opinions,
      {"LinkSpeed": "8.0 GT/s PCIe", "LinkSpeedMax": "8.0 GT/s PCIe",
@@ -637,7 +638,7 @@ def test_link_opinion_quantifies_the_cap_when_the_adapter_derived_it():
     facts rather than asserting a figure the envelope does not contain.
 
     "it does cap the bandwidth available to it" separates a one-percent cap
-    from a halving not at all — the reader who hit this on jar had to leave the
+    from a halving not at all — the reader who hit this had to leave the
     screen and do PCIe arithmetic by hand. The sentence carries the concept too,
     because the reasonable reading of "8.0 GT/s" beside "x2" is that speed and
     width say the same thing twice.

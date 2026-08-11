@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Run se-hub on a non-NixOS guest, fronting the whole lab.
-# Deliberately on a GUEST rather than on silo: the hub deployable had only ever
+# Deliberately on a GUEST rather than on a host already running one: the hub
+# deployable had only ever
 # run on NixOS, so this is the first time it is exercised anywhere else.
 set -euo pipefail
 DEST="${1:?ssh destination}"; AGENTS="${2:?name=url,name=url}"

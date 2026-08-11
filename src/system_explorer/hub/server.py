@@ -26,7 +26,7 @@ Configuration is environment-only so the same package runs anywhere:
                         "host-a=http://127.0.0.1:8091,host-b=http://host-b:8091"
   SE_HUB_SITE           this site's label, surfaced in /hub/hosts
   SE_HUB_SIBLINGS       comma-separated site=hub-url pairs of PEER hubs, e.g.
-                        "naxos=http://tub:8090" — omit for a single-site estate
+                        "site-a=http://host-a:8090" — omit for a single-site estate
   SE_HUB_ALLOWED_HOSTS  Host-header allow-list, same semantics as the
                         agent's SE_ALLOWED_HOSTS (SPEC section 7)
 """

@@ -636,7 +636,7 @@ class Adapter:
             # snapshot that carries no reading, so a drive left asleep long
             # enough ends up with the reason alone. Attaching it only alongside
             # a snapshot would blame grantDiskAccess on a host whose collector
-            # is working correctly (seen on vat, 2026-08-11).
+            # is working correctly (observed 2026-08-11).
             recorded_reason = await anyio.to_thread.run_sync(_smart_no_reading, dev)
             if recorded_reason:
                 info["SmartSnapshotReason"] = recorded_reason
