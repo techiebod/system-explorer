@@ -481,6 +481,10 @@ pre.evidence {
 }
 .owner-part:hover { color: var(--accent); }
 
+/* The way out of a single-host page, when the deployment named a hub. */
+.site-link { color: var(--accent); text-decoration: none; }
+.site-link:hover { text-decoration: underline; }
+
 /* Column picker menu in the facet bar. */
 .col-menu {
   flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px;

@@ -319,6 +319,19 @@ function renderHostCard() {
       $("host-name").textContent = host.hostname;
       $("host-meta").textContent = host.machine_id.slice(0, 12) + "…";
     }
+    // An agent serves exactly one host, so there is no switcher here — and
+    // that silence once cost an operator a whole deployed capability: running
+    // four hosts behind two hubs, they asked what had happened to the host
+    // switcher while browsing an agent directly. The agent does not discover
+    // its hub (aggregation must never be a precondition for observation), so
+    // this appears only where the deployment configured hubUrl.
+    const site = state.capabilities?.site;
+    if (site?.hub_url) {
+      const link = el("a", "site-link", site.name ? `all of ${site.name} →` : "site view →");
+      link.href = site.hub_url;
+      link.title = `This host is one of a site. Its hub serves every host at ${site.hub_url}`;
+      $("host-meta").append(document.createTextNode(" · "), link);
+    }
     return;
   }
   const select = $("host-select");
