@@ -101,7 +101,7 @@ def test_etc_rows_name_the_files_that_changed(tmp_path):
         {"sudoers.gid": "1\n"})
 
     rows = nix._etc_rows(old_root, new_root,
-                         nix._etc_entries(old_root), nix._etc_entries(new_root))
+                         nix._etc_entries(old_root), nix._etc_entries(new_root), {})
     by_name = {row["Name"]: row for row in rows}
 
     # Unchanged entries stay out of it.
@@ -124,7 +124,7 @@ def test_identical_etc_trees_produce_no_rows(tmp_path):
     walked_old, walked_new = nix._etc_entries(old_root), nix._etc_entries(new_root)
     assert walked_old == walked_new
     # Same root string: nothing differs and no fallback row is invented.
-    assert nix._etc_rows(old_root, old_root, walked_old, walked_new) == []
+    assert nix._etc_rows(old_root, old_root, walked_old, walked_new, {}) == []
 
 
 def test_differing_roots_with_no_file_difference_still_report_something(tmp_path):
@@ -133,23 +133,35 @@ def test_differing_roots_with_no_file_difference_still_report_something(tmp_path
     old_root = build_etc(tmp_path / "old", entries, {})
     new_root = build_etc(tmp_path / "new", entries, {})
     rows = nix._etc_rows(f"{STORE}/{HASH_A}-etc/etc", f"{STORE}/{HASH_B}-etc/etc",
-                         nix._etc_entries(old_root), nix._etc_entries(new_root))
+                         nix._etc_entries(old_root), nix._etc_entries(new_root), {})
     assert len(rows) == 1
     assert rows[0]["From"] != rows[0]["To"]
 
 
-def test_a_symlinked_directory_is_followed(tmp_path):
-    """NixOS builds those aggregates so /etc can declare their contents, and
-    stopping at them reported "etc/systemd/system changed" without naming a unit."""
+def test_the_shallow_walk_stops_at_symlinks(tmp_path):
+    """Following them turned a 170-entry walk into 6190 per generation and made
+    this collection take 4.9 seconds. A store symlink's target already identifies
+    its contents, so descending is only informative where the target moved."""
     target = tmp_path / "store-units"
     (target / "sockets.target.wants").mkdir(parents=True)
     (target / "polkit.service").write_text("x")
-    (target / "sockets.target.wants" / "one.socket").write_text("y")
     root = build_etc(tmp_path / "gen", {"systemd/system": str(target)}, {})
     walked = nix._etc_entries(root)
-    assert "systemd/system" in walked, "the link itself is still recorded"
-    assert "systemd/system/polkit.service" in walked
-    assert "systemd/system/sockets.target.wants/one.socket" in walked
+    assert "systemd/system" in walked, "the link itself is recorded"
+    assert not any(name.startswith("systemd/system/") for name in walked)
+
+
+def test_an_unmoved_aggregate_is_never_walked(tmp_path):
+    """The whole performance argument: identical targets cannot differ underneath,
+    so nothing below them is read at all."""
+    target = tmp_path / "store-units"
+    target.mkdir(parents=True)
+    (target / "polkit.service").write_text("x")
+    root = build_etc(tmp_path / "gen", {"systemd/system": str(target)}, {})
+    walked = nix._etc_entries(root)
+    cache: dict = {}
+    assert nix._etc_rows(root, root, walked, walked, cache) == []
+    assert cache == {}, "an unchanged aggregate must not be descended into"
 
 
 def test_individual_units_are_named_rather_than_their_directory(tmp_path):
@@ -162,7 +174,7 @@ def test_individual_units_are_named_rather_than_their_directory(tmp_path):
     new_root = build_etc(tmp_path / "new", {"systemd/system": str(new_units)}, {})
 
     names = [r["Name"] for r in nix._etc_rows(
-        old_root, new_root, nix._etc_entries(old_root), nix._etc_entries(new_root))]
+        old_root, new_root, nix._etc_entries(old_root), nix._etc_entries(new_root), {})]
     assert "etc/systemd/system/polkit.service" in names
     assert "etc/systemd/system/steady.service" not in names, "unchanged unit stays out"
     # The aggregate adds nothing once its members are named individually.
@@ -181,7 +193,7 @@ def test_a_wholesale_directory_change_collapses_with_its_count(tmp_path):
     new_root = build_etc(tmp_path / "new", {"terminfo": str(new_db)}, {})
 
     rows = nix._etc_rows(old_root, new_root,
-                         nix._etc_entries(old_root), nix._etc_entries(new_root))
+                         nix._etc_entries(old_root), nix._etc_entries(new_root), {})
     assert len(rows) == 1, rows
     # A summary, not a silent truncation: the row says how many.
     assert rows[0]["Name"].startswith("etc/terminfo (")
@@ -229,7 +241,7 @@ def test_an_aggregate_whose_contents_are_identical_says_so(tmp_path):
     new_root = build_etc(tmp_path / "new", {"terminfo": str(new_db)}, {})
 
     rows = nix._etc_rows(old_root, new_root,
-                         nix._etc_entries(old_root), nix._etc_entries(new_root))
+                         nix._etc_entries(old_root), nix._etc_entries(new_root), {})
     assert len(rows) == 1, rows
     assert rows[0]["Name"] == "etc/terminfo (identity moved, contents identical)"
     assert rows[0]["From"] != rows[0]["To"]
@@ -245,5 +257,5 @@ def test_a_changed_member_still_reports_the_member_not_the_label(tmp_path):
     new_root = build_etc(tmp_path / "new", {"terminfo": str(new_db)}, {})
 
     names = [r["Name"] for r in nix._etc_rows(
-        old_root, new_root, nix._etc_entries(old_root), nix._etc_entries(new_root))]
+        old_root, new_root, nix._etc_entries(old_root), nix._etc_entries(new_root), {})]
     assert names == ["etc/terminfo/xterm"]

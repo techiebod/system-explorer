@@ -143,25 +143,59 @@ def _file_identity(path: str) -> str:
 
 
 def _etc_entries(etc_root: str | None) -> dict[str, str]:
-    """Every path under a generation's /etc, mapped to an exact identity.
+    """One level of a generation's /etc: symlinks as leaves, real files hashed.
 
-    A NixOS /etc is mostly symlinks into the store plus a handful of tiny files,
-    so a symlink's target and a small file's content hash are both exact
-    identities and a per-file comparison needs no diff tool and no subprocess.
+    Deliberately NOT recursive through symlinks. An earlier version followed them
+    and turned a 170-entry walk into 6190 entries per generation, 2899 of which
+    are terminfo files it then hashed — across 29 generations that made this
+    collection take 4.9 seconds while every other one answered in under 20ms.
 
-    Symlinked directories are followed, and both the link and what is under it are
-    recorded. Stopping at them was the first attempt and it reported
-    "etc/systemd/system changed" without naming a unit — the same withholding as
-    the single /etc row it replaced, one level down. NixOS builds those aggregates
-    precisely so /etc can declare their contents, so their contents are what /etc
-    declares.
-
-    Bounded against a symlink cycle by realpath rather than by depth alone, since a
-    cycle is the one shape here that is unbounded rather than merely large.
+    It is not needed, either. A store path is input-addressed, so a symlink's
+    target identifies its entire contents: two generations whose etc/terminfo
+    points at the same path cannot differ underneath it. Descending is only
+    informative where the target actually moved, and _aggregate_rows does that for
+    one pair at a time.
     """
     if not etc_root:
         return {}
 
+    entries: dict[str, str] = {}
+
+    def walk(base: str, prefix: str, depth: int) -> None:
+        if depth > ETC_MAX_DEPTH:
+            return
+        try:
+            found = list(os.scandir(base))
+        except OSError:
+            return
+        for entry in found:
+            name = f"{prefix}{entry.name}"
+            if entry.is_symlink():
+                try:
+                    entries[name] = os.readlink(entry.path)
+                except OSError:
+                    entries[name] = "unreadable"
+            elif entry.is_dir(follow_symlinks=False):
+                walk(entry.path, f"{name}/", depth + 1)
+            else:
+                entries[name] = _file_identity(entry.path)
+
+    walk(etc_root, "", 0)
+    return entries
+
+
+def _tree_entries(root: str, cache: dict[str, dict[str, str]]) -> dict[str, str]:
+    """Everything under one store directory, recursively, memoised by path.
+
+    Only reached for an aggregate whose identity moved. Store paths are immutable,
+    so memoising by path is sound for the life of the process and two adjacent
+    generations sharing one aggregate walk it once.
+
+    Bounded against a symlink cycle by realpath, since a cycle is the one shape
+    here that is unbounded rather than merely large.
+    """
+    if root in cache:
+        return cache[root]
     entries: dict[str, str] = {}
     visited: set[str] = set()
 
@@ -186,9 +220,6 @@ def _etc_entries(etc_root: str | None) -> dict[str, str]:
                     entries[name] = os.readlink(entry.path)
                 except OSError:
                     entries[name] = "unreadable"
-                # Record the link itself AND descend, so a changed aggregate can
-                # be reported either as its members or, when there are too many,
-                # as itself.
                 if entry.is_dir():
                     walk(entry.path, f"{name}/", depth + 1)
             elif entry.is_dir(follow_symlinks=False):
@@ -196,19 +227,56 @@ def _etc_entries(etc_root: str | None) -> dict[str, str]:
             else:
                 entries[name] = _file_identity(entry.path)
 
-    walk(etc_root, "", 0)
+    walk(root, "", 0)
+    cache[root] = entries
     return entries
 
 
-def _has_members(path: str, older: dict[str, str], newer: dict[str, str]) -> bool:
-    """Whether this entry is a directory with contents on both sides."""
-    prefix = f"{path}/"
-    return (any(p.startswith(prefix) for p in older)
-            and any(p.startswith(prefix) for p in newer))
+def _aggregate_rows(path: str, older_target: str, newer_target: str,
+                    cache: dict[str, dict[str, str]]) -> list[dict]:
+    """Members of one moved aggregate directory, or a labelled summary of it.
+
+    NixOS builds etc/systemd/system and friends as a single store symlink
+    precisely so /etc can declare their contents, so naming the units inside is
+    the whole point. Two shapes are not worth enumerating: a database that moved
+    wholesale, and one that did not really move at all.
+    """
+    older = _tree_entries(older_target, cache)
+    newer = _tree_entries(newer_target, cache)
+    changed = [name for name in sorted(set(older) | set(newer))
+               if older.get(name) != newer.get(name)]
+
+    def row(name: str, before: str | None, after: str | None) -> dict:
+        label_before, label_after = _distinguishable(_short_identity(before),
+                                                     _short_identity(after))
+        return {"Kind": "etc", "Name": name, "From": label_before, "To": label_after}
+
+    # Store paths are input-addressed, so a rebuild relocates byte-identical
+    # content: terminfo moves whenever ncurses does and says nothing about the
+    # machine. Reported, because it moved, but labelled, so nobody goes looking.
+    if not changed:
+        return [row(f"etc/{path} (identity moved, contents identical)",
+                    older_target, newer_target)]
+    # A database that changed wholesale would bury the units an operator wants.
+    # A summary that states its count, not a silent truncation.
+    if len(changed) > ETC_COLLAPSE_OVER:
+        return [row(f"etc/{path} ({len(changed)} entries changed)",
+                    older_target, newer_target)]
+    return [row(f"etc/{path}/{name}", older.get(name), newer.get(name))
+            for name in changed]
+
+
+def _both_directories(older_target: str, newer_target: str) -> bool:
+    """Whether an /etc entry is a directory on both sides, so worth expanding."""
+    try:
+        return os.path.isdir(older_target) and os.path.isdir(newer_target)
+    except OSError:
+        return False
 
 
 def _etc_rows(older_root: str | None, newer_root: str | None,
-              older: dict[str, str], newer: dict[str, str]) -> list[dict]:
+              older: dict[str, str], newer: dict[str, str],
+              cache: dict[str, dict[str, str]]) -> list[dict]:
     """Which files under /etc changed, one row each.
 
     The first version reported a single row carrying the two /etc store paths,
@@ -216,59 +284,23 @@ def _etc_rows(older_root: str | None, newer_root: str | None,
     something under /etc moved and refuses to say what. Naming the paths is the
     whole value, and it is readable directly out of both closures.
 
-    A directory whose members nearly all moved is reported as itself with a count.
-    /etc/terminfo is one symlink to a database of some 2500 files that all change
-    together whenever ncurses moves, and listing them would bury the four unit
-    files an operator actually wants to see. The collapse is stated in the row, so
-    it is a summary rather than a silent truncation.
+    A changed entry that is a directory on both sides is expanded here and only
+    here — one pair, one aggregate, on demand.
 
-    What changed *inside* a file is a further question, and `make config-diff`
-    answers it against a candidate.
+    What changed *inside* a file is a further question.
     """
-    differing = [path for path in sorted(set(older) | set(newer))
-                 if older.get(path) != newer.get(path)]
-    changed = set(differing)
-
-    # Longest first, so a nested aggregate collapses before its parent does.
-    collapsed: list[tuple[str, int]] = []
-    for path in sorted(differing, key=len, reverse=True):
-        members = [p for p in changed if p.startswith(f"{path}/")]
-        if len(members) > ETC_COLLAPSE_OVER:
-            collapsed.append((path, len(members)))
-
-    def inside_collapsed(path: str) -> bool:
-        return any(path.startswith(f"{prefix}/") for prefix, _ in collapsed)
-
-    def row(name: str, before: str | None, after: str | None) -> dict:
+    rows = []
+    for path in sorted(set(older) | set(newer)):
+        before, after = older.get(path), newer.get(path)
+        if before == after:
+            continue
+        if before and after and _both_directories(before, after):
+            rows += _aggregate_rows(path, before, after, cache)
+            continue
         label_before, label_after = _distinguishable(_short_identity(before),
                                                      _short_identity(after))
-        return {"Kind": "etc", "Name": name, "From": label_before, "To": label_after}
-
-    collapsed_names = {prefix for prefix, _ in collapsed}
-    rows = []
-    for path in differing:
-        if inside_collapsed(path):
-            continue
-        if path in collapsed_names:
-            count = next(n for prefix, n in collapsed if prefix == path)
-            rows.append(row(f"etc/{path} ({count} entries changed)",
-                            older.get(path), newer.get(path)))
-            continue
-        # A directory whose members are listed individually adds nothing itself.
-        members = [p for p in changed if p.startswith(f"{path}/")]
-        if members:
-            continue
-        # An aggregate whose identity moved while every member stayed identical.
-        # Store paths are input-addressed, so a rebuild relocates byte-identical
-        # content: /etc/terminfo moves whenever ncurses is rebuilt and says
-        # nothing about the machine. Reported, because it did move, but labelled,
-        # because "terminfo changed" would send an operator looking for a change
-        # that is not there.
-        if path in older and path in newer and _has_members(path, older, newer):
-            rows.append(row(f"etc/{path} (identity moved, contents identical)",
-                            older.get(path), newer.get(path)))
-            continue
-        rows.append(row(f"etc/{path}", older.get(path), newer.get(path)))
+        rows.append({"Kind": "etc", "Name": f"etc/{path}",
+                     "From": label_before, "To": label_after})
 
     # The trees are content-addressed, so differing roots with no file-level
     # explanation means this walk missed something. Say that rather than nothing.
@@ -342,9 +374,11 @@ class Adapter:
     # ── generations ──────────────────────────────────────────
     def _delta_facts(self, number: int, previous: int | None,
                      manifests: dict[int, dict | None],
-                     environments: dict[int, dict[str, str]],
+                     sw_paths: dict[int, str | None],
                      etc_paths: dict[int, str | None],
-                     etc_trees: dict[int, dict[str, str]],
+                     environments: dict[str, dict[str, str]],
+                     etc_trees: dict[str, dict[str, str]],
+                     aggregate_cache: dict[str, dict[str, str]],
                      detailed: bool) -> dict:
         """What this generation changed, against the previous one still present.
 
@@ -378,9 +412,24 @@ class Adapter:
                 f"themselves, so they are complete. Generation {missing} carries no "
                 f"{nx.GENERATION_MANIFEST} though, so the configuration revision and "
                 "flake inputs could not be compared.")
-        rows += _etc_rows(etc_paths.get(previous), etc_paths.get(number),
-                          etc_trees.get(previous, {}), etc_trees.get(number, {}))
-        rows += _package_rows(environments.get(previous, {}), environments.get(number, {}))
+        def walked(path: str | None, cache: dict[str, dict[str, str]],
+                   reader) -> dict[str, str]:
+            if not path:
+                return {}
+            if path not in cache:
+                cache[path] = reader(path)
+            return cache[path]
+
+        older_etc, newer_etc = etc_paths.get(previous), etc_paths.get(number)
+        if older_etc != newer_etc:
+            rows += _etc_rows(older_etc, newer_etc,
+                              walked(older_etc, etc_trees, _etc_entries),
+                              walked(newer_etc, etc_trees, _etc_entries),
+                              aggregate_cache)
+        older_sw, newer_sw = sw_paths.get(previous), sw_paths.get(number)
+        if older_sw != newer_sw:
+            rows += _package_rows(walked(older_sw, environments, nx.store_paths),
+                                  walked(newer_sw, environments, nx.store_paths))
 
         counts: dict[str, int] = {}
         for row in rows:
@@ -430,11 +479,17 @@ class Adapter:
         # The link farm and the /etc symlink are inside every closure, so these
         # two comparisons work where no manifest does — including retroactively,
         # for generations built before se-generation.json existed at all.
-        environments = {number: nx.store_paths(f"{target}/sw")
-                        for number, _, target in links}
+        # Both of these are store symlinks, so comparing the targets is a cheap
+        # proxy for comparing what is under them: identical targets cannot differ.
+        # Walking is deferred to the pairs that actually moved, memoised by path,
+        # because a store path is immutable and 29 generations share many of them.
+        sw_paths = {number: nx.realpath(f"{target}/sw")
+                    for number, _, target in links}
         etc_paths = {number: nx.realpath(f"{target}/etc")
                      for number, _, target in links}
-        etc_trees = {number: _etc_entries(path) for number, path in etc_paths.items()}
+        environments: dict[str, dict[str, str]] = {}
+        etc_trees: dict[str, dict[str, str]] = {}
+        aggregate_cache: dict[str, dict[str, str]] = {}
         receipts_visible = nx.receipts_dir() is not None
         items = []
         for index, (number, link, target) in enumerate(links):
@@ -458,8 +513,8 @@ class Adapter:
             }
             previous = links[index + 1][0] if index + 1 < len(links) else None
             facts.update(self._delta_facts(number, previous, manifests,
-                                           environments, etc_paths, etc_trees,
-                                           detailed))
+                                           sw_paths, etc_paths, environments,
+                                           etc_trees, aggregate_cache, detailed))
             # Deployment facts are absent on a generation that carries no manifest
             # — every generation on a host whose closures are built without one,
             # and the older ones on a host that started recently. Omitted, not
