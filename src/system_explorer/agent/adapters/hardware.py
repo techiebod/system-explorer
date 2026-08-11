@@ -116,9 +116,13 @@ def _epoch_iso(seconds: float) -> str:
     return datetime.fromtimestamp(seconds, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-PLATFORM_REFERENCE = ["lshw -class system", "dmidecode -t system", "lscpu"]
-PCI_REFERENCE = ["lspci -nnk"]
-USB_REFERENCE = ["lsusb", "lsusb -t"]
+PLATFORM_REFERENCE = ["lshw -class system", "dmidecode -t system", "lscpu",
+                      "cat /proc/meminfo"]
+PCI_REFERENCE = ["lspci -nnk", "ls /sys/bus/pci/devices",
+                 "udevadm info /sys/bus/pci/devices/<addr>"]
+USB_REFERENCE = ["lsusb", "lsusb -t",
+                 "cat /sys/bus/usb/devices/<dev>/{idVendor,idProduct,manufacturer,"
+                 "product,speed,version,bcdDevice,bDeviceClass}"]
 # Reference commands are a promise: an administrator can reproduce the
 # observation by running them (SPEC rule 5). That makes them a truthfulness
 # surface, and they had drifted — link rates, host identity and serials were all
@@ -129,24 +133,36 @@ SCSI_REFERENCE = ["lsscsi -v",
                   "ls /sys/class/enclosure",
                   # host identity: driver, transport, and the PCI function it
                   # hangs from, whose hwdb names come from udev not sysfs.
-                  "cat /sys/class/scsi_host/host*/proc_name",
+                  "cat /sys/class/scsi_host/host*/{proc_name,state}",
                   "udevadm info /sys/bus/pci/devices/<addr>",
+                  # the devices themselves: type, identity and state
+                  "cat /sys/bus/scsi/devices/<id>/{type,vendor,model,rev,state,"
+                  "wwid,vpd_pg80}",
+                  "ls /sys/bus/scsi/devices/<id>/block",
+                  # expanders in the attachment tree
+                  "cat /sys/class/sas_expander/expander-*/{vendor_id,product_id,level}",
+                  "cat /sys/class/sas_device/expander-*/sas_address",
                   # negotiated link rate, per transport
-                  "cat /sys/class/ata_link/link*/sata_spd",
+                  "cat /sys/class/ata_link/link*/{sata_spd,hw_sata_spd_limit}",
                   "cat /sys/class/sas_phy/phy-*/negotiated_linkrate",
                   "cat /sys/class/sas_phy/phy-*/maximum_linkrate",
                   "cat /sys/class/sas_device/end_device-*/{sas_address,phy_identifier}",
                   # capacity and serial without a daemon
                   "cat /sys/block/<disk>/size",
                   "sg_vpd --page=sn /dev/<disk>",
-                  "smartctl -H -A /dev/<disk>"]
+                  "smartctl -H -A /dev/<disk>",
+                  # the zero-privilege temperature floor, which is all a host
+                  # with no udisks2 and no disk grant can see
+                  "cat /sys/class/hwmon/hwmon*/{name,temp1_input}",
+                  "ls /sys/class/hwmon/hwmon*/device/block"]
 NVME_REFERENCE = ["nvme list",
                   "smartctl -H -A /dev/<ctrl>",
-                  "cat /sys/class/nvme/*/firmware_rev",
+                  "cat /sys/class/nvme/<ctrl>/{firmware_rev,model,serial,state,transport}",
                   # PCIe link, and the bridge above it whose capability is what
                   # distinguishes a narrow slot from a degraded link
                   "cat /sys/class/nvme/<ctrl>/device/{current,max}_link_{speed,width}",
-                  "lspci -vv -s <addr> | grep LnkSta"]
+                  "lspci -vv -s <addr> | grep LnkSta",
+                  "cat /sys/class/hwmon/hwmon*/{name,temp1_input}"]
 
 # ── the fact dictionary ──────────────────────────────────────
 # One sentence per fact, saying what it MEANS. Facts carry native property

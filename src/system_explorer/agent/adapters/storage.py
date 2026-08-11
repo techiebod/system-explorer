@@ -621,11 +621,24 @@ class Adapter:
 
     def _source_for(self, collection: str) -> dict:
         table = {
-            "block-devices": ("lsblk-json", "lsblk -J", ["lsblk", "lsblk -o +MODEL,SERIAL"]),
+            # The sysfs reads are named alongside the tools: lsblk and mdadm
+            # present the same state, but the adapter reads these files and
+            # rule 5 asks for what reproduces the observation, not what
+            # resembles it. md in particular reported the mdstat/mdadm pair
+            # while every fact came from /sys/block/*/md.
+            "block-devices": ("lsblk-json", "lsblk -J",
+                              ["lsblk", "lsblk -o +MODEL,SERIAL",
+                               "ls /sys/class/block/<device>/holders",
+                               "readlink -f /sys/class/block/<device>/device"]),
             "mounts": ("findmnt-json", "findmnt -J",
                        ["findmnt --real --task 1", "df -h"]),
             "arrays": ("md-sysfs", "/sys/block/*/md",
-                       ["cat /proc/mdstat", "mdadm --detail /dev/md*"]),
+                       ["cat /proc/mdstat", "mdadm --detail /dev/md*",
+                        "ls /sys/block",
+                        "cat /sys/block/<md>/md/{level,array_state,degraded,"
+                        "raid_disks,metadata_version,uuid,sync_action,sync_completed}",
+                        "cat /sys/block/<md>/md/dev-*/{state,slot,errors}",
+                        "cat /sys/block/<device>/size"]),
             "pools": ("zfs-json", "zpool -j", ["zpool status -j", "zpool list -j -p"]),
             "datasets": ("zfs-json", "zfs -j", ["zfs list -j -p -o " + ZFS_LIST_COLUMNS]),
             "lookups": ("zfs-json", "zfs list -j -t snapshot,bookmark",

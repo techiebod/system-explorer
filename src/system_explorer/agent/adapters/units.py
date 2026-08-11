@@ -205,7 +205,13 @@ TYPED_IFACES = {
 
 SERVICE_FACTS = ["MainPID", "NRestarts", "Result", "TasksCurrent"]
 
-REFERENCE = ["systemctl list-units --all", "systemctl status <unit>", "systemctl show <unit>"]
+REFERENCE = ["systemctl list-units --all", "systemctl status <unit>", "systemctl show <unit>",
+             # Per-unit pressure is read from cgroupfs, not from systemd: the
+             # D-Bus interface does not carry it. Named here because rule 5's
+             # promise is about what the observation actually comes from, and
+             # the comment above _walk_cgroups explaining why was the only
+             # place it was written down.
+             "cat /sys/fs/cgroup/<unit-cgroup>/{io,cpu,memory}.pressure"]
 
 
 # Unit properties whose values are secrets-adjacent by construction. A

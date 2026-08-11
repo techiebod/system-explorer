@@ -67,7 +67,14 @@ OVERVIEW_FILES = ["/proc/uptime", "/proc/loadavg", "/proc/stat", "/proc/meminfo"
                   "/proc/pressure/io", "/proc/net/dev", "/proc/diskstats",
                   ARCSTATS]
 OVERVIEW_REFERENCE = ["uptime", "cat /proc/pressure/*", "free -b",
-                      "cat /proc/stat /proc/net/dev /proc/diskstats"]
+                      "cat /proc/stat /proc/net/dev /proc/diskstats",
+                      # Named because they are READ, not because a tool
+                      # summarises them: `uptime` and `free -b` present the
+                      # same numbers, but rule 5 asks for a command that
+                      # reproduces the observation, and these are it.
+                      "cat /proc/uptime /proc/loadavg /proc/meminfo",
+                      "cat /proc/spl/kstat/zfs/arcstats",
+                      "ls /sys/block"]
 
 # Synthetic block devices whose I/O is noise at host scale.
 DISKSTATS_SKIP = re.compile(r"^(loop|ram|zram|sr|fd)\d")
@@ -490,7 +497,11 @@ class Adapter:
         return env.observation(
             self.subsystem, obj,
             env.source("system-dbus", SYSTEMD_MANAGER,
-                       ["systemctl status", "systemd-analyze", "systemctl is-system-running"]
+                       ["systemctl status", "systemd-analyze", "systemctl is-system-running",
+                        "cat /proc/sys/kernel/random/boot_id",
+                        # efibootmgr decodes these; the agent reads the
+                        # variables directly, so both are named.
+                        "efibootmgr -v", "ls /sys/firmware/efi/efivars"]
                        + (["readlink -f /run/current-system /run/booted-system "
                            "/nix/var/nix/profiles/system"] if _is_nixos() else []),
                        method="org.freedesktop.DBus.Properties.GetAll",

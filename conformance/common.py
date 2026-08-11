@@ -71,6 +71,45 @@ def strict(schema: Any) -> Any:
 # pattern. (smartctl joined 2026-08-09 when the lint learned to extract argv
 # heads; it had been invoked unlisted since the hardware adapter landed —
 # the exact ride-along the old some-command-appears check could not see.)
+# SPEC section 11 rule 9's escape hatch: a path an adapter reads that a named
+# TOOL reproduces, rather than a cat an administrator would ever type. Keyed
+# "<module>:<path prefix>", because a family is the unit a reviewer can judge.
+# Same discipline as SUBPROCESS_ALLOWLIST: deliberate reviewed additions, never
+# a broadened pattern, and never a way to make the lint quiet.
+#
+# A reason beginning "TODO" marks a family with no verified reference command
+# yet; test_the_unverified_backlog_only_shrinks holds that count to a number a
+# commit can only move down. It is zero today because the lint landed with its
+# gaps closed rather than suppressed.
+PATH_REFERENCE_EXEMPTIONS: dict[str, str] = {
+    "hardware:/sys/devices/virtual/dmi/id":
+        "dmidecode -t system reads this DMI table and is named in "
+        "PLATFORM_REFERENCE. Catting the raw attributes is not what an "
+        "administrator would run, and the decoded output is the reproduction.",
+    "hardware:/run/system-explorer-smart":
+        "written by the module's own root SMART collector (grantDiskAccess), "
+        "not by the system. The reproducible command is smartctl -H -A "
+        "/dev/<disk>, already named — the snapshot is this product's plumbing.",
+    "network:/run/system-explorer-tailscale":
+        "written by the module's own root tailscale collector "
+        "(grantTailscaleAccess). The reproducible command is "
+        "tailscale status --json, already named.",
+}
+
+# Modules whose reads cannot be resolved statically at all, listed so that
+# unresolvability is a reviewed decision rather than a silent pass.
+UNLINTABLE_READ_MODULES: dict[str, str] = {
+    "nix": "every read is rooted at a generation target obtained from "
+           "os.readlink(/nix/var/nix/profiles/system-<n>-link) — a /nix/store "
+           "path that exists only at runtime, so no literal prefix can be "
+           "resolved from the source. GENERATIONS_REFERENCE names the profile "
+           "directory and the readlink, which is the reproducible form an "
+           "administrator would actually run.",
+}
+
+# The ratchet. Only ever lower this.
+UNVERIFIED_REFERENCE_BUDGET = 0
+
 # Adapters whose get_evidence serves a payload with no credential surface, so
 # it passes through unredacted. Same review discipline as SUBPROCESS_ALLOWLIST
 # below: entries are deliberate, reviewed additions, and each reason has to be
