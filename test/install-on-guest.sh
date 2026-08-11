@@ -109,7 +109,13 @@ UMask=0077
 WantedBy=multi-user.target
 UNIT
 sudo -n systemctl daemon-reload
-sudo -n systemctl enable --now system-explorer.service >/dev/null 2>&1
+sudo -n systemctl enable system-explorer.service >/dev/null 2>&1
+# RESTART, not enable --now. `--now` starts a stopped unit and does nothing at
+# all to a running one, so reinstalling over a live agent left the old code
+# running from deleted files: the health check passed, the version matched, and
+# every fix in the new build was absent. It cost two false diagnoses — a fact
+# that "would not populate" and a nav fix that "had not landed".
+sudo -n systemctl restart system-explorer.service
 
 # The host firewall, which the NixOS module handles with openFirewall and a
 # non-Nix install has no equivalent for. A real portability finding rather than
