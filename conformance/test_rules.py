@@ -781,3 +781,45 @@ def test_ui_priority_badge_matches_the_rulebook_threshold():
         f"trusts the number alone only at <= {logs.PRIORITY_CRITICAL} "
         "(agent/rules/logs.py)"
     )
+
+
+# ---------------------------------------------------------------------------
+# The link kind, which is a shaping decision rather than a rule but has the same
+# failure mode: a value the kernel did not say. Pure, so it is tested directly.
+# ---------------------------------------------------------------------------
+
+LINK_KIND_CASES = [
+    # tailscale0 and libvirt's vnet* both report info_kind "tun", because one
+    # tuntap driver creates both. The kernel draws the line in info_data.type,
+    # and they are genuinely different devices — layer 3 with no address, vs
+    # layer 2 enslaved to a bridge with a real MAC.
+    ("tun-is-a-tun", {"linkinfo": {"info_kind": "tun",
+                                   "info_data": {"type": "tun"}}}, "tun"),
+    ("tap-is-not-a-tun", {"linkinfo": {"info_kind": "tun",
+                                       "info_data": {"type": "tap"}}}, "tap"),
+    # Degrades to the driver name rather than guessing, if a kernel ever stops
+    # reporting the mode.
+    ("tuntap-without-a-mode", {"linkinfo": {"info_kind": "tun"}}, "tun"),
+    ("tuntap-with-empty-info-data",
+     {"linkinfo": {"info_kind": "tun", "info_data": {}}}, "tun"),
+    # Every other kind passes through untouched.
+    ("bridge", {"linkinfo": {"info_kind": "bridge"}}, "bridge"),
+    ("veth", {"linkinfo": {"info_kind": "veth"}}, "veth"),
+    # A physical NIC and loopback carry no linkinfo, or only the enslavement.
+    # Neither has a kind, and info_slave_kind must never become one: it says
+    # "this is a bridge port", which Master already says.
+    ("loopback-has-no-linkinfo", {"link_type": "loopback"}, None),
+    ("physical-nic-has-no-linkinfo", {"link_type": "ether"}, None),
+    ("bridge-port-is-not-a-bridge",
+     {"linkinfo": {"info_slave_kind": "bridge",
+                   "info_slave_data": {"state": "forwarding"}}}, None),
+    ("empty-linkinfo", {"linkinfo": {}}, None),
+    ("nothing-at-all", {}, None),
+]
+
+
+@pytest.mark.parametrize("case,link,expected",
+                         LINK_KIND_CASES, ids=[c[0] for c in LINK_KIND_CASES])
+def test_link_kind_reports_what_the_kernel_said(case, link, expected):
+    from system_explorer.agent.adapters.network import _link_kind
+    assert _link_kind(link) == expected

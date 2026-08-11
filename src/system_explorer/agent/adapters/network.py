@@ -66,20 +66,23 @@ _LINK_GLOSSARY = {
         "they have no carrier to detect, which is not the same as being down."
     ),
     "Kind": (
-        "The software device type the kernel reports — bridge, veth, tun, "
-        "vlan, bond. A physical interface has none, because a kind comes from "
-        "the driver that implements a virtual device; blank here means this is "
-        "not a software device. See LinkType for the link layer, which every "
-        "interface has."
+        "The software device type the kernel reports — bridge, veth, vlan, "
+        "bond, and tun or tap. A physical interface has none, because a kind "
+        "comes from the driver that implements a virtual device; blank here "
+        "means this is not a software device, and loopback is blank for the "
+        "same reason. tun and tap share one driver, so the kernel names that "
+        "driver \"tun\" for both and the mode one level down; this reports the "
+        "mode, because the mode is what makes them different devices. See "
+        "LinkType for the link layer, which every interface has."
     ),
     "LinkType": (
         "The link layer this interface speaks, from the kernel's hardware type: "
         "ether for Ethernet — which includes bridges and TAP devices, both of "
         "which carry Ethernet frames — loopback, or none for an interface with "
         "no link-layer header at all. A layer-3 tunnel is none, which is why it "
-        "has no MAC address; note that a TUN and a TAP interface both report "
-        "Kind \"tun\", because they come from one driver, and only this fact "
-        "distinguishes them."
+        "has no MAC address. This is the only one of the two that every "
+        "interface has, so it is what names a physical NIC or loopback, neither "
+        "of which has a Kind."
     ),
     "MTU": "The largest payload this interface will carry, in bytes.",
     "MACAddress": (
@@ -124,6 +127,34 @@ _LINK_GLOSSARY = {
 }
 
 _NETWORK_GLOSSARY = {"links": _LINK_GLOSSARY}
+
+
+def _link_kind(link: dict) -> str | None:
+    """The kernel's most specific name for what this device IS, or None.
+
+    info_kind names the driver, and for tun/tap that is "tun" in either mode —
+    so tailscale0 (a layer-3 tunnel with no address) and libvirt's vnet* (layer-2
+    taps enslaved to a bridge) arrived indistinguishable. The kernel does draw
+    the line, one level down in the same object: info_data.type is "tun" or
+    "tap". Read, never inferred, and it degrades to the driver name if a kernel
+    ever stops reporting the mode.
+
+    Top-level info_kind only: linkinfo on a bridge port also carries
+    info_slave_kind ("bridge"), which classes the enslavement rather than the
+    device and would render a port as a bridge. Master already says a port is
+    enslaved.
+
+    A device the kernel gives no info_kind — every physical interface, and
+    loopback, which carry no linkinfo at all — has no kind here. That absence is
+    the statement "not a software device". LinkType is what names those, and
+    copying an ARPHRD name in would put two taxonomies in one field: a bridge is
+    "ether" as well as a bridge, so the two are not alternatives.
+    """
+    info = link.get("linkinfo") or {}
+    kind = info.get("info_kind")
+    if kind == "tun":
+        return (info.get("info_data") or {}).get("type") or kind
+    return kind
 
 # Lookup descriptors double as usage documentation: the collection listing
 # and the no-input observation are how both the UI and an agent learn what
@@ -398,17 +429,11 @@ class Adapter:
             name = link["ifname"]
             facts = {
                 "OperState": (link.get("operstate") or "").lower(),
-                # The kernel names a Kind only for software devices: info_kind
-                # comes from an rtnetlink link-type ops struct, and a hardware
-                # NIC has none. So this is null on every physical interface and
-                # on loopback, which is why LinkType sits beside it — that field
-                # the kernel does fill in for everything, and the reader asking
-                # "what is this device" was getting silence on five rows of
-                # seven. info_kind only, deliberately: linkinfo on a bridge port
-                # also carries info_slave_kind ("bridge"), which classes the
-                # enslavement rather than the device and would render a port as
-                # a bridge. Master already says a port is enslaved.
-                "Kind": (link.get("linkinfo") or {}).get("info_kind"),
+                # See _link_kind. Null on every physical interface and on
+                # loopback, because those carry no linkinfo at all — which is
+                # why LinkType sits beside it, that being the field the kernel
+                # fills in for everything.
+                "Kind": _link_kind(link),
                 # The kernel's hardware type (ARPHRD), present on every
                 # interface: "ether", "loopback", or "none" for a device with no
                 # link-layer header at all — a layer-3 tunnel, which is also why
