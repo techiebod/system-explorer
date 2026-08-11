@@ -487,6 +487,23 @@ function navRoutes() {
    system/overview — this is presentation, not a contract change. */
 const STANDALONE = [["system", "overview", "overview"]];
 
+/* Nav headings that group collections regardless of which subsystem owns them.
+   Presentation only — routes, object ids, opinions and stored history are all
+   untouched, which is what makes this the cheap answer to a question that looked
+   expensive.
+
+   "disks" exists because hardware is organised by TRANSPORT and an operator is
+   not: `scsi` holds SAS, SATA and USB drives (Linux routes all three through the
+   SCSI subsystem) while NVMe has its own, so "where are my disks" had no single
+   place to look and the answer depended on knowing kernel taxonomy. Renaming
+   `scsi` would have been a worse lie — it also holds hosts, expanders and
+   enclosures — and making `disks` a real collection would have meant a second
+   object identity per drive, double-counted SMART verdicts, and rehoming nine
+   opinion keys before findings even exist. A heading costs none of that. */
+const GROUPS = [
+  { heading: "disks", members: [["hardware", "scsi"], ["hardware", "nvme"]] },
+];
+
 /* THE nav structure, computed once and consumed by everything.
 
    Three bugs came out of not having this. renderNav built the sidebar while
@@ -503,12 +520,14 @@ const STANDALONE = [["system", "overview", "overview"]];
 function navModel() {
   const subsystems = state.capabilities?.subsystems || {};
   const sections = [];
-  const promoted = new Set();
+  const claimed = new Set();
+
+  const listed = (sub, coll) =>
+    subsystems[sub]?.available && (subsystems[sub].collections || []).includes(coll);
 
   for (const [sub, coll, label] of STANDALONE) {
-    const cap = subsystems[sub];
-    if (!cap?.available || !(cap.collections || []).includes(coll)) continue;
-    promoted.add(`${sub}/${coll}`);
+    if (!listed(sub, coll)) continue;
+    claimed.add(`${sub}/${coll}`);
     // No heading, deliberately: separated by space rather than by a label it
     // does not need. Consumers must tolerate a headless section — which is
     // precisely what one of them did not.
@@ -516,11 +535,23 @@ function navModel() {
                     items: [{ sub, coll, label, route: `${sub}/${coll}` }] });
   }
 
+  for (const group of GROUPS) {
+    const items = group.members
+      .filter(([sub, coll]) => listed(sub, coll) && !claimed.has(`${sub}/${coll}`))
+      .map(([sub, coll]) => ({ sub, coll, label: coll, route: `${sub}/${coll}` }));
+    // An empty group is not a heading, it is a lie about what is here.
+    if (!items.length) continue;
+    items.forEach(item => claimed.add(item.route));
+    sections.push({ solo: false, heading: group.heading, available: true,
+                    grouped: true, items });
+  }
+
   for (const [name, cap] of Object.entries(subsystems)) {
     const items = (cap.collections || [])
-      .filter(coll => !promoted.has(`${name}/${coll}`))
+      .filter(coll => !claimed.has(`${name}/${coll}`))
       .map(coll => ({ sub: name, coll, label: coll, route: `${name}/${coll}` }));
-    // A subsystem whose only collection was promoted has nothing left to head.
+    // A subsystem whose collections were all promoted or grouped has nothing
+    // left to head. An unavailable one still shows, carrying its reason.
     if (!items.length && cap.available) continue;
     sections.push({ solo: false, heading: name, available: !!cap.available,
                     reason: cap.reason, items });

@@ -253,6 +253,29 @@ check("navModel is the single structure both the sidebar and the keys use", () =
     throw new Error("no headless promoted section in the model");
 });
 
+// The "disks" heading groups collections from one subsystem under a label that
+// is not a subsystem name. Presentation only: the routes must stay exactly what
+// the API serves, because the whole point of a heading over a collection is that
+// it costs no contract change.
+check("a disks heading groups scsi and nvme without touching their routes", () => {
+  const model = ui.navModel();
+  const disks = model.find(s => s.heading === "disks");
+  if (!disks) throw new Error("no disks section in the model");
+  const routes = disks.items.map(i => i.route);
+  if (routes.join(",") !== "hardware/scsi,hardware/nvme")
+    throw new Error(`disks holds ${routes.join(", ")}`);
+  // And they must not ALSO appear under hardware, which is what a claimed-set
+  // bug would produce — the same collection reachable twice.
+  const hardware = model.find(s => s.heading === "hardware");
+  const dupes = (hardware?.items || []).filter(i => routes.includes(i.route));
+  if (dupes.length)
+    throw new Error(`also listed under hardware: ${dupes.map(d => d.route).join(", ")}`);
+  // hardware keeps what is genuinely not a disk.
+  const kept = (hardware?.items || []).map(i => i.coll);
+  if (!kept.includes("platform") || !kept.includes("pci"))
+    throw new Error(`hardware lost its own collections: ${kept.join(", ")}`);
+});
+
 if (failures.length) {
   console.log(`\n${failures.length} failed: ${failures.join(", ")}`);
   process.exit(1);
