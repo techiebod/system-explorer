@@ -185,15 +185,36 @@ function humanSeconds(n) {
   return `${Math.round(n / 86400)}d`;
 }
 
+/* Hours, the unit SMART reports drive age in. The fact stays native (SPEC
+   rule: native concepts before abstractions) because 69392 is the number the
+   drive gave; it is simply not a number anyone reads. Past a couple of days
+   it becomes days, past a year it becomes years to one decimal — enough to
+   tell a 4.0y drive from a 7.9y one at a glance, which is the actual
+   question being asked of a pool member. */
+function humanHours(n) {
+  if (typeof n !== "number") return String(n);
+  if (n < 48) return `${Math.round(n)}h`;
+  if (n < 8760) return `${Math.round(n / 24)}d`;
+  return `${(n / 8760).toFixed(1)}y`;
+}
+
 /* Unit-aware scalar formatting, keyed on fact-name conventions: *Bytes
-   humanizes, *Seconds becomes a duration, *Percent / *Pct wears its % sign.
-   Returns null when the key carries no unit convention — callers fall
-   through to generic rendering. */
+   humanizes, *Seconds becomes a duration, *Hours an age, *Percent / *Pct
+   wears its % sign. Returns null when the key carries no unit convention —
+   callers fall through to generic rendering.
+
+   THE one place a unit becomes text. It was not: renderCell carried its own
+   *Bytes branch (dead, since this function already claimed those keys) and
+   the overview's fact table carried a third copy. A second implementation is
+   how *Hours went four releases without anyone noticing it was unreadable —
+   there was no single place to add it. Add new units here and nowhere. */
 const PERCENT_KEY_RE = /(Percent|Pct)/;
 function scalarText(key, value, exact = false) {
   if (typeof value !== "number") return null;
-  if (key.endsWith("Bytes")) return exact ? `${humanBytes(value)}  (${value})` : humanBytes(value);
-  if (key.endsWith("Seconds")) return exact ? `${humanSeconds(value)}  (${value})` : humanSeconds(value);
+  const withExact = (text) => exact ? `${text}  (${value})` : text;
+  if (key.endsWith("Bytes")) return withExact(humanBytes(value));
+  if (key.endsWith("Seconds")) return withExact(humanSeconds(value));
+  if (key.endsWith("Hours")) return withExact(humanHours(value));
   if (PERCENT_KEY_RE.test(key)) return `${value}%`;
   return null;
 }
@@ -933,7 +954,7 @@ function renderOverview(obs, got = {}) {
   for (const [k, v] of Object.entries(f)) {
     const tr = el("tr");
     tr.appendChild(el("td", null, k));
-    tr.appendChild(el("td", null, k.endsWith("Bytes") ? `${humanBytes(v)} (${v})` : String(v)));
+    tr.appendChild(el("td", null, scalarText(k, v, true) ?? vstr(v)));
     table.appendChild(tr);
   }
   details.appendChild(table);
@@ -1218,10 +1239,6 @@ function renderCell(key, value, item) {
   if (["ActiveState", "SubState", "State", "Health", "OperState", "LoadState"].includes(key)) {
     const cls = VALUE_CLASS[String(value).toLowerCase()] || "neutral";
     td.appendChild(el("span", `badge ${cls}`, String(value)));
-    return td;
-  }
-  if (key.endsWith("Bytes") && typeof value === "number") {
-    td.className = "mono"; td.textContent = humanBytes(value); td.title = String(value);
     return td;
   }
   if (Array.isArray(value)) { td.className = "mono"; td.textContent = value.map(vstr).join(", "); return td; }

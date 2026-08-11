@@ -70,6 +70,13 @@ cost of only being routable from the VM host — reach them with `ssh -J <vmhost
 or run the test controller there. A bridge (`bridge=br0,model=virtio`, the
 default) is right when the guests should be first-class LAN citizens.
 
+There is a third option that keeps NAT's isolation and drops the jump: route
+the guest segment to the operator's machine out of band — a tailnet subnet
+route advertised by the VM host, a static route, a VPN. Then set
+`VM_LAB_SSH_PROXY_JUMP=` (explicitly empty) and the generated `ssh_config`
+addresses guests directly, so nothing depends on the VM host's sshd being up
+to reach a guest running on it.
+
 Enter the pinned tool environment:
 
 ```sh
@@ -168,6 +175,7 @@ live in `.state/` and are ignored by Git.
 | Variable | Default | Purpose |
 |---|---|---|
 | `VM_LAB_VM_HOST` | *(empty: local)* | ssh destination of a remote KVM host |
+| `VM_LAB_SSH_PROXY_JUMP` | *(the KVM host)* | bastion for reaching guests; set empty to connect direct |
 | `VM_LAB_NETWORK` | `bridge=br0,model=virtio` | libvirt network or bridge |
 | `VM_LAB_STORAGE_DIR` | `/var/lib/libvirt/images/system-explorer-vm-lab` | base and overlay storage |
 | `VM_LAB_MEMORY_MIB` | `2048` | memory per guest |

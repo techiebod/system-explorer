@@ -11,6 +11,18 @@ readonly STORAGE_DIR="${VM_LAB_STORAGE_DIR:-/var/lib/libvirt/images/system-explo
 # HERE, where the operator's keys and agent live, so no key material is ever
 # written to the VM host, and guests are reached by jumping through it.
 readonly VM_HOST="${VM_LAB_VM_HOST:-}"
+# The bastion for reaching guests, which is NOT always the hypervisor. It
+# defaults to it, because a NAT segment is normally reachable from nowhere
+# else — but when that segment is routed to the operator's machine by other
+# means (a tailnet subnet route, a static route, a VPN), jumping is pure
+# latency and an extra dependency on the VM host being up. Set it empty to
+# connect straight to the guest addresses:
+#
+#   VM_LAB_SSH_PROXY_JUMP= ./bin/vm-lab up all
+#
+# Assigned with `-` rather than `:-` on purpose, so an explicitly-empty value
+# is honoured instead of falling back to VM_HOST.
+readonly SSH_PROXY_JUMP="${VM_LAB_SSH_PROXY_JUMP-${VM_HOST}}"
 # Always the local URI, even in remote mode: virsh and virt-install are
 # executed ON the hypervisor (see host_run), so from their point of view
 # libvirt is local. Handing them qemu+ssh:// instead makes root on the VM
@@ -69,6 +81,10 @@ Distros: fedora, debian, ubuntu (24.04), ubuntu2604 (26.04 LTS), nixos
 Important environment variables:
   VM_LAB_VM_HOST             ssh destination of the KVM host; empty = local.
                              Set it to drive a remote hypervisor from here.
+  VM_LAB_SSH_PROXY_JUMP      Bastion for reaching guests (default: the KVM
+                             host). Set it EMPTY when the guest segment is
+                             routed to this machine already, and connections
+                             go direct instead of jumping.
   VM_LAB_USER                Guest user (default: current $USER)
   VM_LAB_SSH_CONFIG_HOST     Host alias used with ssh -G to resolve identity
                              (default: se-test-fedora)
@@ -547,10 +563,11 @@ ssh_args() {
     -o "UserKnownHostsFile=${STATE_DIR}/known_hosts"
     -o StrictHostKeyChecking=accept-new
   )
-  # Guests sit on the VM host's NAT segment, unrouteable from here, so every
-  # connection jumps through it. Authentication stays end-to-end from this
-  # machine's agent — the jump host never sees a private key.
-  [[ -z "${VM_HOST}" ]] || SSH_ARGS+=( -o "ProxyJump=${VM_HOST}" )
+  # Guests sit on the VM host's NAT segment, normally unrouteable from here,
+  # so every connection jumps through it. Authentication stays end-to-end from
+  # this machine's agent — the jump host never sees a private key. Empty when
+  # the segment is routed here directly (see SSH_PROXY_JUMP).
+  [[ -z "${SSH_PROXY_JUMP}" ]] || SSH_ARGS+=( -o "ProxyJump=${SSH_PROXY_JUMP}" )
 }
 
 ssh_to_guest() {
@@ -628,7 +645,7 @@ refresh_outputs() {
       printf '  BatchMode yes\n'
       printf '  StrictHostKeyChecking accept-new\n'
       printf '  UserKnownHostsFile %s\n' "${STATE_DIR}/known_hosts"
-      [[ -z "${VM_HOST}" ]] || printf '  ProxyJump %s\n' "${VM_HOST}"
+      [[ -z "${SSH_PROXY_JUMP}" ]] || printf '  ProxyJump %s\n' "${SSH_PROXY_JUMP}"
       printf '\n'
     } >> "${config_tmp}"
   done
