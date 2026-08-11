@@ -244,6 +244,9 @@ function scalarText(key, value, exact = false) {
   if (key.endsWith("Bytes")) return withExact(humanBytes(value));
   if (key.endsWith("Seconds")) return withExact(humanSeconds(value));
   if (key.endsWith("Hours")) return withExact(humanHours(value));
+  // PCIe lane counts. A bare "2" beside a bare "4" did not read as the cause of
+  // a warning; "x2" beside "x4" does.
+  if (/LinkWidth(Max)?$/.test(key)) return `x${value}`;
   if (PERCENT_KEY_RE.test(key)) return `${value}%`;
   return null;
 }

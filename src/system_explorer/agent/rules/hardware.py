@@ -158,31 +158,54 @@ def _human_age(seconds: int) -> str:
 
 
 def link_opinions(facts: dict) -> list[dict]:
-    """A link that trained below what it is capable of.
+    """A link running below what the device could do — and, where the slot's
+    capability is known, whether that is the board's doing or a fault.
 
-    Presence-driven twice over: the facts exist only where the kernel
-    establishes both numbers, which on SATA it usually does not (hw_sata_spd_limit
-    reads "<unknown>" on a healthy port), and the comparison is a plain string
-    inequality because these are the kernel's own labels — "6.0 Gbit", "8.0 GT/s
-    PCIe" — and inventing a parser to rank them would be inventing precision.
+    The distinction is the whole rule. A drive at x2 of its own x4 in a socket
+    wired for two lanes is an immutable property of the hardware: worth knowing,
+    because it halves bandwidth, but nothing an operator can act on. The same
+    numbers where the slot ALSO offers four mean the link trained down, which is
+    a fault. Reporting both as a warning was a false positive on a real host —
+    jar's M.2 socket provides two lanes and always will.
 
-    Worth a warn rather than silence because nothing else here shows it: a 6 Gbps
-    drive at 1.5 Gbps, or an NVMe at x2 of a possible x4, passes every health
-    check while delivering a fraction of its bandwidth.
+    So severity follows the explanation: info when the slot accounts for it,
+    warn when both ends could do better. Comparisons are string equality because
+    these are the kernel's own labels ("8.0 GT/s PCIe", "6.0 Gbit"); ranking them
+    would be inventing precision. Presence-driven — a device that reports no
+    maximum, as a healthy SATA port does, is not judged at all.
     """
     opinions: list[dict] = []
-    speed, speed_max = facts.get("LinkSpeed"), facts.get("LinkSpeedMax")
-    if speed and speed_max and speed != speed_max:
-        opinions.append(env.opinion(
-            "link-degraded", "warn",
-            f"Link negotiated {speed}, below this device's {speed_max}.",
-            ["LinkSpeed", "LinkSpeedMax"]))
-    width, width_max = facts.get("LinkWidth"), facts.get("LinkWidthMax")
-    if width and width_max and width != width_max:
-        opinions.append(env.opinion(
-            "link-width-degraded", "warn",
-            f"PCIe link came up at x{width}, below this device's x{width_max}.",
-            ["LinkWidth", "LinkWidthMax"]))
+
+    def judge(key: str, current, device_max, slot_max, noun: str, render) -> None:
+        if not current or not device_max or current == device_max:
+            return
+        explained = slot_max is not None and slot_max == current
+        evidence = [f"Link{noun}", f"Link{noun}Max"]
+        if explained:
+            evidence.append(f"SlotLink{noun}Max")
+            opinions.append(env.opinion(
+                key, "info",
+                f"This device runs at {render(current)} of the "
+                f"{render(device_max)} it supports, because the slot provides "
+                f"{render(slot_max)}. That is how the board is wired, not a "
+                "fault — but it does cap the bandwidth available to it.",
+                evidence))
+        else:
+            if slot_max is not None:
+                evidence.append(f"SlotLink{noun}Max")
+            opinions.append(env.opinion(
+                key, "warn",
+                f"Link trained at {render(current)}, below the "
+                f"{render(device_max)} this device supports"
+                + (f" and the {render(slot_max)} its slot offers" if slot_max else "")
+                + " — both ends can do better, so this is a degraded link.",
+                evidence))
+
+    judge("link-degraded", facts.get("LinkSpeed"), facts.get("LinkSpeedMax"),
+          facts.get("SlotLinkSpeedMax"), "Speed", lambda v: str(v))
+    # Lanes, said as lanes: "x2" read as a speed to the first person who saw it.
+    judge("link-width-degraded", facts.get("LinkWidth"), facts.get("LinkWidthMax"),
+          facts.get("SlotLinkWidthMax"), "Width", lambda v: f"x{v} lanes")
     return opinions
 
 

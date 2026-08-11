@@ -244,16 +244,29 @@ def _scsi_link_facts(scsi_id: str) -> dict:
 
 
 def _nvme_link_facts(controller: str) -> dict:
-    """PCIe link speed and width for an NVMe controller, current against
-    maximum. A drive negotiated at x2 when it can do x4 halves its bandwidth
-    and reports nothing else wrong — this is the only place that shows."""
+    """PCIe link speed and width for an NVMe controller — what it negotiated,
+    what the DEVICE can do, and what the SLOT can do.
+
+    The third one is the point. A drive running x2 of its own x4 is either wired
+    that way or trained down, and those are completely different statements: the
+    first is an immutable property of the board, the second is a fault. Without
+    the upstream bridge's capability there is no way to tell, and warning about
+    the first is warning about something no operator can act on — which is
+    exactly what the first version of this did on a real host.
+    """
     base = f"{NVME_DEVICES}/{controller}/device"
-    return {key: value for key, value in {
+    facts = {
         "LinkSpeed": _sysfs_value(_read(f"{base}/current_link_speed")),
         "LinkSpeedMax": _sysfs_value(_read(f"{base}/max_link_speed")),
         "LinkWidth": _sysfs_value(_read(f"{base}/current_link_width")),
         "LinkWidthMax": _sysfs_value(_read(f"{base}/max_link_width")),
-    }.items() if value}
+    }
+    # The bridge immediately above shares this link, so its max_link_* is the
+    # slot's capability while the device's is the card's.
+    bridge = os.path.dirname(os.path.realpath(base))
+    facts["SlotLinkWidthMax"] = _sysfs_value(_read(f"{bridge}/max_link_width"))
+    facts["SlotLinkSpeedMax"] = _sysfs_value(_read(f"{bridge}/max_link_speed"))
+    return {key: value for key, value in facts.items() if value}
 
 
 def _host_transport(base: str, driver: str | None) -> str | None:
