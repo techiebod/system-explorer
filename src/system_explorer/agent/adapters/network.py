@@ -73,9 +73,13 @@ _LINK_GLOSSARY = {
         "interface has."
     ),
     "LinkType": (
-        "The link layer this interface speaks: ether for Ethernet (including "
-        "bridges, which are Ethernet devices in their own right), loopback, or "
-        "none for tun/tap and other point-to-point devices."
+        "The link layer this interface speaks, from the kernel's hardware type: "
+        "ether for Ethernet — which includes bridges and TAP devices, both of "
+        "which carry Ethernet frames — loopback, or none for an interface with "
+        "no link-layer header at all. A layer-3 tunnel is none, which is why it "
+        "has no MAC address; note that a TUN and a TAP interface both report "
+        "Kind \"tun\", because they come from one driver, and only this fact "
+        "distinguishes them."
     ),
     "MTU": "The largest payload this interface will carry, in bytes.",
     "MACAddress": (
@@ -405,11 +409,21 @@ class Adapter:
                 # enslavement rather than the device and would render a port as
                 # a bridge. Master already says a port is enslaved.
                 "Kind": (link.get("linkinfo") or {}).get("info_kind"),
-                # The link layer, present on every interface: "ether",
-                # "loopback", "none" (tun/tap and other point-to-point). Read,
-                # never classified — a bridge is "ether" too, so this is not a
-                # physical/virtual discriminator and must not be folded into
-                # Kind, or a bridge stops being distinguishable from its ports.
+                # The kernel's hardware type (ARPHRD), present on every
+                # interface: "ether", "loopback", or "none" for a device with no
+                # link-layer header at all — a layer-3 tunnel, which is also why
+                # such a device has no MAC. Read, never classified: a bridge is
+                # "ether" as well, so this is not a physical/virtual
+                # discriminator, and folding it into Kind would stop a bridge
+                # being distinguishable from its own ports.
+                #
+                # It earns a column beside Kind by splitting a case Kind cannot.
+                # tailscale0 and libvirt's vnet* are both Kind "tun", because one
+                # tuntap driver creates both — but /sys/class/net/*/type says
+                # tailscale0 is 65534 (ARPHRD_NONE, addr_len 0, a TUN carrying
+                # bare IP) while vnet* are 1 (ARPHRD_ETHER, real MACs, enslaved
+                # to a bridge — TAPs carrying Ethernet frames). Same Kind,
+                # different devices; only this fact tells them apart.
                 "LinkType": link.get("link_type"),
                 "MTU": link.get("mtu"),
                 "MACAddress": link.get("address"),
