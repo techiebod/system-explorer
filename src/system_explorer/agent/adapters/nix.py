@@ -20,6 +20,7 @@ adapter's identity and boot-pointer facts.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 
@@ -38,6 +39,9 @@ GENERATIONS_REFERENCE = ["nixos-rebuild list-generations",
 STORE_RE = re.compile(r"(/nix/store/[a-z0-9]{32}-([^/]+))")
 # name-version split: the version starts at the first dash followed by a digit.
 NAME_VERSION_RE = re.compile(r"(.+?)-([0-9].*)")
+# Ceiling on hashing one real file under /etc. The sidecars there are bytes; this
+# only bounds the unexpected.
+ETC_HASH_LIMIT = 1 << 20
 
 
 def _input_identity(entry: object) -> str | None:
@@ -86,18 +90,119 @@ def _etc_identity(path: str | None) -> str | None:
     return os.path.basename(match.group(1)) if match else path
 
 
-def _etc_row(older: str | None, newer: str | None) -> list[dict]:
-    """Whether /etc changed, without enumerating it.
+def _short_identity(value: str | None) -> str | None:
+    """A comparable label for one /etc entry.
 
-    Every generation symlinks $out/etc at a content-addressed store path, so the
-    paths differing IS the answer to "did any file under /etc change". Which files
-    is a different and much more expensive question, and one `make config-diff`
-    already answers against a candidate.
+    Store paths reduce to their hash, so a changed file reads as one short token
+    rather than a 60-character path whose only varying part is at the front. A
+    content hash is already in that form.
     """
-    if not older or not newer or older == newer:
-        return []
-    return [{"Kind": "etc", "Name": "/etc",
-             "From": _etc_identity(older), "To": _etc_identity(newer)}]
+    if value is None:
+        return None
+    match = nx.STORE_RE.match(value)
+    if match:
+        return os.path.basename(match.group(1))[:32]
+    return value
+
+
+def _distinguishable(before: str | None, after: str | None) -> tuple[str | None, str | None]:
+    """Abbreviate a pair only while the short forms still tell them apart.
+
+    Same rule the preview's Inputs section needed: abbreviating unconditionally is
+    how a row reporting a change ends up rendering the two sides identically.
+    """
+    if not before or not after:
+        return before, after
+    if before[:12] == after[:12]:
+        return before, after
+    return before[:12], after[:12]
+
+
+def _file_identity(path: str) -> str:
+    """Content hash of a real file under /etc, bounded.
+
+    A NixOS /etc holds a dozen tiny sidecars recording ownership and mode, so
+    hashing them is nothing. The cap exists because this reads whatever the tree
+    actually contains, and an unbounded read is not something to leave to chance.
+    """
+    try:
+        with open(path, "rb") as handle:
+            data = handle.read(ETC_HASH_LIMIT + 1)
+    except OSError:
+        return "unreadable"
+    if len(data) > ETC_HASH_LIMIT:
+        try:
+            return f"size:{os.path.getsize(path)}"
+        except OSError:
+            return "unreadable"
+    return hashlib.sha256(data).hexdigest()[:16]
+
+
+def _etc_entries(etc_root: str | None) -> dict[str, str]:
+    """Every path under a generation's /etc, mapped to an exact identity.
+
+    A NixOS /etc is mostly symlinks into the store plus a handful of tiny files,
+    so a symlink's target and a small file's content hash are both exact
+    identities and a per-file comparison needs no diff tool and no subprocess. The
+    tree is around 200 entries — cheaper to walk than the package link farm this
+    same generation is already walked for.
+
+    Symlinks are leaves even when they point at a directory: recursing through one
+    would enumerate a store path's insides, which is not what /etc declares.
+    """
+    if not etc_root:
+        return {}
+
+    entries: dict[str, str] = {}
+
+    def walk(base: str, prefix: str) -> None:
+        try:
+            found = list(os.scandir(base))
+        except OSError:
+            return
+        for entry in found:
+            name = f"{prefix}{entry.name}"
+            if entry.is_symlink():
+                try:
+                    entries[name] = os.readlink(entry.path)
+                except OSError:
+                    entries[name] = "unreadable"
+            elif entry.is_dir(follow_symlinks=False):
+                walk(entry.path, f"{name}/")
+            else:
+                entries[name] = _file_identity(entry.path)
+
+    walk(etc_root, "")
+    return entries
+
+
+def _etc_rows(older_root: str | None, newer_root: str | None,
+              older: dict[str, str], newer: dict[str, str]) -> list[dict]:
+    """Which files under /etc changed, one row each.
+
+    The first version reported a single row carrying the two /etc store paths,
+    which is a true statement an administrator can do nothing with: it says
+    something under /etc moved and refuses to say what. Naming the paths is the
+    whole value, and it is readable directly out of both closures.
+
+    What changed *inside* a file is a different question, and `make config-diff`
+    answers it against a candidate.
+    """
+    rows = []
+    for path in sorted(set(older) | set(newer)):
+        before, after = older.get(path), newer.get(path)
+        if before == after:
+            continue
+        label_before, label_after = _distinguishable(_short_identity(before),
+                                                     _short_identity(after))
+        rows.append({"Kind": "etc", "Name": f"etc/{path}",
+                     "From": label_before, "To": label_after})
+    # The trees are content-addressed, so differing roots with no file-level
+    # explanation means this walk missed something. Say that rather than nothing.
+    if not rows and older_root and newer_root and older_root != newer_root:
+        rows.append({"Kind": "etc", "Name": "/etc (no file-level difference found)",
+                     "From": _etc_identity(older_root), "To": _etc_identity(newer_root)})
+    return rows
 
 
 def _delta_rows(older: dict, newer: dict) -> list[dict]:
@@ -166,6 +271,7 @@ class Adapter:
                      manifests: dict[int, dict | None],
                      environments: dict[int, dict[str, str]],
                      etc_paths: dict[int, str | None],
+                     etc_trees: dict[int, dict[str, str]],
                      detailed: bool) -> dict:
         """What this generation changed, against the previous one still present.
 
@@ -199,7 +305,8 @@ class Adapter:
                 f"themselves, so they are complete. Generation {missing} carries no "
                 f"{nx.GENERATION_MANIFEST} though, so the configuration revision and "
                 "flake inputs could not be compared.")
-        rows += _etc_row(etc_paths.get(previous), etc_paths.get(number))
+        rows += _etc_rows(etc_paths.get(previous), etc_paths.get(number),
+                          etc_trees.get(previous, {}), etc_trees.get(number, {}))
         rows += _package_rows(environments.get(previous, {}), environments.get(number, {}))
 
         counts: dict[str, int] = {}
@@ -254,6 +361,7 @@ class Adapter:
                         for number, _, target in links}
         etc_paths = {number: nx.realpath(f"{target}/etc")
                      for number, _, target in links}
+        etc_trees = {number: _etc_entries(path) for number, path in etc_paths.items()}
         receipts_visible = nx.receipts_dir() is not None
         items = []
         for index, (number, link, target) in enumerate(links):
@@ -277,7 +385,8 @@ class Adapter:
             }
             previous = links[index + 1][0] if index + 1 < len(links) else None
             facts.update(self._delta_facts(number, previous, manifests,
-                                           environments, etc_paths, detailed))
+                                           environments, etc_paths, etc_trees,
+                                           detailed))
             # Deployment facts are absent on a generation that carries no manifest
             # — every generation on a host whose closures are built without one,
             # and the older ones on a host that started recently. Omitted, not

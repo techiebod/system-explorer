@@ -231,16 +231,37 @@ means only that the generation does not record this.
                        "lastModified": 1786089803}}}
 ```
 
-Comparing two of these yields `DeltaFromPrevious`, a list of
-`{Kind, Name, From, To}` rows, plus `ComparedWithGeneration` naming which
-generation it was compared against — the previous one still *present*, which is
-not necessarily N−1 once older ones are collected.
+**The closures themselves.** Two more comparisons need no manifest at all, so they
+work on every generation including ones built before manifests existed:
+`<generation>/sw` is a buildEnv link farm, and `<generation>/etc` is a tree of
+symlinks into the store plus a few tiny files recording ownership and mode. A
+symlink's target and a small file's content hash are exact identities, so both
+compare by reading.
 
-The comparison is of two recorded manifests, never of two closures. `nvd` and
-`nix store diff-closures` have no structured output, so an adapter running one
-would be executing a reference command and parsing its prose, which rule 5
-forbids and no allow-list entry could make correct. Whatever built the closures
-already knew what went into them.
+Together they yield `DeltaFromPrevious`, a list of uniform
+`{Kind, Name, From, To}` rows — `revision`, `input`, `etc`, `package` — plus
+`ComparedWithGeneration` naming which generation it was compared against: the
+previous one still *present*, which is not necessarily N−1 once older ones are
+collected. `DeltaCounts` carries the per-kind totals and is present on both
+surfaces; the rows themselves are carried only on an opened object, because a
+nixpkgs bump moves hundreds of packages and a collection page is asked for a
+hundred generations at a time. That is a payload decision, not an acquisition one.
+
+`etc` rows name **one changed path each**. An earlier version reported a single
+row carrying the two /etc store paths, which is a true statement an administrator
+can do nothing with: it says something under /etc moved and refuses to say what.
+What changed *inside* a file is a further question, and a config-diff tool
+answers it against a candidate.
+
+Where a generation carries a manifest but its predecessor does not,
+`DeltaFromPreviousPartial` says so precisely: the package and /etc halves are
+complete, and only the revision and inputs could not be compared.
+
+No comparison here diffs two closures with a tool. `nvd` and `nix store
+diff-closures` have no structured output, so an adapter running one would be
+executing a reference command and parsing its prose, which rule 5 forbids and no
+allow-list entry could make correct. Whatever built the closures already knew
+what went into them, and the closures still say so.
 
 **Deployment receipts, outside it.** `SE_DEPLOYMENT_RECEIPTS` (module option
 `services.systemExplorer.deploymentReceipts`) names a directory of
