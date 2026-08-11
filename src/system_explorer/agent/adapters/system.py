@@ -31,6 +31,12 @@ from ..rules.system import (boot_opinions,
                             overview_opinions, time_opinions)
 from ..sysbus import BUS, HOSTNAME1, SYSTEMD, SYSTEMD_MANAGER, SYSTEMD_PATH, TIMEDATE1
 
+# Manager.Environment is the manager-wide environment block; the same property
+# name the units adapter redacts per-unit. Declared here rather than imported
+# from units so each adapter states its own secret surface, and shared only
+# through env.redact_list_properties, which is the mechanism.
+SECRET_LIST_PROPERTIES = ("Environment",)
+
 HOSTNAME1_PATH = "/org/freedesktop/hostname1"
 TIMEDATE1_PATH = "/org/freedesktop/timedate1"
 TIMESYNC1 = "org.freedesktop.timesync1"
@@ -568,10 +574,21 @@ class Adapter:
                     TIMESYNC1, TIMESYNC1_PATH, TIMESYNC1_MANAGER)
             except Exception:  # noqa: BLE001
                 pass
-        return {
+        # org.freedesktop.systemd1.Manager.Environment is the manager-wide
+        # block passed to every executed process — systemd.managerEnvironment
+        # and `systemctl set-environment` write it — and it was being served
+        # verbatim on an unauthenticated API. The units adapter has redacted
+        # the per-unit Environment= since the same exposure was found there;
+        # this is that property one interface up. Nothing on this estate had
+        # anything but LANG and PATH in it, which is why it stayed unnoticed.
+        payload, redacted = env.redact_list_properties(payload, SECRET_LIST_PROPERTIES)
+        out = {
             "object_id": object_id,
             "captured_at": env.utc_now(),
             "interface": iface,
             "method": "org.freedesktop.DBus.Properties.GetAll",
             "payload": payload,
         }
+        if redacted:
+            out["redacted"] = redacted
+        return out

@@ -12,6 +12,7 @@ Key invariants enforced here rather than left to discipline:
 
 from __future__ import annotations
 
+import copy
 import socket
 from datetime import datetime, timezone
 from pathlib import Path
@@ -106,6 +107,60 @@ def opinion(key: str, level: str, message: str, evidence: list[str]) -> dict:
             f"{OPINION_LEVELS} (SPEC section 5.1, rule 6)"
         )
     return {"key": key, "level": level, "message": message, "evidence": evidence}
+
+
+REDACTED = "«redacted»"
+
+
+def redact_assignments(values: list) -> tuple[list[str], bool]:
+    """Replace the value half of every NAME=VALUE entry, keeping the name.
+
+    Names are what make evidence diagnostically useful — "is DATABASE_URL even
+    set?" is a real question — and the value is the credential. A token
+    carrying no '=' carries no value and stays legible: deny-by-default applies
+    to values, not to words.
+
+    Returns the rewritten list and whether anything ACTUALLY changed. That flag
+    is the point. Both redactors used to declare a path whenever a watched key
+    was present, so every container published `redacted: ["Config.Cmd"]` while
+    serving its Cmd verbatim — an envelope claiming to withhold what it served
+    in full, which is the provenance contract inverted rather than upheld.
+
+    Coerces through str() before testing, because the test and the operation
+    disagreeing on type is how a bytes element turned the evidence route into
+    a 500.
+    """
+    out: list[str] = []
+    for value in values:
+        text = str(value)
+        name, separator, _ = text.partition("=")
+        out.append(f"{name}={REDACTED}" if separator else text)
+    return out, out != [str(value) for value in values]
+
+
+def redact_list_properties(payload: dict, keys: tuple[str, ...]) -> tuple[dict, list[str]]:
+    """Redact NAME=VALUE list properties in a D-Bus GetAll payload, which is
+    keyed by interface. Returns (copy, the paths where something was withheld).
+
+    Shared because the exposure was: units redacted a service's Environment=
+    while system served org.freedesktop.systemd1.Manager.Environment — the
+    manager-wide block passed to every executed process — from the same
+    unauthenticated API. One redactor, so the next interface carrying the same
+    property cannot be missed the same way.
+    """
+    out = copy.deepcopy(payload)
+    paths: list[str] = []
+    for interface, properties in out.items():
+        if not isinstance(properties, dict):
+            continue
+        for key in keys:
+            value = properties.get(key)
+            if not isinstance(value, list) or not value:
+                continue
+            properties[key], changed = redact_assignments(value)
+            if changed:
+                paths.append(f"{interface}.{key}")
+    return out, paths
 
 
 def rel(rel_type: str, direction: str, target_id: str, subsystem: str | None = None) -> dict:

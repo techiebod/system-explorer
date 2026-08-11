@@ -51,25 +51,38 @@ def _bridge_interface(raw: dict) -> str | None:
 REFERENCE = ["docker ps -a", "docker inspect <name>", "docker volume ls", "docker network ls"]
 
 
+# Env values are always secrets-adjacent; Cmd/Entrypoint tokens only when they
+# carry a value ("--password=x") — bare tokens and flags stay legible
+# (deny-by-default, vision §11 redaction stance).
+SECRET_LIST_KEYS = ("Env", "Cmd", "Entrypoint")
+
+
 def _redact_env(payload: dict) -> tuple[dict, list[str]]:
     """Replace values of every Env list ('K=V' entries) in an inspect
-    document, keeping the keys. Returns (redacted copy, altered paths)."""
+    document, keeping the keys. Returns (redacted copy, altered paths).
+
+    Lists are descended, not just dicts. The docstring has always said "every
+    Env list in an inspect document" while the walk returned on anything that
+    was not a dict, so a list of mounts or attachments carrying one would have
+    been served whole. Nothing in today's payload sits that way; the promise
+    was the thing that was wrong.
+    """
     redacted = copy.deepcopy(payload)
     paths: list[str] = []
 
     def walk(node, trail: str) -> None:
+        if isinstance(node, list):
+            for index, item in enumerate(node):
+                walk(item, f"{trail}.{index}" if trail else str(index))
+            return
         if not isinstance(node, dict):
             return
         for key, value in node.items():
             here = f"{trail}.{key}" if trail else key
-            if key in ("Env", "Cmd", "Entrypoint") and isinstance(value, list):
-                # Env values are always secrets-adjacent; Cmd/Entrypoint
-                # tokens only when they carry a value ("--password=x") —
-                # bare tokens and flags stay legible (deny-by-default,
-                # vision §11 redaction stance).
-                node[key] = [f"{e.split('=', 1)[0]}=«redacted»" if "=" in str(e) else str(e)
-                             for e in value]
-                paths.append(here)
+            if key in SECRET_LIST_KEYS and isinstance(value, list):
+                node[key], changed = env.redact_assignments(value)
+                if changed:
+                    paths.append(here)
             else:
                 walk(value, here)
 

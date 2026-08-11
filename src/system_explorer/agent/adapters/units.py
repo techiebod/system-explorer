@@ -20,7 +20,6 @@ adapter applies to Config.Env.
 from __future__ import annotations
 
 import asyncio
-import copy
 import os
 import re
 
@@ -222,25 +221,14 @@ REFERENCE = ["systemctl list-units --all", "systemctl status <unit>", "systemctl
 SECRET_LIST_PROPERTIES = ("Environment", "UnsetEnvironment", "PassEnvironment")
 # EnvironmentFiles carries (path, ignore-errors) tuples — paths are not
 # secret and naming them is how an operator finds the credential source.
-
-
-def _redact_secrets(payload: dict) -> tuple[dict, list[str]]:
-    """Redact secret-bearing property values. Returns (copy, altered paths)."""
-    out = copy.deepcopy(payload)
-    paths: list[str] = []
-    for iface, props in out.items():
-        if not isinstance(props, dict):
-            continue
-        for key in SECRET_LIST_PROPERTIES:
-            value = props.get(key)
-            if isinstance(value, list) and value:
-                props[key] = [
-                    f"{str(item).split('=', 1)[0]}=«redacted»" if "=" in str(item)
-                    else str(item)
-                    for item in value
-                ]
-                paths.append(f"{iface}.{key}")
-    return out, paths
+#
+# The redactor itself lives in envelope.py: system/boot serves the same D-Bus
+# shape for org.freedesktop.systemd1.Manager, whose Environment is the
+# manager-wide block, and a private copy here is how that one went unredacted
+# while this one did not. PassEnvironment is by systemd's definition a list of
+# bare NAMES, so it can never withhold anything — it stays listed because the
+# property could carry an assignment, and env.redact_assignments now declines
+# to claim a redaction that did not happen.
 
 
 def _unit_type(name: str) -> str:
@@ -450,7 +438,7 @@ class Adapter:
         name, unit, typed = await self._unit_props(object_id)
         payload = {UNIT_IFACE: unit,
                    **({TYPED_IFACES[_unit_type(name)]: typed} if typed else {})}
-        payload, redacted = _redact_secrets(payload)
+        payload, redacted = env.redact_list_properties(payload, SECRET_LIST_PROPERTIES)
         out = {
             "object_id": object_id,
             "captured_at": env.utc_now(),

@@ -69,6 +69,37 @@ def strict(schema: Any) -> Any:
 # pattern. (smartctl joined 2026-08-09 when the lint learned to extract argv
 # heads; it had been invoked unlisted since the hardware adapter landed —
 # the exact ride-along the old some-command-appears check could not see.)
+# Adapters whose get_evidence serves a payload with no credential surface, so
+# it passes through unredacted. Same review discipline as SUBPROCESS_ALLOWLIST
+# below: entries are deliberate, reviewed additions, and each reason has to be
+# specific enough to be falsifiable. "Probably fine" is not a reason.
+#
+# The list exists because the exposure was found by an adversarial design pass,
+# not by the suite: units served a service's Environment= verbatim, and while
+# writing this table system turned out to be serving the manager-wide one.
+# Whether an evidence payload can carry a secret is now a question someone has
+# to answer in writing before an adapter ships.
+EVIDENCE_REDACTION_EXEMPTIONS: dict[str, str] = {
+    "logs": "a journal record IS the line the operator asked to see; there is "
+            "no key/value structure to redact and censoring the message would "
+            "defeat the collection.",
+    "hardware": "sysfs attributes and udev properties — device identity, "
+                "model, firmware, SMART counters. No credential surface.",
+    "packages": "names, versions and store paths from the link farm.",
+    "nix": "generation manifests and deployment receipts: store paths, kernel "
+           "versions, unit names.",
+    "storage": "lsblk/zpool/findmnt documents. ZFS keylocation names WHERE key "
+               "material lives, never the key itself.",
+    "network": "an `ip -j` dump, an nft ruleset, or a tailscale status "
+               "snapshot — which carries node PUBLIC keys and DERP topology. "
+               "The one member worth watching is AuthURL, a single-use login "
+               "URL present only while the node is logged out.",
+    "vms": "libvirt domain XML from XMLDesc(0). Flag 0 omits "
+           "VIR_DOMAIN_XML_SECURE material such as <graphics passwd=...>, and "
+           "a read-only connection cannot request it. That premise is what "
+           "test_domain_xml_is_requested_without_the_secure_flag holds.",
+}
+
 SUBPROCESS_ALLOWLIST: dict[str, str] = {
     "zpool": "-j",
     "zfs": "-j",
