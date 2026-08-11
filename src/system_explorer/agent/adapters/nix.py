@@ -46,6 +46,10 @@ ETC_HASH_LIMIT = 1 << 20
 # rather than as its members. terminfo alone is ~2500 files that move together.
 ETC_MAX_DEPTH = 8
 ETC_COLLAPSE_OVER = 12
+# Above this many entries an aggregate is summarised without being read. Unit
+# directories sit in the hundreds and stay enumerated; terminfo and zoneinfo are
+# thousands and are databases whose individual members mean nothing here.
+ETC_ENUMERATE_OVER = 1000
 
 
 def _input_identity(entry: object) -> str | None:
@@ -232,6 +236,32 @@ def _tree_entries(root: str, cache: dict[str, dict[str, str]]) -> dict[str, str]
     return entries
 
 
+def _tree_size(root: str) -> int:
+    """How many entries are under a store directory, by scandir alone.
+
+    No readlink and no reads: deciding whether an aggregate is worth enumerating
+    must not cost what enumerating it would. Counting all of terminfo this way is
+    about a millisecond; hashing it is a hundred times that.
+    """
+    total = 0
+    stack = [root]
+    depth = {root: 0}
+    while stack:
+        base = stack.pop()
+        if depth[base] > ETC_MAX_DEPTH:
+            continue
+        try:
+            found = list(os.scandir(base))
+        except OSError:
+            continue
+        for entry in found:
+            total += 1
+            if not entry.is_symlink() and entry.is_dir(follow_symlinks=False):
+                stack.append(entry.path)
+                depth[entry.path] = depth[base] + 1
+    return total
+
+
 def _aggregate_rows(path: str, older_target: str, newer_target: str,
                     cache: dict[str, dict[str, str]]) -> list[dict]:
     """Members of one moved aggregate directory, or a labelled summary of it.
@@ -241,15 +271,26 @@ def _aggregate_rows(path: str, older_target: str, newer_target: str,
     the whole point. Two shapes are not worth enumerating: a database that moved
     wholesale, and one that did not really move at all.
     """
-    older = _tree_entries(older_target, cache)
-    newer = _tree_entries(newer_target, cache)
-    changed = [name for name in sorted(set(older) | set(newer))
-               if older.get(name) != newer.get(name)]
-
     def row(name: str, before: str | None, after: str | None) -> dict:
         label_before, label_after = _distinguishable(_short_identity(before),
                                                      _short_identity(after))
         return {"Kind": "etc", "Name": name, "From": label_before, "To": label_after}
+
+    # Some aggregates are databases, not configuration. terminfo is 2899 files
+    # that move together whenever ncurses is rebuilt, and enumerating it can only
+    # ever produce the collapsed row below — so measure first, cheaply, and skip
+    # reading 35,000 files across a generation list to reach a foregone
+    # conclusion. Sized rather than named, because a size rule keeps working when
+    # the next such directory appears under a name nobody predicted.
+    size = max(_tree_size(older_target), _tree_size(newer_target))
+    if size > ETC_ENUMERATE_OVER:
+        return [row(f"etc/{path} ({size} entries, not enumerated)",
+                    older_target, newer_target)]
+
+    older = _tree_entries(older_target, cache)
+    newer = _tree_entries(newer_target, cache)
+    changed = [name for name in sorted(set(older) | set(newer))
+               if older.get(name) != newer.get(name)]
 
     # Store paths are input-addressed, so a rebuild relocates byte-identical
     # content: terminfo moves whenever ncurses does and says nothing about the

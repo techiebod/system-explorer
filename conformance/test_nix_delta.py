@@ -259,3 +259,40 @@ def test_a_changed_member_still_reports_the_member_not_the_label(tmp_path):
     names = [r["Name"] for r in nix._etc_rows(
         old_root, new_root, nix._etc_entries(old_root), nix._etc_entries(new_root), {})]
     assert names == ["etc/terminfo/xterm"]
+
+
+def test_a_large_aggregate_is_summarised_without_being_read(tmp_path):
+    """terminfo is 2899 files that move together; hashing them across a
+    generation list read 35,000 files to reach a foregone conclusion."""
+    old_db, new_db = tmp_path / "old-db", tmp_path / "new-db"
+    for db, text in ((old_db, "old"), (new_db, "new")):
+        db.mkdir(parents=True)
+        for index in range(nix.ETC_ENUMERATE_OVER + 10):
+            (db / f"term{index}").write_text(text)
+    old_root = build_etc(tmp_path / "old", {"terminfo": str(old_db)}, {})
+    new_root = build_etc(tmp_path / "new", {"terminfo": str(new_db)}, {})
+
+    cache: dict = {}
+    rows = nix._etc_rows(old_root, new_root, nix._etc_entries(old_root),
+                         nix._etc_entries(new_root), cache)
+    assert len(rows) == 1, rows
+    assert "entries, not enumerated" in rows[0]["Name"]
+    assert str(nix.ETC_ENUMERATE_OVER + 10) in rows[0]["Name"], "the count is stated"
+    assert cache == {}, "nothing under it was read"
+
+
+def test_a_unit_directory_stays_enumerated(tmp_path):
+    """Unit directories sit in the hundreds, and naming the unit is the point."""
+    old_units, new_units = tmp_path / "old-units", tmp_path / "new-units"
+    for units, text in ((old_units, "old"), (new_units, "new")):
+        units.mkdir(parents=True)
+        (units / "polkit.service").write_text(text)
+        for index in range(300):
+            (units / f"filler{index}.service").write_text("same")
+    old_root = build_etc(tmp_path / "old", {"systemd/system": str(old_units)}, {})
+    new_root = build_etc(tmp_path / "new", {"systemd/system": str(new_units)}, {})
+
+    names = [r["Name"] for r in nix._etc_rows(
+        old_root, new_root, nix._etc_entries(old_root),
+        nix._etc_entries(new_root), {})]
+    assert names == ["etc/systemd/system/polkit.service"]
