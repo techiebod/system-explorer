@@ -35,7 +35,34 @@ in
       type = lib.types.nullOr lib.types.str;
       default = null;
       example = "site-a";
-      description = "Optional site label surfaced in /hub/hosts.";
+      description = ''
+        This site's label. Set it wherever siblings are used: the UI reaches a
+        sibling's host through a site-scoped proxy route, so an unnamed site can
+        only serve its own agents.
+      '';
+    };
+
+    siblings = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
+      default = { };
+      example = { site-b = "http://hub-b.example.internal:8090"; };
+      description = ''
+        Peer hubs, site name → base URL. Naming them turns this address into an
+        estate view: one URL reaches every host the operator runs, grouped by
+        site, without a central service anywhere.
+
+        Deliberately federation and not centralisation. A site whose siblings
+        are unreachable keeps working alone and shows the rest as unreachable,
+        because nothing it needs lives at a sibling — an estate-wide hub would
+        instead be one box whose loss costs visibility of everything (ROADMAP
+        section 6).
+
+        Federation is one hop: a sibling's host is forwarded to that sibling's
+        own local route, which cannot forward again, so no wiring mistake can
+        build a loop. Each hub still needs its own reachable URL for the others
+        — for a multi-site estate that usually means a tailnet address, and the
+        far hub's allowedHosts must contain whatever name this one dials it by.
+      '';
     };
 
     listenAddress = lib.mkOption {
@@ -70,6 +97,16 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # Caught at build time because the failure is otherwise a puzzle: the UI
+    # would reach every local host fine and 404 on every sibling's, since the
+    # site-scoped proxy route has no site to match against.
+    assertions = [{
+      assertion = cfg.siblings == { } || cfg.site != null;
+      message = "services.systemExplorerHub.siblings needs services."
+                + "systemExplorerHub.site set — a hub with no site label cannot"
+                + " serve a sibling's hosts, only its own.";
+    }];
+
     networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [ cfg.port ];
 
     systemd.services.system-explorer-hub = {
@@ -82,6 +119,9 @@ in
           (lib.mapAttrsToList (name: url: "${name}=${url}") cfg.agents);
       } // lib.optionalAttrs (cfg.site != null) {
         SE_HUB_SITE = cfg.site;
+      } // lib.optionalAttrs (cfg.siblings != { }) {
+        SE_HUB_SIBLINGS = lib.concatStringsSep ","
+          (lib.mapAttrsToList (name: url: "${name}=${url}") cfg.siblings);
       } // lib.optionalAttrs (cfg.allowedHosts != [ ]) {
         SE_HUB_ALLOWED_HOSTS = lib.concatStringsSep "," cfg.allowedHosts;
       };

@@ -157,9 +157,24 @@ function anchorRowId() {
 async function api(path) {
   // Hub mode reaches each agent same-origin through the proxy; the paths
   // themselves (including evidence_ref values) stay agent-relative.
-  const res = await fetch(state.hub ? `/agents/${state.currentHost}${path}` : path);
+  //
+  // The site is named in the URL because the hub is stateless: a host at a
+  // sibling site is forwarded to the hub that owns it, and without the site in
+  // the path that hub would have to ask every sibling who owns the host on
+  // every single request. The browser already knows, from /hub/hosts.
+  const res = await fetch(state.hub ? `${hubBase()}${path}` : path);
   if (!res.ok) throw new Error(`${res.status} ${await res.text().then(t => t.slice(0, 140))}`);
   return res.json();
+}
+
+/* Proxy prefix for the current host. Falls back to the unscoped route when the
+   hub reports no site for it — an older hub, or one started without
+   SE_HUB_SITE — so a mixed-version estate degrades to today's behaviour rather
+   than 404ing. */
+function hubBase() {
+  const site = state.hub?.hosts?.[state.currentHost]?.site;
+  return site ? `/sites/${encodeURIComponent(site)}/agents/${state.currentHost}`
+              : `/agents/${state.currentHost}`;
 }
 
 function humanBytes(n) {
@@ -353,17 +368,48 @@ function renderHostCard() {
   $("host-name").hidden = true;
   select.hidden = false;
   select.textContent = "";
+
+  // Grouped by site, which is the estate's actual shape (ROADMAP §6: an estate
+  // spans sites; a site is not a small estate). A flat list of hostnames left
+  // that structure to be inferred, and the operator had to be the one to point
+  // out that theirs is one estate of two sites.
+  const bySite = new Map();
   for (const [name, probe] of Object.entries(state.hub.hosts)) {
-    // Unreachable hosts stay listed and selectable — picking one shows the
-    // error banner rather than silently hiding the host.
-    const opt = el("option", null, probe.reachable ? name : `${name} — unreachable`);
-    opt.value = name;
-    select.appendChild(opt);
+    const site = probe.site || state.hub.site || "";
+    if (!bySite.has(site)) bySite.set(site, []);
+    bySite.get(site).push([name, probe]);
   }
+  // This site first, then siblings alphabetically: the local one is what the
+  // operator opened this address for.
+  const order = [...bySite.keys()].sort((a, b) =>
+    a === state.hub.site ? -1 : b === state.hub.site ? 1 : a.localeCompare(b));
+
+  for (const site of order) {
+    const siteState = state.hub.sites?.[site];
+    // A whole site being dark is its own statement, distinct from a host being
+    // down — say which, in the group label, rather than listing its hosts as
+    // individually unreachable and leaving the cause to be guessed.
+    const label = siteState && siteState.reachable === false
+      ? `${site} — site unreachable` : site;
+    const group = bySite.size > 1 || site ? el("optgroup") : null;
+    if (group) group.label = label || "(unnamed site)";
+    for (const [name, probe] of bySite.get(site).sort((a, b) => a[0].localeCompare(b[0]))) {
+      // Unreachable hosts stay listed and selectable — picking one shows the
+      // error banner rather than silently hiding the host.
+      const opt = el("option", null, probe.reachable ? name : `${name} — unreachable`);
+      opt.value = name;
+      (group || select).appendChild(opt);
+    }
+    if (group) select.appendChild(group);
+  }
+
   select.value = state.currentHost;
   const probe = state.hub.hosts[state.currentHost];
   const machineId = state.capabilities?.host?.machine_id ?? probe?.host?.machine_id;
-  $("host-meta").textContent = (state.hub.site ? `${state.hub.site} · ` : "")
+  // The host's OWN site, not the hub's — they differ for a sibling's host, and
+  // showing the hub's would misattribute it.
+  const hostSite = probe?.site || state.hub.site;
+  $("host-meta").textContent = (hostSite ? `${hostSite} · ` : "")
     + (machineId ? machineId.slice(0, 12) + "…" : "unreachable");
 }
 
