@@ -195,7 +195,8 @@ routing/firewall), not for coverage symmetry.
 
 | Subsystem | Collections | Acquisition | Privilege needed | First validated on |
 |---|---|---|---|---|
-| `system` | `identity`, `time`, `boot`, `generations`, `packages`, `overview` | hostname1 / timedate1 / timesync1 D-Bus; `/etc/machine-id`; `/nix/var/nix/profiles` + system-closure metadata files (pure filesystem reads); procfs (uptime, loadavg, meminfo, pressure, ZFS arcstats) | none | any systemd host |
+| `system` | `identity`, `time`, `boot`, `overview` | hostname1 / timedate1 / timesync1 D-Bus; `/etc/machine-id`; procfs (uptime, loadavg, meminfo, pressure, ZFS arcstats) | none | any systemd host |
+| `nix` | `generations`, `packages` | `/nix/var/nix/profiles` + system-closure metadata files and the `/run/current-system/sw` link farm (pure filesystem reads, no subprocess) | none | NixOS only — declines as a whole subsystem with one reason elsewhere |
 | `hardware` | `platform`, `pci`, `usb`, `scsi`, `nvme` | sysfs (DMI, pci/usb/nvme, scsi/sas/enclosure classes); udev hwdb via `udevadm --json=short`; `lscpu -J`; udisks2 D-Bus for SMART | none | any systemd host; scsi depth needs SAS/enclosure hardware |
 | `units` | `units` (filter by type/state) | `org.freedesktop.systemd1` ListUnits + properties | none | any systemd host |
 | `logs` | `journal` (bounded query only) | `journalctl -o json` (allow-listed) or libsystemd reader | `systemd-journal` group | any systemd host |

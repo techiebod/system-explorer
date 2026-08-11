@@ -179,7 +179,7 @@ async def capabilities() -> dict:
 # not observed objects with health.
 STATUS_DECLINES: dict[tuple[str, str], str] = {
     ("logs", "journal"): "a bounded log query has no current health",
-    ("system", "packages"): "inventory; no severity semantics",
+    ("nix", "packages"): "inventory; no severity semantics",
 }
 LOOKUPS_DECLINE = "parameterised catalog"
 

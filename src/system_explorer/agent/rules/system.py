@@ -1,9 +1,9 @@
-"""System opinions: time synchronisation, boot health, generation pointers,
-host overview.
+"""System opinions: time synchronisation, boot health, host overview.
 
-identity and packages carry no opinions; time, boot and overview are
-single-object collections whose observation attaches these evaluators'
-output directly, and collect() derives the row from those same opinions.
+identity carries no opinions; time, boot and overview are single-object
+collections whose observation attaches these evaluators' output directly, and
+collect() derives the row from those same opinions. Generation pointers moved
+to rules/nix.py with the subsystem that owns them.
 The boot rules are presence-driven over the boot facts: EFI facts
 (SecureBoot, BootEntries) simply do not exist on BIOS hosts, so those rules
 never fire there. The overview rules are presence-driven the same way: a
@@ -152,11 +152,3 @@ def overview_opinions(facts: dict) -> list[dict]:
             "last minute.", ["PsiIoFullAvg60"]))
     return opinions
 
-
-def generation_opinions(facts: dict) -> list[dict]:
-    if facts.get("Profile") and not facts.get("Current"):
-        return [env.opinion(
-            "generation-pending", "info",
-            "This is the system profile, but a different closure is "
-            "currently activated.", ["Profile", "Current"])]
-    return []

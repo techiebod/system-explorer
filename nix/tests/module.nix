@@ -79,11 +79,11 @@ pkgs.testers.runNixOSTest {
         # "ok with zero items" is literally true there, and the honest-absence
         # gate is right to stay quiet. /run/current-system/sw is always a
         # populated link farm, so this one must have content.
-        packages = get("/v1/system/packages?limit=5")
+        packages = get("/v1/nix/packages?limit=5")
         assert packages["status"] == "ok", packages
         assert packages["items"], "a NixOS host with no packages in its sw link farm"
 
-        generations = get("/v1/system/generations")
+        generations = get("/v1/nix/generations")
         assert generations["status"] == "ok", generations
 
     with subtest("every subsystem is available or says why"):

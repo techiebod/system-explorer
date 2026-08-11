@@ -1,14 +1,17 @@
-"""system subsystem: identity, time, boot, generations, packages, overview.
+"""system subsystem: identity, time, boot, overview — what every host has.
 
-identity/time/boot come from hostname1/timedate1/systemd1 over D-Bus. The
-NixOS view — generations and packages — is pure filesystem reading: profile
-symlinks under /nix/var/nix/profiles, the metadata files every system
-closure carries (nixos-version, configuration-revision), and the
-/run/current-system/sw link farm. Nothing is executed; the store *is* the
-structured interface. overview is the point-in-time host snapshot (ROADMAP
-slice 1): loadavg, meminfo, PSI and ARC read straight from procfs —
-kernel-precomputed aggregates only, never rates derived from counters
-(metric time-series stay with Beszel, SPEC section 12).
+identity/time/boot come from hostname1/timedate1/systemd1 over D-Bus.
+overview is the point-in-time host snapshot (ROADMAP slice 1): loadavg,
+meminfo, PSI and ARC read straight from procfs — kernel-precomputed
+aggregates only, never rates derived from counters (metric time-series stay
+with Beszel, SPEC section 12).
+
+Every collection here exists on every host this agent targets, which is now
+the defining property of the subsystem: generations and packages moved to
+`nix` precisely because they did not. What remains NixOS-specific here is a
+handful of facts on otherwise universal objects — the OS version on identity,
+the profile pointers on boot — read through agent/nixos.py and omitted rather
+than nulled off NixOS (SPEC section 2, rule 7).
 """
 
 from __future__ import annotations
@@ -22,8 +25,9 @@ from pathlib import Path
 import anyio
 
 from .. import envelope as env
+from .. import nixos as nx
 from ..rules import worst_level
-from ..rules.system import (boot_opinions, generation_opinions,
+from ..rules.system import (boot_opinions,
                             overview_opinions, time_opinions)
 from ..sysbus import BUS, HOSTNAME1, SYSTEMD, SYSTEMD_MANAGER, SYSTEMD_PATH, TIMEDATE1
 
@@ -33,52 +37,20 @@ TIMESYNC1 = "org.freedesktop.timesync1"
 TIMESYNC1_PATH = "/org/freedesktop/timesync1"
 TIMESYNC1_MANAGER = "org.freedesktop.timesync1.Manager"
 
-PROFILES = Path("/nix/var/nix/profiles")
-CURRENT_SYSTEM = "/run/current-system"
-BOOTED_SYSTEM = "/run/booted-system"
-SW = f"{CURRENT_SYSTEM}/sw"
+# The Nix closure paths and readers live in agent/nixos.py, shared with the
+# `nix` adapter that owns generations and packages. This subsystem keeps only
+# the NixOS-derived FACTS that belong to a universal object: the OS version on
+# identity, and the profile pointers on boot. Both are omitted off NixOS rather
+# than nulled (SPEC section 2, rule 7).
+PROFILES = nx.PROFILES
+CURRENT_SYSTEM = nx.CURRENT_SYSTEM
+BOOTED_SYSTEM = nx.BOOTED_SYSTEM
+_is_nixos = nx.is_nixos
 
 
-def _is_nixos() -> bool:
-    """Whether this host has a nix system closure to read facts out of.
-
-    /run/current-system is the activated-closure pointer, and it exists only
-    where something activated one. Nix-derived facts are omitted entirely off
-    such a host rather than emitted as nulls: a null "NixosVersion" on Debian
-    reads as *unknown*, when the truth is *not applicable*, and four null rows
-    on the boot card is what a non-Nix user saw first (ROADMAP section 5,
-    phase 2). Absence with a reason is the rule (SPEC section 2, rule 7);
-    for individual facts, the honest form of that is not to claim the fact.
-    """
-    return os.path.exists(CURRENT_SYSTEM)
-
-GENERATIONS_REFERENCE = ["nixos-rebuild list-generations",
-                         "ls -l /nix/var/nix/profiles",
-                         "readlink -f /run/current-system /run/booted-system"]
-PACKAGES_REFERENCE = ["ls /run/current-system/sw/bin",
-                      "readlink /run/current-system/sw/bin/<command>"]
-
-STORE_RE = re.compile(r"(/nix/store/[a-z0-9]{32}-([^/]+))")
-# name-version split: the version starts at the first dash followed by a digit.
-NAME_VERSION_RE = re.compile(r"(.+?)-([0-9].*)")
-
-
-def _read(path: str) -> str:
-    try:
-        return Path(path).read_text().strip()
-    except OSError:
-        return ""
-
-
-def _realpath(path: str) -> str | None:
-    try:
-        return os.path.realpath(path) if os.path.exists(path) else None
-    except OSError:
-        return None
-
-
-def _epoch_to_iso(ts: float) -> str:
-    return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+_read = nx.read
+_realpath = nx.realpath
+_epoch_to_iso = nx.epoch_to_iso
 
 
 # ── host overview (procfs, world-readable — SPEC rule 8 tier 3) ───────
@@ -350,117 +322,14 @@ class Adapter:
     subsystem = "system"
 
     def collections(self) -> list[str]:
-        return ["identity", "time", "boot", "generations", "packages", "overview"]
+        return ["identity", "time", "boot", "overview"]
 
     async def capability(self) -> dict:
-        # overview needs no gate: procfs is unconditional on the kernels
-        # this agent targets.
-        unavailable: dict[str, str] = {}
-        if not PROFILES.is_dir():
-            unavailable["generations"] = f"{PROFILES} does not exist (not a NixOS host?)"
-        if not os.path.isdir(SW):
-            unavailable["packages"] = f"{SW} does not exist (not a NixOS host?)"
-        return {"available": True,
-                "collections": [c for c in self.collections() if c not in unavailable],
-                "unavailable_collections": unavailable}
-
-    # ── generations ──────────────────────────────────────────
-    @staticmethod
-    def _pointers() -> dict[str, str | None]:
-        return {"current": _realpath(CURRENT_SYSTEM),
-                "booted": _realpath(BOOTED_SYSTEM),
-                "default": _realpath(str(PROFILES / "system"))}
-
-    @staticmethod
-    def _generation_links() -> list[tuple[int, Path, str]]:
-        """(generation number, profile link, store path), newest first."""
-        out = []
-        for link in PROFILES.glob("system-*-link"):
-            try:
-                number = int(link.name[len("system-"):-len("-link")])
-            except ValueError:
-                continue
-            try:
-                out.append((number, link, os.readlink(link)))
-            except OSError:
-                continue
-        return sorted(out, reverse=True)
-
-    def _generation_items(self) -> list[dict]:
-        pointers = self._pointers()
-        items = []
-        for number, link, target in self._generation_links():
-            kernel = _realpath(f"{target}/kernel")
-            kernel_match = STORE_RE.match(kernel or "")
-            revision = _read(f"{target}/configuration-revision")
-            try:
-                specialisations = sorted(os.listdir(f"{target}/specialisation"))
-            except OSError:
-                specialisations = []
-            facts = {
-                "NixosVersion": _read(f"{target}/nixos-version") or None,
-                "Kernel": kernel_match.group(2) if kernel_match else None,
-                "ConfigurationRevision": revision or None,
-                "Created": _epoch_to_iso(link.lstat().st_mtime),
-                "Current": target == pointers["current"],
-                "Booted": target == pointers["booted"],
-                "Profile": target == pointers["default"],
-                "Specialisations": specialisations,
-                "StorePath": target,
-            }
-            # Only the running generation is positively vouched for; the rest
-            # are neutral history unless a rule (generation-pending) fires.
-            items.append(env.item_summary(
-                f"generation:{number}", "generation", str(number), facts,
-                worst_opinion_level=worst_level(
-                    generation_opinions(facts),
-                    healthy="ok" if facts["Current"] else "info")))
-        return items
-
-    # ── packages ─────────────────────────────────────────────
-    @staticmethod
-    def _package_paths() -> dict[str, str]:
-        """name-version → store path for everything linked into the system
-        environment. Two scandir levels: buildEnv links packages directly or,
-        on collision, merges one directory level and links inside it."""
-        seen: dict[str, str] = {}
-
-        def record(link_target: str) -> None:
-            match = STORE_RE.match(link_target)
-            if match:
-                seen.setdefault(match.group(2), match.group(1))
-
-        for sub in ("bin", "sbin", "lib", "libexec", "share", "etc"):
-            root = os.path.join(SW, sub)
-            try:
-                level_one = list(os.scandir(root))
-            except OSError:
-                continue
-            for entry in level_one:
-                if entry.is_symlink():
-                    record(os.readlink(entry.path))
-                elif entry.is_dir(follow_symlinks=False):
-                    try:
-                        for nested in os.scandir(entry.path):
-                            if nested.is_symlink():
-                                record(os.readlink(nested.path))
-                    except OSError:
-                        continue
-        return seen
-
-    def _package_items(self) -> list[dict]:
-        items = []
-        for name_version, store_path in sorted(self._package_paths().items()):
-            match = NAME_VERSION_RE.match(name_version)
-            facts = {
-                "Name": match.group(1) if match else name_version,
-                "Version": match.group(2) if match else None,
-                "StorePath": store_path,
-            }
-            items.append(env.item_summary(
-                f"package:{name_version}", "package", name_version, facts))
-        items.sort(key=lambda i: (i["facts"]["Name"], i["native_id"]))
-        return items
+        # Everything here is universal now that generations and packages have
+        # moved to the `nix` subsystem: hostname1/timedate1/systemd1 D-Bus plus
+        # procfs, all unconditional on the hosts this agent targets. Nothing to
+        # decline — which is the point of having made the split.
+        return {"available": True, "collections": self.collections()}
 
     async def _identity(self) -> dict:
         props = await BUS.get_all(HOSTNAME1, HOSTNAME1_PATH, HOSTNAME1)
@@ -605,33 +474,7 @@ class Adapter:
         if builder is None:
             raise env.UnknownCollection(collection)
         return await builder()
-
-    def _multi_source(self, collection: str) -> dict:
-        if collection == "generations":
-            return env.source("nixos-fs", "/nix/var/nix/profiles (filesystem)",
-                              GENERATIONS_REFERENCE)
-        return env.source("nixos-fs", "/run/current-system/sw (filesystem)",
-                          PACKAGES_REFERENCE)
-
-    def _multi_items(self, collection: str) -> list[dict]:
-        if collection == "generations":
-            return self._generation_items()
-        if collection == "packages":
-            return self._package_items()
-        raise env.UnknownCollection(collection)
-
     async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:
-        if collection in ("generations", "packages"):
-            # The link-farm and profile scandir walks are synchronous
-            # filesystem work — off the event loop like every other adapter's
-            # acquisition (backlog note, 2026-08-09: async hygiene).
-            fetched = await anyio.to_thread.run_sync(self._multi_items, collection)
-            items = env.apply_fact_filters(fetched, query)
-            page, applied, next_cursor, total = env.paginate(items, limit, cursor)
-            return env.collection_page(self.subsystem, collection,
-                                       self._multi_source(collection), page,
-                                       applied, next_cursor, requested_limit=limit,
-                                       total=total, filters=query or None)
         obs = await self._single(collection)
         # healthy=None keeps the single-object rows' historical shape: no
         # opinions omits the severity field rather than asserting "ok".
@@ -646,71 +489,16 @@ class Adapter:
                                    applied, next_cursor, requested_limit=limit,
                                    total=total, filters=query or None)
 
-    # Evaluators per collection (agent/rules/system.py), shared verbatim with
-    # the summary path — rows and opened objects cannot disagree. time, boot
-    # and overview attach theirs inside _single(), so only generations
-    # dispatches here.
-    _RULES = {"generations": generation_opinions}
-
+    # Every collection here is a single object whose evaluator is attached
+    # inside _single() (agent/rules/system.py), shared verbatim with the
+    # summary path so rows and opened objects cannot disagree.
     async def get_object(self, collection: str, object_id: str) -> dict:
-        if collection in ("generations", "packages"):
-            fetched = await anyio.to_thread.run_sync(self._multi_items, collection)
-            match = next((i for i in fetched if i["id"] == object_id), None)
-            if match is None:
-                raise env.UnknownObject(object_id)
-            rule = self._RULES.get(collection)
-            opinions = rule(match["facts"]) if rule else []
-            return env.observation(
-                self.subsystem,
-                env.obj_ref(object_id, match["type"], match["native_id"]),
-                self._multi_source(collection), match["facts"], opinions=opinions,
-                evidence_ref=f"/v1/system/{collection}/{object_id}/evidence")
         obs = await self._single(collection)
         if obs["object"]["id"] != object_id:
             raise env.UnknownObject(object_id)
         return obs
 
     async def get_evidence(self, collection: str, object_id: str) -> dict:
-        if collection == "generations":
-            number = object_id.removeprefix("generation:")
-            link = PROFILES / f"system-{number}-link"
-            if not link.is_symlink():
-                raise env.UnknownObject(object_id)
-            target = os.readlink(link)
-            return {
-                "object_id": object_id,
-                "captured_at": env.utc_now(),
-                "interface": "/nix/var/nix/profiles (filesystem)",
-                "payload": {
-                    "link": str(link), "target": target,
-                    "pointers": self._pointers(),
-                    "nixos-version": _read(f"{target}/nixos-version"),
-                    "configuration-revision": _read(f"{target}/configuration-revision"),
-                    "kernel": _realpath(f"{target}/kernel"),
-                },
-            }
-        if collection == "packages":
-            name_version = object_id.removeprefix("package:")
-            store_path = self._package_paths().get(name_version)
-            if store_path is None:
-                raise env.UnknownObject(object_id)
-            links = {}
-            for sub in ("bin", "sbin", "lib", "libexec", "share", "etc"):
-                root = os.path.join(SW, sub)
-                try:
-                    for entry in os.scandir(root):
-                        if entry.is_symlink():
-                            target = os.readlink(entry.path)
-                            if target.startswith(store_path + "/"):
-                                links[f"{sub}/{entry.name}"] = target
-                except OSError:
-                    continue
-            return {
-                "object_id": object_id,
-                "captured_at": env.utc_now(),
-                "interface": "/run/current-system/sw (filesystem)",
-                "payload": {"store_path": store_path, "links": links},
-            }
         if collection == "overview":
             if object_id != "overview:host":
                 raise env.UnknownObject(object_id)

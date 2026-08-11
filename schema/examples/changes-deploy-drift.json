@@ -1,34 +1,64 @@
 {
   "schema": "se.changes/1",
-  "host": { "machine_id": "0123456789abcdef0123456789abcdef", "hostname": "host-a" },
+  "host": {
+    "machine_id": "0123456789abcdef0123456789abcdef",
+    "hostname": "host-a"
+  },
   "observed_at": "2026-08-09T16:20:31Z",
   "since_requested": "2026-08-08T16:20:31Z",
-  "baseline": { "snapshot_at": "2026-08-08T16:12:04Z", "boot_id": "fedcba9876543210fedcba9876543210" },
+  "baseline": {
+    "snapshot_at": "2026-08-08T16:12:04Z",
+    "boot_id": "fedcba9876543210fedcba9876543210"
+  },
   "current_boot_id": "fedcba9876543210fedcba9876543210",
   "rebooted": false,
   "status": "ok",
   "subsystems": {
-    "system": {
-      "generations": {
-        "added": ["generation:58"],
-        "changed": [
-          { "id": "generation:57", "paths": ["facts.Current"] }
-        ]
-      }
-    },
     "units": {
       "units": {
-        "added": ["unit:podman-auto-update.timer"],
-        "removed": ["unit:legacy-app.service"],
+        "added": [
+          "unit:podman-auto-update.timer"
+        ],
+        "removed": [
+          "unit:legacy-app.service"
+        ],
         "changed": [
-          { "id": "unit:compose-stack-web.service", "paths": ["facts.MainPID", "facts.NRestarts"] }
+          {
+            "id": "unit:compose-stack-web.service",
+            "paths": [
+              "facts.MainPID",
+              "facts.NRestarts"
+            ]
+          }
         ]
       }
     },
     "docker": {
       "containers": {
         "changed": [
-          { "id": "container:web-frontend", "paths": ["facts.State", "facts.Status", "worst_opinion_level"] }
+          {
+            "id": "container:web-frontend",
+            "paths": [
+              "facts.State",
+              "facts.Status",
+              "worst_opinion_level"
+            ]
+          }
+        ]
+      }
+    },
+    "nix": {
+      "generations": {
+        "added": [
+          "generation:58"
+        ],
+        "changed": [
+          {
+            "id": "generation:57",
+            "paths": [
+              "facts.Current"
+            ]
+          }
         ]
       }
     }

@@ -113,7 +113,7 @@ async def get_collection(host: str, subsystem: str, collection: str,
     """One collection page (se.collection/1 envelope) from one host.
 
     Fact-equality filters pass through, e.g. {"ActiveState": "failed"} on
-    units/units or {"Name": "vim"} on system/packages. Pagination is
+    units/units or {"Name": "vim"} on nix/packages. Pagination is
     explicit via limit/cursor; the envelope's next_cursor says whether
     more exists. Without an explicit limit, 100 items are requested —
     LLM context is the constraint, so ask for larger pages only when you
@@ -133,7 +133,7 @@ async def get_object(host: str, subsystem: str, collection: str,
                      object_id: str) -> dict:
     """One observation (se.observation/1) — facts, evidence-cited opinions,
     and typed relationships to other objects, e.g. unit:sshd.service in
-    units/units or generation:57 in system/generations."""
+    units/units or generation:57 in nix/generations."""
     return await _get(host, f"/v1/{subsystem}/{collection}/{_idpath(object_id)}")
 
 

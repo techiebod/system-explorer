@@ -18,7 +18,7 @@ import pytest
 from common import AGENT_DIR, resolve_fact_path
 
 from system_explorer.agent import rules
-from system_explorer.agent.rules import (docker, hardware, logs, network,
+from system_explorer.agent.rules import (docker, hardware, logs, network, nix,
                                          storage, system, units, vms)
 
 RULES_DIR = AGENT_DIR / "rules"
@@ -489,11 +489,11 @@ CASES = [
      set()),
 
     # system: generations.
-    ("generation-pending", system.generation_opinions,
+    ("generation-pending", nix.generation_opinions,
      {"Profile": True, "Current": False}, {("generation-pending", "info")}),
-    ("generation-current-healthy", system.generation_opinions,
+    ("generation-current-healthy", nix.generation_opinions,
      {"Profile": True, "Current": True}, set()),
-    ("generation-old-non-profile-quiet", system.generation_opinions,
+    ("generation-old-non-profile-quiet", nix.generation_opinions,
      {"Profile": False, "Current": False}, set()),
 ]
 
