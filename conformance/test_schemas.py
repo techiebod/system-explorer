@@ -96,7 +96,10 @@ def test_a_newer_agents_added_fields_are_accepted_but_not_invented():
     the producer profile must reject it (or we could ship those fields without
     declaring them).
     """
-    doc = load_example(EXAMPLES_DIR / "observation-unit.json")
+    # The degraded pool, because this needs an envelope that actually carries an
+    # opinion: a healthy object has none, so the running-unit example has no
+    # opinions key to extend.
+    doc = load_example(EXAMPLES_DIR / "observation-pool-degraded.json")
     doc["agent_version"] = "9.9.9"
     doc["host"]["site"] = "site-a"
     doc["opinions"][0]["first_seen"] = "2026-08-01T00:00:00Z"

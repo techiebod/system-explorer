@@ -308,11 +308,6 @@ The prose here explains semantics; the schemas win on shape.
     "MainPID": 812,
     "NRestarts": 0
   },
-  "opinions": [
-    { "key": "unit-health", "level": "info",
-      "message": "Unit is active and running.",
-      "evidence": ["ActiveState", "SubState"] }
-  ],
   "relationships": [
     { "type": "after", "direction": "out", "target": { "id": "unit:network-online.target" } },
     { "type": "wants", "direction": "in",  "target": { "id": "unit:multi-user.target" } }
@@ -348,6 +343,14 @@ Field semantics:
   means the envelope documents a failed acquisition. Errors are observations.
 - **`opinions`** are the only place interpretation is allowed, and each must
   cite the facts it derives from. Opinion levels: `info`, `warn`, `critical`.
+  A healthy object has none — the example above is a running unit and carries no
+  `opinions` key at all, which is why the field is absent there rather than
+  holding an affirmative "all is well" entry; see
+  [`observation-pool-degraded.json`](../schema/examples/observation-pool-degraded.json)
+  for the populated shape. `info` is not a weak `warn`: it is what a rule says
+  when a reading is explained rather than alarming (reclaimable ARC counted as
+  used memory, a PCIe card limited by its slot, an unwired spare link), and it
+  earns a neutral mark rather than an attention badge.
 - **`evidence_ref`** fetches the raw native payload (D-Bus reply, JSON
   document, netlink dump) captured fresh at request time.
 - Freshness is the client's judgment from `observed_at`; the envelope does
@@ -597,7 +600,14 @@ Design direction (binding; detail iterates with the implementation):
   belongs to the agent (§5), never to a table in the browser.
 - **Color is semantic only**: opinion levels (info/warn/critical), envelope
   status (ok/partial/error), and later diff states (added/removed/changed).
-  Everything else stays neutral.
+  Everything else stays neutral — a raw native value the rules decline to judge
+  is a label, never a verdict.
+- **The absence of a level is drawn as absence, never as a level.** A row with no
+  `worst_opinion_level` carries no severity claim, which is a different statement
+  from a neutral `info` verdict; it gets an unfilled mark, not the neutral fill an
+  `info` verdict gets. An adapter omits the field deliberately (a quiet operstate
+  is carrier-detection absence, not health), and a UI that renders absence as
+  neutrality re-asserts the judgement the agent withheld.
 - **Dark and light themes from one token set**; dark is the primary design
   target.
 - **Keyboard-first**: subsystem switching, filtering, and object navigation

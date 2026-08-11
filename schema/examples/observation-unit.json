@@ -20,14 +20,6 @@
     "NRestarts": 0,
     "ExecMainStartTimestamp": "2026-08-07T06:12:31Z"
   },
-  "opinions": [
-    {
-      "key": "unit-health",
-      "level": "info",
-      "message": "Unit is active and running.",
-      "evidence": ["ActiveState", "SubState"]
-    }
-  ],
   "relationships": [
     { "type": "after", "direction": "out", "target": { "id": "unit:network-online.target" } },
     { "type": "wants", "direction": "in", "target": { "id": "unit:multi-user.target" } }
