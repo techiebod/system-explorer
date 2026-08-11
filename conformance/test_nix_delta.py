@@ -296,3 +296,20 @@ def test_a_unit_directory_stays_enumerated(tmp_path):
         old_root, new_root, nix._etc_entries(old_root),
         nix._etc_entries(new_root), {})]
     assert names == ["etc/systemd/system/polkit.service"]
+
+
+def test_the_size_gate_measures_what_the_walk_will_do(tmp_path):
+    """A gate that counts differently from the walk it guards does not guard it.
+    Counting without following symlinks made terminfo look like 26 entries, so it
+    passed under the limit and was walked and hashed in full regardless."""
+    # A database reached only through a symlinked subdirectory, as terminfo is.
+    leaves = tmp_path / "leaves"
+    leaves.mkdir()
+    for index in range(nix.ETC_ENUMERATE_OVER + 10):
+        (leaves / f"entry{index}").write_text("x")
+    db = tmp_path / "db"
+    db.mkdir()
+    os.symlink(leaves, db / "sub")
+
+    assert nix._tree_size(str(db)) > nix.ETC_ENUMERATE_OVER, (
+        "the count must see through the symlink the walk would follow")

@@ -244,21 +244,35 @@ def _tree_size(root: str) -> int:
     about a millisecond; hashing it is a hundred times that.
     """
     total = 0
-    stack = [root]
-    depth = {root: 0}
+    visited: set[str] = set()
+    stack = [(root, 0)]
     while stack:
-        base = stack.pop()
-        if depth[base] > ETC_MAX_DEPTH:
+        base, depth = stack.pop()
+        if depth > ETC_MAX_DEPTH:
             continue
+        try:
+            real = os.path.realpath(base)
+        except OSError:
+            continue
+        if real in visited:
+            continue
+        visited.add(real)
         try:
             found = list(os.scandir(base))
         except OSError:
             continue
         for entry in found:
             total += 1
-            if not entry.is_symlink() and entry.is_dir(follow_symlinks=False):
-                stack.append(entry.path)
-                depth[entry.path] = depth[base] + 1
+            # Descend exactly where _tree_entries would, symlinked directories
+            # included. A gate that measures something other than what it gates
+            # does not gate it: counting without following left terminfo looking
+            # like 26 entries, so it sailed under the limit and was then walked
+            # and hashed in full anyway.
+            if entry.is_symlink():
+                if entry.is_dir():
+                    stack.append((entry.path, depth + 1))
+            elif entry.is_dir(follow_symlinks=False):
+                stack.append((entry.path, depth + 1))
     return total
 
 
