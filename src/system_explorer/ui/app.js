@@ -194,6 +194,10 @@ const VALUE_CLASS = {
 };
 
 const PRIORITY_NAMES = ["emerg", "alert", "crit", "err", "warning", "notice", "info", "debug"];
+// The one syslog priority the rulebook trusts as severity from the number alone
+// (rules/logs.py PRIORITY_CRITICAL). Everything below it is a label, not a
+// verdict — err is where plenty of applications write routine output.
+const PRIORITY_CRITICAL = 2;
 const NBSP = "\u00a0";
 
 /* The rulebook's severity order, mirrored from agent/rules/__init__.py
@@ -1989,7 +1993,16 @@ function renderCell(key, value, item) {
     return td;
   }
   if (key === "Priority" && typeof value === "number") {
-    const cls = value <= 3 ? "crit" : value === 4 ? "warn" : "neutral";
+    /* The badge is the priority's LABEL; only emerg/alert/crit is also a
+       verdict. This read `<= 3 ? crit : === 4 ? warn`, which painted every err
+       row red and every warning row amber — while the rulebook calls p3 `info`
+       ("err alone is not attention-worthy — applications log routine output at
+        err") and says nothing whatever about p4 and below. So a red badge sat
+       on the same row as a faint info dot, all day, on the densest collection
+       here. Colour is semantic only (SPEC section 8); it cannot claim more than
+       the rulebook does. PRIORITY_CRITICAL mirrors rules/logs.py and conformance
+       lints the number. */
+    const cls = value <= PRIORITY_CRITICAL ? "crit" : "neutral";
     td.appendChild(el("span", `badge ${cls}`, PRIORITY_NAMES[value] ?? value));
     return td;
   }

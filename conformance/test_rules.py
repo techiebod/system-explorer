@@ -765,3 +765,19 @@ def test_every_severity_class_the_ui_emits_is_styled(selector):
     assert selector in styles, (
         f"app.js can emit {selector} but styles.css never mentions it"
     )
+
+
+def test_ui_priority_badge_matches_the_rulebook_threshold():
+    """The syslog Priority badge is the only place the UI colours a raw kernel
+    value against a rule's own ladder. It read `<= 3 ? crit : === 4 ? warn`,
+    which reddened every err row the rulebook calls `info` and ambered every
+    warning row it says nothing about at all.
+    """
+    source = (UI_DIR / "app.js").read_text()
+    match = re.search(r"^const PRIORITY_CRITICAL = (\d+);", source, re.M)
+    assert match, "app.js no longer declares PRIORITY_CRITICAL at top level"
+    assert int(match.group(1)) == logs.PRIORITY_CRITICAL, (
+        f"app.js reddens syslog priorities <= {match.group(1)}; the rulebook "
+        f"trusts the number alone only at <= {logs.PRIORITY_CRITICAL} "
+        "(agent/rules/logs.py)"
+    )
