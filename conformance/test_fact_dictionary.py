@@ -133,9 +133,9 @@ UNDOCUMENTED_EVIDENCE: dict[str, set[str]] = {
     "docker": {"ExitCode", "Health", "OOMKilled", "RestartCount", "State",
                "Status"},
     "logs": {"Container", "Priority", "RepeatCount", "RepeatWindow"},
-    "network": {"Addresses", "BackendState", "BridgeMembers",
-                "DNSServersInUse", "GlobalDNSServers", "Health", "KeyExpiry",
-                "KeyExpiryDays", "Online", "OperState", "PerLinkDNS",
+    # links is documented; what remains here is tailscale and resolver.
+    "network": {"BackendState", "DNSServersInUse", "GlobalDNSServers", "Health",
+                "KeyExpiry", "KeyExpiryDays", "Online", "PerLinkDNS",
                 "TailscaleSnapshotAgeSeconds", "TailscaleSnapshotAt"},
     "nix": {"Current", "Deployment", "Profile", "ReceiptsExpected"},
     "storage": {"CapacityPercent", "Degraded", "Members", "ScanAgeDays",

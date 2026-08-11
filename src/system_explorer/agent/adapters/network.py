@@ -54,6 +54,73 @@ TAILSCALE_SNAPSHOT = "/run/system-explorer-tailscale/status.json"
 TAILSCALE_UNAVAILABLE = (f"no tailscale snapshot at {TAILSCALE_SNAPSHOT} "
                          "(grantTailscaleAccess off, or tailscaled absent)")
 
+# What the link facts MEAN, served over /v1/facts. Written because the Kind
+# column reads as an em-dash on every physical interface and nothing in the
+# product explained why: a reader who asked why five of seven rows were blank
+# had nowhere to look. Native names are the contract (SPEC §5), so the sentence
+# carries the concept the name cannot.
+_LINK_GLOSSARY = {
+    "OperState": (
+        "The kernel's operational state for this interface: up, down, or "
+        "unknown. Loopback and point-to-point devices report unknown because "
+        "they have no carrier to detect, which is not the same as being down."
+    ),
+    "Kind": (
+        "The software device type the kernel reports — bridge, veth, tun, "
+        "vlan, bond. A physical interface has none, because a kind comes from "
+        "the driver that implements a virtual device; blank here means this is "
+        "not a software device. See LinkType for the link layer, which every "
+        "interface has."
+    ),
+    "LinkType": (
+        "The link layer this interface speaks: ether for Ethernet (including "
+        "bridges, which are Ethernet devices in their own right), loopback, or "
+        "none for tun/tap and other point-to-point devices."
+    ),
+    "MTU": "The largest payload this interface will carry, in bytes.",
+    "MACAddress": (
+        "The hardware address currently in use. This can be set by "
+        "configuration; PermanentMACAddress appears when it differs from the "
+        "one burned into the device."
+    ),
+    "PermanentMACAddress": (
+        "The address burned into the hardware, present only when it differs "
+        "from the address in use — that is, when the MAC has been overridden."
+    ),
+    "Master": (
+        "The bridge or bond this interface is enslaved to, if any. A port's own "
+        "addresses are usually empty because the master carries them."
+    ),
+    "Addresses": (
+        "The IP addresses configured on this interface, in CIDR form. An empty "
+        "list on an enslaved port is normal."
+    ),
+    "BridgeMembers": (
+        "How many interfaces are enslaved to this bridge. Present only on a "
+        "bridge; zero means the bridge has no ports, which is why the kernel "
+        "keeps it down."
+    ),
+    "ParentBus": (
+        "The bus the device sits on, when it is backed by hardware — pci, usb. "
+        "Absent on software devices, which have no parent."
+    ),
+    "ParentDev": (
+        "The bus address of the hardware behind this interface, spelled as the "
+        "kernel spells it, so it joins to the matching device in hardware/pci."
+    ),
+    "PeerMACAddresses": (
+        "The hardware addresses this bridge has learned behind this port — the "
+        "join key that names what is on the other end of a veth. Absent means "
+        "the port has been quiet, not that nothing is attached."
+    ),
+    "LLDPNeighbors": (
+        "What the switch or host on the other end of this link says it is, "
+        "when it announces itself over LLDP."
+    ),
+}
+
+_NETWORK_GLOSSARY = {"links": _LINK_GLOSSARY}
+
 # Lookup descriptors double as usage documentation: the collection listing
 # and the no-input observation are how both the UI and an agent learn what
 # can be asked and how.
@@ -240,6 +307,9 @@ class Adapter:
     def collections(self) -> list[str]:
         return ["links", "routes", "resolver", "nft-tables", "tailscale", "lookups"]
 
+    def fact_glossary(self, collection: str) -> dict[str, str]:
+        return _NETWORK_GLOSSARY.get(collection, {})
+
     async def _nft_available(self) -> tuple[bool, str]:
         stale = (self._nft_state is not None and not self._nft_state[0]
                  and time.monotonic() - self._nft_probed_at > self.PROBE_RETRY_SECONDS)
@@ -324,13 +394,42 @@ class Adapter:
             name = link["ifname"]
             facts = {
                 "OperState": (link.get("operstate") or "").lower(),
+                # The kernel names a Kind only for software devices: info_kind
+                # comes from an rtnetlink link-type ops struct, and a hardware
+                # NIC has none. So this is null on every physical interface and
+                # on loopback, which is why LinkType sits beside it — that field
+                # the kernel does fill in for everything, and the reader asking
+                # "what is this device" was getting silence on five rows of
+                # seven. info_kind only, deliberately: linkinfo on a bridge port
+                # also carries info_slave_kind ("bridge"), which classes the
+                # enslavement rather than the device and would render a port as
+                # a bridge. Master already says a port is enslaved.
                 "Kind": (link.get("linkinfo") or {}).get("info_kind"),
+                # The link layer, present on every interface: "ether",
+                # "loopback", "none" (tun/tap and other point-to-point). Read,
+                # never classified — a bridge is "ether" too, so this is not a
+                # physical/virtual discriminator and must not be folded into
+                # Kind, or a bridge stops being distinguishable from its ports.
+                "LinkType": link.get("link_type"),
                 "MTU": link.get("mtu"),
                 "MACAddress": link.get("address"),
                 "Master": link.get("master"),
                 "Addresses": [f"{a['local']}/{a['prefixlen']}"
                               for a in link.get("addr_info", []) if "local" in a],
             }
+            # Where the device physically is. Omitted rather than nulled,
+            # because only a device on a bus has one: absence is "this is not
+            # backed by hardware", a statement, not a gap (SPEC §2 rule 7). It
+            # is also the join key to hardware/pci, which is why the raw address
+            # is kept exactly as the kernel spells it.
+            if link.get("parentdev"):
+                facts["ParentBus"] = link.get("parentbus")
+                facts["ParentDev"] = link["parentdev"]
+            # The address burned into the hardware, when it differs from the one
+            # in use — the tell that a MAC has been overridden, which otherwise
+            # takes a reader to the device to discover.
+            if link.get("permaddr") and link.get("permaddr") != link.get("address"):
+                facts["PermanentMACAddress"] = link["permaddr"]
             if facts["Kind"] == "bridge":
                 facts["BridgeMembers"] = member_counts.get(name, 0)
             # The MAC(s) the bridge has learned behind this port — the join key

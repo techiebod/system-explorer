@@ -326,6 +326,25 @@ check("an observed Kind fact is not hidden by the derived one", () => {
   if (got !== "bridge") throw new Error(`Kind resolved to ${got}, not the fact`);
 });
 
+check("a fact present with a null value is not replaced by the derived one", () => {
+  /* The untested middle case, and the one an operator actually sees: on
+     network/links every physical interface reports Kind: null, because the
+     kernel names a kind only for software devices. `key in item.facts` is true
+     for a null, so the derive is suppressed and the cell reads as absent —
+     which is correct, since PSEUDO_COLUMNS.Kind can only ever yield the
+     constant "link" here and that is the value the original complaint was
+     about. Load-bearing in both directions: reinstating the fallback puts
+     "link" back on those rows, and making the adapter omit Kind instead of
+     nulling it would do the same by flipping the `in` test. */
+  const nic = { id: "link:eth0", type: "link",
+                facts: { Kind: null, LinkType: "ether" } };
+  const got = ui.cellValue("Kind", nic);
+  if (got !== null)
+    throw new Error(`a null Kind resolved to ${JSON.stringify(got)}, not null`);
+  if (ui.cellValue("LinkType", nic) !== "ether")
+    throw new Error("LinkType, which every interface has, did not resolve");
+});
+
 check("a collection with no Kind fact still gets its object type", () => {
   // hardware/scsi is heterogeneous and carries no Kind fact; without the
   // fallback a controller renders as a disk with every disk column blank.
@@ -460,12 +479,17 @@ check("an unrecognised level colours nothing", () => {
 check("a row with no severity is not drawn as a neutral verdict", () => {
   Object.assign(ui.state, {
     subsystem: "network", collection: "links",
+    /* Kind is null and LinkType carries the layer, which is what the adapter
+       really emits: the kernel names a Kind only for software devices, so every
+       physical interface and loopback has none. An earlier version of this
+       fixture invented Kind: "loopback" / "ether" — shapes no host produces. */
     page: { total: 2, next_cursor: null, status: "ok", items: [
       { id: "link:lo", type: "link", native_id: "lo",
-        facts: { OperState: "unknown", Kind: "loopback" } },        // field absent
+        facts: { OperState: "unknown", Kind: null, LinkType: "loopback" } },  // no severity field
       { id: "link:enp2s0", type: "link", native_id: "enp2s0",
-        facts: { OperState: "down", Kind: "ether" },
-        worst_opinion_level: "info" },                              // judged neutral
+        facts: { OperState: "down", Kind: null, LinkType: "ether",
+                 ParentBus: "pci", ParentDev: "0000:02:00.0" },
+        worst_opinion_level: "info" },                                       // judged neutral
     ] },
     filterText: "", facet: null, sortKey: null, showHidden: false,
     owners: null, detailObs: null, selectedId: null, factDict: null,
