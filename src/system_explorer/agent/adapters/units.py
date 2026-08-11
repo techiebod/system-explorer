@@ -264,7 +264,9 @@ _UNIT_GLOSSARY = {
         "something outside systemd performed the mount. Such a unit reports "
         "the mount accurately but has no fragment, and RequiresMountsFor= "
         "against a fragmentless mount does not become a real dependency — so "
-        "a service naming the path may start before the filesystem is there."
+        "a service naming the path may start before the filesystem is there. "
+        "Common and harmless for container overlay and netns mounts, which "
+        "nothing declares; it matters where something does."
     ),
 }
 

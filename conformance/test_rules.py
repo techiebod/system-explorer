@@ -144,9 +144,11 @@ CASES = [
 
     # units: a .mount unit systemd invented from the mount table. silo carried
     # this for two days with five stacks believing they depended on it.
+    # Silent by design: the fact is reported, no opinion is drawn from it. On a
+    # container host 50 of these are docker's own overlay mounts.
     ("mount-unit-synthesised", units.mount_unit_opinions,
      {"ActiveState": "active", "SubState": "mounted", "RuntimeSynthesised": True},
-     {("mount-unit-synthesised", "info")}),
+     set()),
     ("mount-unit-declared", units.mount_unit_opinions,
      {"ActiveState": "active", "SubState": "mounted"}, set()),
 
