@@ -129,3 +129,40 @@ def _human_age(seconds: int) -> str:
     if seconds < 86400:
         return f"{seconds // 3600}h{(seconds % 3600) // 60:02d}m"
     return f"{seconds // 86400}d{(seconds % 86400) // 3600}h"
+
+
+def route_opinions(facts: dict) -> list[dict]:
+    """A route in a policy table that outranks this host's own connected route.
+
+    The failure this exists for: a node inside a subnet that some tailnet peer
+    advertises accepts a route for the segment under its own feet. tailscaled's
+    table 52 is consulted at rule preference 5270 and main not until 32766, so
+    the tunnelled route wins and every reply to a LAN neighbour goes into the
+    tunnel. ARP is not routed, so ARP keeps answering and the host looks
+    half-alive: reachable on its overlay address, dark on its LAN address, from
+    every machine on the estate including one on the same switch.
+
+    It happened three times before anything could see it, because the routes
+    collection read only the main table and the shadowing route was not in the
+    envelope at all. The fix is a policy rule below the overlay's preference,
+    which is host configuration rather than anything this can assert — so this
+    reports the condition and names the remedy rather than pretending to know
+    the intent.
+
+    warn, not critical: the host is still reachable by its overlay address, and
+    on a deliberate policy-routing setup (a VPN split tunnel) this shape can be
+    exactly what was intended. It is always worth a look and never a certainty.
+    """
+    if not facts.get("ShadowsLocalPrefix"):
+        return []
+    return [env.opinion(
+        "route-shadows-local",
+        "warn",
+        f"Table {facts.get('Table')} is consulted at rule preference "
+        f"{facts.get('RulePreference')}, ahead of main, and carries a route for "
+        f"{facts.get('Destination')} — a prefix this host is directly attached "
+        "to. Traffic to those neighbours leaves by "
+        f"{facts.get('Device')} instead of the local link, which reads as the "
+        "host going dark on its own LAN while ARP still answers. A policy rule "
+        "for this prefix below that preference restores it.",
+        ["Table", "RulePreference", "Destination", "Device", "ShadowsLocalPrefix"])]

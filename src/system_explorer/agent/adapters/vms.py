@@ -14,7 +14,7 @@ import anyio
 
 from .. import envelope as env
 from ..rules import worst_level
-from ..rules.vms import domain_opinions
+from ..rules.vms import domain_address_opinions, domain_opinions
 
 SOCKET_RO = "/var/run/libvirt/libvirt-sock-ro"
 URI = "qemu:///system"
@@ -172,11 +172,29 @@ def _devices(xml: str) -> tuple[list[dict], list[dict], list[dict]]:
     return disks, nics, hostdevs
 
 
+# Documents the fact whose whole purpose is to be read: a null address with no
+# stated reason is exactly the ambiguity this sibling removes. State is on
+# conformance's UNDOCUMENTED_EVIDENCE register — a stated gap, not a silent one.
+_DOMAIN_GLOSSARY = {
+    "IPAddressesUnobservable": (
+        "Why this running guest's address could not be determined. It appears "
+        "with a null IPAddresses, and the pair means the guest has an address "
+        "that this agent cannot see — not that it has none. Normal for a "
+        "bridged guest: the guest agent needs more than a read-only libvirt "
+        "connection, libvirt sees leases only from its own DHCP server, and the "
+        "host's ARP entry expires while the guest is idle."
+    ),
+}
+
+
 class Adapter:
     subsystem = "vms"
 
     def collections(self) -> list[str]:
         return ["domains"]
+
+    def fact_glossary(self, collection: str) -> dict[str, str]:
+        return _DOMAIN_GLOSSARY if collection == "domains" else {}
 
     async def capability(self) -> dict:
         """Socket presence alone is optimistic; open the read-only connection
@@ -212,9 +230,9 @@ class Adapter:
         for nic in nics:
             if nic.get("MAC") and dom["ips_by_mac"].get(nic["MAC"]):
                 nic["IPs"] = dom["ips_by_mac"][nic["MAC"]]
-        return {
+        addresses = sorted({ip for ips in dom["ips_by_mac"].values() for ip in ips})
+        facts = {
             "State": dom["state"],
-            "IPAddresses": sorted({ip for ips in dom["ips_by_mac"].values() for ip in ips}),
             "MemoryMiB": dom["memory_mib"],
             "MaxMemoryMiB": dom["max_memory_mib"],
             "VCPUs": dom["vcpus"],
@@ -234,6 +252,26 @@ class Adapter:
             "HostTaps": sorted({n["HostTap"] for n in nics if n.get("HostTap")}),
             "PassedThroughDevices": hostdevs,
         }
+        # SPEC section 2 rule 7, third arm: the value exists and this agent
+        # cannot see it, so the fact is null and a sibling carries the reason.
+        # An empty list said "this guest has no addresses", which is a different
+        # and false claim — tub's unifi-os read [] while sitting on
+        # 192.168.200.80, because all three libvirt sources happened to be
+        # silent at once. For a BRIDGED guest that is the normal case, not a
+        # transient one: the guest agent needs more than a read-only connection,
+        # libvirt only sees leases from its own dnsmasq (an externally-leased
+        # guest has none it can read), and the host ARP entry ages out.
+        #
+        # A guest that is not running is a different statement again: it has no
+        # address because it is off, which is inapplicability, so the fact is
+        # omitted rather than nulled.
+        if addresses:
+            facts["IPAddresses"] = addresses
+        elif dom["state"] == "running":
+            facts["IPAddresses"] = None
+            if dom.get("ip_note"):
+                facts["IPAddressesUnobservable"] = dom["ip_note"]
+        return facts
 
     async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:
         self._check(collection)
@@ -244,11 +282,12 @@ class Adapter:
             # consumer that needs it is looking at network/links and wants to
             # name every tap from one request, without opening each domain.
             summary = {k: facts[k] for k in
-                       ("State", "IPAddresses", "MemoryMiB", "VCPUs", "Autostart",
+                       ("State", "IPAddresses", "IPAddressesUnobservable",
+                        "MemoryMiB", "VCPUs", "Autostart",
                         "Persistent", "HostTaps")}
             # Rules see the summary facts (State and Autostart both there), so
             # the row carries the same worst opinion an opened object would.
-            worst = worst_level(domain_opinions(summary),
+            worst = worst_level(domain_opinions(summary) + domain_address_opinions(summary),
                                 healthy="ok" if dom["state"] == "running" else "info")
             items.append(env.item_summary(f"domain:{dom['name']}", "domain",
                                           dom["name"], summary,
@@ -278,7 +317,7 @@ class Adapter:
 
         # Same evaluator as the summary path (agent/rules/vms.py) — rows and
         # opened objects cannot disagree.
-        opinions = domain_opinions(facts)
+        opinions = domain_opinions(facts) + domain_address_opinions(facts)
 
         relationships = [env.rel("attached-to", "out", f"link:{bridge}", subsystem="network")
                          for bridge in facts["Bridges"]]

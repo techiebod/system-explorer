@@ -68,3 +68,38 @@ def unit_opinions(facts: dict) -> list[dict]:
             "memory reclaim. Tasks with nothing to do are not counted.",
             ["PsiMemoryFullAvg60"]))
     return opinions
+
+
+def mount_unit_opinions(facts: dict) -> list[dict]:
+    """A .mount unit systemd invented, which nothing can depend on.
+
+    systemd synthesises a mount unit from /proc/self/mountinfo for anything
+    mounted outside its control — a native ZFS mountpoint, most often. The unit
+    reads `active` and looks identical to one that performed the mount, but it
+    has no fragment, and systemd only promotes RequiresMountsFor= into a real
+    Requires= when the target has one. So a service that names the path gets an
+    ordering hint at best, and nothing at all if the mount is not present when
+    the service loads.
+
+    silo carried exactly this for two days: fs-media.mount had never executed a
+    mount in its life — zfs-mount.service won every boot and systemd merely
+    observed the result — while five compose stacks named /fs/media in
+    requiresMountsFor and believed they depended on it. Nothing was failed and
+    nothing could have shown it, because the row said active and carried no fact
+    that distinguished the two cases.
+
+    info rather than warn: on a host that never wanted the dependency this is
+    simply how a mount looks, and saying so on every tmpfs would be the
+    cry-wolf the level exists to avoid. It is a statement about what can be
+    depended on, for the reader who is about to depend on it.
+    """
+    if not facts.get("RuntimeSynthesised"):
+        return []
+    return [env.opinion(
+        "mount-unit-synthesised", "info",
+        "systemd made this unit up from the mount table rather than reading a "
+        "file for it, so it has no fragment. It reports the mount but nothing "
+        "can be ordered against it: RequiresMountsFor= on this path becomes a "
+        "real dependency only when the mount unit has a fragment. Declare the "
+        "filesystem if anything needs to wait for it.",
+        ["RuntimeSynthesised", "ActiveState"])]

@@ -27,7 +27,7 @@ import anyio
 
 from .. import envelope as env
 from ..rules import worst_level
-from ..rules.units import unit_opinions
+from ..rules.units import mount_unit_opinions, unit_opinions
 from ..sysbus import BUS, PROPERTIES, SYSTEMD, SYSTEMD_MANAGER, SYSTEMD_PATH
 
 UNIT_IFACE = "org.freedesktop.systemd1.Unit"
@@ -253,6 +253,22 @@ def _slice_parent(name: str) -> str | None:
     return "-.slice"
 
 
+# The units collection has no full dictionary yet; this documents the one fact
+# whose name explains nothing on its own, and which an opinion cites. The rest
+# of units' cited facts are on conformance's UNDOCUMENTED_EVIDENCE register —
+# a stated gap rather than a silent one.
+_UNIT_GLOSSARY = {
+    "RuntimeSynthesised": (
+        "Present when systemd made this mount unit up from the mount table "
+        "rather than reading a unit file for it, which happens whenever "
+        "something outside systemd performed the mount. Such a unit reports "
+        "the mount accurately but has no fragment, and RequiresMountsFor= "
+        "against a fragmentless mount does not become a real dependency — so "
+        "a service naming the path may start before the filesystem is there."
+    ),
+}
+
+
 def _source(method: str) -> dict:
     return env.source("systemd-dbus", SYSTEMD, REFERENCE, method=method)
 
@@ -262,6 +278,9 @@ class Adapter:
 
     def collections(self) -> list[str]:
         return ["units"]
+
+    def fact_glossary(self, collection: str) -> dict[str, str]:
+        return _UNIT_GLOSSARY if collection == "units" else {}
 
     async def capability(self) -> dict:
         return {"available": True, "collections": self.collections()}
@@ -281,6 +300,20 @@ class Adapter:
     async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:
         self._check(collection)
         listed = await BUS.call(SYSTEMD, SYSTEMD_PATH, SYSTEMD_MANAGER, "ListUnits")
+        # Which units exist as a FILE, in one call rather than a FragmentPath
+        # Get per unit (there are 300+ on an ordinary host). The distinction is
+        # the point: systemd synthesises a .mount unit from /proc/self/mountinfo
+        # for anything mounted outside its control, and such a unit has no
+        # fragment — so RequiresMountsFor= against it degrades to an ordering
+        # hint or nothing at all, silently. A generator-written unit is a file
+        # and appears here; a synthesised one does not.
+        have_file: set[str] = set()
+        try:
+            for entry in (await BUS.call(SYSTEMD, SYSTEMD_PATH, SYSTEMD_MANAGER,
+                                         "ListUnitFiles"))[0]:
+                have_file.add(entry[0].rsplit("/", 1)[-1])
+        except Exception:  # noqa: BLE001 - older systemd, or a denied call
+            have_file = set()
         # Threaded: hundreds of small procfs-style reads must not sit on the
         # event loop (SPEC async hygiene).
         pressure = await anyio.to_thread.run_sync(_pressure_by_unit)
@@ -292,6 +325,13 @@ class Adapter:
             # On the row for the same reason the pressure numbers are: the
             # operator sorting by stall has to recognise the winner in the
             # list, not open it to find out what it is.
+            # Mounts only, deliberately. A .scope or .slice is runtime by
+            # nature and flagging those would be noise; a .mount that nothing
+            # wrote a file for is the case where a dependency quietly does not
+            # exist. Only claimed when the file list was actually read, so a
+            # denied ListUnitFiles stays silent instead of accusing every unit.
+            if have_file and name.endswith(".mount") and name not in have_file:
+                facts["RuntimeSynthesised"] = True
             facts.update(_workload_facts(name))
             # Attribution on the row, not just the object: an operator staring
             # at host I/O pressure needs to sort the list, not open 300 units.
@@ -306,7 +346,7 @@ class Adapter:
             items_by_name[name] = env.item_summary(
                 f"unit:{name}", _unit_type(name), name, facts,
                 worst_opinion_level=worst_level(
-                    unit_opinions(facts),
+                    unit_opinions(facts) + mount_unit_opinions(facts),
                     healthy="ok" if active == "active" else "info"),
             )
             paths[name] = path
@@ -411,7 +451,7 @@ class Adapter:
         # Shared verbatim with the summary path, plus the detail-only
         # restart-churn rule (NRestarts is fetched per-unit, never in
         # ListUnits — see agent/rules/units.py).
-        opinions = unit_opinions(facts)
+        opinions = unit_opinions(facts) + mount_unit_opinions(facts)
 
         relationships = [
             env.rel(rel_type, direction, f"unit:{dep}")

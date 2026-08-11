@@ -119,6 +119,52 @@ CASES = [
       "ScanEndTime": "Sun 1 Feb 16:14:52 GMT 2026"},
      set()),
 
+    # network: a policy-table route that outranks the host's own connected
+    # route. The Red House LAN went dark three times on this before the routes
+    # collection could even see the shadowing route — it read main only.
+    ("route-shadows-own-lan", network.route_opinions,
+     {"Table": "52", "RulePreference": 5270, "Destination": "192.168.123.0/24",
+      "Device": "tailscale0", "Family": "ipv4", "ShadowsLocalPrefix": True},
+     {("route-shadows-local", "warn")}),
+    # The same overlay route on a host that is NOT on that segment: legitimate,
+    # and the only reason to accept routes at all.
+    ("route-policy-table-not-local", network.route_opinions,
+     {"Table": "52", "RulePreference": 5270, "Destination": "192.168.200.0/24",
+      "Device": "tailscale0", "Family": "ipv4"},
+     set()),
+    # Ordinary main-table routes never speak.
+    ("route-main-connected", network.route_opinions,
+     {"Table": "main", "RulePreference": 32766, "Destination": "192.168.123.0/24",
+      "Device": "eno1", "Scope": "link", "Family": "ipv4"},
+     set()),
+    ("route-default", network.route_opinions,
+     {"Table": "main", "Destination": "default", "Device": "eth0",
+      "Gateway": "192.168.200.1", "Family": "ipv4"},
+     set()),
+
+    # units: a .mount unit systemd invented from the mount table. silo carried
+    # this for two days with five stacks believing they depended on it.
+    ("mount-unit-synthesised", units.mount_unit_opinions,
+     {"ActiveState": "active", "SubState": "mounted", "RuntimeSynthesised": True},
+     {("mount-unit-synthesised", "info")}),
+    ("mount-unit-declared", units.mount_unit_opinions,
+     {"ActiveState": "active", "SubState": "mounted"}, set()),
+
+    # vms: a running guest whose address no source could answer for. The row
+    # used to say ok beside an empty list, then show the address on the next
+    # poll once a ping had repopulated the host's ARP table.
+    ("domain-address-unobservable", vms.domain_address_opinions,
+     {"State": "running", "IPAddresses": None,
+      "IPAddressesUnobservable": "No address source answered: the guest agent "
+                                 "is unavailable on a read-only libvirt connection."},
+     {("domain-address-unobservable", "info")}),
+    ("domain-address-known", vms.domain_address_opinions,
+     {"State": "running", "IPAddresses": ["192.168.200.80"]}, set()),
+    # A stopped guest has no address because it is off — inapplicable, and the
+    # adapter omits the fact rather than nulling it.
+    ("domain-stopped-address-quiet", vms.domain_address_opinions,
+     {"State": "shut off"}, set()),
+
     # units.
     ("unit-failed", units.unit_opinions,
      {"ActiveState": "failed", "SubState": "failed", "Result": "exit-code"},

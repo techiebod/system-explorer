@@ -36,7 +36,8 @@ import anyio
 from .. import envelope as env
 from ..rules import worst_level
 from ..rules.network import (LINK_QUIET_STATES, link_opinions,
-                             resolver_opinions, tailscale_opinions)
+                             resolver_opinions, route_opinions,
+                             tailscale_opinions)
 from ..sysbus import BUS, CallError
 
 RESOLVE1 = "org.freedesktop.resolve1"
@@ -45,7 +46,8 @@ RESOLVE1_MANAGER = "org.freedesktop.resolve1.Manager"
 RESOLVE1_LINK = "org.freedesktop.resolve1.Link"
 
 LINK_REFERENCE = ["ip -d addr show", "networkctl status <link>"]
-ROUTE_REFERENCE = ["ip route show", "ip -6 route show"]
+ROUTE_REFERENCE = ["ip route show table all", "ip -6 route show table all",
+                   "ip rule show"]
 RESOLVER_REFERENCE = ["resolvectl status", "resolvectl dns"]
 NFT_REFERENCE = ["nft list ruleset"]
 TAILSCALE_REFERENCE = ["tailscale status --json"]
@@ -126,7 +128,37 @@ _LINK_GLOSSARY = {
     ),
 }
 
-_NETWORK_GLOSSARY = {"links": _LINK_GLOSSARY}
+_ROUTE_GLOSSARY = {
+    "Destination": "The prefix this route matches, or `default` for the route of last resort.",
+    "Gateway": "The next hop, when the destination is not directly attached.",
+    "Device": "The interface the kernel sends matching traffic out of.",
+    "Protocol": "What installed the route — kernel for a directly-attached prefix, dhcp, ra, static, or a daemon's own name.",
+    "Scope": "How far the destination is: link means directly attached on this segment, global means reachable via a gateway.",
+    "PrefSrc": "The source address the kernel will use for traffic it originates down this route.",
+    "Metric": "Tie-break between routes to the same destination; lower wins.",
+    "Family": ("Which address family this route is for: ipv4 or ipv6. The two are\n                separate tables and a host can be healthy in one and broken in the other."),
+    "Table": (
+        "Which routing table holds this route. Most are in `main`, but policy "
+        "routing puts routes in others — a VPN or overlay typically keeps its "
+        "own. The table alone does not say whether a route wins; see "
+        "RulePreference."
+    ),
+    "RulePreference": (
+        "The lowest rule preference that selects this route's table. The kernel "
+        "walks rules in ascending order and takes the first table that answers, "
+        "so a smaller number here means this table is consulted earlier and its "
+        "routes outrank those in tables checked later. main is usually 32766. "
+        "Absent when no rule names the table."
+    ),
+    "ShadowsLocalPrefix": (
+        "Present only when this route is in a table consulted before main AND "
+        "main holds a directly-attached route for the same prefix — so this one "
+        "wins for a segment the host is physically on. Traffic to those "
+        "neighbours leaves down this route instead of the local link."
+    ),
+}
+
+_NETWORK_GLOSSARY = {"links": _LINK_GLOSSARY, "routes": _ROUTE_GLOSSARY}
 
 
 def _link_kind(link: dict) -> str | None:
@@ -516,21 +548,96 @@ class Adapter:
 
     # ── routes ───────────────────────────────────────────────
     async def _route_items(self) -> list[dict]:
+        """Every route the kernel holds, in every table — not just main.
+
+        `ip route show` defaults to main, and for a year that is all this
+        reported. It made a whole class of fault invisible: a host on a tailnet
+        gets policy table 52 consulted at rule preference 5270 while main waits
+        until 32766, so an accepted route for a segment the host is ON silently
+        outranks its own connected route. That took the Red House LAN down twice
+        on 2026-08-09 and again on 2026-08-11, and on every occasion this
+        collection showed a healthy main table and nothing else — the shadowing
+        route was not in the envelope at all, so no rule could see it and no
+        screen could show it.
+
+        Table and rule precedence together decide which route actually wins, so
+        neither is optional. Routes carry their table; the rules are a sibling
+        collection because they are per-host policy rather than per-route facts.
+        """
+        rules = await self._routing_rules()
+        main_pref = rules.get("main", 32766)
+        raw_by_family = {}
+        for family, args in (("ipv4", ["route", "show", "table", "all"]),
+                             ("ipv6", ["-6", "route", "show", "table", "all"])):
+            raw_by_family[family] = await anyio.to_thread.run_sync(_ip_json, args)
+
+        # Which destinations this host is DIRECTLY attached to, per family: a
+        # kernel-scope link route in main is the definition of "on this
+        # segment". A route to the same destination in a table consulted
+        # earlier outranks it, and the host stops reaching its own neighbours
+        # while ARP still answers — which is why the failure looks like a
+        # half-alive host rather than a routing problem.
+        connected = {
+            family: {r.get("dst") for r in raw
+                     if (r.get("table") or "main") == "main"
+                     and r.get("scope") == "link" and r.get("dst")}
+            for family, raw in raw_by_family.items()
+        }
+
         items = []
-        for family, args in (("ipv4", ["route", "show"]), ("ipv6", ["-6", "route", "show"])):
-            for route in await anyio.to_thread.run_sync(_ip_json, args):
+        for family, raw in raw_by_family.items():
+            for route in raw:
                 dst = route.get("dst", "default")
                 dev = route.get("dev", "?")
+                # iproute2 omits `table` for main; naming it beats an absence a
+                # reader has to know the default of.
+                table = route.get("table") or "main"
                 native = f"{dst} dev {dev}" + (f" via {route['gateway']}" if route.get("gateway") else "")
+                if table != "main":
+                    native += f" table {table}"
                 facts = {
                     "Destination": dst, "Gateway": route.get("gateway"),
                     "Device": dev, "Protocol": route.get("protocol"),
                     "Scope": route.get("scope"), "PrefSrc": route.get("prefsrc"),
                     "Metric": route.get("metric"), "Family": family,
+                    "Table": table,
+                    # What preference this table is consulted at, and so whether
+                    # it outranks main. Absent when no rule names the table.
+                    "RulePreference": rules.get(table),
                 }
+                # Exact structural comparison, not a judgement: this route is in
+                # a table the kernel consults BEFORE main, and main holds a
+                # kernel-scope link route for the same destination. Both halves
+                # are read; the conclusion follows by set membership.
+                pref = rules.get(table)
+                if (table != "main" and pref is not None and pref < main_pref
+                        and dst in connected[family]):
+                    facts["ShadowsLocalPrefix"] = True
                 items.append(env.item_summary(
-                    f"route:{family}/{dst}/{dev}", "route", native, facts))
+                    f"route:{family}/{table}/{dst}/{dev}", "route", native, facts,
+                    worst_opinion_level=worst_level(route_opinions(facts), healthy=None)))
         return items
+
+    async def _routing_rules(self) -> dict[str, int]:
+        """table name -> the lowest (most preferred) rule preference selecting it.
+
+        Lowest wins: the kernel walks rules in ascending preference and takes
+        the first table that answers, so the smallest number is the one that
+        decides. main sits at 32766 unless something moves it.
+        """
+        prefs: dict[str, int] = {}
+        try:
+            raw = await anyio.to_thread.run_sync(_ip_json, ["rule", "show"])
+        except Exception:  # noqa: BLE001 - no ip rule support is not a failure
+            return prefs
+        for rule in raw:
+            table = rule.get("table")
+            pref = rule.get("priority")
+            if table is None or pref is None:
+                continue
+            if table not in prefs or pref < prefs[table]:
+                prefs[table] = pref
+        return prefs
 
     # ── resolver ─────────────────────────────────────────────
     async def _link_dns(self) -> dict[str, dict]:

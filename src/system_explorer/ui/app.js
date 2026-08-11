@@ -2080,7 +2080,18 @@ function renderCell(key, value, item) {
     td.appendChild(el("span", `badge ${cls}`, String(value)));
     return td;
   }
-  if (Array.isArray(value)) { td.className = "mono"; td.textContent = value.map(vstr).join(", "); return td; }
+  // Title, like every other long-value branch below: cells are capped at
+  // min(380px, 55vw) and ellipsised, and an array is the one shape that
+  // routinely exceeds it — a link with an IPv4 and three IPv6 addresses runs to
+  // 177 characters, of which about 55 are visible. Without this the remainder
+  // is unreachable: the grid does not scroll horizontally, so the value is not
+  // merely clipped, it is gone.
+  if (Array.isArray(value)) {
+    td.className = "mono";
+    td.textContent = value.map(vstr).join(", ");
+    if (value.length > 1) td.title = value.map(vstr).join("\n");
+    return td;
+  }
   if (typeof value === "boolean") { td.appendChild(el("span", "dim", value ? "true" : "false")); return td; }
   if (typeof value === "object") { td.className = "mono"; td.textContent = vstr(value); td.title = vstr(value); return td; }
   td.textContent = String(value);
