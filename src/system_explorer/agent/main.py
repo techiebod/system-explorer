@@ -138,7 +138,8 @@ async def capabilities() -> dict:
         try:
             subsystems[name] = await adapter.capability()
         except Exception as exc:  # noqa: BLE001 - a broken adapter is itself a capability fact
-            subsystems[name] = {"available": False, "reason": f"error: {exc}"}
+            subsystems[name] = {"available": False, "reason": env.reason(
+                f"capability discovery failed: {type(exc).__name__}: {exc}")}
     for name, reason in PLANNED.items():
         subsystems[name] = {"available": False, "reason": reason}
     return {
@@ -215,7 +216,8 @@ async def _subsystem_status(name: str, adapter) -> tuple[dict, list[str]]:
     try:
         cap = await adapter.capability()
     except Exception as exc:  # noqa: BLE001 - degrade the subsystem, not the endpoint
-        errors.append(f"{name}: capability discovery failed: {type(exc).__name__}: {exc}")
+        errors.append(env.reason(
+            f"{name}: capability discovery failed: {type(exc).__name__}: {exc}"))
         return ({c: {"worst": None, "error": f"{type(exc).__name__}: {exc}"}
                  for c in adapter.collections()}, errors)
     unavailable = cap.get("unavailable_collections", {})
@@ -462,7 +464,7 @@ async def _collection_state(adapter, collection: str):
     try:
         cap = await adapter.capability()
     except Exception as exc:  # noqa: BLE001 - a broken adapter is itself a fact
-        return f"capability discovery failed: {type(exc).__name__}: {exc}"
+        return env.reason(f"capability discovery failed: {type(exc).__name__}: {exc}")
     reason = cap.get("unavailable_collections", {}).get(collection)
     if reason is not None:
         return reason

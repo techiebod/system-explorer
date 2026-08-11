@@ -29,6 +29,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .. import __version__
+from ..text import one_line
 from ..paths import UI_DIR
 
 
@@ -112,7 +113,7 @@ async def hub_hosts() -> dict:
             return name, {"reachable": True, "host": response.json().get("host"), "url": base}
         except Exception as exc:  # noqa: BLE001 - unreachable is data, not an exception
             return name, {"reachable": False,
-                          "error": f"{type(exc).__name__}: {str(exc)[:200]}"}
+                          "error": one_line(f"{type(exc).__name__}: {exc}")}
     results = await asyncio.gather(*(probe(n, b) for n, b in AGENTS.items()))
     return {
         "schema": "se.hub-hosts/1",
@@ -135,7 +136,7 @@ async def _proxy(name: str, path: str, request: Request) -> Response:
                                      params=request.query_params.multi_items() or None)
     except httpx.HTTPError as exc:
         return JSONResponse(status_code=502, content={
-            "error": f"agent unreachable: {type(exc).__name__}: {str(exc)[:200]}",
+            "error": one_line(f"agent unreachable: {type(exc).__name__}: {exc}"),
             "host": name, "url": f"{base}{path}"})
     return Response(content=upstream.content, status_code=upstream.status_code,
                     media_type=upstream.headers.get("content-type", "application/json"))

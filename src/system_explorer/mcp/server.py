@@ -25,6 +25,8 @@ from urllib.parse import quote
 import httpx
 from mcp.server.fastmcp import FastMCP
 
+from ..text import one_line
+
 
 def _agents_from_env() -> dict[str, str]:
     raw = os.environ.get("SE_MCP_AGENTS", "")
@@ -59,11 +61,11 @@ async def _get(host: str, path: str, params: dict | None = None) -> dict:
         response.raise_for_status()
         return response.json()
     except httpx.HTTPStatusError as exc:
-        detail = exc.response.text[:300]
+        detail = one_line(exc.response.text)
         return {"error": f"agent returned HTTP {exc.response.status_code}",
                 "host": host, "path": path, "detail": detail}
     except httpx.HTTPError as exc:
-        return {"error": f"agent unreachable: {type(exc).__name__}: {str(exc)[:200]}",
+        return {"error": one_line(f"agent unreachable: {type(exc).__name__}: {exc}"),
                 "host": host, "url": f"{base}{path}"}
 
 

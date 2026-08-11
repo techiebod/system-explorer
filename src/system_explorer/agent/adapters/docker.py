@@ -96,8 +96,9 @@ class Adapter:
                               "(agent not in the docker group?)"}
         except Exception as exc:  # noqa: BLE001 - daemon down, socket stale, …
             return {"available": False,
-                    "reason": f"{SOCKET} exists but the daemon did not answer "
-                              f"/_ping: {type(exc).__name__}: {str(exc)[:120]}"}
+                    "reason": env.reason(
+                        f"{SOCKET} exists but the daemon did not answer /_ping: "
+                        f"{type(exc).__name__}: {exc}")}
         return {"available": True, "collections": self.collections()}
 
     async def _get(self, path: str) -> httpx.Response:

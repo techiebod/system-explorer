@@ -198,8 +198,8 @@ class Adapter:
                               "(the [vms] extra)"}
         except Exception as exc:  # noqa: BLE001 - the reason is the fact
             return {"available": False,
-                    "reason": "read-only socket exists but openReadOnly failed: "
-                              f"{str(exc)[:140]}"}
+                    "reason": env.reason(
+                        f"read-only socket exists but openReadOnly failed: {exc}")}
         return {"available": True, "collections": self.collections()}
 
     def _check(self, collection: str) -> None:

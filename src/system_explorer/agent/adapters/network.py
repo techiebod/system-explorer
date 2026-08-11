@@ -209,11 +209,11 @@ class Adapter:
                     await anyio.to_thread.run_sync(_nft_json)
                     self._nft_state = (True, "")
                 except subprocess.CalledProcessError as exc:
-                    self._nft_state = (False,
-                                       "nft cannot read the ruleset "
-                                       f"(CAP_NET_ADMIN not granted?): {exc.stderr.strip()[:120]}")
+                    self._nft_state = (False, env.reason(
+                        "nft cannot read the ruleset "
+                        f"(CAP_NET_ADMIN not granted?): {exc.stderr}"))
                 except Exception as exc:  # noqa: BLE001
-                    self._nft_state = (False, str(exc)[:160])
+                    self._nft_state = (False, env.reason(exc))
         return self._nft_state
 
     async def _resolver_available(self) -> tuple[bool, str]:
@@ -221,7 +221,8 @@ class Adapter:
             await BUS.get_all(RESOLVE1, RESOLVE1_PATH, RESOLVE1_MANAGER)
             return True, ""
         except Exception as exc:  # noqa: BLE001
-            return False, f"resolve1 not available on the system bus: {str(exc)[:120]}"
+            return False, env.reason(
+                f"resolve1 not available on the system bus: {exc}")
 
     async def capability(self) -> dict:
         unavailable: dict[str, str] = {

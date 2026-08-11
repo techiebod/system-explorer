@@ -16,6 +16,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .. import text as _text
+
 SCHEMA_OBSERVATION = "se.observation/1"
 SCHEMA_COLLECTION = "se.collection/1"
 
@@ -46,6 +48,12 @@ def _machine_id() -> str:
 
 
 HOST = {"machine_id": _machine_id(), "hostname": socket.gethostname().split(".")[0]}
+
+
+def reason(value: object, limit: int = _text.MAX_LENGTH) -> str:
+    """Bounded, whole-word failure text for a capability reason or an
+    error-envelope entry. See system_explorer.text for why this is central."""
+    return _text.one_line(value, limit)
 
 
 def utc_now() -> str:

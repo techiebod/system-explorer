@@ -142,3 +142,28 @@ def test_lint_is_armed():
         assert agent_sources(), f"{AGENT_DIR} exists but contains no Python sources to lint"
     else:
         pytest.skip("agent/ not created yet (Phase 1); lint arms automatically when it appears")
+
+
+# Failure text is bounded in exactly one place (system_explorer.text via
+# env.reason). Six adapter sites used to clip it locally at four different
+# limits — 120, 140, 160, 200 — and one of them cut a live reason mid-word,
+# discarding the words that named the cause. A slice literal on an exception
+# or on command output is that mistake returning.
+CLIP_SLICE = re.compile(r"(?:str\(\s*exc\s*\)|\.stderr|\.stdout|\.text|"
+                        r"\.strip\(\))\s*\[\s*:\s*\d+\s*\]")
+
+
+@pytest.mark.parametrize("source", agent_sources(), ids=lambda p: str(p.relative_to(AGENT_DIR)))
+def test_failure_text_is_bounded_centrally(source):
+    text = source.read_text()
+    offenders = [
+        f"line {index}: {line.strip()}"
+        for index, line in enumerate(text.splitlines(), 1)
+        if CLIP_SLICE.search(line)
+    ]
+    assert not offenders, (
+        f"{source}: failure text clipped with a slice literal:\n  "
+        + "\n  ".join(offenders)
+        + "\nUse env.reason(...) — it bounds on a word boundary, marks what it "
+          "dropped, and applies one limit everywhere (SPEC section 2, rule 7)."
+    )

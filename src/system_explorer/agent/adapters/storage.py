@@ -380,7 +380,7 @@ class Adapter:
                 self._zfs_probe = (True, "")
             except Exception as exc:  # noqa: BLE001 - the reason is the fact
                 self._zfs_probe = (False,
-                                   f"zpool is installed but unusable: {str(exc)[:140]}")
+                                   env.reason(f"zpool is installed but unusable: {exc}"))
         return self._zfs_probe
 
     async def capability(self) -> dict:
@@ -674,10 +674,10 @@ class Adapter:
             data = await anyio.to_thread.run_sync(_zfs_snapshots, dataset, recursive)
         except ValueError as exc:
             return env.observation(self.subsystem, obj, src, {"Input": arg},
-                                   status="error", errors=[str(exc)])
+                                   status="error", errors=[env.reason(exc)])
         except Exception as exc:  # noqa: BLE001 - the failure is the answer
             return env.observation(self.subsystem, obj, src, {"Input": arg},
-                                   status="error", errors=[str(exc)[:200]])
+                                   status="error", errors=[env.reason(exc)])
 
         entries = []
         for full_name, snap in (data.get("datasets") or {}).items():
