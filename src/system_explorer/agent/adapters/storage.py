@@ -28,7 +28,13 @@ from ..rules import worst_level
 from ..rules.storage import (MD_ACTIVE_SYNC, array_opinions, dataset_opinions,
                              mount_opinions, pool_opinions)
 
-LSBLK_COLUMNS = "NAME,KNAME,TYPE,SIZE,FSTYPE,MOUNTPOINTS,MODEL,SERIAL,ROTA,RM"
+# TRAN is the transport — virtio, sata, sas, nvme, usb — and it was missing,
+# which mattered more than it looks. The hardware subsystem is organised BY
+# transport (scsi, nvme), so a virtio disk appears in no hardware collection at
+# all: on a VM the only place the guest's own disk is visible is here, and here
+# it did not even say what kind of disk it was. Asked directly by an operator
+# looking at a guest that showed block devices and no physical disks.
+LSBLK_COLUMNS = "NAME,KNAME,TYPE,SIZE,FSTYPE,MOUNTPOINTS,MODEL,SERIAL,ROTA,RM,TRAN"
 
 # zpool/zfs normalise short column names in -j output (alloc -> allocated,
 # avail -> available); the value() helpers below use the long keys.
@@ -425,6 +431,11 @@ class Adapter:
                 "Mountpoints": [m for m in node.get("mountpoints", []) if m],
                 "Model": node.get("model"), "Serial": node.get("serial"),
                 "Rotational": node.get("rota"), "Removable": node.get("rm"),
+                # Only lsblk reports this for every transport, which makes this
+                # collection the one honest answer to "what disks does this host
+                # have" — hardware/scsi and hardware/nvme are transport-specific
+                # by construction and a virtio disk belongs to neither.
+                "Transport": node.get("tran"),
             }
             item = env.item_summary(f"block-device:{name}", node.get("type") or "disk", name, facts)
             item["depth"] = depth

@@ -1,18 +1,21 @@
-"""nix subsystem: the deployment itself — generations and installed packages.
+"""nix subsystem: the deployment itself — generations of the system closure.
 
-Split out of `system` because these two collections are the only ones in the
-product that do not exist on every host it targets, and mixing them in made
-both halves worse. On a Debian host they showed up as two odd declining rows
-inside an otherwise universal subsystem; on a NixOS host they sat beside
-identity and time as if a package inventory were the same kind of thing as a
-hostname. Now a non-Nix host declines one whole subsystem with one reason, and
-the operator UI — whose navigation is generated from /v1/capabilities — gets
-the deployment in its own section for free.
+Split out of `system` because a generation is the one thing here that does not
+exist on every host this agent targets, and mixing it in made both halves
+worse: on Debian it was an odd declining row inside an otherwise universal
+subsystem, and on NixOS it sat beside identity and time as if it were the same
+kind of fact as a hostname. A non-Nix host now declines one subsystem with one
+reason, and the operator UI — whose navigation is generated from
+/v1/capabilities — gets the deployment in its own section for free.
 
-No subprocess: generations come from the profile link farm and the closure
-metadata files, packages from the /run/current-system/sw link farm. Both are
-pure filesystem reads (agent/nixos.py holds the primitives, shared with the
-`system` adapter's identity and boot-pointer facts).
+Packages started here too and moved on the same day, to their own subsystem:
+"what is installed" is a question dpkg and rpm answer as readily as the store,
+so keeping it Nix-shaped left non-Nix hosts with no inventory at all. What
+remains is genuinely Nix-only.
+
+No subprocess: the profile link farm and the metadata files every closure
+carries. agent/nixos.py holds the primitives, shared with the `system`
+adapter's identity and boot-pointer facts.
 """
 
 from __future__ import annotations
@@ -30,25 +33,19 @@ from ..rules.nix import generation_opinions
 GENERATIONS_REFERENCE = ["nixos-rebuild list-generations",
                          "ls -l /nix/var/nix/profiles",
                          "readlink -f /run/current-system /run/booted-system"]
-PACKAGES_REFERENCE = ["ls /run/current-system/sw/bin",
-                      "readlink /run/current-system/sw/bin/<command>"]
-
 STORE_RE = re.compile(r"(/nix/store/[a-z0-9]{32}-([^/]+))")
 # name-version split: the version starts at the first dash followed by a digit.
 NAME_VERSION_RE = re.compile(r"(.+?)-([0-9].*)")
-
-SW_SUBDIRS = ("bin", "sbin", "lib", "libexec", "share", "etc")
 
 
 class Adapter:
     subsystem = "nix"
 
     def collections(self) -> list[str]:
-        # Static, always both. An availability-dependent collections() is what
-        # made storage/pools 404 with a reason available and omitted pools from
-        # the roll-up entirely (nix/tests/module.nix caught it); the route gate
-        # reads this list and unavailability belongs in capability() alone.
-        return ["generations", "packages"]
+        # generations only. Packages moved to their own subsystem: the question
+        # "what is installed" is universal and dpkg and rpm answer it as readily
+        # as the store, whereas a generation has no equivalent anywhere else.
+        return ["generations"]
 
     async def capability(self) -> dict:
         """Unavailable as a whole off NixOS, with the path that proves it.
@@ -64,8 +61,6 @@ class Adapter:
         unavailable: dict[str, str] = {}
         if not nx.PROFILES.is_dir():
             unavailable["generations"] = f"{nx.PROFILES} does not exist"
-        if not os.path.isdir(nx.SW):
-            unavailable["packages"] = f"{nx.SW} does not exist"
         return {"available": True,
                 "collections": [c for c in self.collections() if c not in unavailable],
                 "unavailable_collections": unavailable}
@@ -102,65 +97,17 @@ class Adapter:
                     healthy="ok" if facts["Current"] else "info")))
         return items
 
-    # ── packages ─────────────────────────────────────────────
-    @staticmethod
-    def _package_paths() -> dict[str, str]:
-        """name-version → store path for everything linked into the system
-        environment. Two scandir levels: buildEnv links packages directly or,
-        on collision, merges one directory level and links inside it."""
-        seen: dict[str, str] = {}
-
-        def record(link_target: str) -> None:
-            match = STORE_RE.match(link_target)
-            if match:
-                seen.setdefault(match.group(2), match.group(1))
-
-        for sub in SW_SUBDIRS:
-            root = os.path.join(nx.SW, sub)
-            try:
-                level_one = list(os.scandir(root))
-            except OSError:
-                continue
-            for entry in level_one:
-                if entry.is_symlink():
-                    record(os.readlink(entry.path))
-                elif entry.is_dir(follow_symlinks=False):
-                    try:
-                        for nested in os.scandir(entry.path):
-                            if nested.is_symlink():
-                                record(os.readlink(nested.path))
-                    except OSError:
-                        continue
-        return seen
-
-    def _package_items(self) -> list[dict]:
-        items = []
-        for name_version, store_path in sorted(self._package_paths().items()):
-            match = NAME_VERSION_RE.match(name_version)
-            facts = {
-                "Name": match.group(1) if match else name_version,
-                "Version": match.group(2) if match else None,
-                "StorePath": store_path,
-            }
-            items.append(env.item_summary(
-                f"package:{name_version}", "package", name_version, facts))
-        items.sort(key=lambda i: (i["facts"]["Name"], i["native_id"]))
-        return items
-
     # ── plumbing ─────────────────────────────────────────────
     def _source(self, collection: str) -> dict:
-        if collection == "generations":
-            return env.source("nixos-fs", "/nix/var/nix/profiles (filesystem)",
-                              GENERATIONS_REFERENCE)
-        return env.source("nixos-fs", "/run/current-system/sw (filesystem)",
-                          PACKAGES_REFERENCE)
+        if collection != "generations":
+            raise env.UnknownCollection(collection)
+        return env.source("nixos-fs", "/nix/var/nix/profiles (filesystem)",
+                          GENERATIONS_REFERENCE)
 
     def _items(self, collection: str) -> list[dict]:
-        if collection == "generations":
-            return self._generation_items()
-        if collection == "packages":
-            return self._package_items()
-        raise env.UnknownCollection(collection)
+        if collection != "generations":
+            raise env.UnknownCollection(collection)
+        return self._generation_items()
 
     async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:
         # The link-farm and profile scandir walks are synchronous filesystem
@@ -174,9 +121,8 @@ class Adapter:
                                    applied, next_cursor, requested_limit=limit,
                                    total=total, filters=query or None)
 
-    # Evaluators per collection (agent/rules/nix.py), shared verbatim with the
-    # summary path — rows and opened objects cannot disagree. packages carry no
-    # verdict: an inventory has no health.
+    # The evaluator (agent/rules/nix.py), shared verbatim with the summary path
+    # so rows and opened objects cannot disagree.
     _RULES = {"generations": generation_opinions}
 
     async def get_object(self, collection: str, object_id: str) -> dict:
@@ -210,27 +156,5 @@ class Adapter:
                     "configuration-revision": nx.read(f"{target}/configuration-revision"),
                     "kernel": nx.realpath(f"{target}/kernel"),
                 },
-            }
-        if collection == "packages":
-            name_version = object_id.removeprefix("package:")
-            store_path = self._package_paths().get(name_version)
-            if store_path is None:
-                raise env.UnknownObject(object_id)
-            links = {}
-            for sub in SW_SUBDIRS:
-                root = os.path.join(nx.SW, sub)
-                try:
-                    for entry in os.scandir(root):
-                        if entry.is_symlink():
-                            target = os.readlink(entry.path)
-                            if target.startswith(store_path + "/"):
-                                links[f"{sub}/{entry.name}"] = target
-                except OSError:
-                    continue
-            return {
-                "object_id": object_id,
-                "captured_at": env.utc_now(),
-                "interface": "/run/current-system/sw (filesystem)",
-                "payload": {"store_path": store_path, "links": links},
             }
         raise env.UnknownCollection(collection)

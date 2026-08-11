@@ -83,6 +83,12 @@ SUBPROCESS_ALLOWLIST: dict[str, str] = {
     # iproute2's bridge(8): the forwarding database is what attributes a veth
     # to the container behind it, and it speaks JSON.
     "bridge": "-j",
+    # Neither dpkg nor rpm has a --json, but both take a FORMAT STRING supplied
+    # by the caller — which is the opposite of parsing human output: the fields
+    # and their order are ours and cannot drift under a locale or a version.
+    # That is what is allow-listed here, not the tool.
+    "dpkg-query": "-f",
+    "rpm": "--qf",
 }
 
 

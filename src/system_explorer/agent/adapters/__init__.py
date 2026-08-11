@@ -9,7 +9,8 @@ because errors are observations.
 
 from __future__ import annotations
 
-from . import docker, hardware, logs, network, nix, storage, system, units, vms
+from . import (docker, hardware, logs, network, nix, packages, storage,
+               system, units, vms)
 
 # Subsystems declared in SPEC section 4 with no adapter yet. Absence is a
 # capability statement, not an error — reported with a reason, never faked
@@ -22,6 +23,7 @@ def build_adapters() -> dict:
     adapters = [
         system.Adapter(),
         nix.Adapter(),
+        packages.Adapter(),
         hardware.Adapter(),
         units.Adapter(),
         logs.Adapter(),
