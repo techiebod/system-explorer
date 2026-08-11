@@ -390,6 +390,20 @@ CASES = [
      {"SmartSnapshotAt": "2026-08-09T11:00:00Z",
       "SmartSnapshotAgeSeconds": 300, "SmartOverallPassed": True,
       "SmartPercentUsed": 3}, set()),
+    # link_opinions: a link that trained below capability. Both numbers must be
+    # present, which on a healthy SATA port they are not — hw_sata_spd_limit
+    # reads "<unknown>" — so the common case is silence.
+    ("link-at-full-rate-quiet", hardware.link_opinions,
+     {"LinkSpeed": "6.0 Gbit", "LinkSpeedMax": "6.0 Gbit"}, set()),
+    ("link-negotiated-below-max", hardware.link_opinions,
+     {"LinkSpeed": "1.5 Gbps", "LinkSpeedMax": "6.0 Gbps"},
+     {("link-degraded", "warn")}),
+    ("link-speed-alone-is-not-a-verdict", hardware.link_opinions,
+     {"LinkSpeed": "6.0 Gbps"}, set()),
+    ("pcie-width-below-max", hardware.link_opinions,
+     {"LinkSpeed": "8.0 GT/s PCIe", "LinkSpeedMax": "8.0 GT/s PCIe",
+      "LinkWidth": "2", "LinkWidthMax": "4"},
+     {("link-width-degraded", "warn")}),
     ("scsi-disk-offline", hardware.scsi_disk_opinions,
      {"State": "offline"}, {("device-state", "warn")}),
     ("scsi-disk-healthy", hardware.scsi_disk_opinions,

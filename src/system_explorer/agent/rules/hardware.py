@@ -157,6 +157,35 @@ def _human_age(seconds: int) -> str:
     return f"{seconds // 86400}d{(seconds % 86400) // 3600}h"
 
 
+def link_opinions(facts: dict) -> list[dict]:
+    """A link that trained below what it is capable of.
+
+    Presence-driven twice over: the facts exist only where the kernel
+    establishes both numbers, which on SATA it usually does not (hw_sata_spd_limit
+    reads "<unknown>" on a healthy port), and the comparison is a plain string
+    inequality because these are the kernel's own labels — "6.0 Gbit", "8.0 GT/s
+    PCIe" — and inventing a parser to rank them would be inventing precision.
+
+    Worth a warn rather than silence because nothing else here shows it: a 6 Gbps
+    drive at 1.5 Gbps, or an NVMe at x2 of a possible x4, passes every health
+    check while delivering a fraction of its bandwidth.
+    """
+    opinions: list[dict] = []
+    speed, speed_max = facts.get("LinkSpeed"), facts.get("LinkSpeedMax")
+    if speed and speed_max and speed != speed_max:
+        opinions.append(env.opinion(
+            "link-degraded", "warn",
+            f"Link negotiated {speed}, below this device's {speed_max}.",
+            ["LinkSpeed", "LinkSpeedMax"]))
+    width, width_max = facts.get("LinkWidth"), facts.get("LinkWidthMax")
+    if width and width_max and width != width_max:
+        opinions.append(env.opinion(
+            "link-width-degraded", "warn",
+            f"PCIe link came up at x{width}, below this device's x{width_max}.",
+            ["LinkWidth", "LinkWidthMax"]))
+    return opinions
+
+
 def scsi_disk_opinions(facts: dict) -> list[dict]:
     """scsi disks: the kernel device state (offline, blocked, …) plus SMART.
     Only disks carry the running expectation — hosts and expanders are
@@ -168,7 +197,7 @@ def scsi_disk_opinions(facts: dict) -> list[dict]:
         opinions.append(env.opinion(
             "device-state", "warn",
             f"Device state is {state}, not running.", ["State"]))
-    return opinions + smart_opinions(facts)
+    return opinions + link_opinions(facts) + smart_opinions(facts)
 
 
 def nvme_opinions(facts: dict) -> list[dict]:
@@ -179,4 +208,4 @@ def nvme_opinions(facts: dict) -> list[dict]:
         opinions.append(env.opinion(
             "controller-state", "warn",
             f"Controller state is {state}, not live.", ["State"]))
-    return opinions + smart_opinions(facts)
+    return opinions + link_opinions(facts) + smart_opinions(facts)

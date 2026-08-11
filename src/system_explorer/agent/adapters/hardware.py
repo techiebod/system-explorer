@@ -51,6 +51,9 @@ NVME_DEVICES = "/sys/class/nvme"
 SCSI_HOSTS = "/sys/class/scsi_host"
 SCSI_DEVICES = "/sys/bus/scsi/devices"
 SAS_EXPANDERS = "/sys/class/sas_expander"
+SAS_DEVICES = "/sys/class/sas_device"
+SAS_PHYS = "/sys/class/sas_phy"
+ATA_LINKS = "/sys/class/ata_link"
 ENCLOSURES = "/sys/class/enclosure"
 BY_PATH = "/dev/disk/by-path"
 DMI = "/sys/devices/virtual/dmi/id"
@@ -189,6 +192,89 @@ def _listdir(path: str) -> list[str]:
         return sorted(os.listdir(path))
     except OSError:
         return []
+
+
+# sysfs says "<unknown>" or "Unknown" where a value is not established. Both
+# read as data if passed through, so they become absence.
+_SYSFS_UNKNOWN = {"", "<unknown>", "unknown", "Unknown", "none"}
+
+
+def _sysfs_value(raw: str | None) -> str | None:
+    value = (raw or "").strip()
+    return None if value in _SYSFS_UNKNOWN else value
+
+
+def _scsi_link_facts(scsi_id: str) -> dict:
+    """Negotiated link rate for a SCSI-attached disk, and the maximum where the
+    kernel establishes one.
+
+    Worth having because a link that trained low is a real performance fault
+    that nothing else here would show: a 6 Gbps drive at 1.5 Gbps, or a SAS phy
+    that came up at half rate, looks perfectly healthy in every other fact.
+
+    Two native sources, chosen by how the device is actually attached rather
+    than by a driver-name table. SATA: the ata port in the device's own sysfs
+    path names its link, and ata_link carries the negotiated speed. SAS: the
+    end_device names its phy, and sas_phy carries both negotiated and maximum,
+    which is what makes the comparison possible there and not on SATA.
+    """
+    segments = os.path.realpath(f"{SCSI_DEVICES}/{scsi_id}").split("/")
+
+    ata = next((seg for seg in segments if re.fullmatch(r"ata\d+", seg)), None)
+    if ata:
+        link = f"{ATA_LINKS}/link{ata[3:]}"
+        return {key: value for key, value in {
+            "LinkSpeed": _sysfs_value(_read(f"{link}/sata_spd")),
+            # Usually "<unknown>" on a healthy port, so usually absent: the
+            # kernel only fills it when something has limited the link.
+            "LinkSpeedMax": _sysfs_value(_read(f"{link}/hw_sata_spd_limit")),
+        }.items() if value}
+
+    end_device = next((seg for seg in segments if seg.startswith("end_device-")), None)
+    if end_device:
+        host = end_device.removeprefix("end_device-").split(":")[0]
+        phy_id = _sysfs_value(_read(f"{SAS_DEVICES}/{end_device}/phy_identifier"))
+        if phy_id:
+            phy = f"{SAS_PHYS}/phy-{host}:{phy_id}"
+            return {key: value for key, value in {
+                "LinkSpeed": _sysfs_value(_read(f"{phy}/negotiated_linkrate")),
+                "LinkSpeedMax": _sysfs_value(_read(f"{phy}/maximum_linkrate")),
+            }.items() if value}
+    return {}
+
+
+def _nvme_link_facts(controller: str) -> dict:
+    """PCIe link speed and width for an NVMe controller, current against
+    maximum. A drive negotiated at x2 when it can do x4 halves its bandwidth
+    and reports nothing else wrong — this is the only place that shows."""
+    base = f"{NVME_DEVICES}/{controller}/device"
+    return {key: value for key, value in {
+        "LinkSpeed": _sysfs_value(_read(f"{base}/current_link_speed")),
+        "LinkSpeedMax": _sysfs_value(_read(f"{base}/max_link_speed")),
+        "LinkWidth": _sysfs_value(_read(f"{base}/current_link_width")),
+        "LinkWidthMax": _sysfs_value(_read(f"{base}/max_link_width")),
+    }.items() if value}
+
+
+def _host_transport(base: str, driver: str | None) -> str | None:
+    """How a SCSI host actually attaches its devices, from native evidence
+    rather than a list of driver names.
+
+    The kernel presents SATA and USB storage through the SCSI subsystem, so
+    every one of these is a `scsi_host` — which left an AHCI port indistinguish-
+    able from a SAS HBA in the UI, both labelled scsi-host with nothing else to
+    go on. An ata port in the path means SATA; a host_sas_address means SAS.
+    """
+    if os.path.exists(f"{base}/host_sas_address"):
+        return "SAS"
+    if any(re.fullmatch(r"ata\d+", seg)
+           for seg in os.path.realpath(base).split("/")):
+        return "SATA"
+    if driver in ("usb-storage", "uas"):
+        return "USB"
+    if driver == "virtio_scsi":
+        return "virtio"
+    return None
 
 
 def _pci_addr_of(syspath: str) -> str | None:
@@ -580,14 +666,26 @@ class Adapter:
         for host in _listdir(SCSI_HOSTS):
             base = f"{SCSI_HOSTS}/{host}"
             pci_addr = _pci_addr_of(base)
-            facts = {"Driver": _read(f"{base}/proc_name"),
+            driver = _read(f"{base}/proc_name")
+            facts = {"Driver": driver,
                      "State": _read(f"{base}/state"),
+                     # SATA and USB storage are presented through the SCSI
+                     # subsystem, so an AHCI port and a SAS HBA were both just
+                     # "scsi-host" with nothing to tell them apart.
+                     "Transport": _host_transport(base, driver),
                      "PCIAddress": pci_addr}
             # The controller's own identity, so a host row names its silicon
             # in the shared Vendor/Model columns instead of a wall of dashes.
             if pci_addr:
                 try:
-                    props = _udev_json(f"{PCI_DEVICES}/{pci_addr}").get("properties", {})
+                    # udevadm --json=short emits a FLAT property object, not
+                    # one nested under "properties" — so reading a "properties"
+                    # key silently found nothing and every SATA host in the UI
+                    # showed a blank vendor and model, for as long as this
+                    # collection has existed. The identity was always there:
+                    # "Intel Corporation / 500 Series Chipset Family SATA
+                    # Controller (AHCI)".
+                    props = _udev_json(f"{PCI_DEVICES}/{pci_addr}")
                     facts["Vendor"] = props.get("ID_VENDOR_FROM_DATABASE")
                     facts["Model"] = props.get("ID_MODEL_FROM_DATABASE")
                 except Exception:  # noqa: BLE001 - identity is enrichment
@@ -671,6 +769,9 @@ class Adapter:
                 "ByPath": by_path.get(block or ""),
                 "SASAddress": sas_address,
             }
+            # Negotiated link rate, so a drive that trained low is visible. A
+            # link at half speed reports nothing else wrong.
+            facts.update(_scsi_link_facts(dev))
             slot = device_slots.get(dev)
             if slot:
                 facts["Enclosure"] = slot["Enclosure"]
@@ -727,6 +828,7 @@ class Adapter:
             facts = {
                 "Model": _read(f"{base}/model"),
                 "FirmwareRev": _read(f"{base}/firmware_rev"),
+                **_nvme_link_facts(ctrl),
                 "Serial": _read(f"{base}/serial"),
                 "State": _read(f"{base}/state"),
                 "Transport": _read(f"{base}/transport"),
