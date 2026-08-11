@@ -32,10 +32,47 @@ from ..rules.nix import generation_opinions
 
 GENERATIONS_REFERENCE = ["nixos-rebuild list-generations",
                          "ls -l /nix/var/nix/profiles",
-                         "readlink -f /run/current-system /run/booted-system"]
+                         "readlink -f /run/current-system /run/booted-system",
+                         f"cat /nix/var/nix/profiles/system-*-link/{nx.GENERATION_MANIFEST}",
+                         "cat $SE_DEPLOYMENT_RECEIPTS/<generation>.json"]
 STORE_RE = re.compile(r"(/nix/store/[a-z0-9]{32}-([^/]+))")
 # name-version split: the version starts at the first dash followed by a digit.
 NAME_VERSION_RE = re.compile(r"(.+?)-([0-9].*)")
+
+
+def _input_identity(entry: object) -> str | None:
+    """How an input is identified for comparison: its revision, or its content
+    hash where it has no revision (a path or tarball input has no commit)."""
+    if not isinstance(entry, dict):
+        return None
+    return entry.get("revision") or entry.get("narHash")
+
+
+def _delta_rows(older: dict, newer: dict) -> list[dict]:
+    """What changed between two generations' manifests.
+
+    Deliberately a comparison of two recorded manifests rather than a diff of two
+    closures. `nvd` and `nix store diff-closures` have no structured output, so an
+    adapter running one would be executing a reference command and parsing its
+    prose — which SPEC rule 5 forbids, and no allowlist entry could make correct.
+    Whatever built these closures already knew what went into them; reading what
+    it recorded is the honest route to the same answer.
+
+    Uniform {Kind, Name, From, To} rows so the UI renders them as one table and
+    an opinion can cite DeltaFromPrevious.<n>.Name.
+    """
+    rows: list[dict] = []
+    if older.get("revision") != newer.get("revision"):
+        rows.append({"Kind": "revision", "Name": "configuration",
+                     "From": older.get("revision"), "To": newer.get("revision")})
+    old_inputs = older.get("inputs") if isinstance(older.get("inputs"), dict) else {}
+    new_inputs = newer.get("inputs") if isinstance(newer.get("inputs"), dict) else {}
+    for name in sorted(set(old_inputs) | set(new_inputs)):
+        before = _input_identity(old_inputs.get(name))
+        after = _input_identity(new_inputs.get(name))
+        if before != after:
+            rows.append({"Kind": "input", "Name": name, "From": before, "To": after})
+    return rows
 
 
 class Adapter:
@@ -66,10 +103,71 @@ class Adapter:
                 "unavailable_collections": unavailable}
 
     # ── generations ──────────────────────────────────────────
+    def _delta_facts(self, number: int, manifest: dict,
+                     previous: int | None, manifests: dict[int, dict | None]) -> dict:
+        """What this generation changed, against the previous one still present.
+
+        "Previous" is the next generation number that has not been collected, not
+        necessarily number - 1, so it is named in a fact rather than implied — a
+        delta against generation 84 when 85 was garbage-collected is a true
+        statement about a different span than the reader would assume.
+        """
+        if previous is None:
+            return {"DeltaFromPrevious": None,
+                    "DeltaFromPreviousUnobservable":
+                        f"Generation {number} is the oldest still present on this "
+                        "host, so there is nothing here to compare it against."}
+        older = manifests.get(previous)
+        if older is None:
+            return {"ComparedWithGeneration": previous,
+                    "DeltaFromPrevious": None,
+                    "DeltaFromPreviousUnobservable":
+                        f"Generation {previous} carries no {nx.GENERATION_MANIFEST}, "
+                        "so it records nothing to compare against. Comparison begins "
+                        "at the first generation built after that file existed."}
+        return {"ComparedWithGeneration": previous,
+                "DeltaFromPrevious": _delta_rows(older, manifest)}
+
+    def _deployment_facts(self, number: int, manifest: dict,
+                          receipts_visible: bool) -> dict:
+        """How this generation came to be, where that was recorded.
+
+        Both conditions matter before claiming anything. The closure must say that
+        receipts are expected — an older generation predates the workflow, and its
+        lack of one means nothing — and this agent must be able to see them at all.
+        Without both, the facts are omitted rather than nulled, because "no receipt
+        exists" and "I cannot see receipts" are different statements and only the
+        first is about the deployment.
+        """
+        schema = manifest.get("schema")
+        expected = (bool(manifest.get("receiptsExpected"))
+                    and isinstance(schema, int)
+                    and schema >= nx.RECEIPTS_EXPECTED_SCHEMA)
+        if not (expected and receipts_visible):
+            return {}
+        receipt = nx.deployment_receipt(number)
+        if receipt is None:
+            return {"ReceiptsExpected": True, "Deployment": None}
+        activation = receipt.get("activation")
+        activation = activation if isinstance(activation, dict) else {}
+        return {"ReceiptsExpected": True,
+                "Deployment": {
+                    "Mode": activation.get("mode"),
+                    "Outcome": activation.get("outcome"),
+                    "VerifiedAt": activation.get("verified_at"),
+                    "Risks": receipt.get("risks") or [],
+                    "SourceRevision": (receipt.get("source") or {}).get("git_revision"),
+                }}
+
     def _generation_items(self) -> list[dict]:
         pointers = nx.pointers()
+        links = nx.generation_links()
+        # Read every manifest once: each generation's delta needs its neighbour's.
+        manifests = {number: nx.generation_manifest(target)
+                     for number, _, target in links}
+        receipts_visible = nx.receipts_dir() is not None
         items = []
-        for number, link, target in nx.generation_links():
+        for index, (number, link, target) in enumerate(links):
             kernel = nx.realpath(f"{target}/kernel")
             kernel_match = STORE_RE.match(kernel or "")
             revision = nx.read(f"{target}/configuration-revision")
@@ -88,8 +186,17 @@ class Adapter:
                 "Specialisations": specialisations,
                 "StorePath": target,
             }
+            # Absent on a generation that carries no manifest — which is every
+            # generation on a host whose closures are built without one, and the
+            # older generations on a host that started recently. Omitted, not
+            # nulled: "does not record this" is not "unknown" (SPEC rule 7).
+            manifest = manifests[number]
+            if manifest is not None:
+                previous = links[index + 1][0] if index + 1 < len(links) else None
+                facts.update(self._delta_facts(number, manifest, previous, manifests))
+                facts.update(self._deployment_facts(number, manifest, receipts_visible))
             # Only the running generation is positively vouched for; the rest
-            # are neutral history unless a rule (generation-pending) fires.
+            # are neutral history unless a rule fires.
             items.append(env.item_summary(
                 f"generation:{number}", "generation", str(number), facts,
                 worst_opinion_level=worst_level(
@@ -155,6 +262,8 @@ class Adapter:
                     "nixos-version": nx.read(f"{target}/nixos-version"),
                     "configuration-revision": nx.read(f"{target}/configuration-revision"),
                     "kernel": nx.realpath(f"{target}/kernel"),
+                    nx.GENERATION_MANIFEST: nx.generation_manifest(target),
+                    "deployment-receipt": nx.deployment_receipt(int(number)),
                 },
             }
         raise env.UnknownCollection(collection)

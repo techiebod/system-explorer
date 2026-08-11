@@ -57,7 +57,7 @@ const COLUMNS = {
   "storage/arrays": ["Status", "Level", "SyncPercent", "RaidDisks", "SizeBytes"],
   "storage/pools": ["State", "CapacityPercent", "ScanFunction", "Errors"],
   "storage/datasets": ["UsedBytes", "SnapshotUsedBytes", "AvailBytes", "UsePercent", "Mountpoint", "ReadOnly", "Mounted"],
-  "nix/generations": ["NixosVersion", "Kernel", "ConfigurationRevision", "Created", "Current", "Booted", "Profile"],
+  "nix/generations": ["NixosVersion", "Kernel", "ConfigurationRevision", "Changed", "Deployed", "Created", "Current", "Booted", "Profile"],
   "packages/packages": ["Name", "Version", "Manager", "Architecture", "StorePath"],
   "system/overview": ["LoadAvg1", "LoadPerCpu1", "MemUsedPercent", "MemAvailableBytes", "SwapUsedPercent", "UptimeSeconds"],
   "hardware/platform": ["ProductName", "CPUModel", "CPUs", "MemoryTotalBytes", "BiosVersion"],
@@ -97,6 +97,31 @@ const PSEUDO_COLUMNS = {
     const max = [f.LinkSpeedMax, f.LinkWidthMax ? `x${f.LinkWidthMax}` : null]
       .filter(Boolean).join(" ");
     return max && max !== now ? `${now}  (capable of ${max})` : now;
+  },
+  /* A generation's delta is a table of {Kind, Name, From, To} rows — unreadable
+     in a grid cell, and the whole point of the row is to be scanned. Count it
+     here, by kind, and render the rows themselves in the expansion. Null when
+     the generation records no manifest, so the column stays empty rather than
+     claiming "0 changes" about something never measured. */
+  Changed: (item) => {
+    const rows = item.facts.DeltaFromPrevious;
+    if (!Array.isArray(rows)) return null;
+    if (!rows.length) return "no change";
+    const counts = new Map();
+    for (const row of rows) {
+      const kind = row.Kind || "other";
+      counts.set(kind, (counts.get(kind) || 0) + 1);
+    }
+    return [...counts].map(([kind, n]) => `${n} ${kind}${n === 1 ? "" : "s"}`).join(", ");
+  },
+  /* How this generation came to be, in one cell. An expected-but-absent receipt
+     is what the deployment-unattested opinion is about, so say it plainly here
+     rather than leaving the cell blank and the dot unexplained. */
+  Deployed: (item) => {
+    const f = item.facts;
+    if (f.Deployment === undefined) return null;
+    if (f.Deployment === null) return "no receipt";
+    return [f.Deployment.Mode, f.Deployment.Outcome].filter(Boolean).join(" · ") || null;
   },
 };
 
@@ -1918,9 +1943,16 @@ function renderExpansion(colspan) {
   // otherwise-dead space to their right, and the vdev table full-width
   // below — fullness readable at a glance, per top-level vdev.
   const isPool = obs.subsystem === "storage" && obs.object.type === "pool";
+  /* Same treatment as a pool's vdevs, for the same reason: a list of rows is a
+     table, and a table squeezed into the right-hand column of a key/value grid
+     is neither. */
+  const isGeneration = obs.subsystem === "nix" && obs.object.type === "generation";
+  const deltaRows = isGeneration && Array.isArray(obs.facts.DeltaFromPrevious)
+    && obs.facts.DeltaFromPrevious.length ? obs.facts.DeltaFromPrevious : null;
   const grid = el("div", "facts");
   for (const [key, value] of Object.entries(obs.facts)) {
     if (isPool && key === "Vdevs") continue;
+    if (deltaRows && key === "DeltaFromPrevious") continue;
     const k = el("div", "k", key);
     const v = el("div", `v${value === null || value === undefined ? " null" : ""}`);
     const unit = scalarText(key, value, true);
@@ -1939,6 +1971,18 @@ function renderExpansion(colspan) {
     factsSec.appendChild(top);
   } else {
     factsSec.appendChild(grid);
+  }
+  if (deltaRows) {
+    const compared = obs.facts.ComparedWithGeneration;
+    const dh = el("h3", null, compared === undefined || compared === null
+      ? "Changed in this generation"
+      : `Changed from generation ${compared}`);
+    dh.style.marginTop = "14px";
+    factsSec.appendChild(dh);
+    const d = el("div", "v");
+    d.dataset.fact = "DeltaFromPrevious";
+    d.appendChild(renderFactValue(deltaRows));
+    factsSec.appendChild(d);
   }
   if (isPool && obs.facts.Vdevs) {
     const vh = el("h3", null, "Vdevs");

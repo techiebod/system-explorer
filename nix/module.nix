@@ -131,6 +131,28 @@ in
       '';
     };
 
+    deploymentReceipts = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "/var/lib/example/deployments";
+      description = ''
+        Directory holding one deployment receipt per system generation, named
+        <generation>.json, if the estate's deployment workflow writes them. Read
+        only: the agent reports what a receipt says about how a generation came
+        to be, and reports a generation that expects one and has none.
+
+        There is deliberately no default. An estate that keeps no receipts must
+        not have the agent inventing a path, finding nothing, and then reporting
+        the nothing as a deployment that bypassed a workflow which never existed.
+        A generation only participates at all if its own closure carries
+        se-generation.json saying receipts are expected, so enabling this cannot
+        retroactively accuse older generations.
+
+        The directory and the receipts must be readable by an unprivileged
+        process: the agent runs under DynamicUser and has no group to grant it.
+      '';
+    };
+
     extraPackages = lib.mkOption {
       type = lib.types.listOf lib.types.package;
       default = [ ];
@@ -284,7 +306,10 @@ in
           SE_ALLOWED_HOSTS = lib.concatStringsSep "," cfg.allowedHosts;
         }
         // lib.optionalAttrs (cfg.hubUrl != null) { SE_HUB_URL = cfg.hubUrl; }
-        // lib.optionalAttrs (cfg.site != null) { SE_SITE = cfg.site; };
+        // lib.optionalAttrs (cfg.site != null) { SE_SITE = cfg.site; }
+        // lib.optionalAttrs (cfg.deploymentReceipts != null) {
+          SE_DEPLOYMENT_RECEIPTS = cfg.deploymentReceipts;
+        };
 
       serviceConfig = {
         Type = "simple";

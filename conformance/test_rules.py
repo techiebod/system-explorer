@@ -540,6 +540,24 @@ CASES = [
      {"Profile": True, "Current": True}, set()),
     ("generation-old-non-profile-quiet", nix.generation_opinions,
      {"Profile": False, "Current": False}, set()),
+    ("generation-unattested", nix.generation_opinions,
+     {"Profile": True, "Current": True, "ReceiptsExpected": True,
+      "Deployment": None},
+     {("deployment-unattested", "warn")}),
+    ("generation-attested-quiet", nix.generation_opinions,
+     {"Profile": True, "Current": True, "ReceiptsExpected": True,
+      "Deployment": {"Mode": "switch", "Outcome": "VERIFIED",
+                     "VerifiedAt": "2026-08-11T13:00:00+00:00", "Risks": []}},
+     set()),
+    ("generation-deployment-failed", nix.generation_opinions,
+     {"Profile": True, "Current": True, "ReceiptsExpected": True,
+      "Deployment": {"Mode": "switch", "Outcome": "FAILED",
+                     "VerifiedAt": "2026-08-11T13:00:00+00:00", "Risks": []}},
+     {("deployment-not-verified", "warn")}),
+    # A generation from before receipts existed, or a host that keeps none, is
+    # not judged: no ReceiptsExpected fact, so the rule does not evaluate.
+    ("generation-receipts-not-expected-quiet", nix.generation_opinions,
+     {"Profile": True, "Current": True}, set()),
 ]
 
 CASE_IDS = [case[0] for case in CASES]

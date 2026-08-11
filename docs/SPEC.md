@@ -196,7 +196,7 @@ routing/firewall), not for coverage symmetry.
 | Subsystem | Collections | Acquisition | Privilege needed | First validated on |
 |---|---|---|---|---|
 | `system` | `identity`, `time`, `boot`, `overview` | hostname1 / timedate1 / timesync1 D-Bus; `/etc/machine-id`; procfs (uptime, loadavg, meminfo, pressure, ZFS arcstats) | none | any systemd host |
-| `nix` | `generations` | `/nix/var/nix/profiles` + the metadata files every system closure carries (pure filesystem reads, no subprocess) | none | NixOS only — declines as a whole subsystem with one reason elsewhere |
+| `nix` | `generations` | `/nix/var/nix/profiles` + the metadata files every system closure carries, plus optional deployment provenance (§4.1); pure filesystem reads, no subprocess | none | NixOS only — declines as a whole subsystem with one reason elsewhere |
 | `packages` | `packages` | whichever manager can answer: the `/run/current-system/sw` link farm on NixOS, else `dpkg-query -W -f` or `rpm -qa --qf` with a format string this agent supplies | none | any host with one of the three; declines with a reason where none is present |
 | `hardware` | `platform`, `pci`, `usb`, `scsi`, `nvme` | sysfs (DMI, pci/usb/nvme, scsi/sas/enclosure classes); udev hwdb via `udevadm --json=short`; `lscpu -J`; udisks2 D-Bus for SMART | none | any systemd host; scsi depth needs SAS/enclosure hardware |
 | `units` | `units` (filter by type/state) | `org.freedesktop.systemd1` ListUnits + properties | none | any systemd host |
@@ -214,6 +214,48 @@ Notes:
   now). Flow *history* is a different product and a non-goal.
 - The v0.1 `storagectl` domain is deleted; the tool does not exist. Storage
   observations come from the sources above.
+
+### 4.1 Optional deployment provenance
+
+`nix/generations` reports what changed between generations, and how each one came
+to be, from two things it reads and never computes.
+
+**`se-generation.json`, inside the closure.** Any generation may carry this file
+alongside `nixos-version`. nixpkgs knows nothing about it — whatever builds the
+closure writes it — so it is absent far more often than present, and absence
+means only that the generation does not record this.
+
+```json
+{"schema": 2, "revision": "<vcs revision>", "receiptsExpected": true,
+ "inputs": {"<name>": {"revision": "...", "narHash": "...",
+                       "lastModified": 1786089803}}}
+```
+
+Comparing two of these yields `DeltaFromPrevious`, a list of
+`{Kind, Name, From, To}` rows, plus `ComparedWithGeneration` naming which
+generation it was compared against — the previous one still *present*, which is
+not necessarily N−1 once older ones are collected.
+
+The comparison is of two recorded manifests, never of two closures. `nvd` and
+`nix store diff-closures` have no structured output, so an adapter running one
+would be executing a reference command and parsing its prose, which rule 5
+forbids and no allow-list entry could make correct. Whatever built the closures
+already knew what went into them.
+
+**Deployment receipts, outside it.** `SE_DEPLOYMENT_RECEIPTS` (module option
+`services.systemExplorer.deploymentReceipts`) names a directory of
+`<generation>.json` files describing how each generation was activated. The agent
+reads a documented subset — `activation.mode`, `activation.outcome`,
+`activation.verified_at`, `risks`, `source.git_revision` — and ignores the rest,
+so an estate is free to record more.
+
+There is no default path, and `ReceiptsExpected`/`Deployment` appear only when
+the closure says receipts are expected **and** a directory is configured. Both
+conditions are load-bearing: a generation predating the workflow, or a host that
+keeps no receipts, must not be reported as having bypassed anything. Where both
+hold and no receipt exists, `Deployment` is null and `deployment-unattested`
+fires — something activated that closure outside the workflow, and what was
+previewed or verified for it is recorded nowhere.
 
 ---
 
