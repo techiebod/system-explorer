@@ -63,7 +63,7 @@ const COLUMNS = {
   "hardware/platform": ["ProductName", "CPUModel", "CPUs", "MemoryTotalBytes", "BiosVersion"],
   "hardware/pci": ["Class", "Vendor", "Model", "Driver"],
   "hardware/usb": ["Vendor", "Product", "SpeedMbps", "USBVersion"],
-  "hardware/scsi": ["Vendor", "Transport", "Model", "SizeBytes", "State", "Block", "EnclosureSlot", "SmartTemperatureC"],
+  "hardware/scsi": ["Kind", "Vendor", "Transport", "Model", "SizeBytes", "State", "Block", "Devices", "EnclosureSlot", "SmartTemperatureC"],
   "hardware/nvme": ["Model", "FirmwareRev", "Serial", "State", "SmartTemperatureC", "Namespaces"],
   "network/links": ["OperState", "Kind", "MTU", "MACAddress", "Addresses"],
   "network/routes": ["Gateway", "Device", "Protocol", "Scope", "Family"],
@@ -73,6 +73,17 @@ const COLUMNS = {
   "network/tailscale": ["TailscaleIPs", "Online", "Relay", "CurAddr", "OS", "LastSeen"],
   "network/nft-tables": ["Family", "ChainCount", "RuleCount", "Chains"],
   "vms/domains": ["State", "IPAddresses", "MemoryMiB", "VCPUs", "Autostart"],
+};
+
+/* Columns whose value is not a fact. "Kind" is the object's own declared type
+   from the envelope, which every item has carried all along and the grid never
+   showed. It matters most where a collection is heterogeneous: hardware/scsi
+   mixes host adapters, expanders, enclosures and disks, so without this a
+   controller renders as a disk with every disk column blank — which is exactly
+   how an operator concluded the collection was broken. The facet bar could
+   already group by it; the rows could not say it. */
+const PSEUDO_COLUMNS = {
+  Kind: (item) => item.type,
 };
 
 const FACETS = {
@@ -317,8 +328,19 @@ async function loadHost() {
   state.capabilities = caps;
   banner(null);
   renderHostCard();
+  // AWAITED, unlike before. The nav hides collections the roll-up reports as
+  // honestly empty, so painting it first meant offering every collection for a
+  // moment and then withdrawing some — and a collection clicked inside that
+  // window pins itself visible (by design, so deep links keep their anchor)
+  // showing a bare table. That is what "storage/arrays is empty, feels like a
+  // regression" was: not a data regression, a nav that shrank under the
+  // pointer. One round-trip before the nav appears is the cheaper trade.
+  //
+  // A failed roll-up leaves state.status null, and renderNav then offers
+  // everything — the same fallback as before, which is right: without the
+  // roll-up the UI cannot know what is empty and must not guess.
+  await refreshStatus();
   renderNav();
-  refreshStatus();   // deliberately unawaited: badges land when the roll-up does
   return true;
 }
 
@@ -712,6 +734,30 @@ async function loadCollection(deepLinkId = null) {
   }
 }
 
+/* Why a collection has no rows. "Collection is empty." was the whole message,
+   which conflated the three things the API is careful to distinguish (SPEC §2
+   rule 7): declined with a reason, acquisition failed, and observed fine with
+   nothing there. The agent has said honest absence at three scales for a while;
+   the browser had no rendering for any of them, so an operator who landed on an
+   empty page could not tell a host with no md arrays from a broken adapter. */
+function emptyMessage() {
+  if (state.filterText || state.facet) return "Nothing matches the filter.";
+  const page = state.page;
+  const entry = state.status?.subsystems?.[state.subsystem]?.[state.collection];
+  const sub = state.capabilities?.subsystems?.[state.subsystem];
+  // A whole unavailable subsystem is the strongest statement available.
+  if (sub && sub.available === false && sub.reason)
+    return `${state.subsystem} is unavailable on this host: ${sub.reason}`;
+  // Then the collection's own decline, which the roll-up and the error envelope
+  // both carry — prefer whichever answered.
+  const declined = entry?.reason
+    || (page?.status === "error" ? (page.errors || []).join("; ") : null);
+  if (declined) return `Not collected on this host: ${declined}`;
+  if (entry?.error) return `Acquisition failed: ${entry.error}`;
+  return `No ${state.collection} exist on this host. `
+       + "The agent looked and found none — this is an answer, not a gap.";
+}
+
 /* ── workload attribution ────────────────────────────────────────────
    The kernel names virtual plumbing after itself, never after what runs on
    it: vnet4, br-ae307a67bed8, veth960eb05, docker-59286b95….scope. That cost
@@ -908,6 +954,10 @@ async function loadOverview() {
     asks.vall = api("/v1/vms/domains?limit=1");
   }
   if (has("units", "units")) asks.ufail = api("/v1/units/units?ActiveState=failed&limit=1");
+  // The stalled-unit list beside the pressure meter. Cheap because the PSI
+  // numbers already ride on the row (that was the point of putting them there),
+  // so this is one page of units rather than a walk of every object.
+  if (has("units", "units")) asks.stalled = api("/v1/units/units?limit=800");
   if (has("system", "identity") && state.ovIdentity?.host !== state.currentHost)
     asks.identity = api("/v1/system/identity");
   const keys = Object.keys(asks);
@@ -1187,12 +1237,68 @@ function renderOverview(obs, got = {}) {
     for (const [name, c] of Object.entries(f.DiskCounters || {})) {
       const rd = rate(c.ReadBytes, prev?.disk?.[name]?.ReadBytes ?? Infinity);
       const wr = rate(c.WriteBytes, prev?.disk?.[name]?.WriteBytes ?? Infinity);
-      drows.push({ name, a: rd, b: wr, sum: (rd || 0) + (wr || 0) });
+      // Busy share of the window, from the kernel's ms-doing-I/O counter. This
+      // is the number the panel was missing: throughput cannot tell a saturated
+      // disk from an idle one, because a small-random workload saturates a
+      // device at a rate a sequential one would call nothing. Host PSI said
+      // "stalled on I/O 55% of the last minute" while every device showed a few
+      // hundred KiB/s, and there was nowhere to go next.
+      const busyMs = rate(c.IoTicksMs, prev?.disk?.[name]?.IoTicksMs ?? Infinity);
+      const busy = busyMs === null ? null
+        : Math.max(0, Math.min(100, Math.round(busyMs / 10)));   // ms/s → %
+      drows.push({ name, a: rd, b: wr, busy, sum: (rd || 0) + (wr || 0) });
     }
-    drows.sort((x, y) => y.sum - x.sum);
+    // Sorted by BUSY, not by bytes: the point of having utilisation is that it
+    // ranks differently from throughput, and the saturated device is the one
+    // worth putting first.
+    drows.sort((x, y) => (y.busy ?? -1) - (x.busy ?? -1) || y.sum - x.sum);
     if (drows.length) io.appendChild(el("span", "io-head", "disk"));
-    for (const r of drows.slice(0, 4)) ioRow(r.name, "read", r.a, "write", r.b);
+    for (const r of drows.slice(0, 4)) {
+      ioRow(r.name, "read", r.a, "write", r.b);
+      if (r.busy !== null) {
+        io.appendChild(el("span", "io-name dim", ""));
+        io.appendChild(el("span", "io-verb", "busy"));
+        const cell = el("span", "io-val io-busy");
+        cell.appendChild(meter(r.busy, r.busy >= 90 ? "warn" : null));
+        cell.appendChild(el("span", "mono", `${r.busy}%`));
+        io.appendChild(cell);
+        io.appendChild(el("span", "io-verb", ""));
+        io.appendChild(el("span", "io-val", ""));
+      }
+    }
     p.appendChild(io);
+    grid.appendChild(p);
+  }
+
+  // Which units are stalling, beside the pressure that says the host is. This
+  // is the other half of the I/O diagnosis the per-unit PSI work owed: the
+  // attribution existed on the rows of units/units, but an operator staring at
+  // a host pressure meter had to know to go looking for it.
+  if (got.stalled?.items?.length) {
+    const p = el("div", "ov-panel");
+    p.appendChild(el("h3", null, "Stalling most · unit, 60s"));
+    const worst = [...got.stalled.items]
+      .filter(u => (u.facts.PsiIoFullAvg60 ?? 0) > 0)
+      .sort((a, b) => (b.facts.PsiIoFullAvg60 ?? 0) - (a.facts.PsiIoFullAvg60 ?? 0))
+      .slice(0, 5);
+    if (!worst.length) {
+      p.appendChild(el("div", "ov-sub", "no unit reports an I/O stall"));
+    } else {
+      for (const u of worst) {
+        const share = u.facts.PsiIoFullAvg60;
+        const row = el("div", "ov-row");
+        const lbl = el("a", "lbl wide", u.native_id);
+        lbl.href = hashFor("units", "units", u.id);
+        lbl.title = u.native_id;
+        row.appendChild(lbl);
+        row.appendChild(meter(share, share >= 20 ? "warn" : null));
+        row.appendChild(el("span", "val", `${share}%`));
+        p.appendChild(row);
+      }
+      p.appendChild(el("div", "ov-sub",
+        "share of the minute in which every task in the unit that had work to "
+        + "do was waiting on I/O"));
+    }
     grid.appendChild(p);
   }
   state.ovPrev = { host: state.currentHost, t: now, cpu: f.CpuTimes,
@@ -1478,8 +1584,7 @@ function renderGrid() {
   body.textContent = "";
   const items = visibleItems();
   $("grid-empty").hidden = items.length > 0 || !!state.detailObs;
-  $("grid-empty").textContent = state.filterText || state.facet
-    ? "Nothing matches the filter." : "Collection is empty.";
+  $("grid-empty").textContent = emptyMessage();
 
   const treeable = !state.sortKey && !state.filterText && !state.facet;
   const anchorId = anchorRowId();
@@ -1520,7 +1625,10 @@ function renderGrid() {
     }
     tr.appendChild(idCell);
 
-    for (const key of cols) tr.appendChild(renderCell(key, item.facts[key], item));
+    for (const key of cols) {
+      const resolve = PSEUDO_COLUMNS[key];
+      tr.appendChild(renderCell(key, resolve ? resolve(item) : item.facts[key], item));
+    }
     tr.onclick = () => {
       if (item.id === anchorRowId()) {
         collapseDetail(); stripObjectFromHash();

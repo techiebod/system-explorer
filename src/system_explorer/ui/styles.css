@@ -484,6 +484,11 @@ pre.evidence {
 }
 .owner-part:hover { color: var(--accent); }
 
+/* Device busy% sits inside an I/O grid cell: a short meter plus its number, so
+   utilisation reads as a magnitude beside throughput that reads as text. */
+.io-busy { display: flex; align-items: center; gap: 6px; }
+.io-busy .meter { flex: 1 1 auto; min-width: 40px; }
+
 /* Sparklines: a row of thin bars, session-local history of a derived rate.
    Bars rather than a line so nothing has to be interpolated between samples
    that are not evenly spaced — the poll interval is whatever the tab managed,
