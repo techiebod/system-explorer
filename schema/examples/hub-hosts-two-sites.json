@@ -1,0 +1,50 @@
+{
+  "schema": "se.hub-hosts/1",
+  "site": "site-a",
+  "observed_at": "2026-08-11T21:14:05Z",
+  "hosts": {
+    "host-a": {
+      "reachable": true,
+      "host": { "machine_id": "0123456789abcdef0123456789abcdef", "hostname": "host-a" },
+      "url": "http://localhost:8091",
+      "site": "site-a",
+      "version": "0.4.0",
+      "revision": "96cd01f"
+    },
+    "host-b": {
+      "reachable": true,
+      "host": { "machine_id": "fedcba9876543210fedcba9876543210", "hostname": "host-b" },
+      "url": "http://host-b.private:8091",
+      "site": "site-a",
+      "version": "0.4.0",
+      "revision": "142390a"
+    },
+    "host-c": {
+      "reachable": false,
+      "site": "site-a",
+      "error": "ConnectError: [Errno 111] Connection refused"
+    },
+    "host-d": {
+      "reachable": true,
+      "host": { "machine_id": "00112233445566778899aabbccddeeff", "hostname": "host-d" },
+      "url": "http://localhost:8091",
+      "site": "site-b",
+      "version": "0.4.0"
+    }
+  },
+  "sites": {
+    "site-a": { "reachable": true, "local": true, "hosts": ["host-a", "host-b", "host-c"] },
+    "site-b": {
+      "reachable": true,
+      "local": false,
+      "url": "http://hub-b.example:8090",
+      "hosts": ["host-d"]
+    },
+    "site-c": {
+      "reachable": false,
+      "local": false,
+      "url": "http://hub-c.example:8090",
+      "error": "ConnectTimeout: timed out after 4.0s"
+    }
+  }
+}

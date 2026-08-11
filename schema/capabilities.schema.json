@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "se/capabilities.v1",
+  "title": "System Explorer capability discovery",
+  "description": "What this host can answer for, and a stated reason for anything it cannot (SPEC section 2, rule 7: absence is not an error). Every consumer starts here — the UI generates its nav from this document, so a subsystem's availability decides whether it is offered at all, and the MCP list_hosts tool returns the same per configured agent. Absence is reported at two levels: a whole subsystem declines with a reason, and an available subsystem may still decline individual collections through unavailable_collections. Shared $defs are duplicated from observation.schema.json deliberately so each schema file is standalone.",
+  "type": "object",
+  "required": ["schema", "host", "observed_at", "subsystems"],
+  "properties": {
+    "schema": { "const": "se.capabilities/1" },
+    "host": { "$ref": "#/$defs/host" },
+    "observed_at": { "$ref": "#/$defs/utcTimestamp" },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Agent version. Absent from an agent predating the field; a hub reports it per host so a mid-rollout estate is visible as such rather than as inexplicably differing behaviour."
+    },
+    "revision": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Source revision the agent was built from. Absent when the build did not record one."
+    },
+    "site": {
+      "type": "object",
+      "required": ["hub_url"],
+      "description": "Where this host's site view lives, if the deployment configured one. A DISPLAY HINT the deployment supplies, never discovery: the agent does not find its hub and never talks to it, because aggregation must never be a precondition for observation (SPEC section 7, ROADMAP section 6). Absent means no hub was configured, not that none exists.",
+      "properties": {
+        "hub_url": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 }
+      }
+    },
+    "subsystems": {
+      "type": "object",
+      "description": "Subsystem name -> capability. Every subsystem the agent knows appears, including those it cannot serve; a subsystem declared in SPEC section 4 with no adapter yet appears here as unavailable with a reason rather than being silently missing.",
+      "propertyNames": { "$ref": "#/$defs/subsystemName" },
+      "additionalProperties": { "$ref": "#/$defs/subsystemCapability" }
+    }
+  },
+  "$defs": {
+    "subsystemCapability": {
+      "type": "object",
+      "required": ["available"],
+      "description": "Two invariants rather than an enumeration of shapes: an available subsystem names its collections, and an unavailable one says why.",
+      "properties": {
+        "available": { "type": "boolean" },
+        "collections": {
+          "type": "array",
+          "description": "Collections this subsystem can serve right now. Excludes anything in unavailable_collections.",
+          "items": { "$ref": "#/$defs/collectionName" }
+        },
+        "unavailable_collections": {
+          "type": "object",
+          "description": "Collection name -> why this host cannot serve it, while the subsystem as a whole works. Keys are NOT constrained to the collections array, and are not a subset of it: a collection may be advertised here that the subsystem does not otherwise list.",
+          "propertyNames": { "$ref": "#/$defs/collectionName" },
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        },
+        "manager": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The package manager this host resolves to (nix, dpkg, rpm). Emitted by the packages subsystem only; declared here because the producer profile closes what it validates, so an undeclared member fails CI."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why this subsystem cannot be served: a missing socket, an absent daemon, a failed capability probe, or no adapter yet."
+        }
+      },
+      "allOf": [
+        {
+          "description": "Available means it says what it can serve.",
+          "if": { "required": ["available"], "properties": { "available": { "const": true } } },
+          "then": { "required": ["collections"] }
+        },
+        {
+          "description": "Unavailable means it says why. An absence with no reason is the v0.1 mistake this rule exists to prevent.",
+          "if": { "required": ["available"], "properties": { "available": { "const": false } } },
+          "then": { "required": ["reason"] }
+        }
+      ]
+    },
+    "host": {
+      "type": "object",
+      "required": ["machine_id", "hostname"],
+      "properties": {
+        "machine_id": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+        "hostname": { "type": "string", "minLength": 1 }
+      }
+    },
+    "subsystemName": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "collectionName": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "utcTimestamp": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"
+    }
+  }
+}

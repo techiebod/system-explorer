@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "se/hub-hosts.v1",
+  "title": "System Explorer hub host directory",
+  "description": "Every host a site hub can reach, plus each sibling site's own local view — the estate as one document, federated exactly one hop deep. This is the hub's only aggregating route; everything else it serves is a verbatim proxy of an agent's own envelope. Reachability is data, not an error: a dark agent is a host entry saying so, and a dark sibling is a SITE entry saying so, because 'no hosts there' and 'cannot see there' are different statements and only one of them is a problem. The hub is stateless and holds no cache, so this document is what was true at observed_at and nothing older. Shared $defs are duplicated from observation.schema.json deliberately so each schema file is standalone.",
+  "type": "object",
+  "required": ["schema", "observed_at", "hosts"],
+  "properties": {
+    "schema": { "const": "se.hub-hosts/1" },
+    "site": {
+      "type": ["string", "null"],
+      "description": "This hub's own site name, or null when the deployment did not configure one. A hub without a site can still serve its agents; it cannot federate, because a sibling's entries are keyed by site."
+    },
+    "observed_at": { "$ref": "#/$defs/utcTimestamp" },
+    "hosts": {
+      "type": "object",
+      "description": "Agent name -> reachability. Includes hosts learned from siblings, carrying the site that owns them; a local host wins a name collision, because this hub can verify its own.",
+      "propertyNames": { "$ref": "#/$defs/registryName" },
+      "additionalProperties": { "$ref": "#/$defs/hostEntry" }
+    },
+    "sites": {
+      "type": "object",
+      "description": "Site name -> that site's reachability and the host names it claims. Present when this hub knows its own site; absent on a hub with neither a site nor siblings.",
+      "propertyNames": { "$ref": "#/$defs/registryName" },
+      "additionalProperties": { "$ref": "#/$defs/siteEntry" }
+    }
+  },
+  "$defs": {
+    "hostEntry": {
+      "type": "object",
+      "required": ["reachable"],
+      "description": "Reachable means the agent answered /health and can be dialled at url; unreachable means it did not, and says what went wrong.",
+      "properties": {
+        "reachable": { "type": "boolean" },
+        "host": {
+          "$ref": "#/$defs/host",
+          "description": "The agent's own identity as it reported it. Absent when the agent answered without identifying itself — which is a different statement from an agent that could not be reached at all."
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Where this hub dials the agent. SITE-INTERNAL: a URL from one site's hub is not necessarily dialable from another, which is why a cross-site consumer goes through the owning hub's proxy routes rather than dialling agents directly."
+        },
+        "site": { "type": ["string", "null"] },
+        "version": { "type": "string", "minLength": 1 },
+        "revision": { "type": "string", "minLength": 1 },
+        "error": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why the agent could not be reached, bounded by system_explorer.text.one_line."
+        }
+      },
+      "allOf": [
+        {
+          "description": "A reachable agent names where it was reached.",
+          "if": { "required": ["reachable"], "properties": { "reachable": { "const": true } } },
+          "then": { "required": ["url"] }
+        },
+        {
+          "description": "An unreachable agent says why. Silence would read as an empty site.",
+          "if": { "required": ["reachable"], "properties": { "reachable": { "const": false } } },
+          "then": { "required": ["error"] }
+        }
+      ]
+    },
+    "siteEntry": {
+      "type": "object",
+      "required": ["reachable", "local"],
+      "description": "local is this hub's own site, learned first-hand; a non-local site was asked for its own local view with ?local=1, which is what makes federation exactly one hop deep and cannot be followed by another hop.",
+      "properties": {
+        "reachable": { "type": "boolean" },
+        "local": { "type": "boolean" },
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The sibling hub. Absent on the local site, which needs no URL to reach itself."
+        },
+        "hosts": {
+          "type": "array",
+          "description": "The host names this site claims, sorted. Names only — their entries live in the top-level hosts map.",
+          "items": { "$ref": "#/$defs/registryName" }
+        },
+        "error": { "type": "string", "minLength": 1 }
+      },
+      "allOf": [
+        {
+          "description": "A reachable site contributed its host names, even if that list is empty.",
+          "if": { "required": ["reachable"], "properties": { "reachable": { "const": true } } },
+          "then": { "required": ["hosts"] }
+        },
+        {
+          "description": "A dark site says why, and is reported as a site rather than silently contributing nothing.",
+          "if": { "required": ["reachable"], "properties": { "reachable": { "const": false } } },
+          "then": { "required": ["url", "error"] }
+        }
+      ]
+    },
+    "host": {
+      "type": "object",
+      "required": ["machine_id", "hostname"],
+      "properties": {
+        "machine_id": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+        "hostname": { "type": "string", "minLength": 1 }
+      }
+    },
+    "registryName": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+      "description": "An operator-chosen name from SE_HUB_AGENTS / SE_HUB_SIBLINGS, not a native identifier."
+    },
+    "utcTimestamp": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "schema": "se.capabilities/1",
+  "host": { "machine_id": "0123456789abcdef0123456789abcdef", "hostname": "host-a" },
+  "observed_at": "2026-08-11T21:14:03Z",
+  "version": "0.4.0",
+  "revision": "96cd01f",
+  "site": { "hub_url": "http://hub-a:8090/", "name": "site-a" },
+  "subsystems": {
+    "system": { "available": true, "collections": ["identity", "time", "boot", "overview"] },
+    "units": { "available": true, "collections": ["units"] },
+    "hardware": {
+      "available": true,
+      "collections": ["platform", "pci", "usb", "scsi"],
+      "unavailable_collections": { "nvme": "/sys/class/nvme does not exist (no NVMe controllers)" }
+    },
+    "network": {
+      "available": true,
+      "collections": ["links", "routes", "resolver", "lookups"],
+      "unavailable_collections": {
+        "nft-tables": "nft is not available (grantNetAdmin off)",
+        "conntrack-summary": "conntrack accounting is not enabled"
+      }
+    },
+    "packages": { "available": true, "collections": ["packages"], "manager": "dpkg" },
+    "nix": { "available": false, "reason": "not a NixOS host (/run/current-system is absent)" },
+    "docker": { "available": false, "reason": "no docker socket at /var/run/docker.sock" },
+    "vms": { "available": false, "reason": "libvirt-python is not installed (the [vms] extra)" },
+    "storage": {
+      "available": false,
+      "reason": "capability discovery failed: TimeoutError: zpool did not answer in 10s"
+    }
+  }
+}

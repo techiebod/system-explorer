@@ -127,11 +127,14 @@ async def _local_hosts() -> dict:
             response = await _client.get(f"{base}/health", timeout=3.0)
             response.raise_for_status()
             body = response.json()
-            entry = {"reachable": True, "host": body.get("host"), "url": base,
-                     "site": SITE}
-            # Version and revision per host, so a mid-rollout estate is visible
-            # as such rather than as inexplicably differing behaviour.
-            for key in ("version", "revision"):
+            entry = {"reachable": True, "url": base, "site": SITE}
+            # Identity, version and revision per host — the last two so a
+            # mid-rollout estate is visible as such rather than as
+            # inexplicably differing behaviour. All three only when the agent
+            # actually reported them: an agent that answered without naming
+            # itself is a different statement from one that could not be
+            # reached, and `host: null` says neither of them clearly.
+            for key in ("host", "version", "revision"):
                 if body.get(key):
                     entry[key] = body[key]
             return name, entry
