@@ -61,6 +61,11 @@ FACT_FIELDS = {
     "_PID": "PID",
 }
 
+# Fact name back to journald field, so a fact filter can become a journalctl
+# match and be applied AT THE SOURCE. Derived rather than written twice: a new
+# entry in FACT_FIELDS becomes filterable for free, and the two cannot drift.
+FIELD_BY_FACT = {fact: field for field, fact in FACT_FIELDS.items()}
+
 # since= must be resolvable to an absolute floor HERE, because journalctl
 # applies --since only on the first page and a bound that does not survive
 # pagination is a lie.
@@ -201,6 +206,28 @@ class Adapter:
             args += ["-u", native["unit"]]
         if "priority" in native:
             args += ["-p", native["priority"]]
+
+        # Fact filters become journalctl FIELD=value matches, which is the only
+        # way they can mean anything here. They used to be applied client-side to
+        # the page that had already been fetched — so a filter for one container
+        # read the N newest entries in the whole journal, kept the ones that
+        # happened to match, and almost always returned NOTHING while reporting
+        # status ok and echoing the filter back as though it had been applied.
+        # The most useful query an operator has ("show me this container's logs")
+        # silently answered empty. Same shape as the generations lie: a confident
+        # clean answer to a question that was never asked.
+        #
+        # journalctl ANDs matches on different fields and ORs them on the same
+        # field, which is exactly fact-filter semantics for the single-value case
+        # here. Matches also let it SEEK rather than scan.
+        pushed = {}
+        for key, value in query.items():
+            if key in native:
+                continue
+            field = FIELD_BY_FACT.get(key)
+            if field:
+                pushed[key] = value
+                args.append(f"{field}={value}")
         src = env.source("journal-json", "systemd-journal", REFERENCE,
                          method="journalctl -o json")
         floor_usec, page_cursor = _decode_cursor(cursor)
@@ -253,9 +280,20 @@ class Adapter:
         repeats = Counter(_repeat_identity(r) for r in records)
         items = [_entry_item(r, repeats, len(records)) for r in records]
         notes.append(REPEAT_WINDOW_NOTE)
-        leftover = {k: v for k, v in query.items() if k not in native}
+        # Anything neither journalctl nor a known field can carry. Refused
+        # rather than quietly applied to one page, because a filter that only
+        # searches the newest N entries is the lie this pushdown just removed.
+        leftover = {k: v for k, v in query.items()
+                    if k not in native and k not in pushed}
         if leftover:
-            items = env.apply_fact_filters(items, leftover)
+            return env.collection_page(
+                self.subsystem, collection, src, [], applied, None,
+                requested_limit=limit, filters=query or None, status="error",
+                errors=[f"cannot filter the journal by {sorted(leftover)}: only "
+                        "journald's own fields can be matched at the source, and "
+                        "filtering one page client-side would search just the "
+                        f"newest {applied} entries. Filterable: "
+                        f"{sorted(FIELD_BY_FACT)}, plus unit, priority and since"])
 
         next_cursor = (_encode_cursor(floor_usec, records[-1]["__CURSOR"])
                        if full_page and records and not exhausted else None)
