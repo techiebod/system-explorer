@@ -258,10 +258,23 @@ class Adapter:
         else:
             containers = raw.get("Containers") or {}
             bridge = _bridge_interface(raw)
+            # Each attachment's MAC, which is the other half of naming a veth:
+            # the bridge learns this address on the port the container is behind
+            # (network adapter, PeerMACAddresses), so the two join. Only the
+            # inspect payload carries it — /networks omits Containers entirely,
+            # and /containers/json returns an EMPTY MacAddress for any container
+            # attached to more than one network, so neither list endpoint can
+            # stand in for this one.
+            endpoints = [
+                {"Name": c.get("Name"), "MACAddress": c.get("MacAddress") or None,
+                 "IPv4Address": c.get("IPv4Address") or None}
+                for c in containers.values() if c.get("Name")
+            ]
             facts = {"Driver": raw.get("Driver"), "Scope": raw.get("Scope"),
                      "Internal": raw.get("Internal"), "AttachedContainers": len(containers),
                      "BridgeInterface": bridge,
-                     "ComposeProject": (raw.get("Labels") or {}).get(COMPOSE_PROJECT)}
+                     "ComposeProject": (raw.get("Labels") or {}).get(COMPOSE_PROJECT),
+                     "ContainerEndpoints": sorted(endpoints, key=lambda e: e["Name"])}
             opinions = []
             relationships = [env.rel("attached-to", "in", f"container:{c['Name']}")
                              for c in containers.values() if c.get("Name")]

@@ -131,6 +131,20 @@ async def health() -> dict:
     return {"status": "ok", "host": env.HOST, "version": VERSION}
 
 
+# Where this host's site view lives, if the operator configured one. The agent
+# does not discover it and never talks to it: aggregation must never be a
+# precondition for observation (SPEC §7, ROADMAP §6), so this is a display
+# hint the deployment supplies, not a dependency.
+#
+# It exists because a whole deployed capability turned out to be invisible. An
+# operator running four hosts behind two hubs asked what had happened to the
+# host switcher — while browsing an agent directly, where by construction
+# there is one host and no switcher. Nothing was broken; nothing said the
+# site view existed.
+HUB_URL = os.environ.get("SE_HUB_URL") or None
+SITE = os.environ.get("SE_SITE") or None
+
+
 @app.get("/v1/capabilities")
 async def capabilities() -> dict:
     subsystems: dict = {}
@@ -142,13 +156,19 @@ async def capabilities() -> dict:
                 f"capability discovery failed: {type(exc).__name__}: {exc}")}
     for name, reason in PLANNED.items():
         subsystems[name] = {"available": False, "reason": reason}
-    return {
+    out = {
         "schema": "se.capabilities/1",
         "host": env.HOST,
         "observed_at": env.utc_now(),
         "version": VERSION,
         "subsystems": subsystems,
     }
+    # Additive and optional (SPEC §5.1): a consumer that has never heard of a
+    # site is unaffected, and an agent with no hub configured says nothing
+    # rather than claiming it stands alone.
+    if HUB_URL:
+        out["site"] = {"hub_url": HUB_URL, **({"name": SITE} if SITE else {})}
+    return out
 
 
 # Collections whose contents have no honest current health to roll up,

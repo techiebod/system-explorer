@@ -96,6 +96,49 @@ def _ip_json(args: list[str]) -> list:
     return json.loads(proc.stdout or "[]")
 
 
+def _fdb_json() -> list:
+    proc = subprocess.run(["bridge", "-j", "fdb", "show"], capture_output=True,
+                          text=True, timeout=10, check=True)
+    return json.loads(proc.stdout or "[]")
+
+
+def _peer_macs_by_port() -> dict[str, list[str]]:
+    """Learned unicast MACs per bridge port, from the forwarding database.
+
+    This is what makes a veth attributable. A container's host-side veth is
+    named randomly by libnetwork and carries its OWN MAC, not the container's,
+    so nothing about the interface identifies the workload. But the bridge
+    learns the container's MAC on the port it arrived through, and Docker
+    reports that same MAC per attached container — so the fdb is the join, and
+    it needs no privilege and no netns entry.
+
+    Deliberately excluded: `self` and `permanent` entries (the bridge's and
+    each port's own addresses, which would attribute a port to itself) and
+    group addresses, identified by the multicast bit in the first octet.
+
+    The table is LEARNED and ages out, so a container that has sent nothing
+    recently simply has no entry. That is why the caller must treat a missing
+    MAC as "cannot say" and fall back to naming the network — an absent entry
+    is silence, not evidence that nothing is there.
+    """
+    by_port: dict[str, list[str]] = {}
+    for entry in _fdb_json():
+        port, mac = entry.get("ifname"), entry.get("mac")
+        master = entry.get("master")
+        if not port or not mac or not master or port == master:
+            continue
+        flags = entry.get("flags") or []
+        if "self" in flags or entry.get("state") == "permanent":
+            continue
+        try:
+            if int(mac.split(":")[0], 16) & 1:      # group/multicast address
+                continue
+        except ValueError:
+            continue
+        by_port.setdefault(port, []).append(mac)
+    return by_port
+
+
 def _lldp_json() -> dict:
     proc = subprocess.run(["networkctl", "lldp", "--json=short"], capture_output=True,
                           text=True, timeout=10, check=True)
@@ -262,6 +305,13 @@ class Adapter:
     async def _link_items(self) -> list[dict]:
         raw = await anyio.to_thread.run_sync(_ip_json, ["-d", "addr", "show"])
         lldp = await self._lldp_by_link()
+        # Learned MACs per bridge port. A failure here must not cost the whole
+        # links collection: attribution is an enrichment, and an interface list
+        # that works is worth more than one that is complete or nothing.
+        try:
+            peer_macs = await anyio.to_thread.run_sync(_peer_macs_by_port)
+        except Exception:  # noqa: BLE001 - no bridge(8), no bridges, no matter
+            peer_macs = {}
         # Enslavement count per master, from the same payload: a bridge with
         # zero members is down by design (the kernel only raises a bridge
         # when a member port is up), and the empty-bridge rule keys on it.
@@ -283,6 +333,13 @@ class Adapter:
             }
             if facts["Kind"] == "bridge":
                 facts["BridgeMembers"] = member_counts.get(name, 0)
+            # The MAC(s) the bridge has learned behind this port — the join key
+            # that names the container on the other end of a veth. Omitted
+            # rather than nulled where nothing has been learned: absence here
+            # means the port has been quiet, which is not a fact about what is
+            # attached (SPEC §2 rule 7).
+            if peer_macs.get(name):
+                facts["PeerMACAddresses"] = sorted(peer_macs[name])
             if lldp.get(name):
                 facts["LLDPNeighbors"] = lldp[name]
             # "up" is the only positively-healthy operstate. The other quiet

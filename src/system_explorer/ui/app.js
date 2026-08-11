@@ -639,27 +639,55 @@ async function loadOwners() {
       // A tap belongs to exactly one domain — the strongest attribution here.
       for (const d of doms?.items || [])
         for (const tap of d.facts.HostTaps || [])
-          owners[tap] = { label: d.native_id, href: hashFor("vms", "domains", d.id) };
+          owners[tap] = { parts: [{ label: d.native_id,
+                                    href: hashFor("vms", "domains", d.id) }] };
+      // A bridge is named by its network and nothing else. It used to carry
+      // the compose project too ("proxy · arr"), which read as two unlabelled
+      // words with no way to tell which was which and only one of them
+      // clickable. The project is a column on docker/networks instead.
       const byBridge = {};
       for (const n of nets?.items || []) {
         const bridge = n.facts.BridgeInterface;
         if (!bridge) continue;
-        byBridge[bridge] = {
-          label: n.facts.ComposeProject
-            ? `${n.native_id} · ${n.facts.ComposeProject}` : n.native_id,
-          href: hashFor("docker", "networks", n.id),
-        };
-        owners[bridge] = byBridge[bridge];
+        byBridge[bridge] = { label: n.native_id, id: n.id };
+        owners[bridge] = { parts: [{ label: n.native_id,
+                                     href: hashFor("docker", "networks", n.id) }] };
       }
-      // veth is the honest exception. Naming the container behind one means
-      // matching the peer ifindex inside the container's netns, which needs
-      // privilege this agent does not have by design. So a veth is attributed
-      // to the network it is bridged onto — "on proxy · arr" — and claims
-      // nothing about which container, because it cannot know.
+      // veth: name the container, not just the network. The interface itself
+      // gives nothing away — libnetwork names it randomly and it wears its own
+      // MAC — but the bridge learns the CONTAINER's MAC on this port, and
+      // Docker reports that same MAC per attachment. Only the network inspect
+      // payload has it, so those are fetched per bridge-backed network (three
+      // on a real host, not one per container).
+      const bridgesInUse = new Set(rows.filter(r => r.facts.Kind === "veth")
+                                       .map(r => r.facts.Master));
+      const containerByMac = {};
+      const inspected = await Promise.all(
+        [...bridgesInUse].filter(b => byBridge[b]).map(b =>
+          api(`/v1/docker/networks/${encodeURIComponent(byBridge[b].id)}`)
+            .catch(() => null)));
+      for (const obs of inspected)
+        for (const ep of obs?.facts?.ContainerEndpoints || [])
+          if (ep.MACAddress) containerByMac[ep.MACAddress.toLowerCase()] = ep.Name;
       for (const item of rows) {
         if (item.facts.Kind !== "veth") continue;
         const via = byBridge[item.facts.Master];
-        if (via) owners[item.native_id] = { ...via, hedge: true };
+        if (!via) continue;
+        const net = { label: via.label, href: hashFor("docker", "networks", via.id) };
+        const name = (item.facts.PeerMACAddresses || [])
+          .map(m => containerByMac[String(m).toLowerCase()]).find(Boolean);
+        if (name) {
+          owners[item.native_id] = { parts: [net, {
+            label: name,
+            href: hashFor("docker", "containers", `container:${name}`),
+          }] };
+        } else {
+          // The forwarding table is LEARNED and ages out, so a container that
+          // has sent nothing recently has no entry. That is silence, not
+          // evidence — so this names the network and hedges rather than
+          // guessing which of its containers is behind the port.
+          owners[item.native_id] = { parts: [net], hedge: true };
+        }
       }
     } else if (route === "units/units") {
       const containers = has("docker", "containers")
@@ -670,18 +698,18 @@ async function loadOwners() {
       for (const item of rows) {
         const container = byId[item.facts.ContainerID];
         if (container) {
-          owners[item.native_id] = {
+          owners[item.native_id] = { parts: [{
             label: container.native_id,
             href: hashFor("docker", "containers", container.id),
-          };
+          }] };
         } else if (item.facts.MachineName) {
           // The unit's own name proves this one, so it is labelled whether or
           // not the vms subsystem is reachable; only the link needs vms.
-          owners[item.native_id] = {
+          owners[item.native_id] = { parts: [{
             label: item.facts.MachineName,
             href: has("vms", "domains")
               ? hashFor("vms", "domains", `domain:${item.facts.MachineName}`) : null,
-          };
+          }] };
         }
       }
     }
@@ -1271,15 +1299,24 @@ function renderGrid() {
     // What runs on this piece of plumbing, when something can say so.
     const owner = state.owners?.[item.native_id];
     if (owner) {
-      const tag = owner.href ? el("a", "owner") : el("span", "owner");
-      if (owner.href) {
-        tag.href = owner.href;
-        tag.onclick = (e) => e.stopPropagation();
-      }
-      // "on X" for an attribution to a shared network rather than to one
-      // workload — the hedge is the point, not decoration.
-      tag.textContent = owner.hedge ? `on ${owner.label}` : owner.label;
-      idCell.appendChild(tag);
+      const wrap = el("span", "owner");
+      // "on X" where the attribution reaches only the shared network and not
+      // the workload — the hedge is a claim about what is known, not decoration.
+      if (owner.hedge) wrap.appendChild(document.createTextNode("on "));
+      owner.parts.forEach((part, i) => {
+        // "network:container" — one shape, so which half is which never has to
+        // be guessed, and each half goes to its own object.
+        if (i) wrap.appendChild(document.createTextNode(":"));
+        if (!part.href) {
+          wrap.appendChild(document.createTextNode(part.label));
+          return;
+        }
+        const link = el("a", "owner-part", part.label);
+        link.href = part.href;
+        link.onclick = (e) => e.stopPropagation();
+        wrap.appendChild(link);
+      });
+      idCell.appendChild(wrap);
     }
     tr.appendChild(idCell);
 

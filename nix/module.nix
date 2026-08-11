@@ -107,6 +107,30 @@ in
       '';
     };
 
+    hubUrl = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "http://hub.example.internal:8090/";
+      description = ''
+        Where this host's site view lives, if there is one. Purely a display
+        hint: the agent never contacts it, because aggregation must not be a
+        precondition for observation — a host reachable by nobody but its
+        operator stays fully useful. Set it and the single-host UI offers a
+        link to the site; leave it unset and the UI says nothing rather than
+        implying this host stands alone.
+      '';
+    };
+
+    site = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "site-a";
+      description = ''
+        Name of the site this host belongs to, shown beside the hubUrl link.
+        Cosmetic; the hub is authoritative for its own site label.
+      '';
+    };
+
     extraPackages = lib.mkOption {
       type = lib.types.listOf lib.types.package;
       default = [ ];
@@ -235,9 +259,12 @@ in
         ++ lib.optional cfg.grantNetAdmin pkgs.nftables
         ++ cfg.extraPackages;
 
-      environment = lib.mkIf (cfg.allowedHosts != [ ]) {
-        SE_ALLOWED_HOSTS = lib.concatStringsSep "," cfg.allowedHosts;
-      };
+      environment =
+        lib.optionalAttrs (cfg.allowedHosts != [ ]) {
+          SE_ALLOWED_HOSTS = lib.concatStringsSep "," cfg.allowedHosts;
+        }
+        // lib.optionalAttrs (cfg.hubUrl != null) { SE_HUB_URL = cfg.hubUrl; }
+        // lib.optionalAttrs (cfg.site != null) { SE_SITE = cfg.site; };
 
       serviceConfig = {
         Type = "simple";

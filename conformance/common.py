@@ -80,6 +80,9 @@ SUBPROCESS_ALLOWLIST: dict[str, str] = {
     "udevadm": "--json=short",
     "lscpu": "-J",
     "smartctl": "--json=c",
+    # iproute2's bridge(8): the forwarding database is what attributes a veth
+    # to the container behind it, and it speaks JSON.
+    "bridge": "-j",
 }
 
 

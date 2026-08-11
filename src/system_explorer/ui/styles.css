@@ -474,8 +474,12 @@ pre.evidence {
   color: var(--text-dim);
   text-decoration: none;
 }
-a.owner { text-decoration: underline dotted; text-underline-offset: 3px; }
-a.owner:hover { color: var(--accent); }
+.owner-part {
+  color: inherit;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.owner-part:hover { color: var(--accent); }
 
 /* Column picker menu in the facet bar. */
 .col-menu {
