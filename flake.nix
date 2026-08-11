@@ -76,9 +76,21 @@
       # but `enable = true`, and asserts the install path a stranger is told to
       # use plus honest degradation on a host that has almost nothing. It needs
       # KVM, so it is a Linux-only check.
+      # ui-smoke executes the operator UI's chrome path against a stub DOM. It
+      # exists because nothing else here runs a line of JavaScript: conformance
+      # is pytest and lints app.js as text, the module test curls the API, and a
+      # single null dereference in the nav therefore reached production and
+      # blanked the entire page — no rows, no panel, no error to diagnose from.
+      # Verified to catch that exact fault by reintroducing it.
       checks = forEach (pkgs: {
         conformance = self.packages.${pkgs.stdenv.hostPlatform.system}.system-explorer;
         module = pkgs.callPackage ./nix/tests/module.nix { inherit self; };
+        ui-smoke = pkgs.runCommand "se-ui-smoke"
+          { nativeBuildInputs = [ pkgs.nodejs ]; }
+          ''
+            node ${self}/test/ui-smoke/nav-smoke.mjs
+            touch $out
+          '';
       });
 
       devShells = forEach (pkgs: {

@@ -340,7 +340,16 @@ async function loadHost() {
   // everything — the same fallback as before, which is right: without the
   // roll-up the UI cannot know what is empty and must not guess.
   await refreshStatus();
-  renderNav();
+  // Isolated on purpose. The chrome and the content are independent concerns,
+  // and letting a rendering fault in one destroy the other is how a single null
+  // dereference in the nav produced an entirely blank page — no rows, no panel,
+  // no error, nothing to diagnose from. A broken nav with working content is a
+  // bad afternoon; a white screen is an outage.
+  try {
+    renderNav();
+  } catch (err) {
+    banner(`Navigation failed to render: ${err.message}`);
+  }
   return true;
 }
 
@@ -547,7 +556,13 @@ function applyNavBadges() {
     // A subsystem whose every collection is hidden-empty disappears with
     // them (an all-empty group label would navigate to nothing).
     box.hidden = visible === 0;
+    // Optional, because a promoted section (.nav-solo, the overview) is a
+    // .nav-sub with no heading to hang a dot on. Dereferencing this
+    // unconditionally is what blanked the whole page when that section was
+    // added: the TypeError killed renderNav, which killed loadHost, so route()
+    // never ran and the content area was never populated at all.
     const label = box.querySelector(".sub-label");
+    if (!label) continue;
     label.querySelector(".dot")?.remove();
     if (subLevel) label.appendChild(el("span", `dot ${subLevel}`));
   }
