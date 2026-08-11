@@ -501,7 +501,13 @@ const STANDALONE = [["system", "overview", "overview"]];
    object identity per drive, double-counted SMART verdicts, and rehoming nine
    opinion keys before findings even exist. A heading costs none of that. */
 const GROUPS = [
-  { heading: "disks", members: [["hardware", "scsi"], ["hardware", "nvme"]] },
+  // Placed after storage rather than at the top: physical disks are the
+  // substrate the filesystems, arrays and pools above them are built on, so
+  // reading downward goes from what is mounted to what it sits on. `after` names
+  // the section it follows so position is declared here with the grouping,
+  // instead of falling out of the order the loops happen to run in.
+  { heading: "disks", after: "storage",
+    members: [["hardware", "scsi"], ["hardware", "nvme"]] },
 ];
 
 /* THE nav structure, computed once and consumed by everything.
@@ -535,6 +541,10 @@ function navModel() {
                     items: [{ sub, coll, label, route: `${sub}/${coll}` }] });
   }
 
+  // Group membership is claimed BEFORE the subsystem sections are built, so a
+  // grouped collection cannot also appear under its own subsystem — the same
+  // collection reachable twice is what the smoke test guards.
+  const groups = [];
   for (const group of GROUPS) {
     const items = group.members
       .filter(([sub, coll]) => listed(sub, coll) && !claimed.has(`${sub}/${coll}`))
@@ -542,8 +552,8 @@ function navModel() {
     // An empty group is not a heading, it is a lie about what is here.
     if (!items.length) continue;
     items.forEach(item => claimed.add(item.route));
-    sections.push({ solo: false, heading: group.heading, available: true,
-                    grouped: true, items });
+    groups.push({ solo: false, heading: group.heading, available: true,
+                  grouped: true, after: group.after ?? null, items });
   }
 
   for (const [name, cap] of Object.entries(subsystems)) {
@@ -555,6 +565,17 @@ function navModel() {
     if (!items.length && cap.available) continue;
     sections.push({ solo: false, heading: name, available: !!cap.available,
                     reason: cap.reason, items });
+  }
+
+  // Splice each group in after the section it names. An unplaceable group goes
+  // last rather than vanishing: its collections must stay reachable even if the
+  // subsystem it wanted to follow is absent from this host.
+  for (const group of groups) {
+    const at = group.after
+      ? sections.findIndex(section => section.heading === group.after)
+      : -1;
+    if (at === -1) sections.push(group);
+    else sections.splice(at + 1, 0, group);
   }
   return sections;
 }

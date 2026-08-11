@@ -257,6 +257,15 @@ check("navModel is the single structure both the sidebar and the keys use", () =
 // is not a subsystem name. Presentation only: the routes must stay exactly what
 // the API serves, because the whole point of a heading over a collection is that
 // it costs no contract change.
+check("the disks heading sits immediately after storage", () => {
+  const headings = ui.navModel().map(s => s.heading);
+  const storage = headings.indexOf("storage");
+  const disks = headings.indexOf("disks");
+  if (storage === -1) throw new Error(`no storage section: ${headings.join(", ")}`);
+  if (disks !== storage + 1)
+    throw new Error(`order is ${headings.join(", ")} — disks must follow storage`);
+});
+
 check("a disks heading groups scsi and nvme without touching their routes", () => {
   const model = ui.navModel();
   const disks = model.find(s => s.heading === "disks");
