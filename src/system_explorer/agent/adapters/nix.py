@@ -48,6 +48,44 @@ def _input_identity(entry: object) -> str | None:
     return entry.get("revision") or entry.get("narHash")
 
 
+def _package_rows(older: dict[str, str], newer: dict[str, str]) -> list[dict]:
+    """Which packages moved between two generations' system environments.
+
+    Keyed on the name so an upgrade is one row with both versions rather than an
+    add and a remove that the reader has to pair up themselves. A package present
+    on one side only gets a null on the other.
+    """
+    def by_name(paths: dict[str, str]) -> dict[str, str | None]:
+        out: dict[str, str | None] = {}
+        for name_version in paths:
+            match = NAME_VERSION_RE.match(name_version)
+            name, version = (match.group(1), match.group(2)) if match else (name_version, None)
+            out[name] = version
+        return out
+
+    old_versions, new_versions = by_name(older), by_name(newer)
+    rows = []
+    for name in sorted(set(old_versions) | set(new_versions)):
+        before, after = old_versions.get(name), new_versions.get(name)
+        if before != after or (name in old_versions) != (name in new_versions):
+            rows.append({"Kind": "package", "Name": name, "From": before, "To": after})
+    return rows
+
+
+def _etc_row(older: str | None, newer: str | None) -> list[dict]:
+    """Whether /etc changed, without enumerating it.
+
+    Every generation symlinks $out/etc at a content-addressed store path, so the
+    paths differing IS the answer to "did any file under /etc change". Which files
+    is a different and much more expensive question, and one `make config-diff`
+    already answers against a candidate.
+    """
+    if not older or not newer or older == newer:
+        return []
+    return [{"Kind": "etc", "Name": "/etc",
+             "From": os.path.basename(older), "To": os.path.basename(newer)}]
+
+
 def _delta_rows(older: dict, newer: dict) -> list[dict]:
     """What changed between two generations' manifests.
 
@@ -103,30 +141,53 @@ class Adapter:
                 "unavailable_collections": unavailable}
 
     # ── generations ──────────────────────────────────────────
-    def _delta_facts(self, number: int, manifest: dict,
-                     previous: int | None, manifests: dict[int, dict | None]) -> dict:
+    def _delta_facts(self, number: int, previous: int | None,
+                     manifests: dict[int, dict | None],
+                     environments: dict[int, dict[str, str]],
+                     etc_paths: dict[int, str | None],
+                     detailed: bool) -> dict:
         """What this generation changed, against the previous one still present.
 
         "Previous" is the next generation number that has not been collected, not
         necessarily number - 1, so it is named in a fact rather than implied — a
         delta against generation 84 when 85 was garbage-collected is a true
         statement about a different span than the reader would assume.
+
+        The rows themselves are carried only on an opened object. A nixpkgs bump
+        moves hundreds of packages, and a collection page is asked for a hundred
+        generations at a time; DeltaCounts is what a row needs and is always
+        present. This is a payload decision, not an acquisition one — the walk has
+        already happened either way — so both surfaces agree on the counts and
+        neither can disagree about severity.
         """
         if previous is None:
             return {"DeltaFromPrevious": None,
                     "DeltaFromPreviousUnobservable":
                         f"Generation {number} is the oldest still present on this "
                         "host, so there is nothing here to compare it against."}
-        older = manifests.get(previous)
-        if older is None:
-            return {"ComparedWithGeneration": previous,
-                    "DeltaFromPrevious": None,
-                    "DeltaFromPreviousUnobservable":
-                        f"Generation {previous} carries no {nx.GENERATION_MANIFEST}, "
-                        "so it records nothing to compare against. Comparison begins "
-                        "at the first generation built after that file existed."}
-        return {"ComparedWithGeneration": previous,
-                "DeltaFromPrevious": _delta_rows(older, manifest)}
+
+        facts: dict = {"ComparedWithGeneration": previous}
+        rows: list[dict] = []
+        older, newer = manifests.get(previous), manifests.get(number)
+        if older is not None and newer is not None:
+            rows += _delta_rows(older, newer)
+        else:
+            missing = previous if older is None else number
+            facts["DeltaFromPreviousPartial"] = (
+                f"Package and /etc changes below are read from the closures "
+                f"themselves, so they are complete. Generation {missing} carries no "
+                f"{nx.GENERATION_MANIFEST} though, so the configuration revision and "
+                "flake inputs could not be compared.")
+        rows += _etc_row(etc_paths.get(previous), etc_paths.get(number))
+        rows += _package_rows(environments.get(previous, {}), environments.get(number, {}))
+
+        counts: dict[str, int] = {}
+        for row in rows:
+            counts[row["Kind"]] = counts.get(row["Kind"], 0) + 1
+        facts["DeltaCounts"] = counts
+        if detailed:
+            facts["DeltaFromPrevious"] = rows
+        return facts
 
     def _deployment_facts(self, number: int, manifest: dict,
                           receipts_visible: bool) -> dict:
@@ -159,11 +220,18 @@ class Adapter:
                     "SourceRevision": (receipt.get("source") or {}).get("git_revision"),
                 }}
 
-    def _generation_items(self) -> list[dict]:
+    def _generation_items(self, detailed: bool = False) -> list[dict]:
         pointers = nx.pointers()
         links = nx.generation_links()
-        # Read every manifest once: each generation's delta needs its neighbour's.
+        # Read each source once: every generation's delta needs its neighbour's.
         manifests = {number: nx.generation_manifest(target)
+                     for number, _, target in links}
+        # The link farm and the /etc symlink are inside every closure, so these
+        # two comparisons work where no manifest does — including retroactively,
+        # for generations built before se-generation.json existed at all.
+        environments = {number: nx.store_paths(f"{target}/sw")
+                        for number, _, target in links}
+        etc_paths = {number: nx.realpath(f"{target}/etc")
                      for number, _, target in links}
         receipts_visible = nx.receipts_dir() is not None
         items = []
@@ -186,14 +254,15 @@ class Adapter:
                 "Specialisations": specialisations,
                 "StorePath": target,
             }
-            # Absent on a generation that carries no manifest — which is every
-            # generation on a host whose closures are built without one, and the
-            # older generations on a host that started recently. Omitted, not
+            previous = links[index + 1][0] if index + 1 < len(links) else None
+            facts.update(self._delta_facts(number, previous, manifests,
+                                           environments, etc_paths, detailed))
+            # Deployment facts are absent on a generation that carries no manifest
+            # — every generation on a host whose closures are built without one,
+            # and the older ones on a host that started recently. Omitted, not
             # nulled: "does not record this" is not "unknown" (SPEC rule 7).
             manifest = manifests[number]
             if manifest is not None:
-                previous = links[index + 1][0] if index + 1 < len(links) else None
-                facts.update(self._delta_facts(number, manifest, previous, manifests))
                 facts.update(self._deployment_facts(number, manifest, receipts_visible))
             # Only the running generation is positively vouched for; the rest
             # are neutral history unless a rule fires.
@@ -211,10 +280,10 @@ class Adapter:
         return env.source("nixos-fs", "/nix/var/nix/profiles (filesystem)",
                           GENERATIONS_REFERENCE)
 
-    def _items(self, collection: str) -> list[dict]:
+    def _items(self, collection: str, detailed: bool = False) -> list[dict]:
         if collection != "generations":
             raise env.UnknownCollection(collection)
-        return self._generation_items()
+        return self._generation_items(detailed)
 
     async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:
         # The link-farm and profile scandir walks are synchronous filesystem
@@ -233,7 +302,7 @@ class Adapter:
     _RULES = {"generations": generation_opinions}
 
     async def get_object(self, collection: str, object_id: str) -> dict:
-        fetched = await anyio.to_thread.run_sync(self._items, collection)
+        fetched = await anyio.to_thread.run_sync(self._items, collection, True)
         match = next((i for i in fetched if i["id"] == object_id), None)
         if match is None:
             raise env.UnknownObject(object_id)

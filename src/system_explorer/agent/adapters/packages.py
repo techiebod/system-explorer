@@ -45,7 +45,8 @@ RPM_FORMAT = "%{NAME}\\t%{VERSION}-%{RELEASE}\\t%{ARCH}\\n"
 
 STORE_RE = re.compile(r"(/nix/store/[a-z0-9]{32}-([^/]+))")
 NAME_VERSION_RE = re.compile(r"(.+?)-([0-9].*)")
-SW_SUBDIRS = ("bin", "sbin", "lib", "libexec", "share", "etc")
+# One definition, in the module that owns the NixOS read surface.
+SW_SUBDIRS = nx.SW_SUBDIRS
 
 REFERENCE = {
     "nix": ["ls /run/current-system/sw/bin",
@@ -68,32 +69,14 @@ def _rpm_rows() -> list[list[str]]:
 
 
 def _nix_store_paths() -> dict[str, str]:
-    """name-version → store path for everything linked into the system
-    environment. Two scandir levels: buildEnv links packages directly or, on
-    collision, merges one directory level and links inside it."""
-    seen: dict[str, str] = {}
+    """name-version → store path for the running system environment.
 
-    def record(target: str) -> None:
-        match = STORE_RE.match(target)
-        if match:
-            seen.setdefault(match.group(2), match.group(1))
-
-    for sub in SW_SUBDIRS:
-        try:
-            entries = list(os.scandir(os.path.join(nx.SW, sub)))
-        except OSError:
-            continue
-        for entry in entries:
-            if entry.is_symlink():
-                record(os.readlink(entry.path))
-            elif entry.is_dir(follow_symlinks=False):
-                try:
-                    for nested in os.scandir(entry.path):
-                        if nested.is_symlink():
-                            record(os.readlink(nested.path))
-                except OSError:
-                    continue
-    return seen
+    The walk itself lives in agent/nixos.py, parameterised by environment root,
+    because `nix` needs the identical read against `<generation>/sw` to compare
+    two generations' package sets. One reader, two callers, rather than an
+    adapter importing another adapter.
+    """
+    return nx.store_paths(nx.SW)
 
 
 def _detect() -> str | None:

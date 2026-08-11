@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -28,6 +29,11 @@ PROFILES = Path("/nix/var/nix/profiles")
 CURRENT_SYSTEM = "/run/current-system"
 BOOTED_SYSTEM = "/run/booted-system"
 SW = f"{CURRENT_SYSTEM}/sw"
+
+STORE_RE = re.compile(r"(/nix/store/[a-z0-9]{32}-([^/]+))")
+# buildEnv links a package's own subdirectories, so the environment has to be
+# walked one level deeper than its root.
+SW_SUBDIRS = ("bin", "sbin", "lib", "libexec", "share", "etc")
 
 # An optional file a generation may carry, in the same place and with the same
 # properties as nixos-version: inside the closure, immutable per generation, and
@@ -102,6 +108,44 @@ def pointers() -> dict[str, str | None]:
     return {"current": realpath(CURRENT_SYSTEM),
             "booted": realpath(BOOTED_SYSTEM),
             "default": realpath(str(PROFILES / "system"))}
+
+
+def store_paths(sw_root: str) -> dict[str, str]:
+    """name-version → store path for everything linked into a system environment.
+
+    Takes the environment root rather than assuming the running one, because the
+    same link farm exists inside every generation at `<generation>/sw`. That is
+    what makes a package-level comparison between two generations a pair of
+    directory walks rather than a subprocess: `nix store diff-closures` would
+    answer the same question with prose this agent is not allowed to parse
+    (SPEC rule 5).
+
+    Two scandir levels: buildEnv links packages directly or, on collision, merges
+    one directory level and links inside it.
+    """
+    seen: dict[str, str] = {}
+
+    def record(target: str) -> None:
+        match = STORE_RE.match(target)
+        if match:
+            seen.setdefault(match.group(2), match.group(1))
+
+    for sub in SW_SUBDIRS:
+        try:
+            entries = list(os.scandir(os.path.join(sw_root, sub)))
+        except OSError:
+            continue
+        for entry in entries:
+            if entry.is_symlink():
+                record(os.readlink(entry.path))
+            elif entry.is_dir(follow_symlinks=False):
+                try:
+                    for nested in os.scandir(entry.path):
+                        if nested.is_symlink():
+                            record(os.readlink(nested.path))
+                except OSError:
+                    continue
+    return seen
 
 
 def read_json(path: str | Path) -> dict | None:

@@ -104,15 +104,11 @@ const PSEUDO_COLUMNS = {
      the generation records no manifest, so the column stays empty rather than
      claiming "0 changes" about something never measured. */
   Changed: (item) => {
-    const rows = item.facts.DeltaFromPrevious;
-    if (!Array.isArray(rows)) return null;
-    if (!rows.length) return "no change";
-    const counts = new Map();
-    for (const row of rows) {
-      const kind = row.Kind || "other";
-      counts.set(kind, (counts.get(kind) || 0) + 1);
-    }
-    return [...counts].map(([kind, n]) => `${n} ${kind}${n === 1 ? "" : "s"}`).join(", ");
+    const counts = item.facts.DeltaCounts;
+    if (!counts || typeof counts !== "object") return null;
+    const entries = Object.entries(counts);
+    if (!entries.length) return "no change";
+    return entries.map(([kind, n]) => `${n} ${kind}${n === 1 ? "" : "s"}`).join(", ");
   },
   /* How this generation came to be, in one cell. An expected-but-absent receipt
      is what the deployment-unattested opinion is about, so say it plainly here
