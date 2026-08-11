@@ -72,6 +72,20 @@ def _package_rows(older: dict[str, str], newer: dict[str, str]) -> list[dict]:
     return rows
 
 
+def _etc_identity(path: str | None) -> str | None:
+    """The store directory a generation's /etc came out of, hash included.
+
+    Not the basename of the path: a generation symlinks $out/etc at
+    `<store path>/etc`, so basename is the literal "etc" for every generation ever
+    built, and a row reporting a change rendered as "etc -> etc". The store
+    directory name is what distinguishes them.
+    """
+    if not path:
+        return None
+    match = nx.STORE_RE.match(path)
+    return os.path.basename(match.group(1)) if match else path
+
+
 def _etc_row(older: str | None, newer: str | None) -> list[dict]:
     """Whether /etc changed, without enumerating it.
 
@@ -83,7 +97,7 @@ def _etc_row(older: str | None, newer: str | None) -> list[dict]:
     if not older or not newer or older == newer:
         return []
     return [{"Kind": "etc", "Name": "/etc",
-             "From": os.path.basename(older), "To": os.path.basename(newer)}]
+             "From": _etc_identity(older), "To": _etc_identity(newer)}]
 
 
 def _delta_rows(older: dict, newer: dict) -> list[dict]:
@@ -100,16 +114,23 @@ def _delta_rows(older: dict, newer: dict) -> list[dict]:
     an opinion can cite DeltaFromPrevious.<n>.Name.
     """
     rows: list[dict] = []
-    if older.get("revision") != newer.get("revision"):
+    old_revision, new_revision = older.get("revision"), newer.get("revision")
+    if old_revision != new_revision:
         rows.append({"Kind": "revision", "Name": "configuration",
-                     "From": older.get("revision"), "To": newer.get("revision")})
+                     "From": old_revision, "To": new_revision})
     old_inputs = older.get("inputs") if isinstance(older.get("inputs"), dict) else {}
     new_inputs = newer.get("inputs") if isinstance(newer.get("inputs"), dict) else {}
     for name in sorted(set(old_inputs) | set(new_inputs)):
         before = _input_identity(old_inputs.get(name))
         after = _input_identity(new_inputs.get(name))
-        if before != after:
-            rows.append({"Kind": "input", "Name": name, "From": before, "To": after})
+        if before == after:
+            continue
+        # The configuration's own source is usually also one of its inputs, so
+        # reporting both restates one change as two. Suppressed by matching the
+        # pair rather than by the input's name, which no contract fixes.
+        if (before, after) == (old_revision, new_revision):
+            continue
+        rows.append({"Kind": "input", "Name": name, "From": before, "To": after})
     return rows
 
 
