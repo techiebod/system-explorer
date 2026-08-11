@@ -151,6 +151,28 @@ CASES = [
       "PsiIoFullAvg60": 0.0, "PsiCpuSomeAvg60": 0.0, "PsiMemoryFullAvg60": 0.0},
      set()),
 
+    # hardware: a drive that yielded no reading must not be vouched for. Five
+    # raidz1 members read "ok" for days on snapshots holding only an smartctl
+    # error, because State == running was treated as positive health.
+    ("scsi-disk-running-but-unmeasured", hardware.scsi_disk_opinions,
+     {"State": "running", "SmartSnapshotAt": "2026-08-11T06:14:18Z",
+      "SmartSnapshotAgeSeconds": 195,
+      "SmartUnobservable": "the root smartctl snapshot for this device carried "
+                           "no reading."},
+     {("smart-unmeasured", "info")}),
+    # Once a real reading arrives the notice must go away, even if the adapter
+    # still carries the fact from a previous pass.
+    ("scsi-disk-measured-and-healthy", hardware.scsi_disk_opinions,
+     {"State": "running", "SmartFailing": False, "SmartTemperatureC": 36,
+      "SmartPowerOnHours": 57551, "SmartSelftestStatus": "success",
+      "SmartUnobservable": "stale reason that no longer applies"},
+     set()),
+    # A genuinely failing drive is never softened by the notice.
+    ("scsi-disk-unmeasured-yet-failing", hardware.scsi_disk_opinions,
+     {"State": "running", "SmartFailing": True,
+      "SmartUnobservable": "should be ignored: a reading exists"},
+     {("smart-health", "critical")}),
+
     # docker containers.
     ("container-restarting", docker.container_opinions,
      {"State": "restarting", "Status": "Restarting (1) 5 seconds ago",

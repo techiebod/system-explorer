@@ -141,22 +141,45 @@ in
       };
       script = ''
         out=/run/system-explorer-smart
+
+        # smartctl emits a well-formed JSON document even when it refuses to
+        # run: an invalid argument or an unsupported transport still produces a
+        # file carrying nothing but messages[]. A size test cannot tell a
+        # reading from a refusal, so `[ -s ]` installed the refusal — and
+        # because it ran every five minutes, it overwrote the last good
+        # snapshot with a stub. Five raidz1 members read a vouched-for "ok"
+        # for days on no measurement at all.
+        #
+        # smart_status is the object smartctl emits only when it really
+        # interrogated the drive, so require it. A sleeping drive left alone
+        # by -n standby writes no smart_status either, which is exactly right:
+        # the previous snapshot survives and the agent reports its age.
+        has_reading() { grep -q '"smart_status"' "$1"; }
+
         for ctrl in /sys/class/nvme/nvme*; do
           [ -e "$ctrl" ] || continue
           name=$(basename "$ctrl")
-          if smartctl --json=c -d nvme -H -A "/dev/$name" > "$out/.$name.tmp" 2>/dev/null; [ -s "$out/.$name.tmp" ]; then
+          if smartctl --json=c -d nvme -H -A "/dev/$name" > "$out/.$name.tmp" 2>/dev/null; has_reading "$out/.$name.tmp"; then
             mv "$out/.$name.tmp" "$out/$name.json"
+          else
+            rm -f "$out/.$name.tmp"
           fi
         done
-        # -n standby,q: never spin up a sleeping drive for a snapshot (and
-        # emit nothing, so the last good snapshot survives instead of being
-        # replaced by an attribute-less stub). The agent reports snapshot
-        # age, so a long-sleeping drive shows as stale rather than fresh.
+
+        # -n standby: never spin up a sleeping drive for a snapshot. It was
+        # `-n standby,q` here, which smartctl 7.5 rejects outright —
+        # "INVALID ARGUMENT TO -n" — so every sd* snapshot on the estate was
+        # 475 bytes of error text. The valid spelling takes an optional exit
+        # STATUS, not a "q"; verified live, the fix turns a 475-byte refusal
+        # into an 812-byte reading carrying smart_status, temperature and
+        # power_on_time.
         for disk in /sys/block/sd*; do
           [ -e "$disk" ] || continue
           name=$(basename "$disk")
-          if smartctl --json=c -H -A -n standby,q "/dev/$name" > "$out/.$name.tmp" 2>/dev/null; [ -s "$out/.$name.tmp" ]; then
+          if smartctl --json=c -H -A -n standby "/dev/$name" > "$out/.$name.tmp" 2>/dev/null; has_reading "$out/.$name.tmp"; then
             mv "$out/.$name.tmp" "$out/$name.json"
+          else
+            rm -f "$out/.$name.tmp"
           fi
         done
       '';

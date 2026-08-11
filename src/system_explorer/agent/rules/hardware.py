@@ -36,9 +36,41 @@ SMART_SELFTEST_FAILURES = frozenset({
 })
 
 
+# Every fact that constitutes an actual health reading. If a drive carries
+# none of them, nothing about its health has been measured — and the row must
+# not say "ok", which is a positive claim.
+SMART_HEALTH_FACTS = (
+    "SmartFailing", "SmartOverallPassed", "SmartCriticalWarning",
+    "SmartSelftestStatus", "SmartPercentUsed", "SmartAvailableSparePct",
+    "SmartMediaErrors", "SmartBadSectors", "SmartTemperatureC",
+    "SmartPowerOnHours",
+)
+
+
+def has_smart_reading(facts: dict) -> bool:
+    """Whether anything about this drive's health was actually measured.
+
+    Deliberately excludes SmartSnapshotAt/SmartSnapshotAgeSeconds: those say
+    the collector RAN, not that it read anything. Conflating the two is how
+    five raidz1 members displayed a vouched-for "ok" while their snapshots
+    held nothing but an smartctl error.
+    """
+    return any(facts.get(name) is not None for name in SMART_HEALTH_FACTS)
+
+
 def smart_opinions(facts: dict) -> list[dict]:
     """Drive health from whatever SMART depth the facts carry."""
     opinions: list[dict] = []
+    # Absence with a reason (SPEC section 2, rule 7): the adapter supplies the
+    # prose, the rule turns it into a neutral row so "ok" keeps meaning
+    # measured-and-healthy rather than merely enumerated.
+    unobservable = facts.get("SmartUnobservable")
+    if unobservable and not has_smart_reading(facts):
+        opinions.append(env.opinion(
+            "smart-unmeasured", "info",
+            f"No drive-health reading is available: {unobservable} "
+            "This row reports the device exists and is running, which is not "
+            "the same as healthy.", ["SmartUnobservable"]))
     if facts.get("SmartFailing"):
         opinions.append(env.opinion(
             "smart-health", "critical",
@@ -83,7 +115,7 @@ def smart_opinions(facts: dict) -> list[dict]:
     age = facts.get("SmartSnapshotAgeSeconds")
     if isinstance(age, int) and age > SMART_SNAPSHOT_STALE_SECONDS:
         # The rule sees a stale file, not the reason: a wedged collector, a
-        # spun-down drive (-n standby,q preserves the last snapshot), or
+        # spun-down drive (-n standby preserves the last snapshot), or
         # leftover snapshots on a host with no collector installed at all
         # (an ad-hoc run reading /run residue, seen 2026-08-10). Claim
         # only what the evidence carries.

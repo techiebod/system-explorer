@@ -37,7 +37,8 @@ import anyio
 
 from .. import envelope as env
 from ..rules import worst_level
-from ..rules.hardware import nvme_opinions, scsi_disk_opinions, smart_opinions
+from ..rules.hardware import (has_smart_reading, nvme_opinions,
+                              scsi_disk_opinions, smart_opinions)
 from ..sysbus import BUS
 
 UDISKS = "org.freedesktop.UDisks2"
@@ -238,6 +239,16 @@ def _bytes_to_str(value) -> str | None:
     if isinstance(value, str):
         return value
     return None
+
+
+def _no_reading_reason(facts: dict) -> str:
+    """Why this drive carries no health reading, as specifically as we can say."""
+    if facts.get("SmartSnapshotAt"):
+        return ("the root smartctl snapshot for this device carried no reading "
+                "(smartctl declined the drive, or it was asleep and left alone).")
+    return ("no root smartctl snapshot exists for this device (grantDiskAccess "
+            "off?) and udisks2 exposed no SMART for this transport — udisks "
+            "speaks ATA SMART only, so SAS drives have none.")
 
 
 class Adapter:
@@ -748,6 +759,11 @@ class Adapter:
         if collection == "scsi" and item["type"] in ("scsi-host", "expander"):
             return
         facts = item["facts"]
+        # A disk or controller that yielded no health reading says so, so the
+        # rule can decline to vouch for it. State == running is the kernel
+        # having enumerated the device, not a measurement of its health.
+        if (collection == "nvme" or item["type"] == "disk") and not has_smart_reading(facts):
+            facts.setdefault("SmartUnobservable", _no_reading_reason(facts))
         if collection == "scsi" and item["type"] != "disk":
             healthy = "info"
         else:
