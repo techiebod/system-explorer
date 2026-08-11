@@ -258,7 +258,17 @@ def _bytes_to_str(value) -> str | None:
 
 
 def _no_reading_reason(facts: dict) -> str:
-    """Why this drive carries no health reading, as specifically as we can say."""
+    """Why this drive carries no health reading, as specifically as we can say.
+
+    Order matters: smartctl's own words beat any inference. A drive whose
+    snapshot was garbage-collected for carrying no reading has no
+    SmartSnapshotAt at all, so without checking the recorded reason first this
+    would blame grantDiskAccess on a host where the collector is installed,
+    running, and correctly declining to wake a sleeping disk.
+    """
+    recorded = facts.get("SmartSnapshotReason")
+    if recorded:
+        return f"the root smartctl collector got no reading — {recorded}"
     if facts.get("SmartSnapshotAt"):
         return ("the root smartctl snapshot for this device carried no reading "
                 "(smartctl declined the drive, or it was asleep and left alone).")
@@ -327,6 +337,15 @@ class Adapter:
         have_tool = shutil.which("smartctl") is not None
         for dev, paths in candidates.items():
             info: dict = {}
+            # Read unconditionally, because the interesting case is when there
+            # is a reason and NO snapshot: the collector garbage-collects a
+            # snapshot that carries no reading, so a drive left asleep long
+            # enough ends up with the reason alone. Attaching it only alongside
+            # a snapshot would blame grantDiskAccess on a host whose collector
+            # is working correctly (seen on vat, 2026-08-11).
+            recorded_reason = await anyio.to_thread.run_sync(_smart_no_reading, dev)
+            if recorded_reason:
+                info["SmartSnapshotReason"] = recorded_reason
             snapshot = await anyio.to_thread.run_sync(_smart_snapshot, dev)
             if snapshot is not None:
                 data, mtime = snapshot
@@ -337,22 +356,23 @@ class Adapter:
                 # observed_at-fresh and carries neither fact.
                 info["SmartSnapshotAt"] = _epoch_iso(mtime)
                 info["SmartSnapshotAgeSeconds"] = max(0, int(time.time() - mtime))
-                # Why the newest run added nothing, when the collector said so.
-                # Turns "may be wedged, or not installed, or asleep" into the
-                # one that is true — and lets the rule stop calling a
-                # deliberately-sleeping disk a warning.
-                stale_reason = await anyio.to_thread.run_sync(_smart_no_reading, dev)
-                if stale_reason:
-                    info["SmartSnapshotReason"] = stale_reason
             else:
-                if not have_tool:
-                    continue
-                path = next((p for p in paths if os.access(p, os.R_OK)), None)
-                if path is None:
-                    continue
-                try:
-                    data = await anyio.to_thread.run_sync(_smartctl_json, path)
-                except Exception:  # noqa: BLE001 - per-device isolation
+                # No snapshot, so try a direct run — one bail-out point rather
+                # than three, because each of them has to preserve a recorded
+                # reason. Dropping the device silently would discard the only
+                # explanation the operator can get for why a drive shows no
+                # health at all.
+                data = None
+                if have_tool:
+                    path = next((p for p in paths if os.access(p, os.R_OK)), None)
+                    if path is not None:
+                        try:
+                            data = await anyio.to_thread.run_sync(_smartctl_json, path)
+                        except Exception:  # noqa: BLE001 - per-device isolation
+                            data = None
+                if data is None:
+                    if recorded_reason:
+                        out[dev] = info
                     continue
             nvme_log = data.get("nvme_smart_health_information_log") or {}
             if nvme_log:
