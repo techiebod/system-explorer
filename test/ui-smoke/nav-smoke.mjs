@@ -141,7 +141,7 @@ const context = vm.createContext(sandbox);
 // its state and helpers with const, which in a vm script are lexically scoped
 // and never become properties of the sandbox. Only code inside that script can
 // see them.
-const EXPORTS = "\n;globalThis.__ui = { state, renderNav, applyNavBadges, renderBuild };";
+const EXPORTS = "\n;globalThis.__ui = { state, renderNav, applyNavBadges, renderBuild, navRoutes };";
 vm.runInContext(readFileSync(APP, "utf8") + EXPORTS, context, { filename: "app.js" });
 const ui = sandbox.__ui;
 
@@ -200,6 +200,40 @@ check("renderBuild stamps version and revision", () => {
   const stamped = document.getElementById("build").textContent;
   if (!stamped.includes("0.4.0") || !stamped.includes("abc1234"))
     throw new Error(`build stamp reads ${stamped}`);
+});
+
+// The keyboard order MUST be the rendered order. It was not: navRoutes rebuilt
+// itself from capabilities, so [ and ] walked overview in its old position under
+// system/boot while the sidebar showed it promoted to the top. Same root cause as
+// the blank page — a rendering variant added without updating what consumes the
+// nav's structure.
+check("[ and ] walk the nav in the order it is rendered", () => {
+  const rendered = [];
+  for (const box of document.getElementById("nav").querySelectorAll("nav-sub")) {
+    if (box.hidden) continue;
+    for (const link of box.querySelectorAll("nav-item")) {
+      if (!link.hidden) rendered.push(link.dataset.route);
+    }
+  }
+  const walked = ui.navRoutes().map(([s, c]) => `${s}/${c}`);
+  if (walked.join(",") !== rendered.join(","))
+    throw new Error(`keyboard order\n  ${walked.join(", ")}\nrendered order\n  ${rendered.join(", ")}`);
+});
+
+check("overview is FIRST in the keyboard order, not buried under system", () => {
+  const walked = ui.navRoutes().map(([s, c]) => `${s}/${c}`);
+  if (walked[0] !== "system/overview")
+    throw new Error(`first route is ${walked[0]}, expected system/overview`);
+  // The specific symptom: it must not sit immediately after system/boot.
+  const afterBoot = walked[walked.indexOf("system/boot") + 1];
+  if (afterBoot === "system/overview")
+    throw new Error("overview still follows system/boot — the old capability order");
+});
+
+check("the keys skip a collection the nav hides as honestly empty", () => {
+  const walked = ui.navRoutes().map(([s, c]) => `${s}/${c}`);
+  if (walked.includes("storage/arrays"))
+    throw new Error("storage/arrays is hidden in the nav but reachable by keyboard");
 });
 
 if (failures.length) {

@@ -446,8 +446,32 @@ function renderHostCard() {
     + (machineId ? machineId.slice(0, 12) + "…" : "unreachable");
 }
 
+/* The order [ and ] walk, read from the RENDERED nav rather than rebuilt from
+   capabilities.
+
+   Two orderings used to exist — capability order for the keys, render order for
+   the eye — and they agreed only by coincidence. Promoting overview out of
+   `system` broke the coincidence: the keys still walked through it in its old
+   position, between boot and nix, so [ and ] behaved as though it were sitting
+   under boot while the sidebar showed it at the top.
+
+   Reading the DOM also skips what the roll-up hides as honestly empty, which a
+   capability list cannot know: the keys can no longer land on a collection the
+   nav deliberately refuses to offer, pinning it visible with a bare table.
+
+   Falls back to capabilities if the nav is empty — renderNav is wrapped in a
+   catch, so a rendering fault must not also cost keyboard navigation. */
 function navRoutes() {
   const out = [];
+  for (const box of document.querySelectorAll("#nav .nav-sub")) {
+    if (box.hidden) continue;
+    for (const link of box.querySelectorAll(".nav-item")) {
+      if (link.hidden) continue;
+      const [sub, coll] = link.dataset.route.split("/");
+      out.push([sub, coll]);
+    }
+  }
+  if (out.length) return out;
   for (const [name, cap] of Object.entries(state.capabilities?.subsystems || {})) {
     for (const coll of cap.collections || []) out.push([name, coll]);
   }
