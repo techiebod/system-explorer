@@ -155,9 +155,13 @@ the reason string; it names the cause.
   Adding an import means adding it there, not in a derivation.
 - The version lives once, in `src/system_explorer/__init__.py`;
   `pyproject.toml` and `nix/version.nix` both read it.
-- Tests: `nix flake check` (the conformance suite runs inside the package
-  build), or `pytest -q` from the repo root — `pyproject.toml` puts
-  `src/` and `conformance/` on the path, so no install is needed.
+- Tests: `nix flake check` runs both — the conformance suite inside the
+  package build, and a NixOS VM that installs via `nixosModules.default` and
+  asserts the documented install path ([nix/tests/module.nix](nix/tests/module.nix)).
+  Locally, `pytest -q` from the repo root: `pyproject.toml` puts `src/` and
+  `conformance/` on the path, so no install is needed. Install the `test`
+  extra — it carries the adapters' third-party imports so their pure helpers
+  can be tested without a live host.
 - The agent is read-only by construction. Do not add mutating endpoints,
   shell-outs assembled from request input, or auth-gated write paths —
   that is a different product. New collections follow SPEC section

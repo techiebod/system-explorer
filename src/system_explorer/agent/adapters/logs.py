@@ -10,16 +10,27 @@ cursor entry itself — dropped here) and walks older. The previous
 --after-cursor scheme asked for entries newer than the newest already
 shown, so "next page" was empty; caught by an external review.
 
-journalctl rejects --since combined with --cursor (exit 1), so time bounds
-go on the first page only — the cursor already encodes where to resume.
-Passing both silently truncated bounded queries at one page (a "24h" query
-covered 15.5h; audit 2026-08-10).
+journalctl rejects --since combined with --cursor (exit 1), so a time bound
+cannot be handed to journalctl on a cursor page. Passing both truncated
+bounded queries at one page (a "24h" query covered 15.5h); dropping --since
+on later pages instead made the bound vanish while `filters` still advertised
+it — measured 2026-08-10, page 2 of a -30m query returned entries 83 minutes
+old. Returning too much and mislabelling it is the worse of the two.
+
+So the agent owns the bound: since= is resolved to an absolute floor once,
+that floor travels inside our own cursor, and every page drops records below
+it. A since= spelling this adapter cannot resolve is an error envelope rather
+than a bound silently not applied (SPEC section 6: the server never silently
+truncates, the client never infers truncation).
 """
 
 from __future__ import annotations
 
 import json
+import re
 import subprocess
+from collections import Counter
+from datetime import datetime, timedelta, timezone
 
 import anyio
 
@@ -32,12 +43,101 @@ MAX_LIMIT = 1000
 
 FACT_FIELDS = {
     "MESSAGE": "Message",
+    # The emitter's own catalog id for a message TYPE, so entries differing
+    # only in interpolated values (a PID, a path) share it. Absent from
+    # plenty of emitters, which is why repetition falls back to the text.
+    "MESSAGE_ID": "MessageId",
     "PRIORITY": "Priority",
     "SYSLOG_IDENTIFIER": "SyslogIdentifier",
+    # Which stream the entry arrived on. A container's stderr is mapped to
+    # priority err by the journald log driver, so this is what distinguishes
+    # "the application said this is an error" from "the application wrote to
+    # stderr" — the single biggest source of misleading err entries.
+    "_TRANSPORT": "Transport",
     "_SYSTEMD_UNIT": "SystemdUnit",
+    "_SYSTEMD_USER_UNIT": "SystemdUserUnit",
+    "CONTAINER_NAME": "Container",
     "_COMM": "Command",
     "_PID": "PID",
 }
+
+# since= must be resolvable to an absolute floor HERE, because journalctl
+# applies --since only on the first page and a bound that does not survive
+# pagination is a lie.
+_SINCE_RELATIVE = re.compile(
+    r"^-(\d+)(s|sec|secs|second|seconds|m|min|mins|minute|minutes|"
+    r"h|hr|hrs|hour|hours|d|day|days|w|week|weeks)$")
+_SINCE_UNIT_SECONDS = {
+    "s": 1, "sec": 1, "secs": 1, "second": 1, "seconds": 1,
+    "m": 60, "min": 60, "mins": 60, "minute": 60, "minutes": 60,
+    "h": 3600, "hr": 3600, "hrs": 3600, "hour": 3600, "hours": 3600,
+    "d": 86400, "day": 86400, "days": 86400,
+    "w": 604800, "week": 604800, "weeks": 604800,
+}
+
+# <floor_usec>@<journal cursor>. Journal cursors are s=..;i=..;b=..;m=..;t=..;x=..
+# — only [a-z0-9=;] — so "@" cannot collide, and a bare cursor stays valid.
+CURSOR_SEP = "@"
+
+# One message identity this often within a single page is a pattern rather
+# than an event. Repetition is the signal priority cannot give.
+REPEAT_WINDOW_NOTE = ("RepeatCount/RepeatWindow are scoped to the entries this "
+                      "page read, not to the entry: they answer \"is this line "
+                      "spam\", which no single record can.")
+
+
+def _since_floor_usec(expr: str, now: datetime | None = None) -> int | None:
+    """Absolute microsecond floor for a since= expression, or None when the
+    spelling is one this adapter cannot enforce across pages."""
+    now = now or datetime.now(timezone.utc)
+    text = expr.strip()
+    lowered = text.lower()
+    if lowered == "now":
+        return int(now.timestamp() * 1_000_000)
+    if lowered in ("today", "yesterday"):
+        midnight = now.astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
+        if lowered == "yesterday":
+            midnight -= timedelta(days=1)
+        return int(midnight.timestamp() * 1_000_000)
+    match = _SINCE_RELATIVE.match(lowered.replace(" ", ""))
+    if match:
+        seconds = int(match.group(1)) * _SINCE_UNIT_SECONDS[match.group(2)]
+        return int((now.timestamp() - seconds) * 1_000_000)
+    if lowered.startswith("@"):                      # journalctl's epoch form
+        try:
+            return int(float(lowered[1:]) * 1_000_000)
+        except ValueError:
+            return None
+    try:
+        stamp = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if stamp.tzinfo is None:
+        stamp = stamp.astimezone()                   # journalctl reads bare stamps as local
+    return int(stamp.timestamp() * 1_000_000)
+
+
+def _decode_cursor(cursor: str | None) -> tuple[int | None, str | None]:
+    if not cursor:
+        return None, None
+    floor, sep, journal_cursor = cursor.partition(CURSOR_SEP)
+    if sep and floor.isdigit():
+        return int(floor), journal_cursor
+    return None, cursor
+
+
+def _encode_cursor(floor_usec: int | None, journal_cursor: str) -> str:
+    return (f"{floor_usec}{CURSOR_SEP}{journal_cursor}"
+            if floor_usec is not None else journal_cursor)
+
+
+def _repeat_identity(record: dict) -> str:
+    """What "the same message" means for repetition counting."""
+    message_id = record.get("MESSAGE_ID")
+    if isinstance(message_id, str) and message_id:
+        return f"id:{message_id}"
+    message = record.get("MESSAGE")
+    return "msg:" + (message if isinstance(message, str) else repr(message))
 
 REFERENCE = ["journalctl -o json -n 100", "journalctl -u <unit> --since -1h"]
 
@@ -60,9 +160,18 @@ def _entry_facts(record: dict) -> dict:
     return facts
 
 
-def _entry_item(record: dict) -> dict:
+def _entry_item(record: dict, repeats: Counter | None = None,
+                window: int | None = None) -> dict:
     cursor = record["__CURSOR"]
     facts = _entry_facts(record)
+    if repeats is not None and window is not None:
+        # Page-scoped, and the only facts a row carries that get_object cannot
+        # — a single entry has no window to count within. SPEC rule 14 permits
+        # the divergence and requires it documented: the repeat opinion is
+        # info, and info is also the neutral row default, so
+        # worst_opinion_level is provably identical on both surfaces.
+        facts["RepeatCount"] = repeats[_repeat_identity(record)]
+        facts["RepeatWindow"] = window
     # Same evaluator as get_object (agent/rules/logs.py) — a red row and its
     # opened observation cannot disagree. Entries are neutral, never "ok".
     level = worst_level(journal_opinions(facts), healthy="info")
@@ -92,31 +201,68 @@ class Adapter:
             args += ["-u", native["unit"]]
         if "priority" in native:
             args += ["-p", native["priority"]]
-        if "since" in native and not cursor:
-            # First page only: journalctl rejects --since with --cursor
-            # (see file header); the cursor encodes where to resume.
+        src = env.source("journal-json", "systemd-journal", REFERENCE,
+                         method="journalctl -o json")
+        floor_usec, page_cursor = _decode_cursor(cursor)
+        notes = ["pages walk newest to oldest; next_cursor resumes at the journal's "
+                 "own cursor and carries the since= floor with it"]
+        if "since" in native and page_cursor is None:
+            floor_usec = _since_floor_usec(native["since"])
+            if floor_usec is None:
+                # Errors are observations (SPEC section 6): a bound this adapter
+                # cannot enforce past page 1 must be refused, not accepted and
+                # quietly dropped.
+                return env.collection_page(
+                    self.subsystem, collection, src, [], applied, None,
+                    requested_limit=limit, filters=query or None, status="error",
+                    errors=[f"since={native['since']!r} is not a time expression this "
+                            "agent can enforce across pages; use a relative offset "
+                            "(-24h), a UTC timestamp (2026-08-10T12:00:00Z), "
+                            "@<epoch-seconds>, now, today or yesterday"])
+            # First page: let journalctl seek, which is far cheaper than reading
+            # the whole journal and filtering.
             args += ["--since", native["since"]]
         args += ["-r"]
-        if cursor:
+        if page_cursor:
             # -r --cursor starts AT the cursor and walks older; the first
             # record repeats the entry the previous page ended on.
-            args += ["--cursor", cursor, "-n", str(applied + 1)]
+            args += ["--cursor", page_cursor, "-n", str(applied + 1)]
         else:
             args += ["-n", str(applied)]
 
         records = await anyio.to_thread.run_sync(_run_journalctl, args)
-        if cursor and records and records[0].get("__CURSOR") == cursor:
+        if page_cursor and records and records[0].get("__CURSOR") == page_cursor:
             records = records[1:]
+        # Judged on what journalctl returned, BEFORE the floor filter: it answers
+        # "is there more in the journal", which the filter must not change.
         full_page = len(records) == applied
-        items = [_entry_item(r) for r in records]
+        exhausted = False
+        if floor_usec is not None:
+            inside = [r for r in records
+                      if int(r.get("__REALTIME_TIMESTAMP", 0)) >= floor_usec]
+            exhausted = len(inside) < len(records)
+            if exhausted:
+                notes.append(
+                    f"the since= window ends inside this page: {len(records) - len(inside)} "
+                    "older entries were read and not returned, so next_cursor is null")
+            records = inside
+            notes.append(f"since={native.get('since', '')} resolved to "
+                         f"{env.usec_to_iso(floor_usec)} and is enforced on every page")
+
+        # Counted after the floor filter, so the window is what the page kept.
+        repeats = Counter(_repeat_identity(r) for r in records)
+        items = [_entry_item(r, repeats, len(records)) for r in records]
+        notes.append(REPEAT_WINDOW_NOTE)
         leftover = {k: v for k, v in query.items() if k not in native}
         if leftover:
             items = env.apply_fact_filters(items, leftover)
 
-        next_cursor = records[-1]["__CURSOR"] if full_page and records else None
+        next_cursor = (_encode_cursor(floor_usec, records[-1]["__CURSOR"])
+                       if full_page and records and not exhausted else None)
         return env.collection_page(
             self.subsystem, collection,
-            env.source("journal-json", "systemd-journal", REFERENCE, method="journalctl -o json"),
+            env.source("journal-json", "systemd-journal", REFERENCE,
+                       method="journalctl -o json", notes=notes),
             items, applied, next_cursor, requested_limit=limit, filters=query or None,
         )
 

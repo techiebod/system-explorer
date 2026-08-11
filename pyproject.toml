@@ -46,7 +46,12 @@ vms = ["libvirt-python"]
 # than a base dependency because Debian and Ubuntu do not package the SDK at
 # all yet (ROADMAP section 5, phase 5 backports it).
 mcp = ["mcp>=1,<2"]
-test = ["pytest", "jsonschema"]
+# The conformance suite needs jsonschema for the envelope contract, plus the
+# adapters' own third-party imports so their PURE helpers can be unit-tested
+# (a since= floor resolver, a cursor codec) without a live host. All three
+# install anywhere, so the suite still runs on a developer's laptop; libvirt
+# stays out because vms.py defers that import to a hypervisor host.
+test = ["pytest", "jsonschema", "httpx", "anyio", "dbus-fast"]
 
 [project.scripts]
 # Names unchanged across the 0.4 restructure: nix/module.nix and

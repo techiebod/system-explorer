@@ -284,6 +284,37 @@ CASES = [
      {"Priority": 3}, {("journal-priority", "info")}),
     ("journal-priority-6-quiet", logs.journal_opinions,
      {"Priority": 6}, set()),
+    # Container stderr: the journald driver maps it to err, so a p3 from a
+    # container says which stream, not which severity.
+    ("journal-priority-3-container-stderr", logs.journal_opinions,
+     {"Priority": 3, "Container": "example-app",
+      "Message": "ImproperlyConfigured: SECRET_KEY is not set"},
+     {("journal-priority", "info")}),
+    # Repetition is the discrimination priority cannot give. It never moves a
+    # level — it fires alongside whatever the priority already said.
+    ("journal-repeated-spam", logs.journal_opinions,
+     {"Priority": 3, "MessageId": "24dc708d9e6a4226a3efe2033bb744de",
+      "Message": "Ignoring duplicate name 'org.example.Thing' in service file",
+      "RepeatCount": 72, "RepeatWindow": 72},
+     {("journal-priority", "info"), ("journal-repeated", "info")}),
+    ("journal-repeated-critical-coredumps", logs.journal_opinions,
+     {"Priority": 2, "MessageId": "fc2e22bc6ee647b6b90729ab34a250b1",
+      "Message": "Process 75001 (dhcpcd) of user 999 dumped core.",
+      "RepeatCount": 8, "RepeatWindow": 8},
+     {("journal-priority", "critical"), ("journal-repeated", "info")}),
+    ("journal-repeat-below-threshold-quiet", logs.journal_opinions,
+     {"Priority": 3, "Message": "End of file while reading data: I/O error",
+      "RepeatCount": 2, "RepeatWindow": 30},
+     {("journal-priority", "info")}),
+    # A count with no window is not a measurement: presence-driven, so quiet.
+    ("journal-repeat-window-missing-quiet", logs.journal_opinions,
+     {"Priority": 3, "Message": "x", "RepeatCount": 9},
+     {("journal-priority", "info")}),
+    # Above p3 nothing is judged at all, repetition included — a thousand-row
+    # kernel page must not grow a thousand opinions.
+    ("journal-priority-4-repeats-quiet", logs.journal_opinions,
+     {"Priority": 4, "Message": "link up", "RepeatCount": 40, "RepeatWindow": 40},
+     set()),
     ("journal-priority-absent-quiet", logs.journal_opinions,
      {"Message": "hello"}, set()),
 
