@@ -9,9 +9,10 @@ Humans: start with [README.md](README.md); the contract is
 A **read-only** infrastructure observation service. Three deployables, all
 from one Python distribution:
 
-- **system-explorer** — per-host agent. HTTP API serving observations
+- **se-agent** — per-host agent. HTTP API serving observations
   (systemd units, journal, storage/ZFS, network, docker, libvirt VMs) as
-  `se.observation/1` envelopes. No mutations, no auth.
+  `se.observation/1` envelopes. No mutations, no auth. (The distribution
+  is `system-explorer`; all three binaries share the `se-` prefix.)
 - **se-hub** — per-site hub. One URL fronting a site's agents: proxies
   their GETs verbatim and serves the same operator UI. Stateless.
 - **se-mcp** — MCP aggregator. Fronts one or more agents for AI clients.

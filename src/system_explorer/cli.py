@@ -53,7 +53,7 @@ def _serve(app: str, prog: str, description: str, env_prefix: str, default_port:
 def agent() -> None:
     _serve(
         "system_explorer.agent.main:app",
-        "system-explorer-agent",
+        "se-agent",
         "System Explorer host agent: read-only observation over HTTP.",
         "SE",
         8091,

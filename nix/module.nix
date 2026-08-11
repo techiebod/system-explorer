@@ -17,7 +17,7 @@ in
       # buildPythonApplication and names its dependencies individually.
       default = pkgs.python3Packages.callPackage ./package.nix { };
       defaultText = lib.literalExpression "pkgs.python3Packages.callPackage ./package.nix { }";
-      description = "System Explorer agent package (bin/system-explorer-agent).";
+      description = "System Explorer agent package (bin/se-agent).";
     };
 
     listenAddress = lib.mkOption {

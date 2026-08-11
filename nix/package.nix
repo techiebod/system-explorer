@@ -32,7 +32,7 @@
 , jsonschema
 
 , pname ? "system-explorer"
-, mainProgram ? "system-explorer-agent"
+, mainProgram ? "se-agent"
   # libvirt-python is a C extension against libvirt: worth its closure on a
   # hypervisor host, pure waste on the hub and the aggregator. Declared as
   # the [vms] extra in pyproject.toml, so leaving it out does not trip the

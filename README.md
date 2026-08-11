@@ -106,7 +106,7 @@ Outside Nix it is an ordinary Python distribution:
 
 ```sh
 pip install .            # or .[vms] on a libvirt host, .[mcp] for se-mcp
-system-explorer-agent --host 0.0.0.0 --port 8091
+se-agent --host 0.0.0.0 --port 8091
 ```
 
 ## Conformance

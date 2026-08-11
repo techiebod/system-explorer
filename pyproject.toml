@@ -54,9 +54,12 @@ mcp = ["mcp>=1,<2"]
 test = ["pytest", "jsonschema", "httpx", "anyio", "dbus-fast"]
 
 [project.scripts]
-# Names unchanged across the 0.4 restructure: nix/module.nix and
-# nix/hub-module.nix name them in ExecStart, so deployed units keep working.
-system-explorer-agent = "system_explorer.cli:agent"
+# One prefix for all three, settled before the first published package: these
+# become /usr/bin entries and binary-package names in ROADMAP phase 3, at
+# which point a rename costs users an upgrade path. Nothing is published yet,
+# so no compatibility alias is owed; the NixOS units resolve the agent through
+# meta.mainProgram (lib.getExe), not this literal.
+se-agent = "system_explorer.cli:agent"
 se-hub = "system_explorer.cli:hub"
 se-mcp = "system_explorer.mcp.server:main"
 
