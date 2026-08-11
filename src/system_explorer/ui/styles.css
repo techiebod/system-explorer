@@ -121,9 +121,13 @@ body {
 .nav-badge.critical { color: var(--crit); background: color-mix(in srgb, var(--crit) 13%, transparent); }
 .nav-badge.err { color: var(--text-faint); border: 1px solid var(--border-2); line-height: 1.5; padding: 0 5px; }
 .sub-label > .dot { margin-right: 0; }
+/* Toggle and hints share the first line; the build stamp takes its own line
+   underneath. All three used to compete for one 232px row, so the version —
+   the thing you go looking for to answer "am I seeing the fix" — ended up
+   wedged into whatever the wrapping hints left over. */
 #side-foot {
   padding: 10px 12px; border-top: 1px solid var(--border);
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   color: var(--text-faint); font-size: 11px;
 }
 #theme-toggle {
@@ -546,6 +550,7 @@ pre.evidence {
    question that is only asked occasionally, and must never compete with the
    navigation. */
 #build {
+  flex-basis: 100%;          /* its own line, below the hints */
   margin-top: 6px;
   font-family: var(--mono);
   font-size: 10px;
