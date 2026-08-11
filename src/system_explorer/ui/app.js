@@ -63,8 +63,8 @@ const COLUMNS = {
   "hardware/platform": ["ProductName", "CPUModel", "CPUs", "MemoryTotalBytes", "BiosVersion"],
   "hardware/pci": ["Class", "Vendor", "Model", "Driver"],
   "hardware/usb": ["Vendor", "Product", "SpeedMbps", "USBVersion"],
-  "hardware/scsi": ["Kind", "Transport", "Vendor", "Model", "SizeBytes", "LinkSpeed", "State", "Block", "Devices", "EnclosureSlot", "SmartTemperatureC"],
-  "hardware/nvme": ["LinkSpeed", "LinkWidth", "Model", "FirmwareRev", "Serial", "State", "SmartTemperatureC", "Namespaces"],
+  "hardware/scsi": ["Kind", "Transport", "Vendor", "Model", "SizeBytes", "Link", "State", "Block", "Devices", "EnclosureSlot", "SmartTemperatureC"],
+  "hardware/nvme": ["Link", "Model", "FirmwareRev", "Serial", "State", "SmartTemperatureC", "Namespaces"],
   "network/links": ["OperState", "Kind", "MTU", "MACAddress", "Addresses"],
   "network/routes": ["Gateway", "Device", "Protocol", "Scope", "Family"],
   "network/lookups": ["Question", "Input", "Example"],
@@ -84,6 +84,20 @@ const COLUMNS = {
    already group by it; the rows could not say it. */
 const PSEUDO_COLUMNS = {
   Kind: (item) => item.type,
+  /* Speed and width are independent dimensions that MULTIPLY into bandwidth —
+     8.0 GT/s is the per-lane rate, x2 is the lane count, so Gen3 x2 carries half
+     of Gen3 x4 at the same "speed". Shown as four separate facts, an identical
+     speed pair sat next to a differing width pair and the warning looked
+     self-contradictory. One string makes the comparison a single glance. */
+  Link: (item) => {
+    const f = item.facts;
+    if (!f.LinkSpeed && !f.LinkWidth) return null;
+    const now = [f.LinkSpeed, f.LinkWidth ? `x${f.LinkWidth}` : null]
+      .filter(Boolean).join(" ");
+    const max = [f.LinkSpeedMax, f.LinkWidthMax ? `x${f.LinkWidthMax}` : null]
+      .filter(Boolean).join(" ");
+    return max && max !== now ? `${now}  (capable of ${max})` : now;
+  },
 };
 
 const FACETS = {

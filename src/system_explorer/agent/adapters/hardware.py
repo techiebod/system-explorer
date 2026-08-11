@@ -119,9 +119,34 @@ def _epoch_iso(seconds: float) -> str:
 PLATFORM_REFERENCE = ["lshw -class system", "dmidecode -t system", "lscpu"]
 PCI_REFERENCE = ["lspci -nnk"]
 USB_REFERENCE = ["lsusb", "lsusb -t"]
-SCSI_REFERENCE = ["lsscsi -v", "ls -l /dev/disk/by-path", "ls /sys/class/enclosure",
-                  "smartctl -H /dev/<disk>"]
-NVME_REFERENCE = ["nvme list", "smartctl -H /dev/<ctrl>", "cat /sys/class/nvme/*/firmware_rev"]
+# Reference commands are a promise: an administrator can reproduce the
+# observation by running them (SPEC rule 5). That makes them a truthfulness
+# surface, and they had drifted — link rates, host identity and serials were all
+# being read from places nothing here named, because facts were added without
+# updating this. Anything the adapter reads belongs in one of these lists.
+SCSI_REFERENCE = ["lsscsi -v",
+                  "ls -l /dev/disk/by-path",
+                  "ls /sys/class/enclosure",
+                  # host identity: driver, transport, and the PCI function it
+                  # hangs from, whose hwdb names come from udev not sysfs.
+                  "cat /sys/class/scsi_host/host*/proc_name",
+                  "udevadm info /sys/bus/pci/devices/<addr>",
+                  # negotiated link rate, per transport
+                  "cat /sys/class/ata_link/link*/sata_spd",
+                  "cat /sys/class/sas_phy/phy-*/negotiated_linkrate",
+                  "cat /sys/class/sas_phy/phy-*/maximum_linkrate",
+                  "cat /sys/class/sas_device/end_device-*/{sas_address,phy_identifier}",
+                  # capacity and serial without a daemon
+                  "cat /sys/block/<disk>/size",
+                  "sg_vpd --page=sn /dev/<disk>",
+                  "smartctl -H -A /dev/<disk>"]
+NVME_REFERENCE = ["nvme list",
+                  "smartctl -H -A /dev/<ctrl>",
+                  "cat /sys/class/nvme/*/firmware_rev",
+                  # PCIe link, and the bridge above it whose capability is what
+                  # distinguishes a narrow slot from a degraded link
+                  "cat /sys/class/nvme/<ctrl>/device/{current,max}_link_{speed,width}",
+                  "lspci -vv -s <addr> | grep LnkSta"]
 
 # ATA devices reach SCSI with the transport in the vendor field; the real
 # maker is recoverable from the model string's conventional prefix. This is
