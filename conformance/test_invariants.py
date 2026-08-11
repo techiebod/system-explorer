@@ -18,8 +18,14 @@ def test_opinion_evidence_resolves_into_facts(example):
 
 
 def test_errors_listed_when_status_not_ok(example):
-    """status partial/error must say what failed, non-emptily."""
+    """status partial/error must say what failed, non-emptily.
+
+    Not every envelope has one: the fact dictionary is static prose with no
+    acquisition behind it, so it can neither succeed partially nor fail.
+    """
     path, doc = example
+    if "status" not in doc:
+        return
     if doc["status"] != "ok":
         assert doc.get("errors"), f"{path.name}: status={doc['status']} but errors is empty"
     else:

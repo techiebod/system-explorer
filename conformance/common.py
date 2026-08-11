@@ -30,6 +30,7 @@ SCHEMA_FILES = {
     "se.collection/1": SCHEMA_DIR / "collection.schema.json",
     "se.status/1": SCHEMA_DIR / "status.schema.json",
     "se.changes/1": SCHEMA_DIR / "changes.schema.json",
+    "se.facts/1": SCHEMA_DIR / "facts.schema.json",
 }
 
 SCHEMAS: dict[str, dict] = {

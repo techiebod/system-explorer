@@ -139,6 +139,14 @@ agent. An agent that starts but reports subsystems unavailable is
 usually missing a tool or a grant (docker group, CAP_NET_ADMIN) — read
 the reason string; it names the cause.
 
+Facts keep the names Linux itself uses, and those do not explain themselves:
+`GET /v1/facts` (`se.facts/1`, MCP `get_fact_dictionary`) is one sentence per
+fact name, grouped by subsystem and collection. Fetch it once when reasoning
+about an unfamiliar subsystem rather than inferring meaning from a name —
+`LinkSpeed` beside `LinkWidth` does not say that one is a per-lane rate and
+the other a lane count. Coverage is partial: an absent fact has no sentence
+written yet.
+
 ## Working on the code
 
 - Layout: one Python distribution under `src/system_explorer/` —

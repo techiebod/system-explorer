@@ -157,6 +157,40 @@ def _human_age(seconds: int) -> str:
     return f"{seconds // 86400}d{(seconds % 86400) // 3600}h"
 
 
+def _human_rate(per_sec: int) -> str:
+    """Link throughput, in the decimal units every PCIe reference uses. Not
+    humanBytes' binary ladder: 1.97 GB/s rendered as 1.8 GiB/s would disagree
+    with every table the reader goes on to check."""
+    if per_sec >= 1_000_000_000:
+        return f"{per_sec / 1_000_000_000:.1f} GB/s"
+    return f"{per_sec / 1_000_000:.0f} MB/s"
+
+
+def _bandwidth_clause(facts: dict) -> tuple[str, list[str]]:
+    """What the link below capability actually costs, said as a number.
+
+    The old message ended "it does cap the bandwidth available to it" and
+    stopped there, which distinguishes a one-percent cap from a halving not at
+    all — the reader who hit this had to leave the screen and do PCIe
+    arithmetic by hand. The sentence also has to carry the CONCEPT, because the
+    reasonable reading of "8.0 GT/s" beside "x2" is that speed and width are
+    two ways of saying the same thing. They are not: speed is the rate of one
+    lane, width is how many, and the product is the only number anyone wants.
+
+    Empty when the adapter could not derive both figures — a SATA link with no
+    lanes, or a PCIe generation the conversion table has not met — so the
+    message falls back to the qualitative ending rather than inventing one.
+    """
+    now = facts.get("LinkBandwidthBytesPerSec")
+    best = facts.get("LinkBandwidthMaxBytesPerSec")
+    if not now or not best or now == best:
+        return "", []
+    return (f" Speed is the rate of one lane and width is how many of them, "
+            f"so this link carries {_human_rate(now)} each way where the "
+            f"device's own maximum would be {_human_rate(best)}.",
+            ["LinkBandwidthBytesPerSec", "LinkBandwidthMaxBytesPerSec"])
+
+
 def link_opinions(facts: dict) -> list[dict]:
     """A link running below what the device could do — and, where the slot's
     capability is known, whether that is the board's doing or a fault.
@@ -175,6 +209,7 @@ def link_opinions(facts: dict) -> list[dict]:
     maximum, as a healthy SATA port does, is not judged at all.
     """
     opinions: list[dict] = []
+    cost, cost_evidence = _bandwidth_clause(facts)
 
     def judge(key: str, current, device_max, slot_max, noun: str, render) -> None:
         if not current or not device_max or current == device_max:
@@ -188,8 +223,9 @@ def link_opinions(facts: dict) -> list[dict]:
                 f"This device runs at {render(current)} of the "
                 f"{render(device_max)} it supports, because the slot provides "
                 f"{render(slot_max)}. That is how the board is wired, not a "
-                "fault — but it does cap the bandwidth available to it.",
-                evidence))
+                + ("fault." + cost if cost
+                   else "fault — but it does cap the bandwidth available to it."),
+                evidence + cost_evidence))
         else:
             if slot_max is not None:
                 evidence.append(f"SlotLink{noun}Max")
@@ -198,8 +234,9 @@ def link_opinions(facts: dict) -> list[dict]:
                 f"Link trained at {render(current)}, below the "
                 f"{render(device_max)} this device supports"
                 + (f" and the {render(slot_max)} its slot offers" if slot_max else "")
-                + " — both ends can do better, so this is a degraded link.",
-                evidence))
+                + " — both ends can do better, so this is a degraded link."
+                + cost,
+                evidence + cost_evidence))
 
     judge("link-degraded", facts.get("LinkSpeed"), facts.get("LinkSpeedMax"),
           facts.get("SlotLinkSpeedMax"), "Speed", lambda v: str(v))

@@ -141,7 +141,7 @@ const context = vm.createContext(sandbox);
 // its state and helpers with const, which in a vm script are lexically scoped
 // and never become properties of the sandbox. Only code inside that script can
 // see them.
-const EXPORTS = "\n;globalThis.__ui = { state, renderNav, applyNavBadges, renderBuild, navRoutes, navModel, cellValue, PSEUDO_COLUMNS };";
+const EXPORTS = "\n;globalThis.__ui = { state, renderNav, applyNavBadges, renderBuild, navRoutes, navModel, cellValue, PSEUDO_COLUMNS, linkPanel, scalarText, factHelp };";
 vm.runInContext(readFileSync(APP, "utf8") + EXPORTS, context, { filename: "app.js" });
 const ui = sandbox.__ui;
 
@@ -319,6 +319,105 @@ check("every pseudo-column yields undefined rather than throwing on a bare item"
   for (const key of Object.keys(ui.PSEUDO_COLUMNS)) {
     ui.cellValue(key, bare);
   }
+});
+
+/* ── the link equation ────────────────────────────────────────────────────
+   Speed × lanes = bandwidth, drawn. It exists because the four link facts read
+   as four unrelated numbers: a reader asked what "x2 of x4" cost them, could
+   not answer from the screen, and did the PCIe arithmetic by hand offline.
+   Every branch below is a shape a real host actually produces, and each one
+   must degrade rather than invent — the panel says less, never something
+   untrue, when a fact it wants is absent. */
+
+const flatten = (node) => {
+  if (!node) return "";
+  const own = node.textContent ?? "";
+  const kids = (node.children || []).map(flatten).join(" ");
+  return `${own} ${kids}`.replace(/\s+/g, " ").trim();
+};
+const marks = (panel) => {
+  const found = [];
+  const walk = (n) => {
+    if (n.className === "eq-v eq-lanes") found.push(n.children.map(c => c.className));
+    (n.children || []).forEach(walk);
+  };
+  walk(panel);
+  return found[0] || [];
+};
+
+check("the link equation states speed, lanes and the product", () => {
+  // jar: an x4-capable card in an M.2 socket wired for two lanes.
+  const panel = ui.linkPanel({
+    LinkSpeed: "8.0 GT/s PCIe", LinkSpeedMax: "8.0 GT/s PCIe",
+    LinkWidth: 2, LinkWidthMax: 4, SlotLinkWidthMax: 2,
+    LinkBandwidthBytesPerSec: 1969230768, LinkBandwidthMaxBytesPerSec: 3938461536,
+  });
+  const shown = flatten(panel);
+  for (const want of ["8.0 GT/s PCIe", "the rate of one lane", "×",
+                      "x2 lanes of x4", "=", "2.0 GB/s", "each way",
+                      "the slot provides x2", "3.9 GB/s"]) {
+    if (!shown.includes(want)) throw new Error(`missing ${JSON.stringify(want)} in: ${shown}`);
+  }
+  const lanes = marks(panel);
+  if (lanes.join(",") !== "on,on,off,off")
+    throw new Error(`lane marks were ${lanes.join(",")}, expected two lit of four`);
+});
+
+check("a link at full width draws no dark lanes", () => {
+  const panel = ui.linkPanel({
+    LinkSpeed: "8.0 GT/s PCIe", LinkSpeedMax: "8.0 GT/s PCIe",
+    LinkWidth: 4, LinkWidthMax: 4, SlotLinkWidthMax: 4,
+    LinkBandwidthBytesPerSec: 3938461536, LinkBandwidthMaxBytesPerSec: 3938461536,
+  });
+  if (marks(panel).includes("off")) throw new Error("an unnarrowed link drew an unlit lane");
+  // Drawn anyway: a healthy device is where the concept is cheapest to learn.
+  if (!flatten(panel).includes("3.9 GB/s")) throw new Error("healthy link showed no bandwidth");
+});
+
+check("a SATA link is not given lanes it does not have", () => {
+  const panel = ui.linkPanel({ LinkSpeed: "6.0 Gbps", LinkSpeedMax: "6.0 Gbps" });
+  const shown = flatten(panel);
+  if (shown.includes("lane")) throw new Error(`serial link claimed lanes: ${shown}`);
+  if (!shown.includes("negotiated rate")) throw new Error(`no rate caption: ${shown}`);
+  if (marks(panel).length) throw new Error("serial link drew lane marks");
+});
+
+check("an unrecognised PCIe generation yields no bandwidth term", () => {
+  // The conversion table is exact-match: a generation it has not met must make
+  // the panel say less, not guess a number.
+  const shown = flatten(ui.linkPanel({
+    LinkSpeed: "128.0 GT/s PCIe", LinkWidth: 2, LinkWidthMax: 4, SlotLinkWidthMax: 2,
+  }));
+  if (/GB\/s|MB\/s/.test(shown)) throw new Error(`invented a bandwidth: ${shown}`);
+  if (!shown.includes("x2 lanes of x4")) throw new Error(`lost the lane count: ${shown}`);
+});
+
+check("an object with no link facts gets no panel at all", () => {
+  if (ui.linkPanel({ Model: "256GB SSD" }) !== null)
+    throw new Error("drew a link panel for something with no link");
+});
+
+check("lane counts and rates carry their units", () => {
+  const cases = [["LinkWidth", 2, "x2 lanes"], ["SlotLinkWidthMax", 2, "x2 lanes"],
+                 ["LinkBandwidthBytesPerSec", 1969230768, "2.0 GB/s"]];
+  for (const [key, value, want] of cases) {
+    const got = ui.scalarText(key, value, false);
+    if (got !== want) throw new Error(`${key} rendered ${got}, expected ${want}`);
+  }
+  // Throughput is decimal where capacity is binary: 2.0 GB/s must not become
+  // 1.8 GiB/s and disagree with every PCIe reference the reader checks.
+  if (ui.scalarText("SizeBytes", 1969230768, false) === "2.0 GB/s")
+    throw new Error("capacity and throughput are sharing a unit ladder");
+});
+
+check("a missing fact dictionary costs tooltips, not the page", () => {
+  ui.state.factDict = null;
+  if (ui.factHelp("LinkSpeed") !== null) throw new Error("invented help with no dictionary");
+  ui.state.factDict = { subsystems: { hardware: { nvme: { LinkSpeed: "one lane's rate." } } } };
+  if (ui.factHelp("LinkSpeed", "hardware", "nvme") !== "one lane's rate.")
+    throw new Error("dictionary lookup missed a documented fact");
+  if (ui.factHelp("LinkSpeed", "hardware", "scsi") !== null)
+    throw new Error("nvme's sentence leaked onto scsi, where lanes do not exist");
 });
 
 if (failures.length) {

@@ -5,6 +5,11 @@ and exposes: subsystem, collections(), capability(), collect(), get_object(),
 get_evidence(). Unknown collection -> KeyError; unknown object -> LookupError;
 both become 404 at the API layer. Anything else becomes an error envelope,
 because errors are observations.
+
+Optionally an adapter also exposes fact_glossary(collection) -> {fact name:
+one sentence}, served from /v1/facts. Optional because a subsystem whose facts
+are undocumented should say nothing rather than block on prose; absent is an
+empty dict, not an error.
 """
 
 from __future__ import annotations

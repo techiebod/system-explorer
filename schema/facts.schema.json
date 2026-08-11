@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "se/facts.v1",
+  "title": "System Explorer fact dictionary",
+  "description": "What each fact MEANS: one sentence per native property name, grouped by subsystem and collection, owned by the adapter that emits the fact. Facts carry native property names (SPEC section 5) and native names are not self-explanatory — a reader looking at LinkSpeed beside LinkWidth cannot tell from the screen that one is a per-lane rate and the other a lane count. Served from its own endpoint rather than riding on every envelope, because a consumer paging a collection should not pay for the same prose on every row, and rather than living in the UI, because a second copy of this knowledge in the browser is a second rulebook. Descriptions, never labels: presentation belongs to clients (SPEC section 5), so the fact name itself is never restated here. Coverage is partial by design — an undocumented fact is absent from this document, which is a statement that no sentence has been written yet, not an error. Shared $defs are duplicated from observation.schema.json deliberately so each schema file is standalone.",
+  "type": "object",
+  "required": ["schema", "host", "observed_at", "subsystems"],
+  "properties": {
+    "schema": { "const": "se.facts/1" },
+    "host": { "$ref": "#/$defs/host" },
+    "observed_at": { "$ref": "#/$defs/utcTimestamp" },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Agent version, so a consumer caching this document can tell when the vocabulary it holds is older than the host it is talking to."
+    },
+    "revision": { "type": "string", "minLength": 1 },
+    "subsystems": {
+      "type": "object",
+      "description": "Subsystem name -> collection name -> fact name -> one sentence. A subsystem or collection with nothing documented is omitted rather than present and empty.",
+      "propertyNames": { "$ref": "#/$defs/subsystemName" },
+      "additionalProperties": {
+        "type": "object",
+        "minProperties": 1,
+        "propertyNames": { "$ref": "#/$defs/subsystemName" },
+        "additionalProperties": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/factName" },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What the fact means, in prose a reader who does not already know the subsystem can use. Says the concept, not the label — the fact name is already on screen beside it."
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "host": {
+      "type": "object",
+      "required": ["machine_id", "hostname"],
+      "properties": {
+        "machine_id": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+        "hostname": { "type": "string", "minLength": 1 }
+      }
+    },
+    "subsystemName": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "factName": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9]*$",
+      "description": "The native property name as it appears in an observation's facts (SPEC section 5): ActiveState, not active_state."
+    },
+    "utcTimestamp": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"
+    }
+  }
+}

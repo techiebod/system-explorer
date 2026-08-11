@@ -1,0 +1,21 @@
+{
+  "schema": "se.facts/1",
+  "host": { "machine_id": "0123456789abcdef0123456789abcdef", "hostname": "host-a" },
+  "observed_at": "2026-08-11T14:31:02Z",
+  "version": "0.4.0",
+  "revision": "29c5cec",
+  "subsystems": {
+    "hardware": {
+      "nvme": {
+        "LinkSpeed": "The signalling rate of ONE PCIe lane, in the kernel's own label. Not the link's total — multiply by LinkWidth for that.",
+        "LinkWidth": "How many PCIe lanes are actually carrying traffic. The link's bandwidth is LinkSpeed multiplied by this.",
+        "LinkWidthMax": "How many lanes the device can use when a slot provides them.",
+        "SlotLinkWidthMax": "How many lanes the slot is physically wired for, read from the bridge above the device. A property of the board, which no configuration can change.",
+        "LinkBandwidthBytesPerSec": "Derived, not read: LinkSpeed's per-lane throughput after PCIe line encoding, times LinkWidth. Each direction — PCIe is full duplex."
+      },
+      "scsi": {
+        "LinkSpeed": "The rate this SATA or SAS link negotiated. One serial connection, so unlike PCIe there is no lane count to multiply."
+      }
+    }
+  }
+}

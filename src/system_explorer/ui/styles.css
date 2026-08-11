@@ -301,6 +301,26 @@ td .dim, .dim { color: var(--text-faint); }
    the pane edge where it clips unwrapped. */
 .facts .v { font-family: var(--mono); color: var(--ident); overflow-wrap: anywhere; min-width: 0; }
 
+/* The link equation: speed × lanes = bandwidth. Baseline alignment puts the
+   × and = on the values' line rather than the middle of value-plus-caption. */
+.link-eq {
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px; margin-bottom: 8px;
+}
+.eq-row { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; }
+.eq-op { color: var(--text-faint); font-size: 13px; }
+.eq-v { font-family: var(--mono); font-size: 12.5px; color: var(--ident); }
+.eq-c { color: var(--text-dim); font-size: 10.5px; margin-top: 2px; }
+.eq-note { color: var(--text-dim); font-size: 11px; margin-top: 8px; }
+/* Lanes, drawn. Countable marks for a countable thing — not a meter: nothing
+   here is a proportion of anything, each box is one physical lane. */
+.eq-lanes { display: flex; gap: 3px; align-items: center; height: 13px; }
+.eq-lanes span {
+  width: 6px; height: 13px; border-radius: 1px; box-sizing: border-box;
+}
+.eq-lanes .on { background: var(--ident); }
+.eq-lanes .off { border: 1px solid var(--border-2); }
+
 .v-list { margin: 0; padding: 0; list-style: none; }
 .v-list li { line-height: 1.65; }
 
@@ -322,6 +342,16 @@ td .dim, .dim { color: var(--text-faint); }
 
 pre.v-json { margin: 0; font: 11px/1.5 var(--mono); color: var(--ident); white-space: pre-wrap; }
 .facts .v.null { color: var(--text-faint); }
+
+/* A fact that the host's dictionary can explain says so, quietly. An
+   explanation nobody knows is there helps nobody: the reader who asked what
+   LinkSpeed meant had no reason to hover a plain word. Underline only — the
+   name itself must stay exactly as the envelope spells it. */
+.facts .k[title], .ev-chip[title], #grid-head th[title] {
+  text-decoration: underline dotted var(--text-faint);
+  text-underline-offset: 3px;
+  cursor: help;
+}
 .facts > div.cited { background: color-mix(in srgb, var(--warn) 8%, transparent); }
 
 .opinion {

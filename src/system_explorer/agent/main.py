@@ -180,6 +180,44 @@ async def capabilities() -> dict:
     return out
 
 
+@app.get("/v1/facts")
+async def fact_dictionary() -> dict:
+    """What each fact MEANS — one sentence, owned by the adapter that emits it.
+
+    Facts carry native property names (SPEC section 5) and native names are not
+    self-explanatory. A reader looking at LinkSpeed "8.0 GT/s PCIe" beside
+    LinkWidth 2 reasonably asked whether lanes and speed were the same thing;
+    nothing on the screen could tell them, and no amount of renaming would have.
+
+    An endpoint rather than a map in the UI, because a second copy of this
+    knowledge in the browser is a second rulebook and they drift (SPEC rule 14
+    exists because three of them already had). An endpoint rather than
+    descriptions on every envelope, because an agent paging ten thousand rows
+    should not pay for the same prose ten thousand times. Fetched once, cached,
+    and equally available to an LLM as to the UI — one contract, two consumers.
+    """
+    subsystems: dict = {}
+    for name, adapter in ADAPTERS.items():
+        glossary = getattr(adapter, "fact_glossary", None)
+        if glossary is None:
+            continue
+        documented = {collection: entries
+                      for collection in adapter.collections()
+                      if (entries := glossary(collection))}
+        if documented:
+            subsystems[name] = documented
+    out = {
+        "schema": "se.facts/1",
+        "host": env.HOST,
+        "observed_at": env.utc_now(),
+        "version": VERSION,
+        "subsystems": subsystems,
+    }
+    if REVISION:
+        out["revision"] = REVISION
+    return out
+
+
 # Collections whose contents have no honest current health to roll up,
 # declined with a reason — the roll-up is nullable by design (ROADMAP
 # slice 1). Hard-coded so a new collection rolls up by default and is

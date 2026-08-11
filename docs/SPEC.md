@@ -327,6 +327,22 @@ Field semantics:
   and native types. The v0.1 `{key, label, value}` list is gone — labels are
   presentation and belong to clients. Per-subsystem fact schemas may tighten
   `facts` later; v1 requires only that it is an object.
+  - Native names are the contract, and they are not self-explanatory: what a
+    fact MEANS is served separately by `/v1/facts` (§6), one sentence per
+    name, owned by the adapter that emits it. Never a `description` beside the
+    value — an agent paging a collection would pay for the same prose on every
+    row.
+  - A fact is normally READ. A **derived** fact is permitted where the
+    derivation is exact arithmetic over facts already in the envelope plus a
+    fixed published constant, and it is absent (never guessed, never null)
+    whenever any input is missing or unrecognised. `LinkBandwidthBytesPerSec`
+    is the first: `LinkSpeed` is the rate of one PCIe lane and `LinkWidth` is
+    how many, and no reader was deriving the product for themselves — the one
+    who tried had to leave the screen to do it. It is a fact rather than prose
+    so an opinion can CITE it (rule 3), a client can render it without carrying
+    a PCIe table of its own, and an agent consumer gets the same arithmetic the
+    screen shows. The bar is deliberately high: an estimate, a threshold or a
+    judgement is an opinion, not a fact.
 - **`status`** is `ok` | `partial` | `error`, with `errors[]` listing what
   failed. `partial` means some facts are present and trustworthy; `error`
   means the envelope documents a failed acquisition. Errors are observations.
@@ -398,6 +414,7 @@ Base path `/v1`. All responses are envelopes or envelope pages.
 |---|---|
 | `GET /health` | liveness |
 | `GET /v1/capabilities` | per-subsystem availability, with a `reason` for anything absent |
+| `GET /v1/facts` | the fact dictionary (`se.facts/1`): what each fact means |
 | `GET /v1/{subsystem}/{collection}` | collection page (`se.collection/1`) |
 | `GET /v1/{subsystem}/{collection}/{object_id}` | one observation (`se.observation/1`) |
 | `GET /v1/{subsystem}/{collection}/{object_id}/evidence` | native evidence, fresh |
@@ -414,6 +431,34 @@ Collection behaviour (carried from SE-004 §11, unchanged in spirit):
 Capabilities response distinguishes, per SE-004 §12: `available`,
 `unsupported` (with reason: "no docker socket on this host"), and
 `error` (with the failure).
+
+### The fact dictionary — what a native name means
+
+Rule 2 keeps native terminology, and native terminology is not
+self-explanatory. A reader looking at `LinkSpeed` "8.0 GT/s PCIe" beside
+`LinkWidth` 2 reasonably asked whether lanes and speed were the same thing;
+they are not, and nothing on the screen said so. No renaming fixes that — the
+reader needs the concept, once, where they are looking.
+
+`GET /v1/facts` returns `se.facts/1`: subsystem → collection → fact name → one
+sentence. Its shape follows from constraints already in this document:
+
+- **An endpoint, not a client-side table.** Rule 14 exists because duplicated
+  knowledge drifts. A map of fact meanings in the UI would be a second one, and
+  the UI is not where the fact is emitted.
+- **An endpoint, not a `description` beside every value.** §5 keeps `facts` a
+  flat map of native names; a consumer paging ten thousand rows must not pay
+  for the same prose ten thousand times. Fetched once, cached, and equally
+  available to an agent as to the UI — the two-consumers rule of §1.
+- **Owned by the emitting adapter**, so the sentence cannot drift from the
+  thing it describes, and enforced as such: conformance rejects a documented
+  name that no longer appears in that adapter, and rejects a fact an opinion
+  CITES that carries no sentence and no reviewed exemption.
+- **Descriptions, never labels.** Presentation belongs to clients (§5), so the
+  name itself is never restated — the client already has it.
+- **Coverage is partial by design.** An undocumented fact is absent from the
+  document. That says no sentence has been written yet, which is a statement,
+  not an error (rule 7).
 
 ### Lookups — parameterised read-only questions
 
@@ -540,6 +585,16 @@ Design direction (binding; detail iterates with the implementation):
   gauges, no donut charts, no decorative color.
 - **Native identifiers are always monospace**: unit names, object IDs,
   dataset paths, digests.
+- **A native name the host can explain says so.** Facts keep their native
+  spelling, and the meaning arrives from `/v1/facts` (§6) — never a table in
+  the client. Help nobody knows is there helps nobody, so a fact with a
+  sentence behind it is marked as hoverable rather than left looking like
+  plain text. Absent help degrades to today's behaviour and nothing else.
+- **Facts that multiply are shown multiplying.** Where two facts combine into
+  the number a reader actually wants — a per-lane rate and a lane count into
+  bandwidth — the relationship is displayed, not left as adjacent rows for the
+  reader to spot. Composition of envelope facts only: the arithmetic itself
+  belongs to the agent (§5), never to a table in the browser.
 - **Color is semantic only**: opinion levels (info/warn/critical), envelope
   status (ok/partial/error), and later diff states (added/removed/changed).
   Everything else stays neutral.
@@ -569,6 +624,7 @@ legacy sse (`/sse` + `/messages/`, the broker layout):
 |---|---|
 | `list_hosts()` | configured agent endpoints + their capabilities |
 | `get_status(host?)` | `GET /v1/status` — one host, or every configured host |
+| `get_fact_dictionary(host)` | `GET /v1/facts` — what each native fact name means |
 | `get_collection(host, subsystem, collection, filters?, limit?, cursor?)` | `GET /v1/...` |
 | `get_object(host, subsystem, collection, id)` | `GET /v1/.../{id}` |
 | `get_evidence(host, subsystem, collection, id)` | `GET /v1/.../evidence` |

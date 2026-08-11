@@ -402,16 +402,18 @@ CASES = [
     # so INFO — it caps bandwidth and no operator can change it.
     ("pcie-width-explained-by-the-slot", hardware.link_opinions,
      {"LinkSpeed": "8.0 GT/s PCIe", "LinkSpeedMax": "8.0 GT/s PCIe",
-      "LinkWidth": "2", "LinkWidthMax": "4", "SlotLinkWidthMax": "2"},
+      "LinkWidth": 2, "LinkWidthMax": 4, "SlotLinkWidthMax": 2,
+      "LinkBandwidthBytesPerSec": 1_969_230_768,
+      "LinkBandwidthMaxBytesPerSec": 3_938_461_536},
      {("link-width-degraded", "info")}),
     # Both ends capable of x4 and the link came up at x2: a real fault.
     ("pcie-width-degraded-both-ends-capable", hardware.link_opinions,
-     {"LinkWidth": "2", "LinkWidthMax": "4", "SlotLinkWidthMax": "4"},
+     {"LinkWidth": 2, "LinkWidthMax": 4, "SlotLinkWidthMax": 4},
      {("link-width-degraded", "warn")}),
     # No slot capability to compare (SAS, SATA): cannot attribute it, so warn
     # rather than silently excusing it.
     ("link-width-degraded-slot-unknown", hardware.link_opinions,
-     {"LinkWidth": "2", "LinkWidthMax": "4"},
+     {"LinkWidth": 2, "LinkWidthMax": 4},
      {("link-width-degraded", "warn")}),
     ("link-speed-degraded-both-ends-capable", hardware.link_opinions,
      {"LinkSpeed": "1.5 Gbps", "LinkSpeedMax": "6.0 Gbps",
@@ -579,6 +581,43 @@ def test_emitted_evidence_resolves_into_input_facts(_name, evaluator, facts, exp
         assert op["evidence"], f"opinion {op['key']!r} cites no evidence"
         for path in op["evidence"]:
             resolve_fact_path(facts, path)
+
+
+def test_link_opinion_quantifies_the_cap_when_the_adapter_derived_it():
+    """A capped link says what the cap COSTS, in bytes, citing the derived
+    facts rather than asserting a figure the envelope does not contain.
+
+    "it does cap the bandwidth available to it" separates a one-percent cap
+    from a halving not at all — the reader who hit this on jar had to leave the
+    screen and do PCIe arithmetic by hand. The sentence carries the concept too,
+    because the reasonable reading of "8.0 GT/s" beside "x2" is that speed and
+    width say the same thing twice.
+    """
+    op = hardware.link_opinions({
+        "LinkSpeed": "8.0 GT/s PCIe", "LinkSpeedMax": "8.0 GT/s PCIe",
+        "LinkWidth": 2, "LinkWidthMax": 4, "SlotLinkWidthMax": 2,
+        "LinkBandwidthBytesPerSec": 1_969_230_768,
+        "LinkBandwidthMaxBytesPerSec": 3_938_461_536})[0]
+    assert "2.0 GB/s each way" in op["message"]
+    assert "3.9 GB/s" in op["message"]
+    assert "rate of one lane" in op["message"]
+    assert {"LinkBandwidthBytesPerSec", "LinkBandwidthMaxBytesPerSec"} <= set(op["evidence"])
+
+
+@pytest.mark.parametrize("facts,why", [
+    ({"LinkSpeed": "128.0 GT/s PCIe", "LinkSpeedMax": "128.0 GT/s PCIe",
+      "LinkWidth": 2, "LinkWidthMax": 4, "SlotLinkWidthMax": 2},
+     "a PCIe generation the conversion table has not met"),
+    ({"LinkSpeed": "1.5 Gbps", "LinkSpeedMax": "6.0 Gbps",
+      "SlotLinkSpeedMax": "6.0 Gbps"}, "a SATA link, which has no lanes"),
+])
+def test_link_opinion_stays_qualitative_when_bandwidth_is_underivable(facts, why):
+    """Rule 7 at the level of prose: no derived figure means no figure, not an
+    invented one. The message keeps its qualitative ending and cites only what
+    it was actually given."""
+    for op in hardware.link_opinions(facts):
+        assert "GB/s" not in op["message"] and "MB/s" not in op["message"], why
+        assert not [p for p in op["evidence"] if "Bandwidth" in p]
 
 
 # ---------------------------------------------------------------------------

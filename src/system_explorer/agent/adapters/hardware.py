@@ -148,6 +148,109 @@ NVME_REFERENCE = ["nvme list",
                   "cat /sys/class/nvme/<ctrl>/device/{current,max}_link_{speed,width}",
                   "lspci -vv -s <addr> | grep LnkSta"]
 
+# ── the fact dictionary ──────────────────────────────────────
+# One sentence per fact, saying what it MEANS. Facts carry native property
+# names (SPEC section 5) and native names are not self-explanatory: a reader
+# looking at LinkSpeed beside LinkWidth reasonably asked whether lanes and
+# speed were the same thing, and nothing on the screen could tell them.
+#
+# It lives beside the code that emits the fact, so the sentence cannot drift
+# from the thing it describes, and it is served from one endpoint rather than
+# riding on every envelope — an agent paging a collection should not pay for
+# the same prose on every row. Presentation belongs to clients, so these are
+# descriptions, never labels: the fact name itself is unchanged.
+_PCIE_LINK_GLOSSARY = {
+    "LinkSpeed": "The signalling rate of ONE PCIe lane, in the kernel's own "
+                 "label. Not the link's total — multiply by LinkWidth for that.",
+    "LinkSpeedMax": "The fastest per-lane rate the device itself supports, "
+                    "whatever the slot it is fitted in can do.",
+    "LinkWidth": "How many PCIe lanes are actually carrying traffic. The "
+                 "link's bandwidth is LinkSpeed multiplied by this.",
+    "LinkWidthMax": "How many lanes the device can use when a slot provides them.",
+    "SlotLinkWidthMax": "How many lanes the slot is physically wired for, read "
+                        "from the bridge above the device. A property of the "
+                        "board, which no configuration can change.",
+    "SlotLinkSpeedMax": "The fastest per-lane rate the slot supports, read from "
+                        "the bridge above the device.",
+    "LinkBandwidthBytesPerSec": "Derived, not read: LinkSpeed's per-lane "
+                                "throughput after PCIe line encoding, times "
+                                "LinkWidth. Each direction — PCIe is full duplex.",
+    "LinkBandwidthMaxBytesPerSec": "The same arithmetic at LinkSpeedMax and "
+                                   "LinkWidthMax — what this device would carry "
+                                   "in a slot that did not narrow it.",
+}
+_SERIAL_LINK_GLOSSARY = {
+    "LinkSpeed": "The rate this SATA or SAS link negotiated. One serial "
+                 "connection, so unlike PCIe there is no lane count to multiply.",
+    "LinkSpeedMax": "The fastest rate this link could run at. On SATA the kernel "
+                    "fills this in only when something has limited the link, so "
+                    "it is usually absent rather than equal to the negotiated rate.",
+}
+_SMART_GLOSSARY = {
+    "SmartOverallPassed": "The drive's own pass/fail self-assessment. A pass is "
+                          "the drive saying it has not crossed its own failure "
+                          "thresholds, not a promise about tomorrow.",
+    "SmartFailing": "The ATA equivalent of SmartOverallPassed, inverted: true "
+                    "means the drive is reporting imminent failure.",
+    "SmartTemperatureC": "Drive temperature in degrees Celsius, from SMART where "
+                         "it is readable and from hwmon otherwise.",
+    "SmartPowerOnHours": "Hours the drive has been powered on across its life — "
+                         "its age in service, not its uptime since boot.",
+    "SmartPercentUsed": "The NVMe drive's own estimate of the write endurance it "
+                        "has consumed. Above 100 is defined and expected; it "
+                        "means the rated endurance is spent, not that it failed.",
+    "SmartAvailableSparePct": "How much of the drive's spare block pool is left "
+                              "to remap failing blocks with.",
+    "SmartSpareThresholdPct": "The spare level below which the drive itself "
+                              "declares a problem — the number "
+                              "SmartAvailableSparePct is judged against.",
+    "SmartMediaErrors": "Unrecovered data-integrity errors the NVMe controller "
+                        "has counted. Non-zero is worth investigating.",
+    "SmartBadSectors": "Sectors the drive has reallocated or cannot read. A "
+                       "count that is growing matters more than its value.",
+    "SmartCriticalWarning": "The NVMe controller's own critical-warning flags, "
+                            "verbatim — the drive naming what it is unhappy about.",
+    "SmartSelftestStatus": "How the drive's last self-test ended, in its own words.",
+    "SmartSnapshotAt": "When the root SMART collector last wrote these readings. "
+                       "They are last-known, not live: reading SMART needs "
+                       "privilege the agent does not hold.",
+    "SmartSnapshotAgeSeconds": "How old that snapshot is. Large means the "
+                               "collector is not running, not that the drive is quiet.",
+    "SmartSnapshotReason": "Why the snapshot is stale or absent, recorded by the "
+                           "collector itself rather than guessed here.",
+    "SmartUnobservable": "Why this device yielded no health reading at all, so a "
+                         "rule can decline to vouch for it instead of calling it healthy.",
+}
+_DEVICE_GLOSSARY = {
+    "Model": "The device's model string, as it reports it.",
+    "Vendor": "The maker, as reported — for ATA devices behind SCSI this is "
+              "derived from the model prefix, which is where the real name survives.",
+    "Serial": "The device's serial number, as it reports it.",
+    "FirmwareRev": "The firmware revision the device is running.",
+    "Firmware": "The firmware revision as the health daemon reports it; the same "
+                "value as FirmwareRev, from the other source.",
+    "Transport": "How the device is actually attached — SAS, SATA, USB, PCIe — "
+                 "established from the kernel's own topology rather than a "
+                 "driver-name lookup.",
+    "PCIAddress": "The PCI function this device hangs from, in domain:bus:device.function form.",
+    "SizeBytes": "The device's capacity as the kernel reports it.",
+    "Block": "The block device this hardware backs, if the kernel created one.",
+    "Namespaces": "The NVMe namespaces this controller exposes — the block "
+                  "devices a filesystem can actually sit on.",
+    "State": "The kernel's own device state. It records that the device was "
+             "enumerated and is reachable, which is not a measurement of health.",
+    "Devices": "How many devices are attached below this host.",
+    "Enclosure": "The enclosure this device is a member of.",
+    "EnclosureSlot": "Which physical bay in the enclosure holds this device — "
+                     "the number to walk to when a drive needs replacing.",
+    "Driver": "The kernel driver bound to this device.",
+}
+_HARDWARE_GLOSSARY: dict[str, dict[str, str]] = {
+    "nvme": {**_DEVICE_GLOSSARY, **_PCIE_LINK_GLOSSARY, **_SMART_GLOSSARY},
+    "scsi": {**_DEVICE_GLOSSARY, **_SERIAL_LINK_GLOSSARY, **_SMART_GLOSSARY},
+}
+
+
 # ATA devices reach SCSI with the transport in the vendor field; the real
 # maker is recoverable from the model string's conventional prefix. This is
 # the same derivation udisks applies — deterministic, not a guess.
@@ -229,6 +332,43 @@ def _sysfs_value(raw: str | None) -> str | None:
     return None if value in _SYSFS_UNKNOWN else value
 
 
+def _lane_count(raw: str | None) -> int | None:
+    """A lane count is a number and was being carried as the sysfs string.
+    That silently disabled the "x2 lanes" rendering which exists precisely so
+    that a bare 2 beside a bare 4 is not read as a speed."""
+    value = _sysfs_value(raw)
+    return int(value) if value and value.isdigit() else None
+
+
+# PCIe throughput of ONE lane, in bytes per second each way, keyed on the
+# kernel's own current_link_speed / max_link_speed label. These are the rates
+# after line encoding — 8b/10b through Gen2, 128b/130b from Gen3, the 242B/256B
+# FLIT at Gen6 — so they are what the link actually carries, not the raw
+# transfer rate the label names.
+#
+# Exact labels only. A generation this table has not met yet must produce
+# silence rather than a plausible wrong number, so there is no parsing of the
+# leading float and no interpolation.
+#
+# This is the one place the product turns a kernel label into a quantity.
+# link_opinions still compares those labels as strings, on the grounds that
+# ranking them would invent precision — converting an exact match does not, and
+# it stays here in the adapter rather than spreading into the rule.
+_PCIE_LANE_BYTES = {
+    "2.5 GT/s PCIe": 250_000_000,
+    "5.0 GT/s PCIe": 500_000_000,
+    "8.0 GT/s PCIe": 984_615_384,
+    "16.0 GT/s PCIe": 1_969_230_769,
+    "32.0 GT/s PCIe": 3_938_461_538,
+    "64.0 GT/s PCIe": 7_562_500_000,
+}
+
+
+def _pcie_bandwidth(speed: str | None, lanes: int | None) -> int | None:
+    per_lane = _PCIE_LANE_BYTES.get(speed or "")
+    return per_lane * lanes if per_lane and lanes else None
+
+
 def _scsi_link_facts(scsi_id: str) -> dict:
     """Negotiated link rate for a SCSI-attached disk, and the maximum where the
     kernel establishes one.
@@ -280,17 +420,28 @@ def _nvme_link_facts(controller: str) -> dict:
     exactly what the first version of this did on a real host.
     """
     base = f"{NVME_DEVICES}/{controller}/device"
-    facts = {
+    facts: dict = {
         "LinkSpeed": _sysfs_value(_read(f"{base}/current_link_speed")),
         "LinkSpeedMax": _sysfs_value(_read(f"{base}/max_link_speed")),
-        "LinkWidth": _sysfs_value(_read(f"{base}/current_link_width")),
-        "LinkWidthMax": _sysfs_value(_read(f"{base}/max_link_width")),
+        "LinkWidth": _lane_count(_read(f"{base}/current_link_width")),
+        "LinkWidthMax": _lane_count(_read(f"{base}/max_link_width")),
     }
     # The bridge immediately above shares this link, so its max_link_* is the
     # slot's capability while the device's is the card's.
     bridge = os.path.dirname(os.path.realpath(base))
-    facts["SlotLinkWidthMax"] = _sysfs_value(_read(f"{bridge}/max_link_width"))
+    facts["SlotLinkWidthMax"] = _lane_count(_read(f"{bridge}/max_link_width"))
     facts["SlotLinkSpeedMax"] = _sysfs_value(_read(f"{bridge}/max_link_speed"))
+    # Derived, not read — and the reason the four facts above stop reading as
+    # four unrelated numbers. Speed is the rate of ONE lane and width is how
+    # many are active, so the figure a reader is actually after is the product;
+    # asked what "x2 of x4" cost them, nobody could answer from this screen.
+    # It is a fact rather than prose so the rule can CITE it instead of
+    # asserting it (SPEC rule 3), the UI can draw it without carrying a PCIe
+    # table of its own, and an agent consumer gets the same arithmetic.
+    facts["LinkBandwidthBytesPerSec"] = _pcie_bandwidth(
+        facts["LinkSpeed"], facts["LinkWidth"])
+    facts["LinkBandwidthMaxBytesPerSec"] = _pcie_bandwidth(
+        facts["LinkSpeedMax"], facts["LinkWidthMax"])
     return {key: value for key, value in facts.items() if value}
 
 
@@ -406,6 +557,9 @@ class Adapter:
 
     def collections(self) -> list[str]:
         return ["platform", "pci", "usb", "scsi", "nvme"]
+
+    def fact_glossary(self, collection: str) -> dict[str, str]:
+        return _HARDWARE_GLOSSARY.get(collection, {})
 
     async def capability(self) -> dict:
         unavailable: dict[str, str] = {}

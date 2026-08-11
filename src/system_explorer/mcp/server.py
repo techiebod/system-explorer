@@ -138,6 +138,21 @@ async def get_object(host: str, subsystem: str, collection: str,
 
 
 @mcp.tool()
+async def get_fact_dictionary(host: str) -> dict:
+    """What each fact MEANS: one sentence per native property name
+    (se.facts/1), grouped by subsystem and collection.
+
+    Facts carry the native names Linux itself uses, and those are not
+    self-explanatory — LinkSpeed "8.0 GT/s PCIe" beside LinkWidth 2 does
+    not say that one is a per-lane rate and the other a lane count, nor
+    that bandwidth is the product. Fetch this once when reasoning about
+    an unfamiliar subsystem rather than inferring meaning from a name.
+    Coverage is partial by design: an absent fact has no sentence written
+    yet, which is not a statement that the fact is unimportant."""
+    return await _get(host, "/v1/facts")
+
+
+@mcp.tool()
 async def get_evidence(host: str, subsystem: str, collection: str,
                        object_id: str) -> dict:
     """The raw native payload behind an observation (D-Bus reply, inspect
