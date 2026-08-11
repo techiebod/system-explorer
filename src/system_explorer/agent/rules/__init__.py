@@ -20,7 +20,11 @@ documented acquisition cost decision, never drifted thresholds.
 
 from __future__ import annotations
 
-OPINION_LEVELS = ("info", "warn", "critical")
+# Re-exported, not defined here: env.opinion() validates against it, and every
+# module in this package imports the envelope, so defining it here and importing
+# it there would be a cycle. This name is how the rulebook and its consumers
+# (including the operator UI, via a conformance lint) refer to the vocabulary.
+from ..envelope import OPINION_LEVELS  # noqa: F401
 
 
 def worst_level(opinions: list[dict], healthy: str | None = "ok") -> str | None:

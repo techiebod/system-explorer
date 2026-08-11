@@ -6,6 +6,7 @@ Key invariants enforced here rather than left to discipline:
 
 - errors are present exactly when status != ok;
 - opinions always cite evidence (the builder requires it);
+- opinion levels come from the closed three-value enum;
 - timestamps are UTC with a Z suffix.
 """
 
@@ -20,6 +21,12 @@ from .. import text as _text
 
 SCHEMA_OBSERVATION = "se.observation/1"
 SCHEMA_COLLECTION = "se.collection/1"
+
+# The severity vocabulary, lowest to highest — the ordering IS the ranking
+# function. It lives here rather than in the rulebook that reads it because
+# every rules module imports this one, so the reverse direction is a cycle;
+# agent.rules re-exports it as the rulebook's own vocabulary.
+OPINION_LEVELS = ("info", "warn", "critical")
 
 DEFAULT_LIMIT = 500
 MAX_LIMIT = 1000
@@ -88,6 +95,16 @@ def source(adapter: str, interface: str, reference_commands: list[str],
 def opinion(key: str, level: str, message: str, evidence: list[str]) -> dict:
     if not evidence:
         raise ValueError(f"opinion {key!r} must cite evidence (SPEC section 2, rule 3)")
+    if level not in OPINION_LEVELS:
+        # Checked here so a typo fails at the rule that wrote it. Otherwise it
+        # reaches the schema enum on the detail path, or explodes far away in
+        # worst_level's max(key=OPINION_LEVELS.index) on the row path — and a
+        # consumer that cannot rank a level declines to colour it, so an
+        # invented level is silently invisible rather than loud.
+        raise ValueError(
+            f"opinion {key!r} has level {level!r}; the enum is closed at "
+            f"{OPINION_LEVELS} (SPEC section 5.1, rule 6)"
+        )
     return {"key": key, "level": level, "message": message, "evidence": evidence}
 
 

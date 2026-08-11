@@ -68,3 +68,29 @@ def test_bounding_is_idempotent():
 def test_any_object_becomes_a_string(value):
     """Call sites pass exceptions directly; nothing may raise here."""
     assert isinstance(env.reason(value), str)
+
+
+# ---------------------------------------------------------------------------
+# The opinion builder's two invariants. Both are enforced here rather than left
+# to discipline, and neither had a test: the evidence rule (SPEC section 2,
+# rule 3) reached production untested, and the level enum was not checked at
+# all — a typo travelled to the schema on the detail path and to a ValueError
+# deep in worst_level's max() on the row path.
+# ---------------------------------------------------------------------------
+
+def test_an_opinion_must_cite_evidence():
+    with pytest.raises(ValueError, match="must cite evidence"):
+        env.opinion("pool-health", "critical", "Pool is DEGRADED.", [])
+
+
+@pytest.mark.parametrize("level", env.OPINION_LEVELS)
+def test_every_level_the_enum_names_is_accepted(level):
+    assert env.opinion("k", level, "m", ["Fact"])["level"] == level
+
+
+@pytest.mark.parametrize("level", ["warning", "INFO", "err", "ok", "none", ""])
+def test_a_level_outside_the_closed_enum_is_refused(level):
+    """`ok` and `none` are row vocabulary, not opinion levels — a rule reaching
+    for either is a category error the builder should catch, not pass on."""
+    with pytest.raises(ValueError, match="enum is closed"):
+        env.opinion("k", level, "m", ["Fact"])
