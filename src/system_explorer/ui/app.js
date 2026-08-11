@@ -196,6 +196,54 @@ const VALUE_CLASS = {
 const PRIORITY_NAMES = ["emerg", "alert", "crit", "err", "warning", "notice", "info", "debug"];
 const NBSP = "\u00a0";
 
+/* The rulebook's severity order, mirrored from agent/rules/__init__.py
+   (OPINION_LEVELS). The ONE ordering in this file: six hand-rolled binary
+   comparisons lived here instead, and one of them painted an `info` opinion
+   warn-yellow while the sentence directly beneath it said the reading was
+   occupancy, not pressure. Conformance lints this literal against the agent's
+   tuple, so the copy this file is forced to keep cannot drift silently.
+
+   OPINION levels only. Row levels ("ok") and absent severity ("none") are
+   deliberately outside it: /v1/status ranks a vouched-for `ok` row ABOVE a
+   neutral `info` one (agent/main.py tests ok before info), which is the
+   opposite of the order below, so no single table can serve both. Row levels
+   are membership-tested against ATTENTION_LEVELS, never ranked. */
+const OPINION_LEVELS = ["info", "warn", "critical"];
+
+/* Which levels earn a place in an attention channel: a nav badge, a subsystem
+   dot, an overview chip, a storage row's dot. Deliberately NOT every level the
+   rulebook emits. `info` exists precisely to say "recorded, explained, not
+   claiming your attention" \u2014 an unwired spare NIC, a p3 log line, memory that
+   is ZFS ARC occupancy \u2014 and badging it rebuilds the cry-wolf noise the
+   three-level taxonomy was built to escape (rules/logs.py records the audit:
+   one cosmetic message was 72 of 72 p<=3 entries for a day).
+
+   This is a POLICY about which levels may speak, not an ordering:
+   worstOpinionLevel derives a level from a set, this decides which levels are
+   allowed to. Fusing the two is what produced every defect it now prevents. */
+const ATTENTION_LEVELS = ["warn", "critical"];
+
+/* The worst level in a set, or null when the set says nothing rankable.
+   Tolerates null/undefined members so a running maximum can seed itself.
+
+   An unrecognised level is IGNORED, not promoted and not floored. The enum is
+   closed (SPEC section 5.1, rule 6), so an unknown value is a bug or a broken
+   agent, and colouring from a string we cannot rank would invent the loudest
+   claim in the vocabulary out of something we do not understand \u2014 the opposite
+   of every hedge in this file. Nothing is lost by declining: the opinion's TEXT
+   prints verbatim regardless of level, in both the overview box and the detail
+   pane, landing on the base `.opinion` faint border. Colour abstains; the
+   sentence always survives. (That property is why `.opinion.info` restates the
+   base border rather than moving it out of `.opinion`.) */
+function worstOpinionLevel(levels) {
+  let rank = -1;
+  for (const level of levels) {
+    const at = OPINION_LEVELS.indexOf(level);
+    if (at > rank) rank = at;
+  }
+  return rank < 0 ? null : OPINION_LEVELS[rank];
+}
+
 /* ── helpers ─────────────────────────────────────────────── */
 
 function el(tag, cls, text) {
@@ -742,13 +790,17 @@ function applyNavBadges() {
         badge.title = entry.error;
         link.appendChild(badge);
       } else if (entry.counts) {
-        const crit = entry.counts.critical || 0;
-        const warn = entry.counts.warn || 0;
-        if (!crit && !warn) continue;
-        const badge = el("span", `nav-badge ${crit ? "critical" : "warn"}`, String(crit + warn));
-        badge.title = [crit && `${crit} critical`, warn && `${warn} warn`].filter(Boolean).join(", ");
+        // ok and info rows are counted by the roll-up and deliberately not
+        // badged here — see ATTENTION_LEVELS. The badge's number counts only
+        // what the badge claims, so it can never exceed what a reader finds.
+        const present = ATTENTION_LEVELS.filter((level) => entry.counts[level]);
+        if (!present.length) continue;
+        const total = present.reduce((sum, level) => sum + entry.counts[level], 0);
+        const badge = el("span", `nav-badge ${worstOpinionLevel(present)}`, String(total));
+        badge.title = [...present].reverse()
+          .map((level) => `${entry.counts[level]} ${level}`).join(", ");
         link.appendChild(badge);
-        subLevel = crit ? "critical" : subLevel ?? "warn";
+        subLevel = worstOpinionLevel([subLevel, ...present]);
       }
     }
     // A subsystem whose every collection is hidden-empty disappears with
@@ -1220,9 +1272,18 @@ function meter(pct, cls, ticks = [], segments = null) {
   return m;
 }
 
-function ovRow(label, meterNode, value, side) {
+/* `title` is the opinion's own sentence, on the label that names the reading.
+   The memory panel already explains itself in place — the ARC rides as its own
+   dimmed segment with "… available · ARC n GiB" beneath — but the pressure and
+   swap rows do not, and an `info` verdict there leaves a neutral bar with no
+   visible reason. The sentence is the reason, so it goes one hover from the
+   number, in the dotted-underline idiom this UI already uses for a fact the
+   host can explain. No new colour, no new mark. */
+function ovRow(label, meterNode, value, side, { title = null } = {}) {
   const row = el("div", "ov-row");
-  row.appendChild(el("span", "lbl", label));
+  const lbl = el("span", "lbl", label);
+  if (title) lbl.title = title;
+  row.appendChild(lbl);
   if (side !== undefined) row.appendChild(el("span", "side", side));
   row.appendChild(meterNode);
   row.appendChild(el("span", "val", value));
@@ -1258,10 +1319,24 @@ function renderOverview(obs, got = {}) {
   const root = $("overview");
   root.textContent = "";
   const f = obs.facts || {};
+  /* Meter severity is the agent's, not ours (SPEC rule 14): one opinion per
+     resource area, all three levels honoured. `info` is a level, not a weak
+     warn — it is what the rulebook says when a reading is explained rather than
+     alarming (memory that is ARC occupancy, not pressure) — so it leaves the bar
+     at the neutral accent while the sentence itself prints below and on hover.
+     Reduced rather than assigned: two opinions can land on one meter, and the
+     last one read is not necessarily the worst one. */
   const levels = {};
+  const notes = {};
   for (const op of obs.opinions || []) {
     const target = OPINION_METER[op.key];
-    if (target) levels[target] = op.level === "critical" ? "critical" : "warn";
+    if (!target) continue;
+    const worst = worstOpinionLevel([levels[target], op.level]);
+    if (worst === null) continue;          // a level we cannot rank colours nothing
+    // The sentence follows the level: whichever opinion is now the worst owns
+    // the row's hover text. First one wins a tie, keeping the agent's order.
+    if (worst !== levels[target] || notes[target] === undefined) notes[target] = op.message;
+    levels[target] = worst;
   }
 
   // Counter sampling, hoisted here because CPU utilisation needs it as much as
@@ -1320,14 +1395,20 @@ function renderOverview(obs, got = {}) {
   const attention = [];
   for (const [sub, colls] of Object.entries(state.status?.subsystems || {})) {
     for (const [coll, v] of Object.entries(colls)) {
-      if (v.worst !== "warn" && v.worst !== "critical") continue;
-      const n = (v.counts?.critical || 0) + (v.counts?.warn || 0);
+      // Attention only, and `worst` can also be ok / info / null — none of which
+      // this strip is for (ATTENTION_LEVELS). The count matches: it totals the
+      // levels the chip claims, not every row the collection holds.
+      if (!ATTENTION_LEVELS.includes(v.worst)) continue;
+      const n = ATTENTION_LEVELS.reduce((sum, level) => sum + (v.counts?.[level] || 0), 0);
       attention.push({ sub, coll, worst: v.worst, n });
     }
   }
   if (attention.length) {
     const strip = el("div", "ov-attention");
-    attention.sort((a, b) => (a.worst === b.worst ? 0 : a.worst === "critical" ? -1 : 1));
+    // Critical first. Safe to rank because the filter above already narrowed
+    // `worst` to opinion levels; ok and null are not on this scale.
+    attention.sort((a, b) =>
+      OPINION_LEVELS.indexOf(b.worst) - OPINION_LEVELS.indexOf(a.worst));
     for (const a of attention) {
       const chip = el("a", `ov-chip ${a.worst}`);
       chip.href = hashFor(a.sub, a.coll);
@@ -1349,12 +1430,13 @@ function renderOverview(obs, got = {}) {
     const p = el("div", "ov-panel");
     p.appendChild(el("h3", null, `CPU · ${f.CpuCount ?? "?"} cpus`));
     if (cpu) {
-      p.appendChild(ovRow("busy", meter(cpu.busy, levels.cpu), `${cpu.busy}%`));
+      p.appendChild(ovRow("busy", meter(cpu.busy, levels.cpu), `${cpu.busy}%`,
+                          undefined, { title: notes.cpu }));
       // Shown as its own row, not folded into busy: a core waiting on a disk
       // is available, and lumping the two is how a storage problem gets read
       // as a CPU problem. Its scale is the same 0..100 so the eye can compare.
       p.appendChild(ovRow("io wait", meter(cpu.iowait, levels["psi-io"]),
-                          `${cpu.iowait}%`));
+                          `${cpu.iowait}%`, undefined, { title: notes["psi-io"] }));
       p.appendChild(sparkline(history.map(s => s.cpu ?? 0), "accent"));
       p.appendChild(el("div", "ov-sub", sparkWindow(dt)));
     } else {
@@ -1378,7 +1460,7 @@ function renderOverview(obs, got = {}) {
     const segs = [{ pct: apps * 100 / f.MemTotalBytes, title: "in use" }];
     if (arc) segs.push({ pct: arc * 100 / f.MemTotalBytes, aux: true, title: "ZFS ARC (reclaimable)" });
     p.appendChild(ovRow("used", meter(null, levels.mem, [], segs),
-                        `${f.MemUsedPercent}%`));
+                        `${f.MemUsedPercent}%`, undefined, { title: notes.mem }));
     const sub = el("div", "ov-sub");
     sub.append(el("span", "k", `${humanBytes(f.MemUsedBytes)} used`),
                ` of ${humanBytes(f.MemTotalBytes)} · ${humanBytes(f.MemAvailableBytes)} available`);
@@ -1392,7 +1474,7 @@ function renderOverview(obs, got = {}) {
     }
     if (f.SwapTotalBytes) {
       p.appendChild(ovRow("swap", meter((f.SwapUsedPercent ?? 0), levels.swap),
-                          `${f.SwapUsedPercent ?? 0}%`));
+                          `${f.SwapUsedPercent ?? 0}%`, undefined, { title: notes.swap }));
       p.appendChild(el("div", "ov-sub",
         `${humanBytes(f.SwapUsedBytes)} of ${humanBytes(f.SwapTotalBytes)} swap`));
     } else if (f.SwapTotalBytes === 0) {
@@ -1413,7 +1495,8 @@ function renderOverview(obs, got = {}) {
     const p = el("div", "ov-panel");
     p.appendChild(el("h3", null, "Pressure · stall share, 60s"));
     for (const [name, v60, v10, v300, key] of psi)
-      p.appendChild(ovRow(name, meter(v60, levels[key]), `${v60}%`, `${v10}%`));
+      p.appendChild(ovRow(name, meter(v60, levels[key]), `${v60}%`, `${v10}%`,
+                          { title: notes[key] }));
     p.appendChild(el("div", "ov-sub",
       "left flank: 10s · meter and value: 60s (what the rules judge)"));
     grid.appendChild(p);
@@ -1533,7 +1616,7 @@ function renderOverview(obs, got = {}) {
       const lbl = el("a", "lbl wide", item.native_id);
       lbl.href = hashFor("storage", "pools", item.id);
       row.appendChild(lbl);
-      if (["warn", "critical"].includes(lvl)) row.appendChild(el("span", `dot ${lvl}`));
+      if (ATTENTION_LEVELS.includes(lvl)) row.appendChild(el("span", `dot ${lvl}`));
       row.appendChild(meter(cap ?? 0, null));
       row.appendChild(el("span", "val",
         cap !== null && cap !== undefined ? `${cap}%` : "—"));
@@ -1550,8 +1633,10 @@ function renderOverview(obs, got = {}) {
     for (const m of mounts) {
       if (seen.has(m.facts.Source) || shown >= 5) continue;
       seen.add(m.facts.Source); shown++;
-      const lvl = ["warn", "critical"].includes(m.worst_opinion_level)
-        ? (m.worst_opinion_level === "critical" ? "critical" : "warn") : null;
+      // Unlike a pool, mount_opinions is capacity-only, so the row's level IS a
+      // verdict on this meter's own magnitude and may colour it.
+      const lvl = ATTENTION_LEVELS.includes(m.worst_opinion_level)
+        ? m.worst_opinion_level : null;
       const row = el("div", "ov-row");
       const lbl = el("a", "lbl wide", m.native_id);
       lbl.title = `${m.native_id} (${m.facts.Source})`;
@@ -1815,7 +1900,18 @@ function renderGrid() {
     if (treeable && typeof item.depth === "number" && item.depth > 0) {
       idCell.appendChild(el("span", "tree", NBSP.repeat((item.depth - 1) * 3) + "└ "));
     }
-    idCell.appendChild(el("span", `dot ${item.worst_opinion_level || "info"}`));
+    /* "none", not "info": an absent level and a neutral verdict are different
+       statements and must not share a mark. adapters/network.py omits the field
+       for a quiet operstate precisely so no dot is drawn — "no judgment is
+       derivable, so the severity field is omitted rather than drawing a neutral
+       dot two auditors misread as a verdict (audit 2026-08-10)" — and the old
+       `|| "info"` fallback put that dot straight back. The failure mode recorded
+       there is a mark being misread, so the mark now says what it means. */
+    const dot = el("span", `dot ${item.worst_opinion_level || "none"}`);
+    dot.title = item.worst_opinion_level
+      ? `worst opinion on this row: ${item.worst_opinion_level}`
+      : "this row carries no severity — nothing here is judged";
+    idCell.appendChild(dot);
     idCell.appendChild(document.createTextNode(item.native_id));
     idCell.title = item.id;
     // What runs on this piece of plumbing, when something can say so.

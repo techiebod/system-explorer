@@ -215,6 +215,15 @@ td .dim, .dim { color: var(--text-faint); }
 .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 8px; vertical-align: 1px; }
 .dot.ok { background: var(--ok); }
 .dot.info { background: var(--text-faint); opacity: .6; }
+/* No fill and no colour, because the row makes no severity claim: the field is
+   absent, not neutral. adapters/network.py omits it deliberately — a quiet
+   operstate is carrier-detection absence, and an earlier neutral dot here was
+   "misread as a verdict" by two auditors — so this must not put that verdict
+   back. The slot is kept so the identifier column does not jitter between rows
+   that carry severity and rows that cannot. --border-2 rather than --text-faint:
+   a ring in the same ink as the filled info dot reads as heavier than it at 7px,
+   which would invert the order none < info < ok < warn < critical. */
+.dot.none { border: 1px solid var(--border-2); }
 .dot.warn { background: var(--warn); }
 .dot.critical { background: var(--crit); box-shadow: 0 0 6px color-mix(in srgb, var(--crit) 60%, transparent); }
 
@@ -351,7 +360,7 @@ pre.v-json { margin: 0; font: 11px/1.5 var(--mono); color: var(--ident); white-s
    explanation nobody knows is there helps nobody: the reader who asked what
    LinkSpeed meant had no reason to hover a plain word. Underline only — the
    name itself must stay exactly as the envelope spells it. */
-.facts .k[title], .ev-chip[title], #grid-head th[title] {
+.facts .k[title], .ev-chip[title], #grid-head th[title], .ov-row .lbl[title] {
   text-decoration: underline dotted var(--text-faint);
   text-underline-offset: 3px;
   cursor: help;
@@ -362,6 +371,13 @@ pre.v-json { margin: 0; font: 11px/1.5 var(--mono); color: var(--ident); white-s
   border: 1px solid var(--border); border-left: 3px solid var(--text-faint);
   border-radius: 8px; padding: 9px 12px; margin-bottom: 8px; font-size: 12.5px;
 }
+/* Restates the base border rather than moving it here, deliberately: the base
+   rule is what an unrecognised level falls back to, and worstOpinionLevel
+   declines to rank one rather than inventing a colour for it. Stating info
+   explicitly is what makes its neutrality a decision instead of a cascade
+   accident — the omission read as an oversight and sent a reader looking for
+   the rule that wasn't there. */
+.opinion.info { border-left-color: var(--text-faint); }
 .opinion.warn { border-left-color: var(--warn); }
 .opinion.critical { border-left-color: var(--crit); }
 .opinion .msg { margin-bottom: 5px; }
@@ -671,6 +687,13 @@ a.ov-sub:hover { color: var(--accent); }
               border-radius: 0 4px 4px 0; min-width: 0; }
 .meter .seg + .seg { margin-left: 2px; }         /* surface gap between segments */
 .meter .seg.aux { background: color-mix(in srgb, var(--accent) 38%, var(--panel-2)); }
+/* Neutral by intent, not by omission. `info` is the rulebook explaining a
+   reading rather than raising it — memory that is reclaimable ARC, a stall
+   share the rules judge unalarming — so the bar keeps the accent it would have
+   worn with no opinion at all, and the sentence arrives via the label's title.
+   This once coerced to warn, painting a yellow bar directly above a sentence
+   saying the reading was occupancy, not pressure. */
+.meter.info .seg:not(.aux) { background: var(--accent); }
 .meter.warn .seg:not(.aux) { background: var(--warn); }
 .meter.critical .seg:not(.aux) { background: var(--crit); }
 .meter .tick { position: absolute; top: 0; bottom: 0; width: 1px;

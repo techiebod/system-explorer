@@ -38,9 +38,16 @@ class Node {
     this.value = "";
   }
   addEventListener() {}
+  // Fidelity gap worth knowing: a real DOM concatenates a node's own text with
+  // its children's, this one prefers the children. So a label built with text
+  // and then given a child (a nav heading that grows a severity dot) reads as
+  // "" here. Identify such nodes by route or class, not by their text.
   get textContent() {
     return this.children.length ? this.children.map(c => c.textContent).join("") : this._text;
   }
+  // renderOverview counts childNodes to decide whether the KPI line has
+  // anything in it; without this, exporting it throws on the first call.
+  get childNodes() { return this.children; }
   set textContent(value) { this._text = String(value); this.children = []; }
   appendChild(child) { this.children.push(child); return child; }
   append(...nodes) { for (const n of nodes) this.appendChild(typeof n === "object" ? n : text(n)); }
@@ -110,10 +117,36 @@ const STATUS = {
               overview: { worst: "warn", counts: { warn: 1 }, total: 1 } },
     nix: { generations: { worst: "ok", counts: { ok: 68 }, total: 68 },
            packages: { worst: null, reason: "inventory; no severity semantics" } },
-    // The empty-hiding case, and the one that started all this.
+    // A collection that is overwhelmingly info: 115 rows the rulebook looked at
+    // and had something unalarming to say about. It must earn no badge at all.
+    units: { units: { worst: "ok", counts: { ok: 212, info: 115 }, total: 327 } },
+    // The empty-hiding case, and the one that started all this. mounts carries
+    // every level at once, so the badge has to pick and count correctly.
     storage: { arrays: { worst: null, counts: {}, total: 0 },
+               mounts: { worst: "critical", counts: { critical: 1, warn: 2, ok: 3 }, total: 6 },
                pools: { worst: "warn", counts: { warn: 1 }, total: 1 } },
   },
+};
+
+/* An overview at the moment the ARC verdict fires: raw usage over the warn
+   threshold, ARC-adjusted usage well under it. The rulebook's answer is an
+   `info` opinion whose own sentence says this is not pressure. */
+const OVERVIEW_ARC_INFO = {
+  observed_at: "2026-08-11T19:31:17Z", status: "ok",
+  object: { id: "overview:host", type: "overview", native_id: "host" },
+  facts: {
+    UptimeSeconds: 204242, MemTotalBytes: 33525432320,
+    MemUsedBytes: 30500000000, MemAvailableBytes: 3000000000,
+    MemUsedPercent: 91, ArcSizeBytes: 13492575664, SwapTotalBytes: 0,
+    PsiCpuSomeAvg60: 4, PsiCpuSomeAvg10: 2, PsiCpuSomeAvg300: 5,
+    PsiIoFullAvg60: 1, PsiIoFullAvg10: 0, PsiIoFullAvg300: 2,
+  },
+  opinions: [{
+    key: "memory-available", level: "info",
+    message: "Memory reads 91% used, but 51% outside the ZFS ARC — the cache "
+           + "yields under demand, so this is occupancy, not pressure.",
+    evidence: ["MemAvailableBytes", "MemTotalBytes", "ArcSizeBytes"],
+  }],
 };
 
 /* ── run the real code ────────────────────────────────────────────────── */
@@ -141,7 +174,7 @@ const context = vm.createContext(sandbox);
 // its state and helpers with const, which in a vm script are lexically scoped
 // and never become properties of the sandbox. Only code inside that script can
 // see them.
-const EXPORTS = "\n;globalThis.__ui = { state, renderNav, applyNavBadges, renderBuild, navRoutes, navModel, cellValue, PSEUDO_COLUMNS, linkPanel, scalarText, factHelp };";
+const EXPORTS = "\n;globalThis.__ui = { state, renderNav, applyNavBadges, renderBuild, navRoutes, navModel, cellValue, PSEUDO_COLUMNS, linkPanel, scalarText, factHelp, renderOverview, renderGrid, worstOpinionLevel, OPINION_LEVELS, ATTENTION_LEVELS };";
 vm.runInContext(readFileSync(APP, "utf8") + EXPORTS, context, { filename: "app.js" });
 const ui = sandbox.__ui;
 
@@ -319,6 +352,173 @@ check("every pseudo-column yields undefined rather than throwing on a bare item"
   for (const key of Object.keys(ui.PSEUDO_COLUMNS)) {
     ui.cellValue(key, bare);
   }
+});
+
+/* ── severity: one ordering, three levels ─────────────────────────────────
+   `info` is not a weak warn. It is what the rulebook says when a reading is
+   explained rather than alarming — reclaimable ARC, an unwired spare NIC, a p3
+   log line — and six hand-rolled binary comparisons in app.js each decided for
+   themselves what it meant. Two decided wrongly, in opposite directions. */
+
+const overviewRows = () =>
+  document.getElementById("overview").querySelectorAll(".ov-row").map(r => ({
+    label: r.querySelector(".lbl")?.textContent ?? "",
+    title: r.querySelector(".lbl")?.title ?? "",
+    meter: r.querySelector(".meter")?.className ?? null,
+  }));
+
+const drawOverview = (obs) => {
+  ui.state.currentHost = CAPABILITIES.host.hostname;
+  ui.state.status = null;              // no attention strip in these checks
+  ui.state.ovPrev = null;
+  ui.state.ovHistory = [];
+  ui.state.ovHistoryHost = null;
+  ui.renderOverview(obs);
+  return overviewRows();
+};
+
+const withOpinions = (opinions) => ({ ...OVERVIEW_ARC_INFO, opinions });
+
+check("the severity helper mirrors the rulebook and ranks nothing else", () => {
+  const cases = [
+    [["info", "warn"], "warn"], [["warn", "info"], "warn"],
+    [["critical", "warn"], "critical"], [["info"], "info"],
+    [[], null], [[null, undefined], null],
+    // Row levels are not opinion levels: /v1/status ranks a vouched-for `ok`
+    // row ABOVE a neutral `info` one, the opposite of OPINION_LEVELS, so one
+    // table cannot serve both and these must not be rankable here.
+    [["ok"], null], [["none"], null],
+    // A closed enum's unknown member: abstain, never invent the loudest claim
+    // in the vocabulary out of a string we cannot rank.
+    [["catastrophic"], null], [["info", "catastrophic"], "info"],
+  ];
+  for (const [input, want] of cases) {
+    const got = ui.worstOpinionLevel(input);
+    if (got !== want)
+      throw new Error(`worstOpinionLevel(${JSON.stringify(input)}) = ${got}, want ${want}`);
+  }
+});
+
+// THE REGRESSION. An `info` opinion on a mapped overview key was coerced to
+// warn, so the memory meter went yellow directly above a sentence saying the
+// reading was occupancy, not pressure — the UI contradicting the rulebook it
+// exists to render.
+check("an info opinion leaves its meter neutral", () => {
+  const used = drawOverview(OVERVIEW_ARC_INFO).find(r => r.label === "used");
+  if (!used) throw new Error("no memory row was rendered");
+  if (/\b(warn|critical)\b/.test(used.meter))
+    throw new Error(`info painted the memory meter "${used.meter}"`);
+  // Positively: the level REACHED the meter. Silently dropping it would also
+  // satisfy the assertion above.
+  if (!/\binfo\b/.test(used.meter))
+    throw new Error(`the info level never reached the meter: "${used.meter}"`);
+  // And the sentence is the reason the bar is calm, so it must be reachable.
+  if (!used.title.includes("occupancy, not pressure"))
+    throw new Error(`the opinion's sentence is not on the row: "${used.title}"`);
+});
+
+// The paired positive, without which a bug that stops colouring meters at all
+// passes the check above.
+check("a warn opinion still paints its meter", () => {
+  const rows = drawOverview(withOpinions([{
+    key: "memory-available", level: "warn",
+    message: "MemAvailable is nearly exhausted.",
+    evidence: ["MemAvailableBytes", "MemTotalBytes"] }]));
+  const used = rows.find(r => r.label === "used");
+  if (!/\bwarn\b/.test(used.meter)) throw new Error(`warn rendered "${used.meter}"`);
+});
+
+// Last-write-wins: the loop assigned instead of reducing, so two opinions on
+// one meter meant the later one won regardless of severity.
+check("the worst opinion on a meter wins whatever order it arrives in", () => {
+  for (const order of [["critical", "info"], ["info", "critical"]]) {
+    const rows = drawOverview(withOpinions(order.map(level => ({
+      key: "memory-available", level, message: `${level} sentence`,
+      evidence: ["MemTotalBytes"] }))));
+    const used = rows.find(r => r.label === "used");
+    if (!/\bcritical\b/.test(used.meter))
+      throw new Error(`opinions in order ${order} yielded "${used.meter}"`);
+    if (!used.title.startsWith("critical"))
+      throw new Error(`the sentence did not follow the level: "${used.title}"`);
+  }
+});
+
+// An unrankable level colours nothing rather than inventing a verdict — the
+// enum is closed, so an unknown value means a bug, not an emergency.
+check("an unrecognised level colours nothing", () => {
+  const rows = drawOverview(withOpinions([{
+    key: "memory-available", level: "catastrophic",
+    message: "from a newer agent than this page", evidence: ["MemTotalBytes"] }]));
+  const used = rows.find(r => r.label === "used");
+  if (used.meter !== "meter")
+    throw new Error(`an unknown level reached the meter as "${used.meter}"`);
+});
+
+// Absence of severity was rendered identically to a judged-neutral `info`.
+// adapters/network.py omits the field for a quiet operstate specifically to
+// avoid "a neutral dot two auditors misread as a verdict" — and this put it back.
+check("a row with no severity is not drawn as a neutral verdict", () => {
+  Object.assign(ui.state, {
+    subsystem: "network", collection: "links",
+    page: { total: 2, next_cursor: null, status: "ok", items: [
+      { id: "link:lo", type: "link", native_id: "lo",
+        facts: { OperState: "unknown", Kind: "loopback" } },        // field absent
+      { id: "link:enp2s0", type: "link", native_id: "enp2s0",
+        facts: { OperState: "down", Kind: "ether" },
+        worst_opinion_level: "info" },                              // judged neutral
+    ] },
+    filterText: "", facet: null, sortKey: null, showHidden: false,
+    owners: null, detailObs: null, selectedId: null, factDict: null,
+  });
+  ui.renderGrid();
+  const dots = document.getElementById("grid-body").querySelectorAll(".dot");
+  if (dots.length !== 2) throw new Error(`${dots.length} dots for 2 rows`);
+  const [absent, judged] = dots.map(d => d.className);
+  if (absent === judged)
+    throw new Error(`absent and info render identically: ${absent} | ${judged}`);
+  if (!absent.split(" ").includes("none"))
+    throw new Error(`absent severity rendered "${absent}"`);
+  if (!judged.split(" ").includes("info"))
+    throw new Error(`info rendered "${judged}"`);
+  // The recorded failure mode is a mark being misread, so the mark must speak.
+  if (!dots[0].title.includes("nothing here is judged"))
+    throw new Error(`the absent dot says "${dots[0].title}"`);
+});
+
+check("info and ok rows earn no badge, and a badge counts only what it claims", () => {
+  ui.state.capabilities = CAPABILITIES;
+  ui.state.status = STATUS;
+  ui.renderNav();
+  ui.applyNavBadges();
+  const nav = document.getElementById("nav");
+  const items = nav.querySelectorAll("nav-item");
+  const badgeOf = (route) =>
+    items.find(n => n.dataset.route === route)?.querySelector("nav-badge") ?? null;
+
+  // 327 rows, 115 of them info: a badge is an attention claim and info makes none.
+  const units = badgeOf("units/units");
+  if (units) throw new Error(`units/units badged "${units.textContent}" — info is not attention`);
+
+  // 1 critical + 2 warn = 3. The 3 ok rows are counted by the roll-up, not here.
+  const mounts = badgeOf("storage/mounts");
+  if (mounts?.textContent !== "3")
+    throw new Error(`storage/mounts badge reads ${mounts?.textContent}, want 3`);
+  if (!mounts.className.split(" ").includes("critical"))
+    throw new Error(`badge class "${mounts.className}" — the worst level must win`);
+  if (mounts.title !== "1 critical, 2 warn")
+    throw new Error(`badge title reads "${mounts.title}"`);
+
+  // The subsystem dot is the worst BADGED level in the group: storage is walked
+  // mounts (critical) then pools (warn), so a running maximum must not decay.
+  // Found by route rather than by heading text, which is what navModel() is for
+  // — and because this stub's textContent hides a node's own text once a child
+  // is appended, so the label reads "" the moment it wears a dot.
+  const storage = nav.querySelectorAll("nav-sub").find(box =>
+    box.querySelectorAll("nav-item").some(n => n.dataset.route === "storage/mounts"));
+  if (!storage) throw new Error("no nav section carries storage/mounts");
+  const dot = storage.querySelector("sub-label")?.querySelector("dot")?.className ?? null;
+  if (!dot?.split(" ").includes("critical"))
+    throw new Error(`storage subsystem dot is "${dot}"`);
 });
 
 /* ── the link equation ────────────────────────────────────────────────────
