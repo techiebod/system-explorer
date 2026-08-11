@@ -42,6 +42,10 @@ NAME_VERSION_RE = re.compile(r"(.+?)-([0-9].*)")
 # Ceiling on hashing one real file under /etc. The sidecars there are bytes; this
 # only bounds the unexpected.
 ETC_HASH_LIMIT = 1 << 20
+# Depth ceiling and the size at which a changed directory is reported as itself
+# rather than as its members. terminfo alone is ~2500 files that move together.
+ETC_MAX_DEPTH = 8
+ETC_COLLAPSE_OVER = 12
 
 
 def _input_identity(entry: object) -> str | None:
@@ -143,19 +147,34 @@ def _etc_entries(etc_root: str | None) -> dict[str, str]:
 
     A NixOS /etc is mostly symlinks into the store plus a handful of tiny files,
     so a symlink's target and a small file's content hash are both exact
-    identities and a per-file comparison needs no diff tool and no subprocess. The
-    tree is around 200 entries — cheaper to walk than the package link farm this
-    same generation is already walked for.
+    identities and a per-file comparison needs no diff tool and no subprocess.
 
-    Symlinks are leaves even when they point at a directory: recursing through one
-    would enumerate a store path's insides, which is not what /etc declares.
+    Symlinked directories are followed, and both the link and what is under it are
+    recorded. Stopping at them was the first attempt and it reported
+    "etc/systemd/system changed" without naming a unit — the same withholding as
+    the single /etc row it replaced, one level down. NixOS builds those aggregates
+    precisely so /etc can declare their contents, so their contents are what /etc
+    declares.
+
+    Bounded against a symlink cycle by realpath rather than by depth alone, since a
+    cycle is the one shape here that is unbounded rather than merely large.
     """
     if not etc_root:
         return {}
 
     entries: dict[str, str] = {}
+    visited: set[str] = set()
 
-    def walk(base: str, prefix: str) -> None:
+    def walk(base: str, prefix: str, depth: int) -> None:
+        if depth > ETC_MAX_DEPTH:
+            return
+        try:
+            real = os.path.realpath(base)
+        except OSError:
+            return
+        if real in visited:
+            return
+        visited.add(real)
         try:
             found = list(os.scandir(base))
         except OSError:
@@ -167,12 +186,17 @@ def _etc_entries(etc_root: str | None) -> dict[str, str]:
                     entries[name] = os.readlink(entry.path)
                 except OSError:
                     entries[name] = "unreadable"
+                # Record the link itself AND descend, so a changed aggregate can
+                # be reported either as its members or, when there are too many,
+                # as itself.
+                if entry.is_dir():
+                    walk(entry.path, f"{name}/", depth + 1)
             elif entry.is_dir(follow_symlinks=False):
-                walk(entry.path, f"{name}/")
+                walk(entry.path, f"{name}/", depth + 1)
             else:
                 entries[name] = _file_identity(entry.path)
 
-    walk(etc_root, "")
+    walk(etc_root, "", 0)
     return entries
 
 
@@ -185,18 +209,49 @@ def _etc_rows(older_root: str | None, newer_root: str | None,
     something under /etc moved and refuses to say what. Naming the paths is the
     whole value, and it is readable directly out of both closures.
 
-    What changed *inside* a file is a different question, and `make config-diff`
+    A directory whose members nearly all moved is reported as itself with a count.
+    /etc/terminfo is one symlink to a database of some 2500 files that all change
+    together whenever ncurses moves, and listing them would bury the four unit
+    files an operator actually wants to see. The collapse is stated in the row, so
+    it is a summary rather than a silent truncation.
+
+    What changed *inside* a file is a further question, and `make config-diff`
     answers it against a candidate.
     """
-    rows = []
-    for path in sorted(set(older) | set(newer)):
-        before, after = older.get(path), newer.get(path)
-        if before == after:
-            continue
+    differing = [path for path in sorted(set(older) | set(newer))
+                 if older.get(path) != newer.get(path)]
+    changed = set(differing)
+
+    # Longest first, so a nested aggregate collapses before its parent does.
+    collapsed: list[tuple[str, int]] = []
+    for path in sorted(differing, key=len, reverse=True):
+        members = [p for p in changed if p.startswith(f"{path}/")]
+        if len(members) > ETC_COLLAPSE_OVER:
+            collapsed.append((path, len(members)))
+
+    def inside_collapsed(path: str) -> bool:
+        return any(path.startswith(f"{prefix}/") for prefix, _ in collapsed)
+
+    def row(name: str, before: str | None, after: str | None) -> dict:
         label_before, label_after = _distinguishable(_short_identity(before),
                                                      _short_identity(after))
-        rows.append({"Kind": "etc", "Name": f"etc/{path}",
-                     "From": label_before, "To": label_after})
+        return {"Kind": "etc", "Name": name, "From": label_before, "To": label_after}
+
+    collapsed_names = {prefix for prefix, _ in collapsed}
+    rows = []
+    for path in differing:
+        if inside_collapsed(path):
+            continue
+        if path in collapsed_names:
+            count = next(n for prefix, n in collapsed if prefix == path)
+            rows.append(row(f"etc/{path} ({count} entries changed)",
+                            older.get(path), newer.get(path)))
+            continue
+        # A directory whose members are listed individually adds nothing itself.
+        if any(p.startswith(f"{path}/") for p in changed):
+            continue
+        rows.append(row(f"etc/{path}", older.get(path), newer.get(path)))
+
     # The trees are content-addressed, so differing roots with no file-level
     # explanation means this walk missed something. Say that rather than nothing.
     if not rows and older_root and newer_root and older_root != newer_root:

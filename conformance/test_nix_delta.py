@@ -138,16 +138,63 @@ def test_differing_roots_with_no_file_difference_still_report_something(tmp_path
     assert rows[0]["From"] != rows[0]["To"]
 
 
-def test_a_symlinked_directory_is_a_leaf(tmp_path):
-    """Recursing through one would enumerate a store path's insides, which is not
-    what /etc declares."""
-    target = tmp_path / "store-dbus"
-    (target / "inside").mkdir(parents=True)
-    (target / "inside" / "deep.conf").write_text("x")
-    root = build_etc(tmp_path / "gen", {"dbus-1": str(target)}, {})
+def test_a_symlinked_directory_is_followed(tmp_path):
+    """NixOS builds those aggregates so /etc can declare their contents, and
+    stopping at them reported "etc/systemd/system changed" without naming a unit."""
+    target = tmp_path / "store-units"
+    (target / "sockets.target.wants").mkdir(parents=True)
+    (target / "polkit.service").write_text("x")
+    (target / "sockets.target.wants" / "one.socket").write_text("y")
+    root = build_etc(tmp_path / "gen", {"systemd/system": str(target)}, {})
     walked = nix._etc_entries(root)
-    assert "dbus-1" in walked
-    assert not any(name.startswith("dbus-1/") for name in walked)
+    assert "systemd/system" in walked, "the link itself is still recorded"
+    assert "systemd/system/polkit.service" in walked
+    assert "systemd/system/sockets.target.wants/one.socket" in walked
+
+
+def test_individual_units_are_named_rather_than_their_directory(tmp_path):
+    old_units, new_units = tmp_path / "old-units", tmp_path / "new-units"
+    for units, text in ((old_units, "old"), (new_units, "new")):
+        units.mkdir(parents=True)
+        (units / "polkit.service").write_text(text)
+        (units / "steady.service").write_text("same")
+    old_root = build_etc(tmp_path / "old", {"systemd/system": str(old_units)}, {})
+    new_root = build_etc(tmp_path / "new", {"systemd/system": str(new_units)}, {})
+
+    names = [r["Name"] for r in nix._etc_rows(
+        old_root, new_root, nix._etc_entries(old_root), nix._etc_entries(new_root))]
+    assert "etc/systemd/system/polkit.service" in names
+    assert "etc/systemd/system/steady.service" not in names, "unchanged unit stays out"
+    # The aggregate adds nothing once its members are named individually.
+    assert "etc/systemd/system" not in names
+
+
+def test_a_wholesale_directory_change_collapses_with_its_count(tmp_path):
+    """terminfo is one symlink to ~2500 files that move together whenever ncurses
+    does; listing them would bury the units an operator wants to see."""
+    old_db, new_db = tmp_path / "old-db", tmp_path / "new-db"
+    for db, text in ((old_db, "old"), (new_db, "new")):
+        db.mkdir(parents=True)
+        for index in range(nix.ETC_COLLAPSE_OVER + 5):
+            (db / f"term{index}").write_text(text)
+    old_root = build_etc(tmp_path / "old", {"terminfo": str(old_db)}, {})
+    new_root = build_etc(tmp_path / "new", {"terminfo": str(new_db)}, {})
+
+    rows = nix._etc_rows(old_root, new_root,
+                         nix._etc_entries(old_root), nix._etc_entries(new_root))
+    assert len(rows) == 1, rows
+    # A summary, not a silent truncation: the row says how many.
+    assert rows[0]["Name"].startswith("etc/terminfo (")
+    assert f"{nix.ETC_COLLAPSE_OVER + 5} entries changed" in rows[0]["Name"]
+
+
+def test_a_symlink_cycle_terminates(tmp_path):
+    """The one shape here that is unbounded rather than merely large."""
+    etc = tmp_path / "gen" / "etc"
+    etc.mkdir(parents=True)
+    os.symlink(".", etc / "loop")
+    walked = nix._etc_entries(str(etc))
+    assert "loop" in walked
 
 
 def test_etc_identity_does_not_collapse_to_the_literal_etc():
