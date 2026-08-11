@@ -272,6 +272,23 @@ privilege pretending to be isolation.
 
 ## 6. Deployment shape this design assumes
 
+Four words, each meaning one thing, because conflating the top two has already
+caused confusion:
+
+| | |
+|---|---|
+| **Object** | One native thing — a unit, a dataset, a container, a link. |
+| **Host** | One machine, running one agent that observes it. |
+| **Site** | A set of hosts sharing a network. One hub and one MCP aggregator serve a site. |
+| **Estate** | Everything one operator runs, across every site. |
+
+An estate spans sites; a site is not a small estate. Today the product
+implements hosts and sites and **stops there** — the estate is a real thing an
+operator has and nothing in the contract or the UI represents it, so "what
+needs attention across everything I run" has no single answer. That gap is
+tracked, and the cross-site roll-up belongs with findings rather than before
+them.
+
 Not prescriptive — but these are the constraints the components were shaped
 around, and they explain choices that would otherwise look arbitrary:
 
@@ -279,7 +296,10 @@ around, and they explain choices that would otherwise look arbitrary:
   between them, each site runs its own aggregator and hub, so no site's
   visibility depends on an inter-site path. This is why the aggregator is a
   separate deployable rather than a single central service, and why an MCP
-  client is expected to carry one connector per site.
+  client is expected to carry one connector per site. Any future estate view
+  must federate sites rather than centralise them, or it would trade this
+  invariant away: a site whose siblings are unreachable has to keep working
+  alone, showing the rest as unreachable rather than failing.
 - **A host may be reachable by nobody but its operator.** The agent is
   useful standalone and joins an aggregator only if the network allows it,
   so aggregation is never a precondition for observation.
