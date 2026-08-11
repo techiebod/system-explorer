@@ -141,7 +141,7 @@ const context = vm.createContext(sandbox);
 // its state and helpers with const, which in a vm script are lexically scoped
 // and never become properties of the sandbox. Only code inside that script can
 // see them.
-const EXPORTS = "\n;globalThis.__ui = { state, renderNav, applyNavBadges, renderBuild, navRoutes, navModel };";
+const EXPORTS = "\n;globalThis.__ui = { state, renderNav, applyNavBadges, renderBuild, navRoutes, navModel, cellValue, PSEUDO_COLUMNS };";
 vm.runInContext(readFileSync(APP, "utf8") + EXPORTS, context, { filename: "app.js" });
 const ui = sandbox.__ui;
 
@@ -283,6 +283,42 @@ check("a disks heading groups scsi and nvme without touching their routes", () =
   const kept = (hardware?.items || []).map(i => i.coll);
   if (!kept.includes("platform") || !kept.includes("pci"))
     throw new Error(`hardware lost its own collections: ${kept.join(", ")}`);
+});
+
+check("an observed Kind fact is not hidden by the derived one", () => {
+  // network/links reports Kind from the kernel: bridge, veth, tun. Giving the
+  // pseudo-column precedence rendered "link" on all 32 rows of a real host.
+  const link = { id: "link:br-proxy", type: "link", facts: { Kind: "bridge" } };
+  const got = ui.cellValue("Kind", link);
+  if (got !== "bridge") throw new Error(`Kind resolved to ${got}, not the fact`);
+});
+
+check("a collection with no Kind fact still gets its object type", () => {
+  // hardware/scsi is heterogeneous and carries no Kind fact; without the
+  // fallback a controller renders as a disk with every disk column blank.
+  const host = { id: "scsi:host0", type: "host", facts: { Vendor: "LSI" } };
+  if (ui.cellValue("Kind", host) !== "host")
+    throw new Error(`Kind fell back to ${ui.cellValue("Kind", host)}`);
+});
+
+check("a pseudo-column is sortable, not silently inert", () => {
+  // The comparator read item.facts only, so ordering by Kind, Link, Changed or
+  // Deployed did nothing whatever on the collections that define them.
+  const a = { id: "a", type: "enclosure", facts: {} };
+  const b = { id: "b", type: "disk", facts: {} };
+  const values = [a, b].map(i => ui.cellValue("Kind", i));
+  if (values.some(v => v === undefined))
+    throw new Error(`sortable value missing: ${JSON.stringify(values)}`);
+});
+
+check("every pseudo-column yields undefined rather than throwing on a bare item", () => {
+  // A pseudo-column runs against every row of whatever collection lists it, so
+  // one that assumes a fact is present takes the whole grid down — which is how
+  // a nav dereference once blanked the page.
+  const bare = { id: "x:1", type: "thing", facts: {} };
+  for (const key of Object.keys(ui.PSEUDO_COLUMNS)) {
+    ui.cellValue(key, bare);
+  }
 });
 
 if (failures.length) {

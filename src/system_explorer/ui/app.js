@@ -35,6 +35,7 @@ const state = {
   colPicker: false,      // the columns dropdown in the facet bar
   lookupDraft: null,     // in-progress lookup input, preserved across refresh
   lookupCatalog: null,   // launcher entries, fetched once per host
+  factDict: null,        // /v1/facts: what each fact MEANS, fetched once per host
   ovIdentity: null,      // overview KPI identity facts, cached per host
   ovPrev: null,          // overview's previous counter sample (client-side rates)
   owners: null,          // native_id -> owning workload, for the current list
@@ -121,6 +122,23 @@ const PSEUDO_COLUMNS = {
   },
 };
 
+/* THE resolution rule for a column's value, used by the grid and the sort alike.
+   Those two disagreed. The cell gave a pseudo-column unconditional precedence, so
+   network/links — whose Kind is a real fact from the kernel, bridge or veth or
+   tun — rendered "link" on every row, the derived value hiding the observed one.
+   The sort read item.facts only, so ordering by Kind, Link, Changed or Deployed
+   silently did nothing at all.
+
+   An observed fact always wins; a pseudo-column supplies only what the item does
+   not carry. That is what makes Kind able to mean both things: hardware/scsi has
+   no Kind fact and wants its object type, network/links reports one and must keep
+   it. */
+function cellValue(key, item) {
+  if (item.facts && key in item.facts) return item.facts[key];
+  const derive = PSEUDO_COLUMNS[key];
+  return derive ? derive(item) : undefined;
+}
+
 const FACETS = {
   "units/units": (item) => item.type,
   "logs/journal": (item) => item.facts.SyslogIdentifier,
@@ -187,6 +205,21 @@ function el(tag, cls, text) {
   return node;
 }
 
+/* One sentence saying what a fact MEANS, from the host's own dictionary.
+
+   Native property names are the contract (SPEC section 5) and they are not
+   self-explanatory: LinkSpeed beside LinkWidth read as two ways of saying the
+   same thing to the first person who met them, and no renaming would have
+   fixed that — the reader needed the concept, once, where they were looking.
+
+   The sentence comes from the adapter that emits the fact, over /v1/facts, and
+   deliberately not from a table in here. Three severity tables in this file
+   already drifted from the rulebook; a fourth copy of anything the agent knows
+   is a fourth thing to disagree with it. */
+function factHelp(fact, subsystem = state.subsystem, collection = state.collection) {
+  return state.factDict?.subsystems?.[subsystem]?.[collection]?.[fact] || null;
+}
+
 function idPath(objectId) {
   return encodeURIComponent(objectId).replace(/%2F/gi, "/").replace(/%3A/gi, ":");
 }
@@ -233,6 +266,17 @@ function humanBytes(n) {
   return `${v >= 10 || i === 0 ? Math.round(v) : v.toFixed(1)} ${units[i]}`;
 }
 
+/* Throughput, in the decimal units every link reference uses — deliberately
+   NOT humanBytes' binary ladder. Storage capacity is conventionally GiB and
+   link rate conventionally GB/s; a PCIe 3.0 x2 link rendered as "1.8 GiB/s"
+   would disagree with every table the reader goes on to check. */
+function humanRate(n) {
+  if (typeof n !== "number") return String(n);
+  if (n >= 1e9) return `${(n / 1e9).toFixed(1)} GB/s`;
+  if (n >= 1e6) return `${Math.round(n / 1e6)} MB/s`;
+  return `${Math.round(n / 1e3)} kB/s`;
+}
+
 function ageOf(iso) {
   if (!iso) return "";
   const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
@@ -276,12 +320,17 @@ const PERCENT_KEY_RE = /(Percent|Pct)/;
 function scalarText(key, value, exact = false) {
   if (typeof value !== "number") return null;
   const withExact = (text) => exact ? `${text}  (${value})` : text;
+  // Before *Bytes, which it does not match today but would the moment someone
+  // adds a suffix check that is not an exact endsWith.
+  if (key.endsWith("BytesPerSec")) return withExact(humanRate(value));
   if (key.endsWith("Bytes")) return withExact(humanBytes(value));
   if (key.endsWith("Seconds")) return withExact(humanSeconds(value));
   if (key.endsWith("Hours")) return withExact(humanHours(value));
   // PCIe lane counts. A bare "2" beside a bare "4" did not read as the cause of
-  // a warning; "x2" beside "x4" does.
-  if (/LinkWidth(Max)?$/.test(key)) return `x${value}`;
+  // a warning; "x2 lanes" beside "x4 lanes" does — and says which of the two
+  // dimensions it is, which "x2" alone did not: the first person shown it read
+  // it as a speed. Same wording the rule settled on, for the same reason.
+  if (/LinkWidth(Max)?$/.test(key)) return `x${value} lanes`;
   if (PERCENT_KEY_RE.test(key)) return `${value}%`;
   return null;
 }
@@ -349,7 +398,13 @@ async function loadHost() {
   state.ovPrev = null;         // counter deltas never span two hosts
   state.owners = null;         // and neither does attribution
   state.capabilities = null;   // stale caps must not describe the new host
+  state.factDict = null;       // and vocabulary belongs to the host that served it
   renderHostCard();
+  /* Started alongside capabilities rather than in front of them, and never
+     awaited on the failure path: an agent too old to serve /v1/facts (or a hub
+     proxying one) simply has no fact tooltips. Missing help must never be the
+     difference between a page that renders and one that does not. */
+  const dictionary = api("/v1/facts").catch(() => null);
   let caps;
   try {
     caps = await api("/v1/capabilities");
@@ -364,6 +419,8 @@ async function loadHost() {
   }
   if (epoch !== state.epoch) return false;
   state.capabilities = caps;
+  state.factDict = await dictionary;
+  if (epoch !== state.epoch) return false;
   banner(null);
   renderHostCard();
   // AWAITED, unlike before. The nav hides collections the roll-up reports as
@@ -1688,8 +1745,8 @@ function visibleItems() {
   if (state.sortKey) {
     const k = state.sortKey, dir = state.sortDir;
     items = [...items].sort((a, b) => {
-      const av = k === "id" ? a.id : a.facts[k];
-      const bv = k === "id" ? b.id : b.facts[k];
+      const av = k === "id" ? a.id : cellValue(k, a);
+      const bv = k === "id" ? b.id : cellValue(k, b);
       if (av === bv) return 0;
       if (av === null || av === undefined) return 1;
       if (bv === null || bv === undefined) return -1;
@@ -1726,6 +1783,10 @@ function renderGrid() {
   const hr = el("tr");
   for (const key of ["id", ...cols]) {
     const th = el("th", null, key === "id" ? "object" : key);
+    // A column header is where a reader first meets a native name — often
+    // before they open anything. Pseudo-columns name no fact and get none.
+    const help = factHelp(key);
+    if (help) th.title = help;
     if (state.sortKey === key) th.appendChild(el("span", "dir", state.sortDir > 0 ? "↑" : "↓"));
     th.onclick = () => {
       state.sortDir = state.sortKey === key ? -state.sortDir : 1;
@@ -1782,8 +1843,7 @@ function renderGrid() {
     tr.appendChild(idCell);
 
     for (const key of cols) {
-      const resolve = PSEUDO_COLUMNS[key];
-      tr.appendChild(renderCell(key, resolve ? resolve(item) : item.facts[key], item));
+      tr.appendChild(renderCell(key, cellValue(key, item), item));
     }
     tr.onclick = () => {
       if (item.id === anchorRowId()) {
@@ -1923,6 +1983,10 @@ function renderExpansion(colspan) {
     const ev = el("div", "ev");
     for (const path of op.evidence) {
       const chip = el("span", "ev-chip", path);
+      // The chips are the facts the opinion reasoned from, so they are exactly
+      // the names a reader most needs explained.
+      const help = factHelp(path.split(".")[0]);
+      if (help) chip.title = help;
       chip.onmouseenter = () => citeFacts(path, true);
       chip.onmouseleave = () => citeFacts(path, false);
       ev.appendChild(chip);
@@ -1935,6 +1999,9 @@ function renderExpansion(colspan) {
 
   const factsSec = el("div", "d-section");
   factsSec.appendChild(el("h3", null, "Facts"));
+  // Above the facts it explains, below the opinion that judges them.
+  const link = linkPanel(obs.facts);
+  if (link) factsSec.appendChild(link);
   // Pools get a bespoke layout: scalar facts left, capacity meters in the
   // otherwise-dead space to their right, and the vdev table full-width
   // below — fullness readable at a glance, per top-level vdev.
@@ -1950,6 +2017,8 @@ function renderExpansion(colspan) {
     if (isPool && key === "Vdevs") continue;
     if (deltaRows && key === "DeltaFromPrevious") continue;
     const k = el("div", "k", key);
+    const help = factHelp(key);
+    if (help) k.title = help;
     const v = el("div", `v${value === null || value === undefined ? " null" : ""}`);
     const unit = scalarText(key, value, true);
     if (unit !== null) {
@@ -2180,6 +2249,86 @@ const INLINE_LIST_MAX = 64;
 /* Capacity meters for a pool: one bar for the pool, one per top-level vdev.
    Status color only at the same thresholds the pool opinions use (>=80 warn,
    >=90 crit); the numbers are always printed, so color never stands alone. */
+/* Speed × width = bandwidth, drawn as that equation.
+
+   The facts were six unrelated rows, and the reasonable reading of "8.0 GT/s"
+   beside "2" is that speed and width say the same thing twice. They do not:
+   speed is the rate of ONE lane, width is how many of them are active, and the
+   product is the only figure anyone actually wants. Asked what "x2 of x4" had
+   cost them, a reader could not answer from this screen — they left it, did
+   PCIe arithmetic by hand, and came back to explain it to us.
+
+   Drawn on every link, not only capped ones. A healthy x4 device is where the
+   idea is cheapest to learn, and nobody should have to find a degraded device
+   to be taught it.
+
+   Lanes are drawn rather than counted because a lane is a physical, countable
+   thing and four marks say "four of these exist, two are dark" faster than
+   "2" beside "4" ever did. CSS boxes, not glyph characters: a monospace font
+   without U+25B0 would render the whole explanation as tofu. Every mark is
+   also stated in words underneath, so the drawing carries no information alone.
+
+   Reads facts only — the GT/s-to-bytes conversion lives in the adapter, one
+   place and conformance-tested. A copy here would be the second rulebook. */
+function linkPanel(facts) {
+  const speed = facts.LinkSpeed, lanes = facts.LinkWidth;
+  const hasLanes = typeof lanes === "number" && lanes > 0;
+  if (!speed && !hasLanes) return null;
+
+  const panel = el("div", "link-eq");
+  const row = el("div", "eq-row");
+  const term = () => { const t = el("div", "eq-term"); row.appendChild(t); return t; };
+
+  if (speed) {
+    const t = term();
+    t.appendChild(el("div", "eq-v", speed));
+    // A SATA or SAS link has one serial connection and no lanes, so the
+    // per-lane wording would be a lie there.
+    t.appendChild(el("div", "eq-c", hasLanes ? "the rate of one lane" : "negotiated rate"));
+  }
+  if (hasLanes) {
+    if (speed) row.appendChild(el("div", "eq-op", "×"));
+    const t = term();
+    const max = typeof facts.LinkWidthMax === "number"
+      ? Math.max(lanes, facts.LinkWidthMax) : lanes;
+    const marks = el("div", "eq-v eq-lanes");
+    for (let i = 0; i < max; i++) marks.appendChild(el("span", i < lanes ? "on" : "off"));
+    marks.title = `${lanes} of ${max} lanes active`;
+    t.appendChild(marks);
+    t.appendChild(el("div", "eq-c",
+      `x${lanes} lane${lanes === 1 ? "" : "s"}${max > lanes ? ` of x${max}` : ""}`));
+  }
+  const now = facts.LinkBandwidthBytesPerSec;
+  if (typeof now === "number") {
+    row.appendChild(el("div", "eq-op", "="));
+    const t = term();
+    t.appendChild(el("div", "eq-v", humanRate(now)));
+    t.appendChild(el("div", "eq-c", "each way"));
+  }
+  panel.appendChild(row);
+
+  /* What the marks mean and what the ceiling would be — stated, never implied
+     by the drawing. No causal claim: whether a dark lane is the slot's doing
+     or a link that trained down is the opinion's judgement, above, and it
+     needs the slot fact to make it. */
+  const notes = [];
+  if (facts.LinkSpeedMax && facts.LinkSpeedMax !== speed) {
+    notes.push(`the device supports ${facts.LinkSpeedMax}`);
+  }
+  if (typeof facts.LinkWidthMax === "number" && facts.LinkWidthMax !== lanes) {
+    notes.push(`the device supports x${facts.LinkWidthMax} lanes`);
+  }
+  if (typeof facts.SlotLinkWidthMax === "number") {
+    notes.push(`the slot provides x${facts.SlotLinkWidthMax}`);
+  }
+  const best = facts.LinkBandwidthMaxBytesPerSec;
+  if (typeof best === "number" && best !== now) {
+    notes.push(`at the device's own maximum it would carry ${humanRate(best)}`);
+  }
+  if (notes.length) panel.appendChild(el("div", "eq-note", notes.join(" · ")));
+  return panel;
+}
+
 function capacityPanel(facts) {
   const panel = el("div", "cap-panel");
   panel.appendChild(el("h3", null, "Capacity"));
