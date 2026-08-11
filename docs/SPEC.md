@@ -416,7 +416,7 @@ Base path `/v1`. All responses are envelopes or envelope pages.
 | Endpoint | Returns |
 |---|---|
 | `GET /health` | liveness |
-| `GET /v1/capabilities` | per-subsystem availability, with a `reason` for anything absent |
+| `GET /v1/capabilities` | per-subsystem availability (`se.capabilities/1`), with a `reason` for anything absent |
 | `GET /v1/facts` | the fact dictionary (`se.facts/1`): what each fact means |
 | `GET /v1/{subsystem}/{collection}` | collection page (`se.collection/1`) |
 | `GET /v1/{subsystem}/{collection}/{object_id}` | one observation (`se.observation/1`) |
@@ -431,9 +431,62 @@ Collection behaviour (carried from SE-004 §11, unchanged in spirit):
   truncates; the client never infers truncation.**
 - Small collections (pools, links, domains) return whole by default.
 
-Capabilities response distinguishes, per SE-004 §12: `available`,
-`unsupported` (with reason: "no docker socket on this host"), and
-`error` (with the failure).
+Capability discovery (`se.capabilities/1`) reports absence at **two levels**,
+which is the shape SE-004 §12 was reaching for. A subsystem carries
+`available: true` and names its `collections`, or `available: false` and a
+`reason` — "no docker socket on this host", "not a NixOS host", or a capability
+probe that failed, since a broken adapter is itself a capability fact. An
+available subsystem may still decline individual collections through
+`unavailable_collections`, a map of collection name to reason: hardware without
+an NVMe controller, network without the `nft` grant. Those keys are not a subset
+of `collections` — a collection may be declined that the subsystem does not
+otherwise list.
+
+Two members exist beyond that shape and are declared rather than tolerated:
+`manager` on the packages subsystem, naming what this host resolves to, and a
+top-level `site` carrying the hub URL. `site` is a **display hint the deployment
+supplies, never discovery** — the agent does not find its hub and never talks to
+one, because aggregation must never be a precondition for observation (§7).
+
+### 6.1 Federation: the site hub
+
+`se-hub` fronts the agents of one site with the same UI and the same `/v1`
+contract, and it is the reason an operator running several hosts sees one page
+rather than several. It is deployed, it drives the UI's host switcher, and until
+now this specification did not mention it.
+
+| Endpoint | Returns |
+|---|---|
+| `GET /hub/hosts[?local=1]` | every host this site can reach, plus each sibling site's own view (`se.hub-hosts/1`) |
+| `GET /agents/{name}/v1/{path}` | one agent's route, proxied verbatim |
+| `GET /sites/{site}/agents/{name}/v1/{path}` | the same, for a host this hub may not own |
+
+Four rules, each load-bearing:
+
+1. **Verbatim pass-through, no summarisation layer.** The hub returns the
+   agent's bytes and status untouched, so an error envelope arrives exactly as
+   sent. `/hub/hosts` is the single exception and the only route that
+   aggregates anything; it aggregates reachability, never observations.
+2. **Federation is exactly one hop, enforced by which URL is used.** A sibling's
+   host is handed to that sibling's own *local* `/agents/…` route, which cannot
+   forward again. That is a rule about addressing rather than a hop counter or a
+   header, so no estate wiring can produce a loop.
+3. **Unreachable is data.** A dark agent is a host entry saying so; a dark
+   sibling is a *site* entry saying so, because "no hosts there" and "cannot see
+   there" are different statements and only one is a problem. A site whose
+   siblings are dark keeps working alone (ROADMAP §6).
+4. **Stateless.** No cache, no polling, no persistence — the hub holds nothing
+   an agent could not be asked for again. Last-known-good belongs with findings.
+
+The configuration contract is four environment variables — `SE_HUB_AGENTS`,
+`SE_HUB_SITE`, `SE_HUB_SIBLINGS`, `SE_HUB_ALLOWED_HOSTS` — and the host URLs a
+hub hands out are **site-internal**: a URL from one site's directory is not
+necessarily dialable from another, which is why a cross-site consumer goes
+through the owning hub's proxy rather than dialling agents itself.
+
+The hub's own surface is deliberately **not** under `/v1`. `/v1` is the agent's
+contract, which the hub proxies unchanged; `se.hub-hosts/1` versions
+independently of it.
 
 ### The fact dictionary — what a native name means
 
@@ -722,6 +775,17 @@ every collection it exposes:
    facts, and are exercised directly — characteristic inputs must fire the
    documented keys at the documented levels, and every emitted opinion's
    evidence must resolve into the input facts.
+9. **Every declared surface is published** (0.4): every `se.<name>/<n>`
+   discriminator emitted anywhere in the package has a schema in `schema/` and
+   a fixture, and every published schema is emitted by something. An envelope
+   naming a schema nobody wrote is unversioned in practice, and a schema
+   nothing emits is contract a consumer implements against and never receives.
+10. **Evidence redacts what it should** (0.4): every adapter serving
+    `evidence_ref` either routes its payload through a redactor or carries a
+    written, reviewed reason why its native payload has no credential surface.
+    A redactor declares the paths where it actually withheld something —
+    announcing a redaction that did not happen inverts the provenance contract
+    as surely as performing one silently.
 
 ---
 
