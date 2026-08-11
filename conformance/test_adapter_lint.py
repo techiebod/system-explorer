@@ -167,3 +167,59 @@ def test_failure_text_is_bounded_centrally(source):
         + "\nUse env.reason(...) — it bounds on a word boundary, marks what it "
           "dropped, and applies one limit everywhere (SPEC section 2, rule 7)."
     )
+
+
+# ── refactor hazard: self.<name> that no longer exists ───────────────────
+#
+# Moving a helper out of an adapter and leaving one call site behind is a
+# runtime AttributeError, and adapters are exactly where that hides: the suite
+# validates fixtures and lints source text but never calls a collect() (the
+# logged gap), so nothing else notices. It happened for real — _pointers moved
+# to agent/nixos.py with the nix subsystem split and system/boot broke on every
+# NixOS host, surfacing only as an error envelope in the browser.
+#
+# Deliberately conservative: it checks names DEFINED nowhere in the class, so a
+# genuinely dynamic attribute is the only false positive, and there are none.
+
+def _class_defined_names(node: ast.ClassDef) -> set[str]:
+    """Every attribute this class body establishes: methods, class-level
+    assignments, and anything assigned to self anywhere inside it."""
+    names: set[str] = set()
+    for item in node.body:
+        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            names.add(item.name)
+        elif isinstance(item, ast.Assign):
+            names.update(t.id for t in item.targets if isinstance(t, ast.Name))
+        elif isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
+            names.add(item.target.id)
+    for sub in ast.walk(node):
+        # self.x = ... in __init__ or anywhere else
+        targets = (sub.targets if isinstance(sub, ast.Assign)
+                   else [sub.target] if isinstance(sub, (ast.AnnAssign, ast.AugAssign))
+                   else [])
+        for target in targets:
+            if (isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name)
+                    and target.value.id == "self"):
+                names.add(target.attr)
+    return names
+
+
+def _self_attributes(node: ast.ClassDef) -> set[str]:
+    return {sub.attr for sub in ast.walk(node)
+            if isinstance(sub, ast.Attribute) and isinstance(sub.value, ast.Name)
+            and sub.value.id == "self" and isinstance(sub.ctx, ast.Load)}
+
+
+@pytest.mark.parametrize("source", agent_sources(), ids=lambda p: str(p.relative_to(AGENT_DIR)))
+def test_no_self_attribute_survives_its_definition(source):
+    tree = ast.parse(source.read_text(), filename=str(source))
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        defined = _class_defined_names(node)
+        missing = sorted(name for name in _self_attributes(node) if name not in defined)
+        assert not missing, (
+            f"{source}: class {node.name} reads self.{{{', '.join(missing)}}} which "
+            "the class does not define — a helper was moved or renamed and a call "
+            "site was left behind (SPEC section 11: the suite is the teeth)"
+        )

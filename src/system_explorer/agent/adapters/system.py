@@ -451,7 +451,12 @@ class Adapter:
         # observable.
         # Nix-only, so absent rather than null elsewhere (see _is_nixos).
         if _is_nixos():
-            pointers = self._pointers()
+            # nx.pointers(), not self._pointers(): the method moved to
+            # agent/nixos.py with the rest of the closure primitives when the
+            # nix subsystem split off, and this call site was left behind —
+            # which broke system/boot on every NixOS host with an AttributeError
+            # until the new empty-collection message made it legible.
+            pointers = nx.pointers()
             default_gen = None
             try:
                 link = os.readlink(PROFILES / "system")
