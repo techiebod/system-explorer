@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import os
+import re
 
 import anyio
 
@@ -136,6 +137,45 @@ def _pressure_by_unit() -> dict[str, dict]:
 # needs exactly the number that answers "is this the unit stalling the host",
 # and it is the one the rule judges.
 ROW_PRESSURE_FACTS = ("PsiIoFullAvg60", "PsiCpuSomeAvg60", "PsiMemoryFullAvg60")
+
+# ── naming the workload behind a transient scope ─────────────────────
+#
+# Container and VM runtimes register their workloads as transient scopes whose
+# names carry an id and nothing an operator recognises. This mattered the first
+# time per-unit PSI worked: a docker-59286b95bc5b….scope showed the highest
+# I/O stall on the host, and there was no way to tell it was syncthing. The
+# unit itself holds no name — Description is dockerd's own "libcontainer
+# container <the same id>" — so each runtime gets exactly the handle its own
+# naming actually supports, and no more.
+#
+# docker: the short id, published under the SAME fact name the docker adapter
+#   already uses (ContainerID), so the two collections join on a shared value.
+#   No relationship is emitted: an edge needs container:<name>, and this
+#   adapter cannot know the name without talking to Docker, which is not its
+#   acquisition path.
+# libvirt: the domain name is recoverable in full, because libvirt names the
+#   scope qemu-<domid>-<domain> and systemd escapes it. So this one CAN form
+#   domain:<name> and does — a real edge, not a join key.
+DOCKER_SCOPE_RE = re.compile(r"^docker-([0-9a-f]{12})[0-9a-f]*\.scope$")
+MACHINE_SCOPE_RE = re.compile(r"^machine-qemu\\x2d\d+\\x2d(.+)\.scope$")
+
+
+def _unescape_unit_name(name: str) -> str:
+    r"""systemd's C-escaping of unit names: \x2d for '-', and so on. Only the
+    \xNN form appears in machine and mount unit names."""
+    return re.sub(r"\\x([0-9a-fA-F]{2})",
+                  lambda m: chr(int(m.group(1), 16)), name)
+
+
+def _workload_facts(unit_name: str) -> dict:
+    """Whatever the scope's own name can prove about the workload inside it."""
+    docker = DOCKER_SCOPE_RE.match(unit_name)
+    if docker:
+        return {"ContainerID": docker.group(1)}
+    machine = MACHINE_SCOPE_RE.match(unit_name)
+    if machine:
+        return {"MachineName": _unescape_unit_name(machine.group(1))}
+    return {}
 
 # Unit types that live in the cgroup tree, and where their Slice lives.
 SLICE_IFACES = {
@@ -255,6 +295,10 @@ class Adapter:
         for name, description, load, active, sub, _following, path, *_job in sorted(listed[0]):
             facts = {"LoadState": load, "ActiveState": active, "SubState": sub,
                      "Description": description}
+            # On the row for the same reason the pressure numbers are: the
+            # operator sorting by stall has to recognise the winner in the
+            # list, not open it to find out what it is.
+            facts.update(_workload_facts(name))
             # Attribution on the row, not just the object: an operator staring
             # at host I/O pressure needs to sort the list, not open 300 units.
             for key in ROW_PRESSURE_FACTS:
@@ -355,6 +399,7 @@ class Adapter:
             "FragmentPath": unit.get("FragmentPath"),
             "ActiveEnterTimestamp": env.usec_to_iso(unit.get("ActiveEnterTimestamp")),
         }
+        facts.update(_workload_facts(name))
         if unit_type == "service":
             for key in SERVICE_FACTS:
                 facts[key] = env.norm_u64(typed.get(key))
@@ -385,6 +430,13 @@ class Adapter:
         if slice_unit and slice_unit != name:
             facts["Slice"] = slice_unit
             relationships.append(env.rel("member-of", "out", f"unit:{slice_unit}"))
+        # libvirt's scope name yields the domain name in full, so this edge is
+        # real rather than a join hint. Docker's does not (see _workload_facts),
+        # which is why only one of the two gets a relationship.
+        if facts.get("MachineName"):
+            relationships.append(env.rel("runs", "out",
+                                         f"domain:{facts['MachineName']}",
+                                         subsystem="vms"))
 
         return env.observation(
             self.subsystem, env.obj_ref(object_id, unit_type, name),

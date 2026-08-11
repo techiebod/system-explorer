@@ -224,6 +224,14 @@ class Adapter:
             "NICs": nics,
             "Disks": disks,
             "Bridges": sorted({n["Bridge"] for n in nics if n.get("Bridge")}),
+            # The host-side tap devices this domain owns. Already parsed per
+            # NIC; lifted to its own fact because it is the ONLY authoritative
+            # answer to "which domain owns vnet4", and network/links cannot
+            # derive it — a tap carries no domain identity in sysfs, and the
+            # fe:54:/52:54: MAC resemblance is a QEMU convention, not a
+            # record. Without this the operator meets four unattributed vnet
+            # rows and a bridge (seen on silo, 2026-08-11).
+            "HostTaps": sorted({n["HostTap"] for n in nics if n.get("HostTap")}),
             "PassedThroughDevices": hostdevs,
         }
 
@@ -232,8 +240,12 @@ class Adapter:
         items = []
         for dom in await anyio.to_thread.run_sync(_domains_raw):
             facts = self._facts(dom)
+            # HostTaps rides on the ROW, not just the opened object: the
+            # consumer that needs it is looking at network/links and wants to
+            # name every tap from one request, without opening each domain.
             summary = {k: facts[k] for k in
-                       ("State", "IPAddresses", "MemoryMiB", "VCPUs", "Autostart", "Persistent")}
+                       ("State", "IPAddresses", "MemoryMiB", "VCPUs", "Autostart",
+                        "Persistent", "HostTaps")}
             # Rules see the summary facts (State and Autostart both there), so
             # the row carries the same worst opinion an opened object would.
             worst = worst_level(domain_opinions(summary),
@@ -270,6 +282,11 @@ class Adapter:
 
         relationships = [env.rel("attached-to", "out", f"link:{bridge}", subsystem="network")
                          for bridge in facts["Bridges"]]
+        # The tap edge, distinct from the bridge edge: the bridge is shared by
+        # every guest on the network, the tap belongs to this domain alone, so
+        # it is the edge that actually attributes a link to a workload.
+        relationships += [env.rel("owns", "out", f"link:{tap}", subsystem="network")
+                          for tap in facts["HostTaps"]]
         relationships += [env.rel("backs", "in", f"file:{d['Source']}")
                           for d in facts["Disks"] if d.get("Source")]
         relationships += [env.rel("attached-to", "out", f"pci:{d['Address']}",

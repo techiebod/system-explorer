@@ -23,6 +23,30 @@ from ..rules.docker import container_opinions
 
 SOCKET = "/var/run/docker.sock"
 COMPOSE_PROJECT = "com.docker.compose.project"
+BRIDGE_NAME_OPTION = "com.docker.network.bridge.name"
+
+
+def _bridge_interface(raw: dict) -> str | None:
+    """The host bridge this docker network is plumbed onto, or None.
+
+    Two sources, in order of authority. Docker records the name explicitly for
+    the default bridge (`com.docker.network.bridge.name: docker0`), and for
+    every other bridge network the interface is `br-` plus the first 12
+    characters of the network id — Docker's documented naming, verified on a
+    live host against both of its user-defined bridges.
+
+    This is the edge that stops network/links being a wall of anonymous
+    plumbing: a `br-56a84c7a9838` row means nothing, and "the paperless
+    stack's network" means everything. host and null drivers plumb no
+    interface, so they get no claim.
+    """
+    named = (raw.get("Options") or {}).get(BRIDGE_NAME_OPTION)
+    if named:
+        return named
+    if raw.get("Driver") != "bridge":
+        return None
+    ident = raw.get("Id") or ""
+    return f"br-{ident[:12]}" if len(ident) >= 12 else None
 
 REFERENCE = ["docker ps -a", "docker inspect <name>", "docker volume ls", "docker network ls"]
 
@@ -155,7 +179,9 @@ class Adapter:
             env.item_summary(
                 f"docker-network:{n['Name']}", "network", n["Name"],
                 {"Driver": n.get("Driver"), "Scope": n.get("Scope"),
-                 "Internal": n.get("Internal")})
+                 "Internal": n.get("Internal"),
+                 "BridgeInterface": _bridge_interface(n),
+                 "ComposeProject": (n.get("Labels") or {}).get(COMPOSE_PROJECT)})
             for n in raw
         ]
 
@@ -231,11 +257,17 @@ class Adapter:
 
         else:
             containers = raw.get("Containers") or {}
+            bridge = _bridge_interface(raw)
             facts = {"Driver": raw.get("Driver"), "Scope": raw.get("Scope"),
-                     "Internal": raw.get("Internal"), "AttachedContainers": len(containers)}
+                     "Internal": raw.get("Internal"), "AttachedContainers": len(containers),
+                     "BridgeInterface": bridge,
+                     "ComposeProject": (raw.get("Labels") or {}).get(COMPOSE_PROJECT)}
             opinions = []
             relationships = [env.rel("attached-to", "in", f"container:{c['Name']}")
                              for c in containers.values() if c.get("Name")]
+            if bridge:
+                relationships.append(
+                    env.rel("plumbed-onto", "out", f"link:{bridge}", subsystem="network"))
             obj = env.obj_ref(object_id, "network", raw["Name"])
 
         return env.observation(

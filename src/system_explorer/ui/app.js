@@ -37,6 +37,7 @@ const state = {
   lookupCatalog: null,   // launcher entries, fetched once per host
   ovIdentity: null,      // overview KPI identity facts, cached per host
   ovPrev: null,          // overview's previous counter sample (client-side rates)
+  owners: null,          // native_id -> owning workload, for the current list
   observedAt: null,
   refreshTimer: null,
   suppressAutoOpen: false,
@@ -48,7 +49,7 @@ const COLUMNS = {
   "logs/journal": ["Timestamp", "Priority", "SyslogIdentifier", "Message"],
   "docker/containers": ["State", "Status", "Image", "ComposeProject"],
   "docker/volumes": ["Driver", "Mountpoint", "ComposeProject"],
-  "docker/networks": ["Driver", "Scope", "Internal"],
+  "docker/networks": ["Driver", "BridgeInterface", "ComposeProject", "Internal"],
   "storage/mounts": ["Source", "FsType", "UsePercent", "SizeBytes", "AvailBytes"],
   "storage/block-devices": ["Type", "Size", "FsType", "Mountpoints", "Model"],
   "storage/arrays": ["Status", "Level", "SyncPercent", "RaidDisks", "SizeBytes"],
@@ -280,6 +281,7 @@ async function loadHost() {
   state.lookupCatalog = null;
   state.status = null;
   state.ovPrev = null;         // counter deltas never span two hosts
+  state.owners = null;         // and neither does attribution
   state.capabilities = null;   // stale caps must not describe the new host
   renderHostCard();
   let caps;
@@ -474,7 +476,7 @@ function route() {
     Object.assign(state, { sortKey: null, filterText: "", facet: null,
                            selectedId: null, detailObs: null, evidence: null,
                            suppressAutoOpen: false, page: null, lookupDraft: null,
-                           showHidden: false, colPicker: false });
+                           showHidden: false, colPicker: false, owners: null });
     $("filter").value = "";
     // The facet bar describes a collection's rows; on a route change the
     // old chips are stale immediately — clear now, not when the new data
@@ -585,6 +587,15 @@ async function loadCollection(deepLinkId = null) {
   renderFacets();
   renderGrid();
 
+  // Attribution lands after the rows, never before them: it costs an extra
+  // request or two, and a list that is slower to appear would be a bad trade
+  // for a label. Re-renders in place when it arrives.
+  loadOwners().then((owners) => {
+    if (epoch !== state.epoch || !owners) return;
+    state.owners = owners;
+    renderGrid();
+  });
+
   if (deepLinkId) {
     openDetail(deepLinkId);
   } else if (state.selectedId && state.detailObs) {
@@ -596,6 +607,88 @@ async function loadCollection(deepLinkId = null) {
              && page.items.length === 1 && page.total === 1) {
     openDetail(page.items[0].id, { quiet: true });
   }
+}
+
+/* ── workload attribution ────────────────────────────────────────────
+   The kernel names virtual plumbing after itself, never after what runs on
+   it: vnet4, br-ae307a67bed8, veth960eb05, docker-59286b95….scope. That cost
+   a real diagnosis — per-unit PSI correctly identified the scope stalling
+   silo on I/O and the operator could not tell it was syncthing.
+
+   Only the owning subsystem can name these, so each publishes its half as a
+   fact (vms: HostTaps; docker: BridgeInterface and ContainerID; units:
+   ContainerID and MachineName) and this joins them for the list view. The
+   same edges exist as relationships for MCP consumers, so this is a
+   projection of the graph rather than a second source of truth.
+
+   Every source is capability-guarded and every failure is silent: a missing
+   label is a worse list, a broken list is a broken page. */
+
+async function loadOwners() {
+  const route = `${state.subsystem}/${state.collection}`;
+  const subs = state.capabilities?.subsystems || {};
+  const has = (s, c) => subs[s]?.available && (subs[s].collections || []).includes(c);
+  const rows = state.page?.items || [];
+  const owners = {};
+  try {
+    if (route === "network/links") {
+      const [doms, nets] = await Promise.all([
+        has("vms", "domains") ? api("/v1/vms/domains?limit=200") : null,
+        has("docker", "networks") ? api("/v1/docker/networks?limit=200") : null,
+      ]);
+      // A tap belongs to exactly one domain — the strongest attribution here.
+      for (const d of doms?.items || [])
+        for (const tap of d.facts.HostTaps || [])
+          owners[tap] = { label: d.native_id, href: hashFor("vms", "domains", d.id) };
+      const byBridge = {};
+      for (const n of nets?.items || []) {
+        const bridge = n.facts.BridgeInterface;
+        if (!bridge) continue;
+        byBridge[bridge] = {
+          label: n.facts.ComposeProject
+            ? `${n.native_id} · ${n.facts.ComposeProject}` : n.native_id,
+          href: hashFor("docker", "networks", n.id),
+        };
+        owners[bridge] = byBridge[bridge];
+      }
+      // veth is the honest exception. Naming the container behind one means
+      // matching the peer ifindex inside the container's netns, which needs
+      // privilege this agent does not have by design. So a veth is attributed
+      // to the network it is bridged onto — "on proxy · arr" — and claims
+      // nothing about which container, because it cannot know.
+      for (const item of rows) {
+        if (item.facts.Kind !== "veth") continue;
+        const via = byBridge[item.facts.Master];
+        if (via) owners[item.native_id] = { ...via, hedge: true };
+      }
+    } else if (route === "units/units") {
+      const containers = has("docker", "containers")
+        ? await api("/v1/docker/containers?limit=500") : null;
+      const byId = {};
+      for (const c of containers?.items || [])
+        if (c.facts.ContainerID) byId[c.facts.ContainerID] = c;
+      for (const item of rows) {
+        const container = byId[item.facts.ContainerID];
+        if (container) {
+          owners[item.native_id] = {
+            label: container.native_id,
+            href: hashFor("docker", "containers", container.id),
+          };
+        } else if (item.facts.MachineName) {
+          // The unit's own name proves this one, so it is labelled whether or
+          // not the vms subsystem is reachable; only the link needs vms.
+          owners[item.native_id] = {
+            label: item.facts.MachineName,
+            href: has("vms", "domains")
+              ? hashFor("vms", "domains", `domain:${item.facts.MachineName}`) : null,
+          };
+        }
+      }
+    }
+  } catch {
+    return null;
+  }
+  return owners;
 }
 
 /* ── host overview: a designed panel, not the generic grid ──
@@ -1175,6 +1268,19 @@ function renderGrid() {
     idCell.appendChild(el("span", `dot ${item.worst_opinion_level || "info"}`));
     idCell.appendChild(document.createTextNode(item.native_id));
     idCell.title = item.id;
+    // What runs on this piece of plumbing, when something can say so.
+    const owner = state.owners?.[item.native_id];
+    if (owner) {
+      const tag = owner.href ? el("a", "owner") : el("span", "owner");
+      if (owner.href) {
+        tag.href = owner.href;
+        tag.onclick = (e) => e.stopPropagation();
+      }
+      // "on X" for an attribution to a shared network rather than to one
+      // workload — the hedge is the point, not decoration.
+      tag.textContent = owner.hedge ? `on ${owner.label}` : owner.label;
+      idCell.appendChild(tag);
+    }
     tr.appendChild(idCell);
 
     for (const key of cols) tr.appendChild(renderCell(key, item.facts[key], item));
