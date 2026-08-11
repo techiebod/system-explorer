@@ -200,6 +200,13 @@ def _etc_entries(etc_root: str | None) -> dict[str, str]:
     return entries
 
 
+def _has_members(path: str, older: dict[str, str], newer: dict[str, str]) -> bool:
+    """Whether this entry is a directory with contents on both sides."""
+    prefix = f"{path}/"
+    return (any(p.startswith(prefix) for p in older)
+            and any(p.startswith(prefix) for p in newer))
+
+
 def _etc_rows(older_root: str | None, newer_root: str | None,
               older: dict[str, str], newer: dict[str, str]) -> list[dict]:
     """Which files under /etc changed, one row each.
@@ -248,7 +255,18 @@ def _etc_rows(older_root: str | None, newer_root: str | None,
                             older.get(path), newer.get(path)))
             continue
         # A directory whose members are listed individually adds nothing itself.
-        if any(p.startswith(f"{path}/") for p in changed):
+        members = [p for p in changed if p.startswith(f"{path}/")]
+        if members:
+            continue
+        # An aggregate whose identity moved while every member stayed identical.
+        # Store paths are input-addressed, so a rebuild relocates byte-identical
+        # content: /etc/terminfo moves whenever ncurses is rebuilt and says
+        # nothing about the machine. Reported, because it did move, but labelled,
+        # because "terminfo changed" would send an operator looking for a change
+        # that is not there.
+        if path in older and path in newer and _has_members(path, older, newer):
+            rows.append(row(f"etc/{path} (identity moved, contents identical)",
+                            older.get(path), newer.get(path)))
             continue
         rows.append(row(f"etc/{path}", older.get(path), newer.get(path)))
 

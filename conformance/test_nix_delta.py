@@ -213,3 +213,37 @@ def test_abbreviation_never_hides_the_difference():
     assert before != after
     short_before, short_after = nix._distinguishable("aaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbb")
     assert (short_before, short_after) == ("aaaaaaaaaaaa", "bbbbbbbbbbbb")
+
+
+def test_an_aggregate_whose_contents_are_identical_says_so(tmp_path):
+    """Store paths are input-addressed, so a rebuild relocates byte-identical
+    content. /etc/terminfo moves whenever ncurses is rebuilt and says nothing
+    about the machine; an unlabelled row sends an operator looking for a change
+    that is not there."""
+    old_db, new_db = tmp_path / "old-db", tmp_path / "new-db"
+    for db in (old_db, new_db):
+        db.mkdir(parents=True)
+        (db / "xterm").write_text("same")
+        (db / "screen").write_text("same")
+    old_root = build_etc(tmp_path / "old", {"terminfo": str(old_db)}, {})
+    new_root = build_etc(tmp_path / "new", {"terminfo": str(new_db)}, {})
+
+    rows = nix._etc_rows(old_root, new_root,
+                         nix._etc_entries(old_root), nix._etc_entries(new_root))
+    assert len(rows) == 1, rows
+    assert rows[0]["Name"] == "etc/terminfo (identity moved, contents identical)"
+    assert rows[0]["From"] != rows[0]["To"]
+
+
+def test_a_changed_member_still_reports_the_member_not_the_label(tmp_path):
+    """The label must not swallow a real change inside an aggregate."""
+    old_db, new_db = tmp_path / "old-db", tmp_path / "new-db"
+    for db, text in ((old_db, "old"), (new_db, "new")):
+        db.mkdir(parents=True)
+        (db / "xterm").write_text(text)
+    old_root = build_etc(tmp_path / "old", {"terminfo": str(old_db)}, {})
+    new_root = build_etc(tmp_path / "new", {"terminfo": str(new_db)}, {})
+
+    names = [r["Name"] for r in nix._etc_rows(
+        old_root, new_root, nix._etc_entries(old_root), nix._etc_entries(new_root))]
+    assert names == ["etc/terminfo/xterm"]
