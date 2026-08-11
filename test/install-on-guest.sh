@@ -25,6 +25,13 @@ set -euo pipefail
 DEST="${1:?ssh destination (host or alias)}"
 WHEEL="${2:?path to a system_explorer wheel}"
 BIND="${3:-0.0.0.0}"
+# Where this guest's site view lives, and what the site is called. Optional, and
+# the agent never dials it — it is the display hint that stops a single-host page
+# looking like the whole product (services.systemExplorer.hubUrl on NixOS). The
+# lab had no hub at all until one ran on a guest, so nothing set these and every
+# guest page was a dead end.
+HUB_URL="${SE_GUEST_HUB_URL:-}"
+SITE="${SE_GUEST_SITE:-}"
 # shellcheck disable=SC2206  # deliberately word-split into an array
 SSH_OPTS=(${SE_SSH_OPTS:-})
 
@@ -83,6 +90,8 @@ After=network.target
 Type=simple
 User=system-explorer
 SupplementaryGroups=systemd-journal
+Environment=SE_HUB_URL=${HUB_URL}
+Environment=SE_SITE=${SITE}
 ExecStart=/opt/system-explorer/bin/se-agent --host ${BIND} --port 8091
 Restart=on-failure
 RestartSec=2
