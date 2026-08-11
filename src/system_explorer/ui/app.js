@@ -312,7 +312,22 @@ function onHostSelect() {
   location.hash = `#/${$("host-select").value}${rest}`;
 }
 
+/* Which build am I looking at. The version alone cannot answer that: between
+   releases every host reports the same one, so the footer read identically
+   before and after a deploy and the only way to check whether a change had
+   landed was to probe the API. In hub mode this is the SELECTED agent's build,
+   not the hub's, which is the one the page's data came from — and the two can
+   legitimately differ mid-rollout. */
+function renderBuild() {
+  const caps = state.capabilities;
+  const foot = $("build");
+  if (!caps) { foot.textContent = ""; return; }
+  foot.textContent = caps.revision ? `v${caps.version} · ${caps.revision}`
+                                   : `v${caps.version}`;
+}
+
 function renderHostCard() {
+  renderBuild();
   if (!state.hub) {
     const host = state.capabilities?.host;
     if (host) {

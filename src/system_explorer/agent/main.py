@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from .. import __version__
+from .. import __revision__, __version__
 from ..paths import UI_DIR
 from . import envelope as env
 from . import history
@@ -32,6 +32,10 @@ RESERVED_PARAMS = {"limit", "cursor"}
 # system_explorer/__init__.py, which pyproject.toml and nix/version.nix also
 # read — one edit per release, and no way to disagree.
 VERSION = __version__
+# The build's source revision, or None off a Nix build (see __init__.py). Sent
+# alongside the version so an operator can tell from the screen which build
+# they are looking at — between releases the version alone cannot.
+REVISION = __revision__
 
 # Snapshot history (SPEC section 10): SQLite under systemd's StateDirectory.
 # No STATE_DIRECTORY means history is deliberately off — /v1/changes then
@@ -128,7 +132,10 @@ def _query(request: Request) -> tuple[dict, int | None, str | None]:
 
 @app.get("/health")
 async def health() -> dict:
-    return {"status": "ok", "host": env.HOST, "version": VERSION}
+    out = {"status": "ok", "host": env.HOST, "version": VERSION}
+    if REVISION:
+        out["revision"] = REVISION
+    return out
 
 
 # Where this host's site view lives, if the operator configured one. The agent
@@ -163,6 +170,8 @@ async def capabilities() -> dict:
         "version": VERSION,
         "subsystems": subsystems,
     }
+    if REVISION:
+        out["revision"] = REVISION
     # Additive and optional (SPEC §5.1): a consumer that has never heard of a
     # site is unaffected, and an agent with no hub configured says nothing
     # rather than claiming it stands alone.

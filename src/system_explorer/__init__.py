@@ -19,3 +19,17 @@ relative imports.
 # build fails rather than shipping 0.4.0 code labelled 0.3.0 — which is what
 # four hand-maintained copies did until 2026-08-10. Tracks docs/SPEC.md.
 __version__ = "0.4.0"
+
+# The source revision this build came from, when the builder knew it. Written
+# by nix/package.nix as _build.py from the flake's own rev, so it is absent
+# from a plain `pip install .` — a wheel built from a tarball has no git to
+# ask, and inventing a value would be worse than admitting none.
+#
+# It exists because a version alone cannot answer "am I looking at the change
+# we just made". Between releases every host reports 0.4.0, so the operator UI
+# showed the same string before and after a deploy and there was no way to tell
+# from the screen whether a fix had landed. That question was asked out loud.
+try:                                          # pragma: no cover - build artefact
+    from ._build import REVISION as __revision__
+except ImportError:                           # pragma: no cover - source checkout
+    __revision__ = None

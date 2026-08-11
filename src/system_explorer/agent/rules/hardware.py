@@ -114,17 +114,38 @@ def smart_opinions(facts: dict) -> list[dict]:
             "NVMe health log.", ["SmartMediaErrors"]))
     age = facts.get("SmartSnapshotAgeSeconds")
     if isinstance(age, int) and age > SMART_SNAPSHOT_STALE_SECONDS:
-        # The rule sees a stale file, not the reason: a wedged collector, a
-        # spun-down drive (-n standby preserves the last snapshot), or
-        # leftover snapshots on a host with no collector installed at all
-        # (an ad-hoc run reading /run residue, seen 2026-08-10). Claim
-        # only what the evidence carries.
-        opinions.append(env.opinion(
-            "smart-snapshot-stale", "warn",
-            f"SMART facts are last-known, not current: the newest snapshot "
-            f"is {_human_age(age)} old. The collector may be wedged or not "
-            "installed on this host, or the drive may be asleep.",
-            ["SmartSnapshotAt", "SmartSnapshotAgeSeconds"]))
+        # The collector now records WHY its newest run added nothing, so this
+        # no longer offers the operator a three-way guess about something the
+        # agent already knew. The level follows the reason, which is the part
+        # that matters: a drive the collector deliberately left asleep is
+        # normal operation and must not wear a warning, while an unexplained
+        # stale snapshot really might be a wedged collector.
+        reason = facts.get("SmartSnapshotReason")
+        asleep = isinstance(reason, str) and "STANDBY" in reason.upper()
+        if asleep:
+            opinions.append(env.opinion(
+                "smart-snapshot-stale", "info",
+                f"SMART facts are {_human_age(age)} old because the drive is "
+                "spun down and the collector deliberately does not wake it "
+                f"(smartctl: {reason}). Waking a sleeping disk every five "
+                "minutes to read its temperature would cost more than the "
+                "reading is worth.",
+                ["SmartSnapshotAt", "SmartSnapshotAgeSeconds", "SmartSnapshotReason"]))
+        elif reason:
+            opinions.append(env.opinion(
+                "smart-snapshot-stale", "warn",
+                f"SMART facts are last-known, not current: the newest "
+                f"snapshot is {_human_age(age)} old and the last collector "
+                f"run produced no reading (smartctl: {reason}).",
+                ["SmartSnapshotAt", "SmartSnapshotAgeSeconds", "SmartSnapshotReason"]))
+        else:
+            opinions.append(env.opinion(
+                "smart-snapshot-stale", "warn",
+                f"SMART facts are last-known, not current: the newest snapshot "
+                f"is {_human_age(age)} old and nothing recorded why. The "
+                "collector may be wedged, or these may be leftover snapshots "
+                "on a host where it is not installed.",
+                ["SmartSnapshotAt", "SmartSnapshotAgeSeconds"]))
     return opinions
 
 

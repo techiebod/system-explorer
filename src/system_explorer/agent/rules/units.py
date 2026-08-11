@@ -19,13 +19,19 @@ from .. import envelope as env
 RESTART_CHURN_THRESHOLD = 3
 
 # Per-unit stall shares, judged on the same 60-second window the host
-# overview uses so the two agree about what "now" means. "full" is the
-# unambiguous one: EVERY task in this cgroup was stalled, so the unit made
-# no progress at all for that share of the minute. Deliberately warn, not
-# critical — a stalled unit is a symptom whose cause is usually elsewhere
-# (a saturated device, a degraded pool), and calling it critical would put
-# the loudest level on the thing that is suffering rather than the thing
-# that is wrong.
+# overview uses so the two agree about what "now" means.
+#
+# "full" is the share of time in which every NON-IDLE task was stalled, which
+# is not the same as every task and must not be worded as if it were. A unit
+# with ninety-nine sleeping tasks and one blocked on I/O is "full" for as long
+# as that one is blocked, because nothing else wanted to run. The distinction
+# is the whole difference between "this unit is making no progress" (true) and
+# "everything in this unit is stuck" (usually false, and alarming).
+#
+# Deliberately warn, not critical — a stalled unit is a symptom whose cause is
+# usually elsewhere (a saturated device, a degraded pool), and calling it
+# critical would put the loudest level on the thing that is suffering rather
+# than the thing that is wrong.
 UNIT_IO_STALL_WARN = 20.0
 UNIT_MEMORY_STALL_WARN = 10.0
 
@@ -50,12 +56,15 @@ def unit_opinions(facts: dict) -> list[dict]:
     if isinstance(io_stall, (int, float)) and io_stall >= UNIT_IO_STALL_WARN:
         opinions.append(env.opinion(
             "unit-io-stall", "warn",
-            f"Every task in this unit was stalled waiting for I/O {io_stall}% "
-            "of the last minute.", ["PsiIoFullAvg60"]))
+            f"This unit made no progress for {io_stall}% of the last minute: "
+            "every task in it that had work to do was waiting on I/O. Tasks "
+            "with nothing to do are not counted.", ["PsiIoFullAvg60"]))
     memory_stall = facts.get("PsiMemoryFullAvg60")
     if isinstance(memory_stall, (int, float)) and memory_stall >= UNIT_MEMORY_STALL_WARN:
         opinions.append(env.opinion(
             "unit-memory-stall", "warn",
-            f"Every task in this unit was stalled reclaiming memory "
-            f"{memory_stall}% of the last minute.", ["PsiMemoryFullAvg60"]))
+            f"This unit made no progress for {memory_stall}% of the last "
+            "minute: every task in it that had work to do was waiting on "
+            "memory reclaim. Tasks with nothing to do are not counted.",
+            ["PsiMemoryFullAvg60"]))
     return opinions

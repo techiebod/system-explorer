@@ -364,9 +364,27 @@ CASES = [
      {("smart-selftest", "warn")}),
     ("smart-selftest-success-quiet", hardware.smart_opinions,
      {"SmartSelftestStatus": "success", "SmartOverallPassed": True}, set()),
-    ("smart-snapshot-stale", hardware.smart_opinions,
+    # Stale with nothing recorded about why: still a warning, because an
+    # unexplained gap really might be a wedged collector.
+    ("smart-snapshot-stale-unexplained", hardware.smart_opinions,
      {"SmartSnapshotAt": "2026-08-09T11:00:00Z",
       "SmartSnapshotAgeSeconds": hardware.SMART_SNAPSHOT_STALE_SECONDS + 1},
+     {("smart-snapshot-stale", "warn")}),
+    # Stale BECAUSE the collector deliberately did not wake a sleeping disk.
+    # info, not warn: that is normal operation on a spun-down bulk drive, and
+    # a warning there trains the operator to ignore the rule. Observed on vat,
+    # whose pool disks idle into standby (2026-08-11).
+    ("smart-snapshot-stale-drive-asleep", hardware.smart_opinions,
+     {"SmartSnapshotAt": "2026-08-09T11:00:00Z",
+      "SmartSnapshotAgeSeconds": hardware.SMART_SNAPSHOT_STALE_SECONDS + 1,
+      "SmartSnapshotReason": "Device is in STANDBY mode, exit(2)"},
+     {("smart-snapshot-stale", "info")}),
+    # Stale for a reason that is NOT standby — an unsupported transport, a
+    # permission failure. Still a warning, now with the cause quoted.
+    ("smart-snapshot-stale-explained-fault", hardware.smart_opinions,
+     {"SmartSnapshotAt": "2026-08-09T11:00:00Z",
+      "SmartSnapshotAgeSeconds": hardware.SMART_SNAPSHOT_STALE_SECONDS + 1,
+      "SmartSnapshotReason": "Unsupported device type 'scsi'"},
      {("smart-snapshot-stale", "warn")}),
     ("smart-snapshot-fresh-healthy", hardware.smart_opinions,
      {"SmartSnapshotAt": "2026-08-09T11:00:00Z",

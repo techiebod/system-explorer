@@ -481,6 +481,18 @@ pre.evidence {
 }
 .owner-part:hover { color: var(--accent); }
 
+/* Bottom-left build stamp: which version and source revision produced the
+   data on screen. Deliberately the quietest text in the sidebar — it answers a
+   question that is only asked occasionally, and must never compete with the
+   navigation. */
+#build {
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-faint);
+  user-select: all;          /* so it can be copied into a bug report */
+}
+
 /* The way out of a single-host page, when the deployment named a hub. */
 .site-link { color: var(--accent); text-decoration: none; }
 .site-link:hover { text-decoration: underline; }

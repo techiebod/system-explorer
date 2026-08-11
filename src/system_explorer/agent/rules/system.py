@@ -136,19 +136,27 @@ def overview_opinions(facts: dict) -> list[dict]:
         opinions.append(env.opinion(
             "psi-memory",
             "critical" if psi_mem >= PSI_MEMORY_FULL_CRITICAL else "warn",
-            f"All non-idle tasks were stalled on memory {psi_mem}% of the "
-            "last minute (thrashing).", ["PsiMemoryFullAvg60"]))
+            f"This host made no progress for {psi_mem}% of the last minute: "
+            "every task that had work to do was waiting on memory reclaim "
+            "(thrashing). Tasks with nothing to do are not counted.",
+            ["PsiMemoryFullAvg60"]))
     psi_cpu = facts.get("PsiCpuSomeAvg60")
     if psi_cpu is not None and psi_cpu >= PSI_CPU_SOME_WARN:
         opinions.append(env.opinion(
+            # "some", not "full": the kernel defines cpu-full as always zero,
+            # so this is "at least one task was waiting", a weaker and quite
+            # different claim from the io/memory messages above. Worded to say
+            # so, because identical-looking percentages that mean different
+            # things is how an operator learns to distrust all of them.
             "psi-cpu", "warn",
-            f"Tasks were waiting for CPU {psi_cpu}% of the last minute.",
-            ["PsiCpuSomeAvg60"]))
+            f"At least one task was waiting for CPU {psi_cpu}% of the last "
+            "minute.", ["PsiCpuSomeAvg60"]))
     psi_io = facts.get("PsiIoFullAvg60")
     if psi_io is not None and psi_io >= PSI_IO_FULL_WARN:
         opinions.append(env.opinion(
             "psi-io", "warn",
-            f"All non-idle tasks were stalled on I/O {psi_io}% of the "
-            "last minute.", ["PsiIoFullAvg60"]))
+            f"This host made no progress for {psi_io}% of the last minute: "
+            "every task that had work to do was waiting on I/O. Tasks with "
+            "nothing to do are not counted.", ["PsiIoFullAvg60"]))
     return opinions
 

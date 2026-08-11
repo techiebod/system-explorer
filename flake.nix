@@ -7,6 +7,16 @@
     let
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forEach = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
+
+      # The source revision this build came from, baked into the package so a
+      # running agent can say which one it is. Between releases every host
+      # reports the same version, so the UI read identically before and after a
+      # deploy and the only way to tell whether a change had landed was to
+      # probe the API — a question that got asked out loud. dirtyShortRev
+      # covers a working tree with uncommitted edits; null when neither exists
+      # (a tarball has no git to ask, and inventing a value would be worse
+      # than admitting none).
+      revision = self.shortRev or self.dirtyShortRev or null;
     in
     {
       # One distribution, three console scripts, three closures. The variants
@@ -15,17 +25,21 @@
       # needs the MCP SDK. mainProgram keeps `lib.getExe` pointing at the
       # right script so the NixOS modules did not have to change.
       packages = forEach (pkgs: rec {
-        system-explorer = pkgs.python3Packages.callPackage ./nix/package.nix { };
+        system-explorer = pkgs.python3Packages.callPackage ./nix/package.nix {
+          rev = revision;
+        };
         se-hub = pkgs.python3Packages.callPackage ./nix/package.nix {
           pname = "system-explorer-hub";
           mainProgram = "se-hub";
           withVms = false;
+          rev = revision;
         };
         se-mcp = pkgs.python3Packages.callPackage ./nix/package.nix {
           pname = "system-explorer-mcp";
           mainProgram = "se-mcp";
           withVms = false;
           withMcp = true;
+          rev = revision;
         };
         default = system-explorer;
       });

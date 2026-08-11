@@ -33,6 +33,11 @@
 
 , pname ? "system-explorer"
 , mainProgram ? "se-agent"
+  # Source revision, when the caller knows it — the flake passes its own rev.
+  # Baked in rather than read at runtime because the deployed closure has no
+  # git and no repository: by the time the agent runs, the only place this
+  # could come from is the build.
+, rev ? null
   # libvirt-python is a C extension against libvirt: worth its closure on a
   # hypervisor host, pure waste on the hub and the aggregator. Declared as
   # the [vms] extra in pyproject.toml, so leaving it out does not trip the
@@ -69,6 +74,14 @@ buildPythonApplication {
   };
 
   build-system = [ setuptools ];
+
+  # Stamped before the build so it lands in the wheel as ordinary package data
+  # rather than being patched into an installed tree afterwards. Absent when no
+  # rev was supplied, which is what makes __revision__ honestly None for a
+  # `pip install .` from a tarball.
+  postPatch = lib.optionalString (rev != null) ''
+    echo 'REVISION = "${rev}"' > src/system_explorer/_build.py
+  '';
 
   dependencies = [
     anyio

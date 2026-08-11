@@ -180,14 +180,37 @@ in
         # the previous snapshot survives and the agent reports its age.
         has_reading() { grep -q '"smart_status"' "$1"; }
 
+        # Why there was no reading, in smartctl's own words — "Device is in
+        # STANDBY mode", an unsupported transport, a permission failure. The
+        # first version of this guard threw that away, so the agent could only
+        # offer the operator a three-way guess (wedged / not installed /
+        # asleep) about something the collector already knew. A spun-down bulk
+        # disk is normal operation and must not read like a fault.
+        install_reason() {
+          sed -n 's/.*"string":"\([^"]*\)".*/\1/p' "$1" | head -1 > "$2.tmp" || true
+          if [ -s "$2.tmp" ]; then mv "$2.tmp" "$2"; else rm -f "$2.tmp" "$2"; fi
+        }
+
+        # A snapshot that itself carries no reading is not a last-known-good
+        # one worth protecting; it is residue. Keeping it forever is what made
+        # 475-byte refusals from the `-n standby,q` era outlive the fix and go
+        # on driving a staleness warning off a file containing only error text.
+        install_outcome() {
+          tmp="$1"; final="$2"; reason="$3"
+          if has_reading "$tmp"; then
+            mv "$tmp" "$final"; rm -f "$reason"
+          else
+            install_reason "$tmp" "$reason"
+            if [ -e "$final" ] && ! has_reading "$final"; then rm -f "$final"; fi
+            rm -f "$tmp"
+          fi
+        }
+
         for ctrl in /sys/class/nvme/nvme*; do
           [ -e "$ctrl" ] || continue
           name=$(basename "$ctrl")
-          if smartctl --json=c -d nvme -H -A "/dev/$name" > "$out/.$name.tmp" 2>/dev/null; has_reading "$out/.$name.tmp"; then
-            mv "$out/.$name.tmp" "$out/$name.json"
-          else
-            rm -f "$out/.$name.tmp"
-          fi
+          smartctl --json=c -d nvme -H -A "/dev/$name" > "$out/.$name.tmp" 2>/dev/null || true
+          install_outcome "$out/.$name.tmp" "$out/$name.json" "$out/$name.reason"
         done
 
         # -n standby: never spin up a sleeping drive for a snapshot. It was
@@ -200,11 +223,8 @@ in
         for disk in /sys/block/sd*; do
           [ -e "$disk" ] || continue
           name=$(basename "$disk")
-          if smartctl --json=c -H -A -n standby "/dev/$name" > "$out/.$name.tmp" 2>/dev/null; has_reading "$out/.$name.tmp"; then
-            mv "$out/.$name.tmp" "$out/$name.json"
-          else
-            rm -f "$out/.$name.tmp"
-          fi
+          smartctl --json=c -H -A -n standby "/dev/$name" > "$out/.$name.tmp" 2>/dev/null || true
+          install_outcome "$out/.$name.tmp" "$out/$name.json" "$out/$name.reason"
         done
       '';
     };

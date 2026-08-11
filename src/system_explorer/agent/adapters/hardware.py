@@ -93,6 +93,22 @@ def _smart_snapshot(name: str) -> tuple[dict, float] | None:
         return None
 
 
+def _smart_no_reading(name: str) -> str | None:
+    """smartctl's own words for why the last run produced no reading.
+
+    The collector writes this beside the snapshot (nix/module.nix) precisely so
+    the agent does not have to guess. "Device is in STANDBY mode" is the common
+    one and it is not a fault: the collector passes -n standby so a spun-down
+    bulk disk is deliberately left asleep, and its facts are honestly
+    last-known rather than current.
+    """
+    try:
+        text = Path(f"{SMART_SNAPSHOT_DIR}/{name}.reason").read_text().strip()
+    except OSError:
+        return None
+    return env.reason(text) if text else None
+
+
 def _epoch_iso(seconds: float) -> str:
     return datetime.fromtimestamp(seconds, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -321,6 +337,13 @@ class Adapter:
                 # observed_at-fresh and carries neither fact.
                 info["SmartSnapshotAt"] = _epoch_iso(mtime)
                 info["SmartSnapshotAgeSeconds"] = max(0, int(time.time() - mtime))
+                # Why the newest run added nothing, when the collector said so.
+                # Turns "may be wedged, or not installed, or asleep" into the
+                # one that is true — and lets the rule stop calling a
+                # deliberately-sleeping disk a warning.
+                stale_reason = await anyio.to_thread.run_sync(_smart_no_reading, dev)
+                if stale_reason:
+                    info["SmartSnapshotReason"] = stale_reason
             else:
                 if not have_tool:
                     continue
