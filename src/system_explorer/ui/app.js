@@ -66,12 +66,16 @@ const COLUMNS = {
   "hardware/usb": ["Vendor", "Product", "SpeedMbps", "USBVersion"],
   "hardware/scsi": ["Kind", "Transport", "Vendor", "Model", "SizeBytes", "Link", "State", "Block", "Devices", "EnclosureSlot", "SmartTemperatureC"],
   "hardware/nvme": ["Link", "Model", "FirmwareRev", "Serial", "State", "SmartTemperatureC", "Namespaces"],
-  // Kind AND LinkType, because they answer different questions and only one of
-  // them has an answer for every row: Kind is the software device type (blank on
-  // anything physical, which is itself the information), LinkType is the link
-  // layer (always present). Folding them into one column would put "ether" and
-  // "bridge" in one taxonomy, and a bridge is "ether" too.
-  "network/links": ["OperState", "Kind", "LinkType", "MTU", "MACAddress", "Addresses"],
+  /* Three columns answer "what is this device", because no one field does and
+     none of them can be synthesised into another without inventing a value.
+     Kind is the software device type, blank on anything the kernel gives no
+     linkinfo. LinkType is the link layer, present on everything. ParentBus is
+     the bus behind it, present only where there is hardware — and it says pci
+     on a real NIC but virtio on a VM's, which is exactly the distinction a
+     synthesised "physical" would have destroyed. Each cell is read; the reader's
+     eye does the join, losslessly. */
+  "network/links": ["OperState", "Kind", "LinkType", "ParentBus", "MTU",
+                    "MACAddress", "Addresses"],
   "network/routes": ["Gateway", "Device", "Protocol", "Scope", "Family"],
   "network/lookups": ["Question", "Input", "Example"],
   "storage/lookups": ["Question", "Input", "Example"],
