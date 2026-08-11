@@ -576,10 +576,31 @@ class Adapter:
                 "MountpointSource": _prop_source(props, "mountpoint"),
                 "CanMount": _prop_value(props, "canmount"),
                 "CanMountSource": _prop_source(props, "canmount"),
-                "ReadOnly": _prop_value(props, "readonly"),
-                "ReadOnlySource": _prop_source(props, "readonly"),
                 "Mounted": _prop_value(props, "mounted"),
             }
+            # libzfs derives readonly (and atime/exec/setuid/…) from the
+            # QUERYING process's mount table: where a mount option contradicts
+            # the stored property it returns the mount's value with source
+            # "temporary". ProtectSystem=strict hands this agent every
+            # filesystem read-only, so every MOUNTED dataset reported
+            # ReadOnly=on/temporary while PID 1's table said rw — 21 rows
+            # across two hosts, every one of them wrong (2026-08-10 audit).
+            #
+            # That is the sandbox's value, not the dataset's, and the stored
+            # property is masked behind it. Report the absence with its reason
+            # (SPEC section 2 rule 7) rather than publishing the artifact as a
+            # fact. Unmounted datasets are unaffected: no mount, no override,
+            # so their local/inherited value is the truth.
+            readonly_source = _prop_source(props, "readonly")
+            masked = readonly_source == "temporary"
+            facts["ReadOnly"] = None if masked else _prop_value(props, "readonly")
+            facts["ReadOnlySource"] = readonly_source
+            if masked:
+                facts["ReadOnlyUnobservable"] = (
+                    "masked by a temporary mount-option override in the agent's "
+                    "own mount namespace (ProtectSystem=strict): zfs reads "
+                    "/proc/self/mounts, not PID 1's. This dataset's mount row "
+                    "carries the host's live read-only state.")
             items.append(env.item_summary(
                 f"dataset:{name}", ds.get("type", "filesystem"), name, facts,
                 worst_opinion_level=worst_level(

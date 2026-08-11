@@ -78,6 +78,18 @@ Carried forward from the SE-00x suite:
 7. **Partial success over total failure; absence is not an error.** A missing
    capability is reported in capability discovery with a reason. A failed
    adapter degrades one subsystem, not the service. (SE-004 §12)
+
+   This applies at three scales, and the shape at each is fixed so a consumer
+   learns it once. A **subsystem** or **collection** that cannot be answered
+   carries a `reason` in capability discovery, and its route answers with an
+   error envelope carrying that same reason — never an empty page (§6). An
+   individual **fact** that cannot be observed is *omitted*, not null, when it
+   does not apply to this host; a null fact reads as "unknown", and "not
+   applicable" is a different statement. Where a fact is genuinely
+   unobservable rather than inapplicable — the value exists but this agent
+   cannot see it — the fact is null and a sibling `<Fact>Unobservable` carries
+   the prose reason, so the reader learns both that a value exists and why it
+   is out of reach. One convention, one name shape, no per-adapter dialect.
 8. **Acquisition hierarchy** (SE-003 §2), tightened: D-Bus / varlink → native
    libraries → kernel interfaces (netlink, procfs, sysfs) → structured CLI
    output (`-j`/`-J`/`-o json` only). Parsing human-readable command output is

@@ -212,11 +212,22 @@ def _int_or_none(value: str | None) -> int | None:
     return int(value) if value is not None and value.isdigit() else None
 
 
-def _kelvin_to_c(value) -> float | None:
-    """udisks reports temperatures in kelvin (0 = unknown)."""
-    if isinstance(value, (int, float)) and value > 0:
-        return round(value - 273.15, 1)
-    return None
+def _kelvin_to_c(value) -> float | int | None:
+    """udisks reports temperatures in kelvin (0 = unknown).
+
+    Whole kelvin in, whole degrees out. Subtracting 273.15 from an integer
+    always lands on .85, so rounding to one decimal made every udisks reading
+    end in .9 — a digit the sensor never measured. A drive reporting 300 K
+    knows it is 27 °C, not 26.9 °C, and inventing precision is the same class
+    of error as inventing a value.
+
+    The hwmon floor is left fractional on purpose: it reports millidegrees, so
+    its one decimal is real.
+    """
+    if not isinstance(value, (int, float)) or value <= 0:
+        return None
+    celsius = value - 273.15
+    return round(celsius) if float(value).is_integer() else round(celsius, 1)
 
 
 def _bytes_to_str(value) -> str | None:
