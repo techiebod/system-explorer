@@ -509,6 +509,50 @@ check("a row with no severity is not drawn as a neutral verdict", () => {
     throw new Error(`the absent dot says "${dots[0].title}"`);
 });
 
+check("a tap or veth shows the workload's address, not just its name", () => {
+  /* The row that prompted this: network/links on a VM host renders
+     "vnet1 unifi-os  fe80::fc00:ff:fe00:80/64". The fe80 is genuinely all the
+     TAP has — the guest's 192.168.200.80 lives on the guest — so the reader
+     concludes the VM has no IPv4. The join already knows the address; it just
+     stopped at the name. Docker veths have the identical problem. */
+  Object.assign(ui.state, {
+    subsystem: "network", collection: "links",
+    page: { total: 2, next_cursor: null, status: "ok", items: [
+      { id: "link:vnet1", type: "link", native_id: "vnet1",
+        facts: { OperState: "unknown", Kind: "tap", LinkType: "ether",
+                 Addresses: ["fe80::fc00:ff:fe00:80/64"] } },
+      { id: "link:vnet9", type: "link", native_id: "vnet9",
+        facts: { OperState: "unknown", Kind: "tap", LinkType: "ether",
+                 Addresses: ["fe80::dead/64"] } },
+    ] },
+    owners: {
+      vnet1: { parts: [{ label: "unifi-os", href: "#/x", addrs: ["192.168.200.80"] }] },
+      // libvirt saw no address for this one: no lease, no ARP entry. Silence
+      // is the honest render — never another workload's address.
+      vnet9: { parts: [{ label: "quiet-vm", href: "#/y", addrs: [] }] },
+    },
+    filterText: "", facet: null, sortKey: null, showHidden: false,
+    detailObs: null, selectedId: null, factDict: null,
+  });
+  ui.renderGrid();
+  const rows = document.getElementById("grid-body").querySelectorAll("ident");
+  const text = rows.map(r => r.textContent);
+  if (!text[0].includes("unifi-os"))
+    throw new Error(`owner name missing: ${text[0]}`);
+  if (!text[0].includes("192.168.200.80"))
+    throw new Error(`the guest's address is not on the row: ${text[0]}`);
+  // It must be the OWNER's address, marked as such — not folded into the
+  // link's own Addresses column, which belongs to the interface.
+  const marked = document.getElementById("grid-body").querySelectorAll("owner-addr");
+  if (marked.length !== 1)
+    throw new Error(`${marked.length} owner-addr spans, want exactly 1`);
+  if (!marked[0].title.includes("not this interface"))
+    throw new Error(`owner-addr does not attribute itself: ${marked[0].title}`);
+  // And a workload whose address could not be observed shows none.
+  if (/\d+\.\d+\.\d+\.\d+/.test(text[1]))
+    throw new Error(`invented an address for a guest with none: ${text[1]}`);
+});
+
 check("info and ok rows earn no badge, and a badge counts only what it claims", () => {
   ui.state.capabilities = CAPABILITIES;
   ui.state.status = STATUS;

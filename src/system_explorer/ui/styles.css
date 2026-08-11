@@ -533,6 +533,16 @@ pre.evidence {
   text-underline-offset: 3px;
 }
 .owner-part:hover { color: var(--accent); }
+/* The workload's address, quieter than its name and never underlined: it is a
+   value, not a link to somewhere. Monospace so it lines up with the addresses
+   in the column to its right, which belong to the interface rather than to
+   whatever runs behind it. */
+.owner-addr {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-faint);
+  cursor: help;
+}
 
 /* Device busy% sits inside an I/O grid cell: a short meter plus its number, so
    utilisation reads as a magnitude beside throughput that reads as text. */

@@ -1091,10 +1091,21 @@ async function loadOwners() {
         has("docker", "networks") ? api("/v1/docker/networks?limit=200") : null,
       ]);
       // A tap belongs to exactly one domain — the strongest attribution here.
+      //
+      // The guest's address rides along, because the row without it actively
+      // misleads: a tap's own Addresses are its link-local and nothing else, so
+      // "vnet1 unifi-os  fe80::fc00:ff:fe00:80/64" reads as a VM with no IPv4
+      // when the VM is sitting on 192.168.200.80. The address belongs to the
+      // guest, not the link, so it renders inside the attribution rather than
+      // in the link's own Addresses column. Absent when libvirt could not see
+      // one (bridged guests leased externally often have no lease or ARP entry
+      // to read) — silence there is honest, and better than the wrong owner's
+      // address.
       for (const d of doms?.items || [])
         for (const tap of d.facts.HostTaps || [])
           owners[tap] = { parts: [{ label: d.native_id,
-                                    href: hashFor("vms", "domains", d.id) }] };
+                                    href: hashFor("vms", "domains", d.id),
+                                    addrs: d.facts.IPAddresses || [] }] };
       // A bridge is named by its network and nothing else. It used to carry
       // the compose project too ("proxy · arr"), which read as two unlabelled
       // words with no way to tell which was which and only one of them
@@ -1120,20 +1131,27 @@ async function loadOwners() {
         [...bridgesInUse].filter(b => byBridge[b]).map(b =>
           api(`/v1/docker/networks/${encodeURIComponent(byBridge[b].id)}`)
             .catch(() => null)));
+      // The same payload carries IPv4Address per endpoint, and a veth has the
+      // identical problem a tap does: its own Addresses are link-local, so the
+      // container's address is the one the reader wants and the only one that
+      // is not on screen.
       for (const obs of inspected)
         for (const ep of obs?.facts?.ContainerEndpoints || [])
-          if (ep.MACAddress) containerByMac[ep.MACAddress.toLowerCase()] = ep.Name;
+          if (ep.MACAddress)
+            containerByMac[ep.MACAddress.toLowerCase()] =
+              { name: ep.Name, addrs: [ep.IPv4Address].filter(Boolean) };
       for (const item of rows) {
         if (item.facts.Kind !== "veth") continue;
         const via = byBridge[item.facts.Master];
         if (!via) continue;
         const net = { label: via.label, href: hashFor("docker", "networks", via.id) };
-        const name = (item.facts.PeerMACAddresses || [])
+        const found = (item.facts.PeerMACAddresses || [])
           .map(m => containerByMac[String(m).toLowerCase()]).find(Boolean);
-        if (name) {
+        if (found) {
           owners[item.native_id] = { parts: [net, {
-            label: name,
-            href: hashFor("docker", "containers", `container:${name}`),
+            label: found.name,
+            href: hashFor("docker", "containers", `container:${found.name}`),
+            addrs: found.addrs,
           }] };
         } else {
           // The forwarding table is LEARNED and ages out, so a container that
@@ -1973,6 +1991,15 @@ function renderGrid() {
         link.href = part.href;
         link.onclick = (e) => e.stopPropagation();
         wrap.appendChild(link);
+        // The workload's own address, not the interface's. Marked as the
+        // owner's so the two are never read as one set: the Addresses column
+        // stays the link's facts and this stays the join.
+        if (part.addrs?.length) {
+          const at = el("span", "owner-addr", ` ${part.addrs.join(" ")}`);
+          at.title = `${part.label} reports ${part.addrs.join(", ")}`
+                   + " — the workload's address, not this interface's";
+          wrap.appendChild(at);
+        }
       });
       idCell.appendChild(wrap);
     }
