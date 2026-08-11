@@ -38,6 +38,8 @@ const state = {
   ovIdentity: null,      // overview KPI identity facts, cached per host
   ovPrev: null,          // overview's previous counter sample (client-side rates)
   owners: null,          // native_id -> owning workload, for the current list
+  ovHistory: [],         // sparkline ring: derived cpu/mem samples, this session
+  ovHistoryHost: null,   // which host that ring belongs to
   observedAt: null,
   refreshTimer: null,
   suppressAutoOpen: false,
@@ -421,15 +423,42 @@ function navRoutes() {
   return out;
 }
 
+/* The overview is its own section, above the subsystems, because it already is
+   one everywhere else in the code: the landing view, a designed panel rather
+   than a grid, no rows to facet, a pseudo-page in the router. Only the nav
+   still listed it as a peer of identity and time, which made the host summary
+   look like one more system fact rather than the way in. Its route stays
+   system/overview — this is presentation, not a contract change. */
+const STANDALONE = [["system", "overview", "overview"]];
+
 function renderNav() {
   const nav = $("nav");
   nav.textContent = "";
-  for (const [name, cap] of Object.entries(state.capabilities?.subsystems || {})) {
+  const subsystems = state.capabilities?.subsystems || {};
+
+  const promoted = new Set();
+  for (const [sub, coll, label] of STANDALONE) {
+    const cap = subsystems[sub];
+    if (!cap?.available || !(cap.collections || []).includes(coll)) continue;
+    promoted.add(`${sub}/${coll}`);
+    const box = el("div", "nav-sub nav-solo");
+    const item = el("a", "nav-item", label);
+    item.href = hashFor(sub, coll);
+    item.dataset.route = `${sub}/${coll}`;
+    box.appendChild(item);
+    nav.appendChild(box);
+  }
+
+  for (const [name, cap] of Object.entries(subsystems)) {
+    const collections = (cap.collections || [])
+      .filter(coll => !promoted.has(`${name}/${coll}`));
+    // A subsystem whose only collection was promoted has nothing left to head.
+    if (!collections.length && cap.available) continue;
     const box = el("div", "nav-sub" + (cap.available ? "" : " unavailable"));
     const label = el("div", "sub-label", name);
     if (!cap.available) label.title = cap.reason || "unavailable";
     box.appendChild(label);
-    for (const coll of cap.collections || []) {
+    for (const coll of collections) {
       const item = el("a", "nav-item", coll);
       item.href = hashFor(name, coll);
       item.dataset.route = `${name}/${coll}`;
@@ -799,9 +828,63 @@ async function loadOwners() {
    holds scales, never thresholds. */
 
 const OPINION_METER = {
-  "load-pressure": "load", "memory-available": "mem", "swap-pressure": "swap",
-  "psi-cpu": "psi-cpu", "psi-memory": "psi-memory", "psi-io": "psi-io",
+  // load-pressure is gone (retired in favour of psi-cpu, which measures the
+  // same thing directly); psi-cpu now colours the CPU panel it replaced.
+  "memory-available": "mem", "swap-pressure": "swap",
+  "psi-cpu": "cpu", "psi-memory": "psi-memory", "psi-io": "psi-io",
 };
+
+/* How many samples the sparklines hold. The browser accumulates these across
+   its own polls: the agent ships counters and holds no history (SPEC rules
+   4/10), and the 15-minute snapshot store is far too coarse to draw with. So
+   this is deliberately session-local and the panel states its window — a graph
+   that silently resets on reload is only dishonest if it pretends otherwise. */
+const SPARK_SAMPLES = 40;
+
+/* A bar sparkline. Ordinary spans rather than SVG or canvas: the UI builds all
+   DOM through textContent (conformance lints for HTML sinks) and forty divs is
+   cheaper than either. Values are 0..100. */
+function sparkline(values, cls) {
+  const wrap = el("div", `spark${cls ? " " + cls : ""}`);
+  for (const value of values) {
+    const bar = el("span", "sb");
+    // A floor of 2% so a real zero still draws a mark: an empty gap reads as
+    // "no data", which is a different statement from "nothing happening".
+    bar.style.height = `${Math.max(2, Math.min(100, value))}%`;
+    wrap.appendChild(bar);
+  }
+  return wrap;
+}
+
+/* What a sparkline actually covers, said out loud. A chart whose x-axis is
+   "however often this tab happened to poll" is fine; one that leaves the
+   reader to assume a fixed interval is not. */
+function sparkWindow(dt) {
+  const n = state.ovHistory?.length || 0;
+  if (!dt || n < 2) return "collecting samples";
+  const span = Math.round(dt * (n - 1));
+  return `last ${span < 90 ? `${span}s` : `${Math.round(span / 60)}m`} `
+       + `· ${n} samples this session`;
+}
+
+/* Busy share of an interval from cumulative CPU tick counters, plus the part of
+   it that was only waiting for a disk. Derived here because the agent ships
+   counters, so the window is the one this page actually observed. */
+function cpuBusy(now, prev) {
+  if (!now || !prev) return null;
+  const total = (t) => Object.values(t).reduce((sum, v) => sum + v, 0);
+  const dTotal = total(now) - total(prev);
+  if (dTotal <= 0) return null;
+  const dIdle = (now.Idle - prev.Idle) + ((now.Iowait || 0) - (prev.Iowait || 0));
+  const dIowait = (now.Iowait || 0) - (prev.Iowait || 0);
+  return {
+    // Iowait counts as NOT busy: a core waiting on a disk is available, and
+    // folding it into utilisation is how a storage problem gets misread as a
+    // CPU one. It is reported separately instead.
+    busy: Math.max(0, Math.min(100, Math.round((dTotal - dIdle) * 100 / dTotal))),
+    iowait: Math.max(0, Math.min(100, Math.round(dIowait * 100 / dTotal))),
+  };
+}
 
 async function loadOverview() {
   const { epoch } = state;
@@ -918,6 +1001,33 @@ function renderOverview(obs, got = {}) {
     if (target) levels[target] = op.level === "critical" ? "critical" : "warn";
   }
 
+  // Counter sampling, hoisted here because CPU utilisation needs it as much as
+  // the I/O rates do: the agent ships cumulative counters and holds no previous
+  // sample (SPEC rules 4/10), so every derived rate on this page is a delta
+  // across this page's own polls, over a window it can state.
+  const now = Date.parse(obs.observed_at);
+  const prev = state.ovPrev?.host === state.currentHost ? state.ovPrev : null;
+  const dt = prev ? (now - prev.t) / 1000 : 0;
+  const cpuNow = cpuBusy(f.CpuTimes, prev?.cpu);
+
+  // The sparkline ring, session-local by construction. Reset with the host, so
+  // one host's history can never be drawn under another's name.
+  if (state.ovHistoryHost !== state.currentHost) {
+    state.ovHistory = [];
+    state.ovHistoryHost = state.currentHost;
+  }
+  const history = state.ovHistory;
+  // Memory excludes the ARC for the same reason the verdict does: cache that
+  // yields under demand is occupancy, not consumption.
+  const memPct = f.MemTotalBytes
+    ? Math.round(Math.max(0, (f.MemUsedBytes || 0) - (f.ArcSizeBytes || 0))
+                 * 100 / f.MemTotalBytes)
+    : null;
+  if (cpuNow || memPct !== null) {
+    history.push({ cpu: cpuNow?.busy ?? null, mem: memPct });
+    while (history.length > SPARK_SAMPLES) history.shift();
+  }
+
   // Key-info line: identity, addresses, workload counts — every value a
   // door into the collection that backs it.
   const kpis = el("div", "ov-kpis");
@@ -967,18 +1077,31 @@ function renderOverview(obs, got = {}) {
 
   const grid = el("div", "ov-grid");
 
-  // Load: scale runs 0..4× per-cpu — the rulebook's critical threshold —
-  // with hairline ticks at 1× (saturated) and 2× (its warn threshold).
-  if (f.LoadAvg1 !== undefined) {
+  // CPU: real utilisation, replacing the load-average panel. Load average
+  // answered a different question badly — it counts uninterruptible sleep, so
+  // a host merely waiting on a slow disk read as CPU-starved. The facts are
+  // still on the object; nothing judges or charts them.
+  if (f.CpuTimes) {
+    const cpu = cpuNow;
     const p = el("div", "ov-panel");
-    p.appendChild(el("h3", null, `Load · ${f.CpuCount ?? "?"} cpus`));
-    const per = f.LoadPerCpu1 ?? 0;
-    p.appendChild(ovRow("1 min", meter(per / 4 * 100, levels.load, [25, 50]),
-                        String(f.LoadAvg1)));
-    p.appendChild(ovRow("5 min", meter((f.CpuCount ? f.LoadAvg5 / f.CpuCount : 0) / 4 * 100, null, [25, 50]),
-                        String(f.LoadAvg5)));
-    p.appendChild(ovRow("15 min", meter((f.CpuCount ? f.LoadAvg15 / f.CpuCount : 0) / 4 * 100, null, [25, 50]),
-                        String(f.LoadAvg15)));
+    p.appendChild(el("h3", null, `CPU · ${f.CpuCount ?? "?"} cpus`));
+    if (cpu) {
+      p.appendChild(ovRow("busy", meter(cpu.busy, levels.cpu), `${cpu.busy}%`));
+      // Shown as its own row, not folded into busy: a core waiting on a disk
+      // is available, and lumping the two is how a storage problem gets read
+      // as a CPU problem. Its scale is the same 0..100 so the eye can compare.
+      p.appendChild(ovRow("io wait", meter(cpu.iowait, levels["psi-io"]),
+                          `${cpu.iowait}%`));
+      p.appendChild(sparkline(history.map(s => s.cpu ?? 0), "accent"));
+      p.appendChild(el("div", "ov-sub", sparkWindow(dt)));
+    } else {
+      // First sample of a session has no previous counter to difference.
+      p.appendChild(el("div", "ov-sub", "measuring — utilisation needs two samples"));
+    }
+    if (f.LoadAvg1 !== undefined)
+      p.appendChild(el("div", "ov-sub",
+        `load average ${f.LoadAvg1} / ${f.LoadAvg5} / ${f.LoadAvg15} `
+        + "(1/5/15 min, unjudged — see io wait above)"));
     grid.appendChild(p);
   }
 
@@ -998,6 +1121,12 @@ function renderOverview(obs, got = {}) {
                ` of ${humanBytes(f.MemTotalBytes)} · ${humanBytes(f.MemAvailableBytes)} available`);
     if (arc) sub.append(` · ARC ${humanBytes(arc)}`);
     p.appendChild(sub);
+    if (history.some(s => s.mem != null)) {
+      // Excludes the ARC, for the same reason the verdict does: charting
+      // occupancy that yields under demand would draw a cliff that is not one.
+      p.appendChild(sparkline(history.map(s => s.mem ?? 0)));
+      p.appendChild(el("div", "ov-sub", sparkWindow(dt) + " · excludes ZFS ARC"));
+    }
     if (f.SwapTotalBytes) {
       p.appendChild(ovRow("swap", meter((f.SwapUsedPercent ?? 0), levels.swap),
                           `${f.SwapUsedPercent ?? 0}%`));
@@ -1031,9 +1160,6 @@ function renderOverview(obs, got = {}) {
   // SPEC rules 4/10); the rates here are deltas across this page's own
   // polls, and the window is stated rather than implied. First sample
   // honestly reads "measuring".
-  const now = Date.parse(obs.observed_at);
-  const prev = state.ovPrev?.host === state.currentHost ? state.ovPrev : null;
-  const dt = prev ? (now - prev.t) / 1000 : 0;
   const rate = (cur, old) => (dt > 0 && cur >= old ? (cur - old) / dt : null);
   const perSec = (v) => v === null ? "—" : `${humanBytes(Math.round(v))}/s`;
   if (f.NetCounters || f.DiskCounters) {
@@ -1069,7 +1195,7 @@ function renderOverview(obs, got = {}) {
     p.appendChild(io);
     grid.appendChild(p);
   }
-  state.ovPrev = { host: state.currentHost, t: now,
+  state.ovPrev = { host: state.currentHost, t: now, cpu: f.CpuTimes,
                    net: f.NetCounters, disk: f.DiskCounters };
 
   // Storage: pools and the biggest real filesystems — rows wear the same

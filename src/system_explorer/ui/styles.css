@@ -87,6 +87,9 @@ body {
 
 #nav { flex: 1; overflow-y: auto; padding: 10px 8px; }
 .nav-sub { margin-bottom: 2px; }
+/* A promoted, label-less section: the overview stands alone above the
+   subsystems, separated by space rather than by a heading it does not need. */
+.nav-sub.nav-solo { margin-bottom: 10px; }
 .nav-sub > .sub-label {
   display: flex; align-items: center; gap: 7px;
   padding: 6px 8px; color: var(--text-dim);
@@ -480,6 +483,28 @@ pre.evidence {
   text-underline-offset: 3px;
 }
 .owner-part:hover { color: var(--accent); }
+
+/* Sparklines: a row of thin bars, session-local history of a derived rate.
+   Bars rather than a line so nothing has to be interpolated between samples
+   that are not evenly spaced — the poll interval is whatever the tab managed,
+   and a smooth curve would imply a regularity that is not there. */
+.spark {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 26px;
+  margin: 6px 0 2px;
+}
+.spark .sb {
+  flex: 1 1 0;
+  min-width: 1px;
+  background: var(--border-2);
+  border-radius: 1px 1px 0 0;
+}
+.spark.accent .sb { background: var(--accent); opacity: .55; }
+/* The newest sample reads full-strength: on a dense row of bars the eye needs
+   telling which end is now. */
+.spark .sb:last-child { opacity: 1; }
 
 /* Bottom-left build stamp: which version and source revision produced the
    data on screen. Deliberately the quietest text in the sidebar — it answers a

@@ -455,12 +455,12 @@ CASES = [
      set()),
 
     # system: overview — kernel-precomputed aggregates (ROADMAP slice 1).
-    ("overview-load-warn", system.overview_opinions,
-     {"LoadAvg1": 9.04, "CpuCount": 4, "LoadPerCpu1": 2.26},
-     {("load-pressure", "warn")}),
-    ("overview-load-critical", system.overview_opinions,
-     {"LoadAvg1": 17.3, "CpuCount": 4, "LoadPerCpu1": 4.33},
-     {("load-pressure", "critical")}),
+    # A high load average is now deliberately SILENT: load-pressure was retired
+    # in favour of psi-cpu, which measures the same question directly instead of
+    # via a proxy that counts uninterruptible sleep. Pinned as a case so the
+    # rule cannot quietly come back and start double-judging one condition.
+    ("overview-high-load-is-not-judged", system.overview_opinions,
+     {"LoadAvg1": 17.3, "CpuCount": 4, "LoadPerCpu1": 4.33}, set()),
     ("overview-memory-91-warn", system.overview_opinions,
      {"MemTotalBytes": 8 * 2**30, "MemAvailableBytes": 700 * 2**20,
       "MemUsedPercent": 91},

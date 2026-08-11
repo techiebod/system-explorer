@@ -56,12 +56,12 @@ _epoch_to_iso = nx.epoch_to_iso
 # ── host overview (procfs, world-readable — SPEC rule 8 tier 3) ───────
 
 ARCSTATS = "/proc/spl/kstat/zfs/arcstats"
-OVERVIEW_FILES = ["/proc/uptime", "/proc/loadavg", "/proc/meminfo",
+OVERVIEW_FILES = ["/proc/uptime", "/proc/loadavg", "/proc/stat", "/proc/meminfo",
                   "/proc/pressure/cpu", "/proc/pressure/memory",
                   "/proc/pressure/io", "/proc/net/dev", "/proc/diskstats",
                   ARCSTATS]
 OVERVIEW_REFERENCE = ["uptime", "cat /proc/pressure/*", "free -b",
-                      "cat /proc/net/dev /proc/diskstats"]
+                      "cat /proc/stat /proc/net/dev /proc/diskstats"]
 
 # Synthetic block devices whose I/O is noise at host scale.
 DISKSTATS_SKIP = re.compile(r"^(loop|ram|zram|sr|fd)\d")
@@ -108,6 +108,35 @@ def _disk_counters() -> dict:
                      # "busy" from "backed up".
                      "WeightedIoMs": int(fields[13])}
     return out
+
+
+# /proc/stat's aggregate line, in the kernel's documented field order. steal
+# and the guest fields matter on a VM and are meaningless on metal, so they are
+# carried when present rather than assumed.
+CPU_TIME_FIELDS = ("User", "Nice", "System", "Idle", "Iowait", "Irq",
+                   "Softirq", "Steal", "Guest", "GuestNice")
+
+
+def _cpu_times() -> dict:
+    """Cumulative CPU time per state since boot, in the kernel's USER_HZ ticks.
+
+    Counters, not a percentage, for the same reason NetCounters and DiskCounters
+    are: the agent holds no previous sample (SPEC rules 4/10), so a client
+    derives utilisation across the window it actually observed and can state
+    that window. There was no CPU-utilisation fact in this product at all until
+    now — only load average, which is a proxy for a different question.
+
+    Iowait is the one worth having separately: a host can be 90% "busy" doing
+    nothing but waiting for a disk, which reads as saturated CPU on any meter
+    that lumps the states together, and is the exact confusion the per-unit PSI
+    work exists to resolve.
+    """
+    for line in _read("/proc/stat").splitlines():
+        fields = line.split()
+        if fields and fields[0] == "cpu":
+            return {name: int(value) for name, value in
+                    zip(CPU_TIME_FIELDS, fields[1:]) if value.isdigit()}
+    return {}
 
 
 def _meminfo_bytes() -> dict[str, int]:
@@ -186,6 +215,9 @@ def _overview_facts() -> dict:
                       # to be innocent of.
                       "SwapUsedPercent": round(swap_used * 100 / mem["SwapTotal"])
                                          if mem["SwapTotal"] else None})
+    cpu_times = _cpu_times()
+    if cpu_times:
+        facts["CpuTimes"] = cpu_times
     facts.update(_psi_facts())
     facts.update(_arc_facts())
     net = _net_counters()

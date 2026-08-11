@@ -18,8 +18,13 @@ from .. import envelope as env
 # Host-snapshot thresholds (ROADMAP slice 1). Load is normalised per CPU;
 # the PSI numbers are the kernel's own decaying 60-second stall shares
 # (SPEC section 12: kernel-precomputed aggregates, no rates from counters).
-LOAD_PER_CPU_WARN = 2.0
-LOAD_PER_CPU_CRITICAL = 4.0
+# load-pressure RETIRED 2026-08-11. Load average is a 1993 proxy for "are
+# tasks waiting to run"; PSI measures that directly, is already collected, and
+# is already judged by psi-cpu below. Keeping both meant two rules firing on one
+# condition — the double-counting the design pass caught elsewhere — and the
+# proxy is the worse of the two: it counts uninterruptible-sleep tasks, so a
+# host merely waiting on a slow disk reads as CPU-starved. The LoadAvg facts
+# stay; nothing judges them.
 MEM_USED_WARN = 90
 MEM_USED_CRITICAL = 95
 SWAP_USED_WARN = 50
@@ -88,14 +93,6 @@ def boot_opinions(facts: dict) -> list[dict]:
 
 def overview_opinions(facts: dict) -> list[dict]:
     opinions: list[dict] = []
-    load = facts.get("LoadPerCpu1")
-    if load is not None and load >= LOAD_PER_CPU_WARN:
-        opinions.append(env.opinion(
-            "load-pressure",
-            "critical" if load >= LOAD_PER_CPU_CRITICAL else "warn",
-            f"Load is {load} runnable tasks per CPU (1-minute average "
-            f"{facts.get('LoadAvg1')} over {facts.get('CpuCount')} CPUs).",
-            ["LoadAvg1", "CpuCount"]))
     mem = facts.get("MemUsedPercent")
     if mem is not None and mem >= MEM_USED_WARN:
         # ZFS hosts: the ARC counts as "used" (Linux excludes it from
