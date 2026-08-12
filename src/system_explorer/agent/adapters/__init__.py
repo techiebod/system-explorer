@@ -35,7 +35,19 @@ from . import (docker, hardware, logs, network, nix, packages, storage,
 PLANNED: dict[str, str] = {}
 
 
-def build_adapters() -> dict:
+def build_adapters(selected: list[str] | None = None) -> dict:
+    """The subsystems this PROCESS observes — all of them by default, a
+    selection when SE_ADAPTERS names one (Phase 3 of the estate design:
+    the unit of code is an adapter, the unit of deployment is a process
+    running a selected set, and privilege separation becomes a deployment
+    decision — an app-scoped instance holds API keys and no host grants,
+    which only works if it can decline to be a host observer at all).
+
+    An unknown name fails at startup, loudly: a typo'd selection that
+    silently ran everything would hold grants nobody audited, and one that
+    silently ran nothing would be absence-as-health with a service in the
+    green. The single-host default — no selection — is unchanged.
+    """
     adapters: list = [
         system.Adapter(),
         nix.Adapter(),
@@ -48,4 +60,12 @@ def build_adapters() -> dict:
         docker.Adapter(),
         vms.Adapter(),
     ]
-    return {adapter.subsystem: adapter for adapter in adapters}
+    by_name = {adapter.subsystem: adapter for adapter in adapters}
+    if selected is None:
+        return by_name
+    unknown = sorted(set(selected) - set(by_name))
+    if unknown:
+        raise ValueError(
+            f"SE_ADAPTERS names unknown subsystems {unknown}; "
+            f"known: {sorted(by_name)}")
+    return {name: by_name[name] for name in by_name if name in set(selected)}

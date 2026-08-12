@@ -160,7 +160,66 @@ in
     };
   };
 
-  config = lib.mkIf cfg.enable {
+  # Named instances (Phase 3 of the estate design): the unit of deployment
+  # is a process running a SELECTED adapter set, so privilege separation is
+  # a deployment decision. An instance holds credentials via its
+  # environmentFile and NO host grants by construction — no docker group,
+  # no CAP_NET_ADMIN, no journal, no disk: that absence is its entire
+  # point, and an instance that needs a host grant is the host agent's job.
+  # Each gets its own port, loopback by default, and its own StateDirectory
+  # so snapshot histories never collide.
+  options.services.systemExplorer.instances = lib.mkOption {
+    default = { };
+    description = ''
+      Additional agent processes, each observing a selected adapter set —
+      `apps` fronting credentialed application APIs is the motivating case.
+      Instance units are named system-explorer-<name> and carry none of the
+      main agent's host grants.
+    '';
+    type = lib.types.attrsOf (lib.types.submodule {
+      options = {
+        port = lib.mkOption {
+          type = lib.types.port;
+          description = "TCP port for this instance's API.";
+        };
+        adapters = lib.mkOption {
+          type = lib.types.nonEmptyListOf lib.types.str;
+          example = [ "system" "network" ];
+          description = ''
+            Subsystems this instance runs (SE_ADAPTERS). An unknown name
+            refuses to start rather than silently running everything.
+          '';
+        };
+        listenAddress = lib.mkOption {
+          type = lib.types.str;
+          default = "127.0.0.1";
+          description = "Bind address; widening is a per-instance decision.";
+        };
+        allowedHosts = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [ ];
+          description = "Host-header allow-list, as the main agent's.";
+        };
+        environmentFile = lib.mkOption {
+          type = lib.types.nullOr lib.types.path;
+          default = null;
+          description = ''
+            EnvironmentFile holding this instance's upstream credentials
+            (SOPS-decrypted on the estate). Secret-shaped variable names
+            (_API_KEY, _TOKEN, _SECRET, _PASSWORD) are scrubbed from
+            failure text by the agent itself.
+          '';
+        };
+        extraPackages = lib.mkOption {
+          type = lib.types.listOf lib.types.package;
+          default = [ ];
+          description = "Extra tools on this instance's PATH.";
+        };
+      };
+    });
+  };
+
+  config = lib.mkMerge [ (lib.mkIf cfg.enable {
     networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [ cfg.port ];
 
     # SMART/health facts in the hardware subsystem come from udisks2 over
@@ -343,5 +402,51 @@ in
         UMask = "0077";
       };
     };
-  };
+  }) (lib.mkIf (cfg.enable && cfg.instances != { }) {
+    # One generated unit per instance, wearing the same hardening as the
+    # main agent MINUS every host grant: no journal group, no docker group,
+    # no capabilities, no udisks dependency. What an instance observes is
+    # SE_ADAPTERS; what it may hold is its environmentFile; what it may
+    # never become is a host observer wearing unaudited grants.
+    systemd.services = lib.mapAttrs' (name: icfg:
+      lib.nameValuePair "system-explorer-${name}" {
+        description = "System Explorer agent instance ${name} (read-only observation API)";
+        after = [ "network.target" ];
+        wantedBy = [ "multi-user.target" ];
+        path = [ pkgs.systemd pkgs.util-linux pkgs.iproute2 ] ++ icfg.extraPackages;
+        environment = {
+          SE_ADAPTERS = lib.concatStringsSep "," icfg.adapters;
+        } // lib.optionalAttrs (icfg.allowedHosts != [ ]) {
+          SE_ALLOWED_HOSTS = lib.concatStringsSep "," icfg.allowedHosts;
+        } // lib.optionalAttrs (cfg.hubUrl != null) { SE_HUB_URL = cfg.hubUrl; }
+          // lib.optionalAttrs (cfg.site != null) { SE_SITE = cfg.site; };
+        serviceConfig = {
+          Type = "simple";
+          ExecStart = "${lib.getExe cfg.package} --host ${icfg.listenAddress} --port ${toString icfg.port}";
+          Restart = "on-failure";
+          RestartSec = 2;
+          EnvironmentFile = lib.mkIf (icfg.environmentFile != null) icfg.environmentFile;
+          DynamicUser = true;
+          CapabilityBoundingSet = [ "" ];
+          NoNewPrivileges = true;
+          ProtectSystem = "strict";
+          ProtectHome = true;
+          PrivateTmp = true;
+          ProtectClock = true;
+          ProtectKernelLogs = true;
+          ProtectKernelModules = true;
+          ProtectKernelTunables = true;
+          ProtectControlGroups = true;
+          RestrictAddressFamilies = [ "AF_UNIX" "AF_INET" "AF_INET6" "AF_NETLINK" ];
+          RestrictNamespaces = true;
+          RestrictRealtime = true;
+          RestrictSUIDSGID = true;
+          LockPersonality = true;
+          MemoryDenyWriteExecute = true;
+          SystemCallArchitectures = "native";
+          StateDirectory = "system-explorer-${name}";
+          UMask = "0077";
+        };
+      }) cfg.instances;
+  }) ];
 }

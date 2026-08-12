@@ -57,6 +57,7 @@ you know why.
 | `grantDiskAccess` | `false` | root smartctl snapshot collector on a timer; agent reads (and ages) the snapshots |
 | `grantTailscaleAccess` | `false` | root `tailscale status --json` snapshot collector on a timer; surfaces tailnet identity, key expiry, DERP home, per-peer reachability |
 | `extraPackages` | `[ ]` | extra tools on the agent's PATH |
+| `instances.<name>` | `{ }` | additional agent processes, each running a SELECTED adapter set (`adapters`, `port`, `environmentFile`, loopback by default) and none of the main agent's host grants — credential isolation as a deployment decision |
 
 Subsystems degrade gracefully: no zfs on PATH means the pools/datasets
 collections report unavailable with a reason — that is normal, not a

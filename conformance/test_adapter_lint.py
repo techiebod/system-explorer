@@ -358,3 +358,18 @@ def test_every_adapter_has_single_flighted_acquire():
         assert acquire.__wrapped__ is not None, (
             f"{name}: acquire() is not @env.single_flight-decorated — "
             "concurrent sweeps and UI polls would stack acquisitions")
+
+
+def test_adapter_selection_is_exact_or_refused():
+    """SE_ADAPTERS (Phase 3): a selection runs exactly what it names, the
+    default runs everything, and a typo refuses to start — a unit whose
+    grants were audited against one list must not silently run another."""
+    from system_explorer.agent.adapters import build_adapters
+
+    everything = build_adapters()
+    assert set(build_adapters(None)) == set(everything)
+    subset = build_adapters(["network", "system"])
+    assert set(subset) == {"network", "system"}
+    with pytest.raises(ValueError) as err:
+        build_adapters(["network", "sytem"])
+    assert "sytem" in str(err.value) and "known" in str(err.value)

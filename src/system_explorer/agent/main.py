@@ -64,7 +64,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="System Explorer agent", version=VERSION, docs_url=None, redoc_url=None,
               lifespan=lifespan)
-ADAPTERS = build_adapters()
+# SE_ADAPTERS selects this process's subsystems (comma-separated); unset
+# runs them all — the single-host default. An unknown name refuses to
+# start, which is the honest failure for a unit whose grants were audited
+# against a list it is not actually running.
+_SELECTED = [name.strip()
+             for name in os.environ.get("SE_ADAPTERS", "").split(",")
+             if name.strip()] or None
+ADAPTERS = build_adapters(_SELECTED)
 
 # DNS-rebinding defence. The API is unauthenticated inside its network trust
 # boundary (SPEC section 7), but a browser is not bound by that boundary: a
