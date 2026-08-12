@@ -9,6 +9,10 @@
     "schema": { "const": "se.hub-findings/1" },
     "site": { "type": ["string", "null"] },
     "observed_at": { "$ref": "#/$defs/utcTimestamp" },
+    "swept_at": {
+      "$ref": "#/$defs/utcTimestamp",
+      "description": "When the sweep behind this answer completed. The read serves the latest completed sweep instantly (the hub sweeps on its own cadence); this stamp is the staleness, stated rather than hidden."
+    },
     "writes_enabled": {
       "type": "boolean",
       "description": "Whether this deployment granted the transition route (findingsWrites). Surfaced so a consumer can offer acknowledgement only where it exists."

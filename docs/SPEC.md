@@ -713,7 +713,13 @@ swept. The hub parses these envelopes, deliberately and exceptionally:
 the registry is metadata DERIVED from findings under §6.1's amended rule
 4, and every observation behind them still travels rule 1's verbatim
 proxy. One clock — the hub's — stamps first_seen and last_seen, so
-lifecycle never depends on comparing host clocks.
+lifecycle never depends on comparing host clocks. The sweep runs on the
+hub's own background cadence rather than inline per request: a fresh
+estate acquisition costs seconds by design, and the read side serves the
+registry plus the latest completed sweep instantly, with `swept_at` on
+the envelope saying exactly how old that sweep is — the founding rule's
+"last-known-good belongs with findings", done literally and nowhere
+else.
 
 ### The fact dictionary — what a native name means
 

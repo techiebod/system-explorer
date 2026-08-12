@@ -1368,7 +1368,10 @@ async function loadFindings() {
   }
   if (state.epoch !== epoch) return;
   banner("");
-  state.observedAt = body.observed_at || null;
+  // The age shown is the SWEEP's, not the read's: the read is instant by
+  // design and its timestamp would claim a freshness the data does not
+  // have. swept_at is the honesty stamp.
+  state.observedAt = body.swept_at || body.observed_at || null;
 
   const next = [];
   const head = el("div", "vw-head");

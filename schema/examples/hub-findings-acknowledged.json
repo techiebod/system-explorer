@@ -2,6 +2,7 @@
   "schema": "se.hub-findings/1",
   "site": "site-a",
   "observed_at": "2026-08-12T21:30:00Z",
+  "swept_at": "2026-08-12T21:29:30Z",
   "writes_enabled": true,
   "hosts": {
     "host-a": {

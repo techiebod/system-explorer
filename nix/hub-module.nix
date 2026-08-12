@@ -127,6 +127,19 @@ in
       '';
     };
 
+    findingsSweepSeconds = lib.mkOption {
+      type = lib.types.numbers.positive;
+      default = 60;
+      description = ''
+        How often the hub's background task sweeps every agent's
+        /v1/findings into the registry. The read side serves the latest
+        completed sweep instantly with its swept_at stamped — the founding
+        rule's "last-known-good belongs with findings": staleness lives
+        where it is honest, on records that carry their own timestamps,
+        never on observations served as current.
+      '';
+    };
+
     findingsRetentionDays = lib.mkOption {
       type = lib.types.numbers.positive;
       default = 90;
@@ -165,6 +178,7 @@ in
         SE_HUB_AGENTS = lib.concatStringsSep ","
           (lib.mapAttrsToList (name: url: "${name}=${url}") cfg.agents);
         SE_HUB_FINDINGS_RETENTION_DAYS = toString cfg.findingsRetentionDays;
+        SE_HUB_FINDINGS_SWEEP_SECONDS = toString cfg.findingsSweepSeconds;
       } // lib.optionalAttrs cfg.findingsWrites {
         SE_HUB_FINDINGS_WRITES = "1";
       } // lib.optionalAttrs (cfg.site != null) {

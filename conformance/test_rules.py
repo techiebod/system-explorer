@@ -637,9 +637,13 @@ CASES = [
     ("boot-next-armed", system.boot_opinions,
      {"SecureBoot": False, "SystemState": "running", "BootNext": "Boot0002"},
      {("boot-next", "info")}),
+    # info, deliberately: degraded IS ">=1 failed unit", and each failed
+    # unit already carries its own critical on the units collection — a
+    # second critical here double-reported one failure onto the estate
+    # attention surface (operator report, 2026-08-13).
     ("boot-degraded-with-failures", system.boot_opinions,
      {"SystemState": "degraded", "NFailedUnits": 2},
-     {("system-state", "critical")}),
+     {("system-state", "info")}),
     ("boot-maintenance-state", system.boot_opinions,
      {"SystemState": "maintenance", "NFailedUnits": 0},
      {("system-state", "warn")}),

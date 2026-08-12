@@ -3,9 +3,13 @@
 One URL fronts a site's host agents: the hub proxies GETs to the named
 agent verbatim and serves the same operator UI, so every host at a site is
 navigable from one address. Responses pass through untouched — no
-summarisation layer, the same rule as se-mcp (../mcp/server.py). Stateless by
-design: no polling, no caching, no persistence — the last-known-good cache
-is roadmap slice 2 and gets designed with findings.
+summarisation layer, the same rule as se-mcp (../mcp/server.py). No
+observation is ever served from hub state (section 6.1 rule 4): what the
+hub keeps is metadata — view documents, and the findings lifecycle
+registry it folds on its OWN sweep cadence, which is the founding rule's
+"last-known-good belongs with findings" made real. Staleness there is
+honest by construction: every record carries its stamps and the envelope
+its swept_at.
 
 **Sibling hubs make this an estate view without making it a central service.**
 An estate spans sites; a site is not a small estate (ROADMAP §6). Naming peer
@@ -34,8 +38,10 @@ Configuration is environment-only so the same package runs anywhere:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import re
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -95,10 +101,28 @@ FINDINGS_RETENTION_DAYS = float(os.environ.get("SE_HUB_FINDINGS_RETENTION_DAYS",
 # hub's route table simply has no write verb, which is the strongest
 # available form of "the transition route exists only when enabled".
 FINDINGS_WRITES = os.environ.get("SE_HUB_FINDINGS_WRITES", "").lower() in ("1", "true", "yes")
+# The estate sweep is the hub's OWN cadence, run by a background task: a
+# full fresh acquisition on every agent costs seconds by design, and paying
+# it inline on every GET made the attention surface the slowest page in the
+# product (operator report, 2026-08-13). The founding rule already houses
+# this: "last-known-good belongs with findings" — lifecycle records ARE the
+# one place staleness is honest, because every one carries its stamps, and
+# the envelope's swept_at says exactly how old the sweep behind it is.
+FINDINGS_SWEEP_SECONDS = float(os.environ.get("SE_HUB_FINDINGS_SWEEP_SECONDS", "60"))
 
 _MACHINE_ID = re.compile(r"^[0-9a-f]{32}$")
 
-app = FastAPI(title="System Explorer hub", version=__version__, docs_url=None, redoc_url=None)
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = asyncio.create_task(_findings_sweep_loop())
+    yield
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+
+
+app = FastAPI(title="System Explorer hub", version=__version__, docs_url=None, redoc_url=None,
+              lifespan=lifespan)
 
 # DNS-rebinding defence, same reasoning as the agent (SPEC section 7): the
 # hub is unauthenticated inside its network trust boundary, but a browser
@@ -213,16 +237,55 @@ async def _sweep_findings() -> list[dict]:
     return list(await asyncio.gather(*(fetch(n, b) for n, b in AGENTS.items())))
 
 
+# The latest completed sweep: {"sweeps": [...], "at": iso}. Swapped whole,
+# read whole; None only before the first sweep lands.
+_LAST_SWEEP: dict | None = None
+
+
+async def _run_findings_sweep() -> dict:
+    global _LAST_SWEEP
+    sweeps = await _sweep_findings()
+    at = _utc_now()
+    if REGISTRY is not None:
+        swept = [s for s in sweeps if s.get("envelope")]
+        try:
+            await anyio.to_thread.run_sync(
+                REGISTRY.record_sweep, at, swept, FINDINGS_RETENTION_DAYS)
+        except Exception as exc:  # noqa: BLE001 - registry damage must not stop sweeping
+            print(f"findings: registry write failed: {type(exc).__name__}: {exc}",
+                  file=sys.stderr)
+    _LAST_SWEEP = {"sweeps": sweeps, "at": at}
+    return _LAST_SWEEP
+
+
+async def _findings_sweep_loop() -> None:
+    """The estate sweep on its own cadence, startup-first so the panel has
+    an answer immediately; failures log and the loop continues — sweeping
+    must never break serving (the agent snapshot loop's rule)."""
+    while True:
+        try:
+            await _run_findings_sweep()
+        except Exception as exc:  # noqa: BLE001 - log-and-continue
+            print(f"findings: sweep failed: {type(exc).__name__}: {exc}",
+                  file=sys.stderr)
+        await asyncio.sleep(FINDINGS_SWEEP_SECONDS)
+
+
 @app.get("/hub/findings")
 async def hub_findings() -> dict:
     """The estate's attention surface (SPEC section 6.3): every finding the
-    site's agents currently derive, folded into the registry so each carries
-    first_seen, last_seen and its acknowledgement history — one request per
-    host per sweep, not one per collection. The hub parses these envelopes,
-    deliberately and exceptionally: the registry is hub metadata DERIVED
-    from findings, sanctioned by section 6.1's amended rule 4, and every
-    observation behind them still travels rule 1's verbatim proxy."""
-    sweeps = await _sweep_findings()
+    site's agents derive, folded into the registry so each carries
+    first_seen, last_seen and its acknowledgement history. Served from the
+    LATEST completed sweep — the background loop's, on the hub's own
+    cadence — so this read answers instantly, and `swept_at` says exactly
+    how old the sweep behind it is. That is the founding rule's
+    "last-known-good belongs with findings" done literally: no observation
+    is served as current (rule 1's proxy is still the only observation
+    path); lifecycle records are served as lifecycle records, stamped. The
+    hub parses findings envelopes deliberately and exceptionally: the
+    registry is hub metadata DERIVED from them, per section 6.1's amended
+    rule 4."""
+    last = _LAST_SWEEP or await _run_findings_sweep()
     now = _utc_now()
     # Advertised writability is the grant AND a registry to write to: a
     # grant with no STATE_DIRECTORY would advertise a route that answers
@@ -230,20 +293,23 @@ async def hub_findings() -> dict:
     # acknowledgement only where it works.
     writes = FINDINGS_WRITES and REGISTRY is not None
     if REGISTRY is None:
-        return assemble(now, SITE, writes, sweeps, registry_note=(
+        view = assemble(now, SITE, writes, last["sweeps"], registry_note=(
             "findings registry disabled: STATE_DIRECTORY is not set, so"
             " lifecycle (first_seen, acknowledgement) is unavailable"
             " (the NixOS module sets StateDirectory=se-hub)"))
-    swept = [s for s in sweeps if s.get("envelope")]
+        view["swept_at"] = last["at"]
+        return view
     try:
-        await anyio.to_thread.run_sync(
-            REGISTRY.record_sweep, now, swept, FINDINGS_RETENTION_DAYS)
         rows = await anyio.to_thread.run_sync(REGISTRY.rows)
         transitions = await anyio.to_thread.run_sync(REGISTRY.transitions)
-    except Exception as exc:  # noqa: BLE001 - registry damage must not cost the live sweep
-        return assemble(now, SITE, writes, sweeps, registry_note=one_line(
+    except Exception as exc:  # noqa: BLE001 - registry damage must not cost the read
+        view = assemble(now, SITE, writes, last["sweeps"], registry_note=one_line(
             f"findings registry unreadable: {type(exc).__name__}: {exc}"))
-    return assemble(now, SITE, writes, sweeps, rows, transitions)
+        view["swept_at"] = last["at"]
+        return view
+    view = assemble(now, SITE, writes, last["sweeps"], rows, transitions)
+    view["swept_at"] = last["at"]
+    return view
 
 
 if FINDINGS_WRITES:

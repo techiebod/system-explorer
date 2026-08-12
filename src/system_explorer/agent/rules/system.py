@@ -69,9 +69,18 @@ def boot_opinions(facts: dict) -> list[dict]:
             "boots next, once.", ["BootNext"]))
     state = facts.get("SystemState")
     if state not in ("running", None):
-        level = "critical" if state == "degraded" and facts.get("NFailedUnits") else "warn"
+        # "degraded" is DEFINED as >=1 failed unit, and every failed unit
+        # already carries its own critical on the units collection — so a
+        # degraded verdict here is the same condition counted, not a second
+        # signal, and it double-reported one failed service onto the estate
+        # attention surface (operator report, 2026-08-13). Mirrored as info:
+        # visible on the boot object, absent from findings; the per-unit
+        # findings are the actionable form and name the culprit. Any OTHER
+        # non-running state (maintenance, stopping…) is its own signal and
+        # keeps its warn.
+        degraded = state == "degraded" and facts.get("NFailedUnits")
         opinions.append(env.opinion(
-            "system-state", level,
+            "system-state", "info" if degraded else "warn",
             f"systemd reports state {state!r} with "
             f"{facts.get('NFailedUnits')} failed unit(s).",
             ["SystemState", "NFailedUnits"]))
