@@ -6,6 +6,12 @@
 condensed into this document; per-document disposition in Appendix A
 **Direction:** [ROADMAP.md](ROADMAP.md) — status, priorities, and the estate/portability tracks
 
+0.6 (unreleased) decides the composite locator in writing before its
+schema: optional `container` and `app` members join the `host` block and
+rule 15's finding-identity tuple — identity, not provenance — with
+`relationships[].target` gaining the same members and off-host subjects
+explicitly deferred. Implementation follows in the same version.
+
 0.5 (2026-08-12) amends §6.1 rule 4 — the hub holds metadata, never
 observations — and adds views (§6.2, `se.views/1`), the evidence envelope's
 schema (`se.evidence/1`), the prefix evidence route, the 422 near-miss
@@ -141,12 +147,42 @@ New in 0.4:
     — divergence by acquisition-cost decision is allowed and documented per
     rule; divergence by drifted thresholds is a conformance failure.
 15. **Findings have stable identity.** The composite
-    `(host.machine_id, object.id, opinion.key)` identifies a condition
-    across observations: object IDs are stable for unchanged objects
-    (rule 7, §11) and opinion keys are stable kebab-case slugs that never
-    rename casually. An unchanged condition yields the same key on every
-    evaluation. This is the identity the findings layer (hub, roadmap
-    slice 2) will attach lifecycle to; agents stay stateless.
+    `(host.machine_id, container?, app?, object.id, opinion.key)`
+    identifies a condition across observations: object IDs are stable for
+    unchanged objects (rule 7, §11) and opinion keys are stable kebab-case
+    slugs that never rename casually. An unchanged condition yields the
+    same key on every evaluation. This is the identity the findings layer
+    (hub, roadmap slice 2) will attach lifecycle to; agents stay stateless.
+
+    The optional members are the **composite locator** (0.6, decided in
+    writing before any schema changed — the sequencing that mattered,
+    because this tuple is the primary key findings will persist under, and
+    re-keying it after they exist would orphan every finding in flight).
+    Three decisions, each closing a question an adversarial review showed
+    the first draft had left open:
+
+    - **They are identity, not provenance.** One `machine_id` now runs
+      several agent processes, and an app-scoped process can front several
+      instances of one application — two readarr instances speak one API
+      and both emit `indexer:3`. Sibling `container` and `app` members on
+      the envelope's `host` block are what keep those conditions distinct.
+      Absent means host-native — never a zero value, because an invented
+      identity is worse than an admitted absence. What keeps the change
+      one day rather than ten: *within a single collection on a single
+      process, object ids remain unique*, so route addressing,
+      `evidence_ref`, page uniqueness, snapshot diffing and the MCP tool
+      signatures are untouched by envelope-root members.
+    - **`relationships[].target` gains the same optional members**, or an
+      app-scoped object could not express an edge to a host-scoped one —
+      the exact edge a cross-app trace (indexer → download → library)
+      walks.
+    - **Off-host subjects stay out of scope until the locator answers
+      them.** An adapter observing a subject that lives on no agent host
+      would silently change `host.machine_id` from "where this lives" to
+      "who looked", against §3's definition of host as the observation
+      boundary. That contradiction is deferred with the non-Linux adapter
+      case (§12), and this locator deliberately does not claim to solve
+      it.
 
 Explicitly dropped from the SE-00x suite: the SE-005 UI framework (replaced by
 the one-page contract in §8), the WebSocket message protocol, placeholder
