@@ -1,10 +1,16 @@
 # System Explorer — Specification
 
-**Version:** 0.4
+**Version:** 0.5
 **Status:** Accepted for build
 **Supersedes:** SE-001 through SE-006 — the predecessor design suite,
 condensed into this document; per-document disposition in Appendix A
 **Direction:** [ROADMAP.md](ROADMAP.md) — status, priorities, and the estate/portability tracks
+
+0.5 (2026-08-12) amends §6.1 rule 4 — the hub holds metadata, never
+observations — and adds views (§6.2, `se.views/1`), the evidence envelope's
+schema (`se.evidence/1`), the prefix evidence route, the 422 near-miss
+filter refusal, and three relationship types. The observation shape itself
+is unchanged; every addition is additive under §5.1.
 
 0.4 (2026-08-09) records the passed success gate, adds the shared rule
 evaluators (rule 14) and finding identity (rule 15), amends the §7 trust
@@ -474,6 +480,7 @@ now this specification did not mention it.
 | Endpoint | Returns |
 |---|---|
 | `GET /hub/hosts[?local=1]` | every host this site can reach, plus each sibling site's own view (`se.hub-hosts/1`) |
+| `GET /hub/views` | the site's view documents (`se.views/1`), read from the configured directory — see §6.2 |
 | `GET /agents/{name}/v1/{path}` | one agent's route, proxied verbatim |
 | `GET /sites/{site}/agents/{name}/v1/{path}` | the same, for a host this hub may not own |
 
@@ -491,8 +498,21 @@ Four rules, each load-bearing:
    sibling is a *site* entry saying so, because "no hosts there" and "cannot see
    there" are different statements and only one is a problem. A site whose
    siblings are dark keeps working alone (ROADMAP §6).
-4. **Stateless.** No cache, no polling, no persistence — the hub holds nothing
-   an agent could not be asked for again. Last-known-good belongs with findings.
+4. **The hub holds metadata, never observations.** Amended 0.5 — the rule was
+   "stateless: no cache, no polling, no persistence", and the property it
+   protected survives intact: **no observation is ever served from hub state**,
+   so nothing the hub holds can go stale against a host and be passed off as
+   current, and an unreachable host stays a *statement of unreachability*
+   rather than a last-known-good masquerading as now. What 0.5 admits is the
+   other kind of state, which the founding vision always sanctioned ("writes…
+   to hub-owned metadata… never translated into host actions"): documents the
+   operator authored — view definitions (§6.2), read fresh from a configured
+   directory on every request — and, when the findings model lands, finding
+   lifecycle records, each gated by its own written reconciliation before any
+   code. The boundary a reviewer should check is mechanical: every byte of
+   every observation still arrives through rule 1's verbatim proxy, and
+   deleting the hub's state directory loses convenience, never data and never
+   truth.
 
 The configuration contract is four environment variables — `SE_HUB_AGENTS`,
 `SE_HUB_SITE`, `SE_HUB_SIBLINGS`, `SE_HUB_ALLOWED_HOSTS` — and the host URLs a
@@ -501,8 +521,43 @@ necessarily dialable from another, which is why a cross-site consumer goes
 through the owning hub's proxy rather than dialling agents itself.
 
 The hub's own surface is deliberately **not** under `/v1`. `/v1` is the agent's
-contract, which the hub proxies unchanged; `se.hub-hosts/1` versions
-independently of it.
+contract, which the hub proxies unchanged; `se.hub-hosts/1` and `se.views/1`
+version independently of it.
+
+### 6.2 Views: one graph, several projections
+
+A **view** is an operator-authored projection of the graph for a stated
+audience: which collections appear, which facts surface at which level, and
+where each row drills to. The principle is ROADMAP §2's — one graph, several
+projections, one public contract — and the placement follows the fact
+dictionary's precedent exactly: deciding *which facts an audience sees* is a
+judgement about the facts, so it is served from an endpoint both consumers
+read, never a table inside one client (a fourth copy of anything the agent
+knows is a fourth thing to disagree with it).
+
+- **A view never hides the truth; it defers it.** Every row links to its full
+  observation, every panel to its full collection. The novice's three panels
+  and the expert's full graph are the same data at different depths, not two
+  products.
+- **A view references facts; it does not restate them.** Documents carry fact
+  *names*; meaning stays in `/v1/facts`, labels stay native (§5). A view
+  schema field that duplicated a glossary sentence would be the drift this
+  product keeps hunting.
+- **The schema is public contract; the documents are estate configuration.**
+  `se.views/1` and its conformance guards live in this repository; the JSON
+  documents live wherever the estate keeps configuration, deployed to the
+  directory `SE_HUB_VIEWS` names (the deployment-receipts pattern: a path
+  option with no default, because views are the operator's judgement and an
+  empty directory honestly means none were made). Malformed documents are an
+  *input*: the hub validates each against the published schema on read and
+  serves a per-document error entry rather than dropping it silently or
+  serving garbage.
+- **se-mcp serves the same documents** through its `get_views` tool, pointed
+  at the same deployed directory (`SE_MCP_VIEWS`). Parity is by shared
+  configuration, not by a hub dependency: the MCP surface must keep working
+  when the hub is down, so it reads the directory itself.
+- The agent knows nothing of views. An agent-only deployment simply has none,
+  and the UI shows the section only where `/hub/views` answers.
 
 ### The fact dictionary — what a native name means
 

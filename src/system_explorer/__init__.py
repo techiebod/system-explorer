@@ -18,7 +18,7 @@ relative imports.
 # and nix/version.nix parses this line, so a release is one edit and the
 # build fails rather than shipping 0.4.0 code labelled 0.3.0 — which is what
 # four hand-maintained copies did until 2026-08-10. Tracks docs/SPEC.md.
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 # The source revision this build came from, when the builder knew it. Written
 # by nix/package.nix as _build.py from the flake's own rev, so it is absent

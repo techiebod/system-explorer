@@ -31,6 +31,19 @@ in
       description = "Host agents to front: name → base URL.";
     };
 
+    views = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      example = "/etc/system-explorer/views";
+      description = ''
+        Directory of view documents (SPEC section 6.2) served at /hub/views —
+        operator-authored projections of the graph, JSON files matching
+        se.views/1's view shape. No default deliberately: views are the
+        operator's judgement, and an unset option honestly means none were
+        made. Point se-mcp's `views` at the same path for parity.
+      '';
+    };
+
     site = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
@@ -119,6 +132,8 @@ in
           (lib.mapAttrsToList (name: url: "${name}=${url}") cfg.agents);
       } // lib.optionalAttrs (cfg.site != null) {
         SE_HUB_SITE = cfg.site;
+      } // lib.optionalAttrs (cfg.views != null) {
+        SE_HUB_VIEWS = toString cfg.views;
       } // lib.optionalAttrs (cfg.siblings != { }) {
         SE_HUB_SIBLINGS = lib.concatStringsSep ","
           (lib.mapAttrsToList (name: url: "${name}=${url}") cfg.siblings);

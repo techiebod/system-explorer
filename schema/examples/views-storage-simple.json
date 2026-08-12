@@ -1,0 +1,42 @@
+{
+  "schema": "se.views/1",
+  "observed_at": "2026-08-12T20:30:00Z",
+  "site": "site-a",
+  "views": [
+    {
+      "name": "storage-simple",
+      "title": "Storage health",
+      "audience": "someone who does not run Linux and wants to know their files are safe",
+      "panels": [
+        {
+          "key": "pools",
+          "title": "Pools",
+          "subsystem": "storage",
+          "collection": "pools",
+          "columns": ["State", "CapacityPercent", "ScanAgeDays"],
+          "note": "Each pool is one big protected store. ONLINE means healthy."
+        },
+        {
+          "key": "datasets",
+          "title": "What is on them",
+          "subsystem": "storage",
+          "collection": "datasets",
+          "columns": ["UsedBytes", "AvailableBytes", "Mountpoint"]
+        },
+        {
+          "key": "disks",
+          "title": "The disks themselves",
+          "subsystem": "hardware",
+          "collection": "scsi",
+          "filters": {"type": "disk"},
+          "columns": ["Model", "Enclosure", "EnclosureSlot",
+                      "SmartOverallPassed", "SmartTemperatureC"],
+          "note": "Every physical drive, which bay it sits in, and whether it says it is healthy."
+        }
+      ]
+    }
+  ],
+  "errors": [
+    {"file": "half-finished.json", "error": "views.0.panels: [] should be non-empty"}
+  ]
+}

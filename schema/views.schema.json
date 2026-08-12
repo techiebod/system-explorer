@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "se.views.1.schema.json",
+  "title": "System Explorer view documents",
+  "description": "Operator-authored projections of the graph, served by the hub (docs/SPEC.md section 6.2). The envelope carries every document the configured directory holds, plus a per-document error entry for anything malformed — a broken view is an input to report, not a file to silently drop.",
+  "type": "object",
+  "required": ["schema", "observed_at", "views"],
+  "properties": {
+    "schema": {"const": "se.views/1"},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "site": {"type": "string", "minLength": 1},
+    "views": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/view"}
+    },
+    "errors": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["file", "error"],
+        "properties": {
+          "file": {"type": "string", "minLength": 1},
+          "error": {"type": "string", "minLength": 1}
+        }
+      },
+      "description": "Documents the directory holds that do not validate, each named with why. Present only when at least one is."
+    }
+  },
+  "$defs": {
+    "view": {
+      "type": "object",
+      "required": ["name", "title", "panels"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "Stable identifier, kebab-case like every other key in the product."
+        },
+        "title": {"type": "string", "minLength": 1},
+        "audience": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Prose: who this projection is for. Documentation for the operator choosing a view, never machine-matched — audiences are people, not roles the product could pretend to enforce."
+        },
+        "panels": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/panel"}
+        }
+      }
+    },
+    "panel": {
+      "type": "object",
+      "required": ["key", "title", "subsystem", "collection"],
+      "properties": {
+        "key": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+        "title": {"type": "string", "minLength": 1},
+        "subsystem": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+        "collection": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+        "filters": {
+          "type": "object",
+          "additionalProperties": {"type": "string"},
+          "propertyNames": {"pattern": "^[A-Za-z][A-Za-z0-9_]*$|^type$"},
+          "description": "Fact-equality filters, exactly the collection route's own (section 6): the panel IS a filtered collection, so it cannot express a question the API cannot."
+        },
+        "columns": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*$|^type$"},
+          "description": "Fact NAMES, native spelling, in display order. Names only — meaning lives in /v1/facts and labels are the client's concern (section 5). A name no row carries renders empty, which is honest: the view said what to show, the host said what exists."
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1,
+          "description": "One optional sentence of operator prose under the panel title — what this panel is FOR, in the audience's words. The one place a view may speak, because it is the operator speaking, not the product."
+        }
+      }
+    }
+  }
+}

@@ -46,6 +46,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from .. import __version__
 from ..text import one_line
 from ..paths import UI_DIR
+from ..views import load_views
 
 
 def _params(request) -> list[tuple[str, str | int | float | bool | None]]:
@@ -71,6 +72,11 @@ def _pairs_from_env(variable: str) -> dict[str, str]:
 AGENTS = _pairs_from_env("SE_HUB_AGENTS")
 SIBLINGS = _pairs_from_env("SE_HUB_SIBLINGS")
 SITE = os.environ.get("SE_HUB_SITE") or None
+
+# Where this site's view documents live (SPEC section 6.2) — the loader is
+# shared with se-mcp (system_explorer/views.py), which reads the same
+# deployed directory so view parity needs no hub dependency.
+VIEWS_DIR = os.environ.get("SE_HUB_VIEWS") or None
 
 app = FastAPI(title="System Explorer hub", version=__version__, docs_url=None, redoc_url=None)
 
@@ -152,6 +158,14 @@ async def _local_hosts() -> dict:
             return name, {"reachable": False, "site": SITE,
                           "error": one_line(f"{type(exc).__name__}: {exc}")}
     return dict(await asyncio.gather(*(probe(n, b) for n, b in AGENTS.items())))
+
+
+@app.get("/hub/views")
+async def hub_views() -> dict:
+    """This site's view documents (SPEC section 6.2), read fresh from the
+    configured directory per request. No directory configured means a
+    deployment that made no views: an empty list, not an error."""
+    return load_views(VIEWS_DIR, _utc_now(), SITE)
 
 
 @app.get("/hub/hosts")

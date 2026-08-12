@@ -26,6 +26,17 @@ in
       description = "se-mcp package (bin/se-mcp).";
     };
 
+    views = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      example = "/etc/system-explorer/views";
+      description = ''
+        Directory of view documents served by the get_views tool — the SAME
+        path the hub's `views` option names, so both consumers see one set
+        of projections without the MCP surface depending on the hub.
+      '';
+    };
+
     agents = lib.mkOption {
       type = lib.types.attrsOf lib.types.str;
       example = { host-a = "http://localhost:8091"; host-b = "http://host-b.example.internal:8091"; };
@@ -75,6 +86,8 @@ in
         SE_MCP_HOST = cfg.listenAddress;
         SE_MCP_PORT = toString cfg.port;
         SE_MCP_TRANSPORT = cfg.transport;
+      } // lib.optionalAttrs (cfg.views != null) {
+        SE_MCP_VIEWS = toString cfg.views;
       };
 
       serviceConfig = {

@@ -186,6 +186,10 @@ FORWARD_COMPAT_EXTENSIONS: dict[str, list[tuple[str, object]]] = {
         ("payload_bytes", 512),
         ("host.site", "site-a"),
     ],
+    "views-storage-simple.json": [
+        ("generated_by", "estate-tooling/1.0"),
+        ("views.0.panels.0.icon", "pool"),
+    ],
 }
 
 

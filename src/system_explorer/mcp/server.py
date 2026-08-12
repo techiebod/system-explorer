@@ -27,6 +27,7 @@ from mcp.server.fastmcp import FastMCP
 
 from ..agent import envelope as env
 from ..text import one_line
+from ..views import load_views
 
 
 def _agents_from_env() -> dict[str, str]:
@@ -192,6 +193,23 @@ async def what_changed(host: str, since: str,
     if subsystem is not None:
         params["subsystem"] = subsystem
     return await _get(host, "/v1/changes", params)
+
+
+@mcp.tool()
+async def get_views() -> dict:
+    """Operator-authored projections of the graph (se.views/1): which
+    collections an audience sees, which facts at which panel, every row
+    still one get_object away from the full observation — a view defers
+    truth, never hides it.
+
+    Read from the SE_MCP_VIEWS directory, the same documents the hub
+    serves: parity by shared deployment, not by a hub dependency, so this
+    tool keeps answering when the hub is down. An empty list means the
+    operator made no views, which is a statement, not an error."""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return load_views(os.environ.get("SE_MCP_VIEWS") or None, now,
+                      os.environ.get("SE_MCP_SITE") or None)
 
 
 def main() -> None:

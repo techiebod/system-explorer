@@ -34,6 +34,7 @@ SCHEMA_FILES = {
     "se.capabilities/1": SCHEMA_DIR / "capabilities.schema.json",
     "se.hub-hosts/1": SCHEMA_DIR / "hub-hosts.schema.json",
     "se.evidence/1": SCHEMA_DIR / "evidence.schema.json",
+    "se.views/1": SCHEMA_DIR / "views.schema.json",
 }
 
 SCHEMAS: dict[str, dict] = {
