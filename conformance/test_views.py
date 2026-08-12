@@ -78,3 +78,18 @@ def test_the_repo_fixture_round_trips_through_the_loader(tmp_path):
     envelope = load_views(str(tmp_path), NOW)
     assert len(envelope["views"]) == len(fixture["views"])
     assert "errors" not in envelope
+
+
+def test_a_configured_but_missing_directory_is_named_not_empty(tmp_path):
+    # The first estate deploy handed the build host's store path to the
+    # target: /hub/views answered 200 with views [] — present, empty,
+    # quietly wrong. A configured directory that does not exist is a
+    # deployment fault and the envelope says so.
+    gone = str(tmp_path / "never-created")
+    envelope = load_views(gone, NOW, "site-a")
+    assert envelope["views"] == []
+    assert envelope["errors"] == [
+        {"file": gone, "error": "configured views directory does not exist"}]
+    import jsonschema
+    from common import SCHEMAS
+    jsonschema.Draft202012Validator(SCHEMAS["se.views/1"]).validate(envelope)

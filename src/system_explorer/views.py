@@ -43,7 +43,16 @@ def load_views(directory: str | None, now: str, site: str | None = None) -> dict
         out["site"] = site
     views: list[dict] = []
     errors: list[dict] = []
-    if directory:
+    if directory and not Path(directory).is_dir():
+        # A CONFIGURED directory that does not exist is a deployment fault,
+        # not an operator who made no views — and it happened on the first
+        # estate deploy (a module bug handed the build host's path to the
+        # target). Silent [] from a missing directory is absence-as-health;
+        # the envelope names the directory and the UI's error strip shows it
+        # where the operator looks first.
+        errors.append({"file": directory,
+                       "error": "configured views directory does not exist"})
+    elif directory:
         for path in sorted(Path(directory).glob("*.json")):
             try:
                 doc = json.loads(path.read_text())

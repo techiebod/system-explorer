@@ -133,7 +133,14 @@ in
       } // lib.optionalAttrs (cfg.site != null) {
         SE_HUB_SITE = cfg.site;
       } // lib.optionalAttrs (cfg.views != null) {
-        SE_HUB_VIEWS = toString cfg.views;
+        # Interpolation imports a path literal into the store WITH context,
+        # so the directory joins the closure and exists on the target.
+        # toString handed the BUILD host's raw source path to a machine
+        # that never had it, and /hub/views answered an honest-looking
+        # empty list from a directory that was not there (first estate
+        # deploy, 2026-08-12). A string-typed runtime path interpolates
+        # to itself, which is also right.
+        SE_HUB_VIEWS = "${cfg.views}";
       } // lib.optionalAttrs (cfg.siblings != { }) {
         SE_HUB_SIBLINGS = lib.concatStringsSep ","
           (lib.mapAttrsToList (name: url: "${name}=${url}") cfg.siblings);

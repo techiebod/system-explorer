@@ -25,6 +25,9 @@ characters, so 400 leaves headroom while still refusing an unbounded blob.
 
 from __future__ import annotations
 
+import os
+import re
+
 MAX_LENGTH = 400
 
 # Trailing punctuation left dangling by a word-boundary cut reads as damage
@@ -64,9 +67,6 @@ def one_line(value: object, limit: int = MAX_LENGTH) -> str:
 #      name. The names come from the process's own environment at call
 #      time: any variable whose name ends in a recognised secret suffix is
 #      assumed to hold something that must never appear in an envelope.
-
-import os
-import re
 
 _QUERY_STRING = re.compile(r"""\?[^\s"'<>]+""")
 SECRET_ENV_SUFFIXES = ("_API_KEY", "_TOKEN", "_SECRET", "_PASSWORD", "_PASS")
