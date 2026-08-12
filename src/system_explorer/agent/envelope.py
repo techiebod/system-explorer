@@ -62,9 +62,12 @@ HOST = {"machine_id": _machine_id(), "hostname": socket.gethostname().split(".")
 
 
 def reason(value: object, limit: int = _text.MAX_LENGTH) -> str:
-    """Bounded, whole-word failure text for a capability reason or an
-    error-envelope entry. See system_explorer.text for why this is central."""
-    return _text.one_line(value, limit)
+    """Bounded, whole-word, credential-scrubbed failure text for a
+    capability reason or an error-envelope entry. See system_explorer.text
+    for why bounding is central and why scrubbing lives beside it: failure
+    text is the one channel that reaches unauthenticated pollers from
+    inside an exception handler nobody reviews for secrets."""
+    return _text.scrub(_text.one_line(value, limit))
 
 
 def utc_now() -> str:
@@ -223,7 +226,12 @@ def observation(subsystem: str, obj: dict, src: dict, facts: dict,
         "facts": facts,
     }
     if status != "ok":
-        out["errors"] = errors or ["unspecified acquisition failure"]
+        # Scrubbed at the boundary, wholesale: the fifteen call sites that
+        # interpolate exceptions inherit it unchanged, and the sixteenth
+        # cannot forget (SPEC section 11, rule 10 extended — failure text
+        # is a credential channel).
+        out["errors"] = [_text.scrub(_text.one_line(entry))
+                         for entry in (errors or ["unspecified acquisition failure"])]
     if opinions:
         out["opinions"] = opinions
     if relationships:
@@ -252,7 +260,12 @@ def collection_page(subsystem: str, collection: str, src: dict, items: list[dict
         "items": items,
     }
     if status != "ok":
-        out["errors"] = errors or ["unspecified acquisition failure"]
+        # Scrubbed at the boundary, wholesale: the fifteen call sites that
+        # interpolate exceptions inherit it unchanged, and the sixteenth
+        # cannot forget (SPEC section 11, rule 10 extended — failure text
+        # is a credential channel).
+        out["errors"] = [_text.scrub(_text.one_line(entry))
+                         for entry in (errors or ["unspecified acquisition failure"])]
     if requested_limit is not None:
         out["requested_limit"] = requested_limit
     if total is not None:

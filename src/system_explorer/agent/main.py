@@ -558,7 +558,10 @@ def _evidence_envelope(body: dict) -> dict:
     so the live check and every consumer can validate the shape instead of
     sniffing it.
     """
-    return {"schema": "se.evidence/1", "host": env.HOST, **body}
+    out = {"schema": "se.evidence/1", "host": env.HOST, **body}
+    if "error" in out:
+        out["error"] = env.reason(out["error"])
+    return out
 
 
 # Prefix-first, not suffix: the old shape appended /evidence to the object

@@ -43,3 +43,55 @@ def one_line(value: object, limit: int = MAX_LENGTH) -> str:
         return flat
     head = flat[:limit].rpartition(" ")[0] or flat[:limit]
     return f"{head.rstrip(_DANGLING)} … (truncated)"
+
+
+# ── credential scrubbing (SPEC section 11, rule 10 extended) ─────────────
+#
+# Failure text is a channel. httpx stringifies HTTPStatusError with the full
+# request URL, and two of the estate's planned upstreams (Tautulli, sabnzbd)
+# accept their API key ONLY as a query parameter — so one 401 during a key
+# rotation would publish the key into a capability reason, which
+# /v1/status and /v1/capabilities then serve to every unauthenticated
+# poller. Found by adversarial review BEFORE the first credentialed adapter
+# exists, which is the only acceptable time to find it.
+#
+# Two defences, both at the envelope boundary so a new adapter inherits
+# them for free:
+#   1. URL query strings in failure text are stripped wholesale — the path
+#      identifies the endpoint, the query is where credentials hide, and no
+#      diagnosis has ever needed the query string back.
+#   2. The VALUES of secret-shaped environment variables are substituted by
+#      name. The names come from the process's own environment at call
+#      time: any variable whose name ends in a recognised secret suffix is
+#      assumed to hold something that must never appear in an envelope.
+
+import os
+import re
+
+_QUERY_STRING = re.compile(r"""\?[^\s"'<>]+""")
+SECRET_ENV_SUFFIXES = ("_API_KEY", "_TOKEN", "_SECRET", "_PASSWORD", "_PASS")
+
+
+def _secret_values() -> list[tuple[str, str]]:
+    """(value, env name) pairs worth substituting, longest value first so a
+    secret that contains another is replaced whole. Read per call, not
+    cached: the EnvironmentFile can change across a reload, and a scrub
+    that missed a rotated-in secret is the exact failure this exists for."""
+    pairs = [(value, name) for name, value in os.environ.items()
+             if name.endswith(SECRET_ENV_SUFFIXES) and len(value) >= 8]
+    return sorted(pairs, key=lambda pair: len(pair[0]), reverse=True)
+
+
+def scrub(value: str) -> str:
+    """Failure text with credentials removed, marked where anything was.
+
+    Substitution names the VARIABLE, not the value: `[redacted:$NAME]` tells
+    the operator which secret leaked into which failure without re-leaking
+    it — the redaction suite's rule that withholding must say what it
+    withheld.
+    """
+    out = _QUERY_STRING.sub("?[query-stripped]", value)
+    for secret, name in _secret_values():
+        if secret in out:
+            out = out.replace(secret, f"[redacted:${name}]")
+    return out
