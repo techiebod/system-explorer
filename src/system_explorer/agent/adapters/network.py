@@ -158,7 +158,54 @@ _ROUTE_GLOSSARY = {
     ),
 }
 
-_NETWORK_GLOSSARY = {"links": _LINK_GLOSSARY, "routes": _ROUTE_GLOSSARY}
+# Written after an operator read the resolver row's CurrentDNSServer beside
+# the fallback list and reasonably concluded the host's primary DNS was a
+# public resolver, while every real query went to the LAN (2026-08-12). The
+# facts were all true; nothing on the screen said which scope each belonged
+# to. That is exactly the LinkSpeed/LinkWidth lesson from the hardware
+# glossary: native names carry scope a reader cannot infer.
+_RESOLVER_GLOSSARY = {
+    "CurrentDNSServer": (
+        "The selected server of resolved's GLOBAL scope only — the scope "
+        "backed by GlobalDNSServers or, when none are configured, the "
+        "fallback list. It is sticky: it shows whichever server that scope "
+        "last used, often chosen at boot before any link had DNS, and keeps "
+        "showing it while the scope sits idle. It is NOT where ordinary "
+        "queries go when a link carries the default route — see PerLinkDNS, "
+        "whose per-link CurrentDNSServer is the one answering."
+    ),
+    "PerLinkDNS": (
+        "Each link's DNS configuration: its servers, the server currently "
+        "answering, the domains routed to it, and DefaultRoute — whether "
+        "queries matching no domain go here. A link with DefaultRoute true "
+        "is the host's working resolver path; DefaultRoute absent means "
+        "this resolved predates the property, which is not a no."
+    ),
+    "GlobalDNSServers": (
+        "Servers configured globally rather than on a link. Empty is normal "
+        "on a host whose DNS arrives per-link via DHCP; ordinary queries "
+        "then follow whichever link has DefaultRoute."
+    ),
+    "FallbackDNSServers": (
+        "Compiled-in public resolvers used only when no global server is "
+        "configured and no link takes the default route — or in the boot "
+        "window before any link has DNS. Reachable last resort, not "
+        "configuration."
+    ),
+    "DNSServersInUse": (
+        "The union of every server configured globally or on any link — "
+        "what could answer, not what answered last. The fallback list is "
+        "deliberately excluded."
+    ),
+    "SearchDomains": (
+        "Domains appended to single-label names, plus route-only entries "
+        "(marked) that steer matching queries to a specific link without "
+        "being used for completion."
+    ),
+}
+
+_NETWORK_GLOSSARY = {"links": _LINK_GLOSSARY, "routes": _ROUTE_GLOSSARY,
+                     "resolver": _RESOLVER_GLOSSARY}
 
 
 def _link_kind(link: dict) -> str | None:
@@ -686,6 +733,14 @@ class Adapter:
             domains = [d[0] for d in link.get("Domains") or [] if d]
             if domains:
                 entry["Domains"] = domains
+            # The fact that decides where ordinary queries go — without it an
+            # operator reading the manager-level CurrentDNSServer beside the
+            # fallback list concluded a host's primary DNS was 1.1.1.1 while
+            # every real query went to the LAN resolver (asked live,
+            # 2026-08-12). Omitted, not defaulted, when resolve1 predates the
+            # property: cannot-see is not "no".
+            if "DefaultRoute" in link:
+                entry["DefaultRoute"] = bool(link["DefaultRoute"])
             per_link[ifname] = entry
         return per_link
 

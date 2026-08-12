@@ -83,3 +83,22 @@ system_explorer = ["ui/*"]
 # conformance/ so `from common import ...` keeps working from any cwd.
 pythonpath = ["src", "conformance"]
 testpaths = ["conformance"]
+
+# ── static checks ─────────────────────────────────────────────────────────
+# ruff formalises conventions the code already carried informally — noqa
+# markers for BLE001 predate this table. Selection is bug classes, not
+# style: pyflakes, syntax, bugbear, blind-except. The bespoke AST lints in
+# conformance/ stay the authority on everything a generic tool cannot say
+# (reference-command paths, subprocess argv allow-listing, estate names).
+[tool.ruff.lint]
+select = ["F", "E4", "E7", "E9", "B", "BLE"]
+
+# Non-strict deliberately: the envelope is an untyped dict by design (native
+# fact names, native shapes), so strict mode would demand annotations the
+# contract refuses. What non-strict still catches is the class that put two
+# hosts' vms collections dark for 17 hours — an indexing assumption a test
+# had not met. Third-party gaps (libvirt, dbus_fast, mcp) are ignored.
+[tool.mypy]
+files = ["src/system_explorer"]
+python_version = "3.10"
+ignore_missing_imports = true

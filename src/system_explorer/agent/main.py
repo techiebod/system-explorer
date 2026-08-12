@@ -124,7 +124,7 @@ def _query(request: Request) -> tuple[dict, int | None, str | None]:
     try:
         parsed_limit = int(limit) if limit is not None else None
     except ValueError:
-        raise HTTPException(status_code=422, detail="limit must be an integer")
+        raise HTTPException(status_code=422, detail="limit must be an integer") from None
     if parsed_limit is not None and parsed_limit < 1:
         raise HTTPException(status_code=422, detail="limit must be >= 1")
     return params, parsed_limit, cursor
@@ -325,7 +325,7 @@ async def status() -> dict:
     }
     if errors:
         out["errors"] = errors
-    out["subsystems"] = {name: entries for name, (entries, _) in zip(ADAPTERS, results)}
+    out["subsystems"] = {name: entries for name, (entries, _) in zip(ADAPTERS, results, strict=True)}
     return out
 
 
@@ -371,7 +371,7 @@ async def _subsystem_snapshot(name: str, adapter) -> dict[str, list[dict]]:
 async def _take_snapshot() -> None:
     results = await asyncio.gather(
         *(_subsystem_snapshot(name, adapter) for name, adapter in ADAPTERS.items()))
-    data = {name: colls for name, colls in zip(ADAPTERS, results) if colls}
+    data = {name: colls for name, colls in zip(ADAPTERS, results, strict=True) if colls}
     await anyio.to_thread.run_sync(
         HISTORY.write_snapshot, env.utc_now(), history.read_boot_id(),
         data, SNAPSHOT_RETENTION_DAYS)
@@ -486,7 +486,7 @@ async def changes(since: str | None = None, subsystem: str | None = None) -> dic
     out["status"] = "partial" if errors else "ok"
     if errors:
         out["errors"] = errors
-    out["subsystems"] = {name: diffs for name, (diffs, _) in zip(base["data"], results) if diffs}
+    out["subsystems"] = {name: diffs for name, (diffs, _) in zip(base["data"], results, strict=True) if diffs}
     return out
 
 
@@ -564,9 +564,9 @@ async def evidence(subsystem: str, collection: str, object_id: str) -> dict:
     try:
         return await adapter.get_evidence(collection, object_id)
     except env.UnknownCollection:
-        raise HTTPException(status_code=404, detail=f"unknown collection: {collection}")
+        raise HTTPException(status_code=404, detail=f"unknown collection: {collection}") from None
     except env.UnknownObject:
-        raise HTTPException(status_code=404, detail=f"unknown object: {object_id}")
+        raise HTTPException(status_code=404, detail=f"unknown object: {object_id}") from None
     except Exception as exc:  # noqa: BLE001 - errors are observations
         return {
             "object_id": object_id,
@@ -592,9 +592,9 @@ async def get_object(subsystem: str, collection: str, object_id: str) -> dict:
     try:
         return await adapter.get_object(collection, object_id)
     except env.UnknownCollection:
-        raise HTTPException(status_code=404, detail=f"unknown collection: {collection}")
+        raise HTTPException(status_code=404, detail=f"unknown collection: {collection}") from None
     except env.UnknownObject:
-        raise HTTPException(status_code=404, detail=f"unknown object: {object_id}")
+        raise HTTPException(status_code=404, detail=f"unknown object: {object_id}") from None
     except Exception as exc:  # noqa: BLE001 - errors are observations
         return env.observation(
             subsystem,
@@ -623,7 +623,7 @@ async def get_collection(subsystem: str, collection: str, request: Request) -> d
     try:
         return await adapter.collect(collection, filters, limit, cursor)
     except env.UnknownCollection:
-        raise HTTPException(status_code=404, detail=f"unknown collection: {collection}")
+        raise HTTPException(status_code=404, detail=f"unknown collection: {collection}") from None
     except env.UnknownFilterKey as exc:
         # A near-miss filter key is a malformed request, not an acquisition
         # failure: the same 422 a bad `limit` gets (_query above). Left to the
@@ -631,7 +631,7 @@ async def get_collection(subsystem: str, collection: str, request: Request) -> d
         # class name leaked — a client typo wearing an outage's envelope, so
         # retry logic hammered a permanently-bad request and the UI reported
         # a healthy collection unavailable (three review passes converged).
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from None
     except Exception as exc:  # noqa: BLE001 - errors are observations
         return env.collection_page(
             subsystem, collection,

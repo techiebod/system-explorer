@@ -308,6 +308,31 @@ CASES = [
      {"CurrentDNSServer": "192.168.1.1", "DNSServersInUse": ["192.168.1.1"],
       "GlobalDNSServers": [], "PerLinkDNS": {"eth0": ["192.168.1.1"]}},
      set()),
+    # A link owns the default route: ordinary queries go there, and the
+    # sticky global CurrentDNSServer showing a fallback server is boot
+    # residue, not a finding (asked live, 2026-08-12: "is my primary DNS
+    # really 1.1.1.1?" — it was not).
+    ("resolver-link-owns-default", network.resolver_opinions,
+     {"CurrentDNSServer": "1.1.1.1", "DNSServersInUse": ["192.168.1.1"],
+      "GlobalDNSServers": [], "FallbackDNSServers": ["1.1.1.1"],
+      "PerLinkDNS": {"br0": {"DNSServers": ["192.168.1.1"],
+                             "DefaultRoute": True}}},
+     set()),
+    # Nothing owns the default route and no global servers exist: every
+    # non-domain query rides the compiled-in public fallback.
+    ("resolver-fallback-carries-default", network.resolver_opinions,
+     {"CurrentDNSServer": "1.1.1.1", "DNSServersInUse": ["192.168.1.1"],
+      "GlobalDNSServers": [], "FallbackDNSServers": ["1.1.1.1"],
+      "PerLinkDNS": {"br0": {"DNSServers": ["192.168.1.1"],
+                             "DefaultRoute": False}}},
+     {("resolver-fallback-carries-default", "warn")}),
+    # DefaultRoute unobservable (resolved predates the property): cannot-see
+    # is not a misconfiguration, so the rule stays silent.
+    ("resolver-default-route-unobservable", network.resolver_opinions,
+     {"CurrentDNSServer": "1.1.1.1", "DNSServersInUse": ["192.168.1.1"],
+      "GlobalDNSServers": [], "FallbackDNSServers": ["1.1.1.1"],
+      "PerLinkDNS": {"br0": {"DNSServers": ["192.168.1.1"]}}},
+     set()),
 
     # network tailscale: node-key expiry ladder, self connectivity, snapshot
     # age. Only the self item carries BackendState, KeyExpiryDays and the

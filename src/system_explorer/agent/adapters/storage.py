@@ -506,21 +506,25 @@ class Adapter:
 
             # Per-vdev fullness from zpool list -v, matched onto the status
             # walk's entries by vdev name.
+            # The accumulator rides as a parameter, not a closure over the
+            # loop variable: the call is same-iteration today, but a closure
+            # capturing a loop variable is one refactor away from reading a
+            # LATER iteration's dict, and the shape is identical either way.
             vdev_caps: dict[str, dict] = {}
 
-            def collect_caps(nodes: dict | None) -> None:
+            def collect_caps(nodes: dict | None, caps: dict[str, dict]) -> None:
                 for vname, vd in (nodes or {}).items():
                     vprops = vd.get("properties") or {}
                     alloc = _int_or_none(_prop_value(vprops, "allocated"))
                     if alloc is not None:
-                        vdev_caps[str(vname)] = {
+                        caps[str(vname)] = {
                             "SizeBytes": _int_or_none(_prop_value(vprops, "size")),
                             "AllocatedBytes": alloc,
                             "CapacityPercent": _int_or_none(_prop_value(vprops, "capacity")),
                         }
-                    collect_caps(vd.get("vdevs"))
+                    collect_caps(vd.get("vdevs"), caps)
 
-            collect_caps((listing.get(name) or {}).get("vdevs"))
+            collect_caps((listing.get(name) or {}).get("vdevs"), vdev_caps)
             for entry in vdevs:
                 cap = vdev_caps.get(str(entry["Name"]))
                 if cap:

@@ -56,12 +56,32 @@ def link_opinions(facts: dict) -> list[dict]:
 def resolver_opinions(facts: dict) -> list[dict]:
     if "DNSServersInUse" not in facts:
         return []
-    if facts.get("DNSServersInUse") or facts.get("CurrentDNSServer"):
-        return []
-    return [env.opinion(
-        "resolver-servers", "warn",
-        "No DNS servers are configured globally or on any link.",
-        ["DNSServersInUse", "GlobalDNSServers", "PerLinkDNS"])]
+    if not facts.get("DNSServersInUse") and not facts.get("CurrentDNSServer"):
+        return [env.opinion(
+            "resolver-servers", "warn",
+            "No DNS servers are configured globally or on any link.",
+            ["DNSServersInUse", "GlobalDNSServers", "PerLinkDNS"])]
+    opinions: list[dict] = []
+    # Nothing owns the default route: every query outside the configured
+    # domains is served by the compiled-in fallback — public resolvers the
+    # operator never chose. Fires only when the DefaultRoute property was
+    # OBSERVABLE on every link that has servers and none carries it: a
+    # resolved too old to report the property is cannot-see, and cannot-see
+    # is not a misconfiguration (rule 7). The sticky global CurrentDNSServer
+    # showing a fallback server is deliberately NOT an opinion — it is the
+    # normal residue of the boot window, and warning on it would re-teach
+    # the misreading the glossary now corrects.
+    per_link = facts.get("PerLinkDNS") or {}
+    if (per_link and not facts.get("GlobalDNSServers")
+            and all("DefaultRoute" in entry for entry in per_link.values())
+            and not any(entry["DefaultRoute"] for entry in per_link.values())):
+        opinions.append(env.opinion(
+            "resolver-fallback-carries-default", "warn",
+            "No link takes the DNS default route and no global servers are "
+            "configured, so every query outside the configured domains goes "
+            "to the compiled-in public fallback servers.",
+            ["PerLinkDNS", "GlobalDNSServers", "FallbackDNSServers"]))
+    return opinions
 
 
 # Node-key expiry ladder: a month out is a calendar reminder; inside a week

@@ -86,7 +86,7 @@ async def list_hosts() -> dict:
     # timeout per host behind it in the sequence.
     names = list(AGENTS)
     capabilities = await asyncio.gather(*(_get(name, "/v1/capabilities") for name in names))
-    return {"hosts": dict(zip(names, capabilities))}
+    return {"hosts": dict(zip(names, capabilities, strict=True))}
 
 
 @mcp.tool()
@@ -103,7 +103,7 @@ async def get_status(host: str | None = None) -> dict:
         return await _get(host, "/v1/status")
     names = list(AGENTS)
     rollups = await asyncio.gather(*(_get(name, "/v1/status") for name in names))
-    return {"hosts": dict(zip(names, rollups))}
+    return {"hosts": dict(zip(names, rollups, strict=True))}
 
 
 @mcp.tool()

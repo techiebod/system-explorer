@@ -73,7 +73,7 @@ def parse_since(value: str, now: datetime | None = None) -> str:
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
-        raise ValueError(f"since must be ISO 8601 or relative like -24h, got {value!r}")
+        raise ValueError(f"since must be ISO 8601 or relative like -24h, got {value!r}") from None
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc).strftime(_ISO)

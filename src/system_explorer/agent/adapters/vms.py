@@ -180,8 +180,11 @@ def _devices(xml: str) -> tuple[list[dict], list[dict], list[dict]]:
         if kind == "pci":
             addr = source.find("address")
             if addr is not None:
-                def hexpart(key: str) -> int:
-                    return int(addr.get(key) or "0", 16)
+                # addr binds as a default, not a closure: same-iteration use
+                # is safe today, but a closure over a loop variable is one
+                # refactor from reading a later iteration's element.
+                def hexpart(key: str, _addr: dict = addr) -> int:
+                    return int(_addr.get(key) or "0", 16)
                 hostdevs.append({"Type": "pci", "Address":
                                  f"{hexpart('domain'):04x}:{hexpart('bus'):02x}"
                                  f":{hexpart('slot'):02x}.{hexpart('function'):x}"})

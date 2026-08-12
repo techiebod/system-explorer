@@ -148,7 +148,7 @@ def _cpu_times() -> dict:
         fields = line.split()
         if fields and fields[0] == "cpu":
             return {name: int(value) for name, value in
-                    zip(CPU_TIME_FIELDS, fields[1:]) if value.isdigit()}
+                    zip(CPU_TIME_FIELDS, fields[1:], strict=True) if value.isdigit()}
     return {}
 
 

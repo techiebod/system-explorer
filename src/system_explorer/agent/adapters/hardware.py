@@ -735,7 +735,7 @@ class Adapter:
                          if name.startswith(f"{UDISKS}.Drive") or ".NVMe." in name}
         health: dict[str, dict] = {}
         raw_by_block: dict[str, dict] = {}
-        for path, ifaces in objects.items():
+        for _path, ifaces in objects.items():
             block = ifaces.get(f"{UDISKS}.Block")
             if not block or not drives.get(block.get("Drive")):
                 continue
@@ -786,7 +786,7 @@ class Adapter:
             anyio.to_thread.run_sync(_udev_json, f"{PCI_DEVICES}/{a}")
             for a in addresses))
         items = []
-        for address, props in zip(addresses, udev):
+        for address, props in zip(addresses, udev, strict=True):
             facts = {
                 "Class": props.get("ID_PCI_SUBCLASS_FROM_DATABASE")
                          or props.get("ID_PCI_CLASS_FROM_DATABASE"),
@@ -806,7 +806,7 @@ class Adapter:
             anyio.to_thread.run_sync(_udev_json, f"{USB_DEVICES}/{n}")
             for n in names))
         items = []
-        for name, props in zip(names, udev):
+        for name, props in zip(names, udev, strict=True):
             base = f"{USB_DEVICES}/{name}"
             device_class = _read(f"{base}/bDeviceClass")
             facts = {
