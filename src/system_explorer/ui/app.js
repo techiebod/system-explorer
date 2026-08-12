@@ -1344,33 +1344,44 @@ async function loadFindings() {
   $("collection-pane").hidden = true;
   const pane = $("views-pane");
   pane.hidden = false;
-  pane.textContent = "loading…";
+  // Repaint in the BACKGROUND: the previous render stays on screen while
+  // the sweep runs (a full estate acquisition, honestly seconds), and the
+  // new content lands in one replaceChildren swap. Blanking to a loading
+  // line on every poll made the panel strobe in the foreground (reported
+  // live, 2026-08-12). Only a first visit has nothing better to show.
+  const firstLoad = pane.dataset.findings !== "1";
+  if (firstLoad) pane.textContent = "sweeping the estate…";
+  $("refresh").classList.add("spin");
   let body;
   try {
     const res = await fetch("/hub/findings");
     body = await res.json();
   } catch (err) {
     if (state.epoch !== epoch) return;
-    pane.textContent = "";
-    banner(`The hub's findings surface did not answer: ${err}`);
+    if (firstLoad) {
+      pane.textContent = "";
+      banner(`The hub's findings surface did not answer: ${err}`);
+    }
     return;
+  } finally {
+    $("refresh").classList.remove("spin");
   }
   if (state.epoch !== epoch) return;
-  pane.textContent = "";
   banner("");
   state.observedAt = body.observed_at || null;
 
+  const next = [];
   const head = el("div", "vw-head");
   head.appendChild(el("h2", "vw-title", "Estate findings"));
   if (body.site) head.appendChild(el("div", "vw-audience", `site ${body.site}`));
-  pane.appendChild(head);
+  next.push(head);
 
   for (const note of body.errors || [])
-    pane.appendChild(el("div", "vw-error", note));
+    next.push(el("div", "vw-error", note));
   const unswept = Object.entries(body.hosts || {})
     .filter(([, entry]) => !entry.swept);
   for (const [name, entry] of unswept)
-    pane.appendChild(el("div", "vw-error",
+    next.push(el("div", "vw-error",
       `${name} could not be swept: ${entry.error || "no answer"} — its findings below are frozen, not resolved`));
 
   const bands = [
@@ -1380,9 +1391,8 @@ async function loadFindings() {
   ];
   const findings = body.findings || [];
   if (!findings.length) {
-    pane.appendChild(el("div", "vw-note",
+    next.push(el("div", "vw-note",
       "No findings anywhere the estate can currently see."));
-    return;
   }
   for (const [, title, match] of bands) {
     const rows = findings.filter(match);
@@ -1390,8 +1400,10 @@ async function loadFindings() {
     const card = el("section", "vw-card");
     card.appendChild(el("h3", "vw-panel-title", `${title} (${rows.length})`));
     for (const finding of rows) card.appendChild(findingRow(finding));
-    pane.appendChild(card);
+    next.push(card);
   }
+  pane.replaceChildren(...next);
+  pane.dataset.findings = "1";
 }
 
 function findingRow(finding) {
@@ -1432,6 +1444,10 @@ async function loadView(name) {
   const pane = $("views-pane");
   pane.hidden = false;
   pane.textContent = "";
+  // The findings panel's keep-content-while-sweeping marker must not
+  // survive into a view render, or navigating back to findings would
+  // show this view's stale content for the seconds the sweep takes.
+  delete pane.dataset.findings;
   if (!doc) {
     // A stale bookmark for a view the operator since removed: say so and
     // stay useful, exactly the unreachable-host shape.
@@ -3106,9 +3122,15 @@ function banner(text) {
 
 function armAutoRefresh() {
   clearInterval(state.refreshTimer);
+  // The estate findings sweep is a full acquisition on every agent — it
+  // COSTS seconds, honestly (statelessness means fresh capture, not a
+  // cache going stale). Polling it at the collection cadence meant the
+  // panel spent a third of its life mid-sweep (reported live,
+  // 2026-08-12); attention lifecycle does not change in 15 s.
+  const interval = state.subsystem === "estate" ? 60000 : 15000;
   state.refreshTimer = setInterval(() => {
     if (!document.hidden) loadCollection();
-  }, 15000);
+  }, interval);
 }
 
 function initTheme() {
