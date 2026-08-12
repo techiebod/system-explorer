@@ -730,7 +730,16 @@ function navModel() {
   // an empty heading would be a lie about what is here (same rule as
   // groups below). The route shape is view/<name>; "view" is not a
   // subsystem and the router dispatches it before capabilities are asked.
+  //
+  // A view that names its hosts appears only on them: a dashboard is
+  // composed FOR somewhere, and rendering the ZFS view against a host
+  // with no ZFS turned a curated page into a wall of error strips
+  // (reported live, 2026-08-12 — the composable-dashboard idea deployed
+  // as an accidental estate-wide default). On a host a view DOES name,
+  // failures stay loud; that half was right.
   for (const doc of state.views?.views || []) {
+    if (doc.hosts && state.currentHost && !doc.hosts.includes(state.currentHost))
+      continue;
     sections.push({ solo: false, heading: sections.length ? null : "views",
                     available: true,
                     items: [{ sub: "view", coll: doc.name, label: doc.title,
@@ -769,23 +778,20 @@ function navModel() {
     const items = (cap.collections || [])
       .filter(coll => !claimed.has(`${name}/${coll}`))
       .map(coll => ({ sub: name, coll, label: coll, route: `${name}/${coll}` }));
-    // An unavailable COLLECTION inside an available subsystem used to vanish
-    // without trace, so "where's resolver gone?" had no answer on the very
-    // product built to answer it (asked live, 2026-08-12 — resolver exists
-    // on a host running resolved and is declined on one that is not, and
-    // the nav showed the difference as silent absence). Dimmed, reason as
-    // the tooltip, still a link: the route itself serves the reason as an
-    // error envelope, so the click-through IS the explanation.
-    for (const [coll, reason] of Object.entries(cap.unavailable_collections || {})) {
-      if (claimed.has(`${name}/${coll}`)) continue;
-      items.push({ sub: name, coll, label: coll, route: `${name}/${coll}`,
-                   unavailable: true, reason });
-    }
-    // A subsystem whose collections were all promoted or grouped has nothing
-    // left to head. An unavailable one still shows, carrying its reason.
-    if (!items.length && cap.available) continue;
-    sections.push({ solo: false, heading: name, available: !!cap.available,
-                    reason: cap.reason, items });
+    // The nav lists what this host ANSWERS, nothing else. The dimmed
+    // unavailable-entries experiment lasted exactly one deploy: on a host
+    // with no ZFS it rendered three grey storage rows and a
+    // "not yet implemented" placeholder, which the operator read — rightly
+    // — as clutter and roadmap leaking into the product ("no placeholders
+    // in the UI", 2026-08-12). The where-did-it-go question the dimming
+    // was built for is answered at the API instead: /v1/capabilities
+    // names every absence with its reason, one call away, and the
+    // original vanishing act (resolver) is gone at the root — it answers
+    // on every host now (SPEC rule 16). An unavailable subsystem
+    // likewise contributes no section: a heading over nothing is not
+    // information, it is furniture.
+    if (!items.length || !cap.available) continue;
+    sections.push({ solo: false, heading: name, available: true, items });
   }
 
   // Splice each group in after the section it names. An unplaceable group goes
@@ -2050,9 +2056,27 @@ function visibleItems() {
   if (facetOf && state.facet) items = items.filter(it => facetOf(it) === state.facet);
   const q = state.filterText.toLowerCase();
   if (q) {
-    items = items.filter(it =>
-      it.id.toLowerCase().includes(q) ||
-      Object.values(it.facts).some(v => v !== null && vstr(v).toLowerCase().includes(q)));
+    // The filter matches everything the ROW can show, not a subset of it:
+    // identity members, every fact, derived (pseudo) columns, and the
+    // cross-subsystem attributions loadOwners() paints beside the row.
+    // Typing a docker network's name on network/links found nothing while
+    // that exact name sat rendered on the bridge's row (reported live,
+    // 2026-08-12) — "my eyes can see it, the filter cannot" is the whole
+    // class this closes.
+    const contains = (v) =>
+      v !== null && v !== undefined && vstr(v).toLowerCase().includes(q);
+    items = items.filter(it => {
+      if ([it.id, it.name, it.native_id, it.type].some(contains)) return true;
+      if (Object.values(it.facts).some(contains)) return true;
+      for (const derive of Object.values(PSEUDO_COLUMNS)) {
+        let value;
+        try { value = derive(it); } catch { continue; }
+        if (contains(value)) return true;
+      }
+      const owner = state.owners?.[it.native_id];
+      return (owner?.parts || []).some(part =>
+        contains(part.label) || (part.addrs || []).some(contains));
+    });
   }
   if (state.sortKey) {
     const k = state.sortKey, dir = state.sortDir;

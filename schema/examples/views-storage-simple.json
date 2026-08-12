@@ -6,6 +6,7 @@
     {
       "name": "storage-simple",
       "title": "Storage health",
+      "hosts": ["host-a", "host-b"],
       "audience": "someone who does not run Linux and wants to know their files are safe",
       "panels": [
         {

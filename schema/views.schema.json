@@ -38,6 +38,12 @@
           "description": "Stable identifier, kebab-case like every other key in the product."
         },
         "title": {"type": "string", "minLength": 1},
+        "hosts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1},
+          "description": "Hub-registry host names this view was composed FOR; consumers offer it only there. Absent means every host — but a view is a dashboard composed for somewhere, so authored documents should usually name their hosts: the ZFS view rendering against a ZFS-less host as a wall of error strips is the shape this member exists to prevent. On a named host, panel failures still show loudly; targeting narrows where the view appears, never what it admits."
+        },
         "audience": {
           "type": "string",
           "minLength": 1,

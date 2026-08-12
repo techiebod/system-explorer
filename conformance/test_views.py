@@ -93,3 +93,15 @@ def test_a_configured_but_missing_directory_is_named_not_empty(tmp_path):
     import jsonschema
     from common import SCHEMAS
     jsonschema.Draft202012Validator(SCHEMAS["se.views/1"]).validate(envelope)
+
+
+def test_a_views_host_targeting_is_validated_never_silently_widened():
+    # A view that tried to narrow itself and failed must not widen into an
+    # estate-wide default (the ZFS-view-on-every-host misstep, 2026-08-12).
+    assert view_problem({**GOOD, "hosts": ["host-a", "host-b"]}) is None
+    assert view_problem({**GOOD, "hosts": []}) \
+        == "hosts must be a non-empty list of host names when given"
+    assert view_problem({**GOOD, "hosts": ["host-a", ""]}) \
+        == "hosts must be a non-empty list of host names when given"
+    assert view_problem({**GOOD, "hosts": "host-a"}) \
+        == "hosts must be a non-empty list of host names when given"

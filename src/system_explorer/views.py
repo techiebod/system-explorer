@@ -79,6 +79,15 @@ def view_problem(doc: object) -> str | None:
         return "missing name"
     if not isinstance(doc.get("title"), str) or not doc["title"]:
         return "missing title"
+    hosts = doc.get("hosts")
+    if hosts is not None and (
+            not isinstance(hosts, list) or not hosts
+            or any(not isinstance(name, str) or not name for name in hosts)):
+        # An empty or malformed target list is refused, not treated as
+        # "everywhere": a view that tried to narrow itself and failed must
+        # not widen silently — that inversion is how the ZFS dashboard
+        # became an estate-wide default (2026-08-12).
+        return "hosts must be a non-empty list of host names when given"
     panels = doc.get("panels")
     if not isinstance(panels, list) or not panels:
         return "panels must be a non-empty list"
