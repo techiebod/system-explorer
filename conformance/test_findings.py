@@ -116,3 +116,31 @@ def test_a_narrowed_process_names_what_it_is_not_running():
     assert named == {("docker", "containers"), ("docker", "volumes"),
                      ("docker", "networks"), ("storage", "pools")}
     assert all(entry["reason"] == DESELECTED_REASON for entry in entries)
+
+
+def test_app_records_carry_their_locator_and_the_envelope_its_coverage():
+    # One process, host and app subsystems at once: the app's findings and
+    # unobserved entries must key under the app locator the collection
+    # surfaces declare, and the envelope must state every locator it
+    # fronts — or the hub reads "the app was never mentioned" as
+    # "the app was observed clean" (adversarial review, 2026-08-12).
+    from system_explorer.agent.findings import locator_scoped
+    app_block = env.host_block(app="paperless")
+    records = locator_scoped(
+        finding_records("paperless", "instance", [
+            env.item_summary("instance:paperless", "paperless-instance",
+                             "paperless", {"DocumentCount": 0},
+                             opinions=[env.opinion("paperless-empty",
+                                                   "critical", "Zero documents.",
+                                                   ["DocumentCount"])])]),
+        app_block)
+    assert records[0]["host"]["app"] == "paperless"
+    unscoped = locator_scoped([{"subsystem": "units", "collection": "units",
+                                "reason": "x"}], None)
+    assert "host" not in unscoped[0]
+    envelope = findings_envelope(NOW, records, [],
+                                 locators=[env.HOST, app_block])
+    assert envelope["locators"][1]["app"] == "paperless"
+    jsonschema.Draft202012Validator(SCHEMAS["se.findings/1"]).validate(envelope)
+    jsonschema.Draft202012Validator(
+        strict(SCHEMAS["se.findings/1"])).validate(envelope)

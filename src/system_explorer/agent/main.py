@@ -24,7 +24,8 @@ from ..paths import UI_DIR
 from . import envelope as env
 from . import history
 from .adapters import PLANNED, build_adapters
-from .findings import deselected_unobserved, finding_records, findings_envelope
+from .findings import (deselected_unobserved, finding_records,
+                       findings_envelope, locator_scoped)
 
 RESERVED_PARAMS = {"limit", "cursor"}
 
@@ -293,7 +294,7 @@ async def _subsystem_status(name: str, adapter) -> tuple[dict, list[str]]:
     except Exception as exc:  # noqa: BLE001 - degrade the subsystem, not the endpoint
         errors.append(env.reason(
             f"{name}: capability discovery failed: {type(exc).__name__}: {exc}"))
-        return ({c: {"worst": None, "error": f"{type(exc).__name__}: {exc}"}
+        return ({c: {"worst": None, "error": env.reason(f"{type(exc).__name__}: {exc}")}
                  for c in adapter.collections()}, errors)
     unavailable = cap.get("unavailable_collections", {})
     for collection in adapter.collections():
@@ -309,8 +310,9 @@ async def _subsystem_status(name: str, adapter) -> tuple[dict, list[str]]:
             try:
                 entries[collection] = await _status_rollup(adapter, collection)
             except Exception as exc:  # noqa: BLE001 - errors are observations
-                entries[collection] = {"worst": None, "error": f"{type(exc).__name__}: {exc}"}
-                errors.append(f"{name}/{collection}: {type(exc).__name__}: {exc}")
+                entries[collection] = {"worst": None,
+                                       "error": env.reason(f"{type(exc).__name__}: {exc}")}
+                errors.append(env.reason(f"{name}/{collection}: {type(exc).__name__}: {exc}"))
     return entries, errors
 
 
@@ -345,11 +347,15 @@ async def status() -> dict:
 # collections as unobserved, or its envelope claims full coverage and the
 # hub resolves findings nobody looked at (agent/findings.py). Computed once
 # — the adapter universe and its collections are static per build.
-_DESELECTED_UNOBSERVED = deselected_unobserved(
-    {name: adapter.collections()
-     for name, adapter in build_adapters(None).items()
-     if name not in ADAPTERS},
-    set(STATUS_DECLINES)) if _SELECTED else []
+_DESELECTED_UNOBSERVED = [
+    entry
+    for name, adapter in build_adapters(None).items()
+    if name not in ADAPTERS
+    for entry in locator_scoped(
+        deselected_unobserved({name: adapter.collections()},
+                              set(STATUS_DECLINES)),
+        getattr(adapter, "host_block", None))
+] if _SELECTED else []
 
 
 async def _subsystem_findings(name: str, adapter) -> tuple[list, list, list[str]]:
@@ -392,7 +398,8 @@ async def _subsystem_findings(name: str, adapter) -> tuple[list, list, list[str]
             errors.append(f"{name}/{collection}: {reason}")
             continue
         found.extend(finding_records(name, collection, items))
-    return found, unobserved, errors
+    block = getattr(adapter, "host_block", None)
+    return locator_scoped(found, block), locator_scoped(unobserved, block), errors
 
 
 @app.get("/v1/findings")
@@ -405,12 +412,18 @@ async def findings() -> dict:
     request per host rather than one per collection."""
     results = await asyncio.gather(
         *(_subsystem_findings(name, adapter) for name, adapter in ADAPTERS.items()))
+    locators: list[dict] = [env.HOST]
+    for adapter in ADAPTERS.values():
+        block = getattr(adapter, "host_block", None)
+        if block is not None and block not in locators:
+            locators.append(block)
     return findings_envelope(
         env.utc_now(),
         [record for found, _, _ in results for record in found],
         [entry for _, unobserved, _ in results for entry in unobserved]
         + _DESELECTED_UNOBSERVED,
         errors=[line for _, _, lines in results for line in lines] or None,
+        locators=locators,
     )
 
 
@@ -628,7 +641,7 @@ def _unknown(collection: str) -> HTTPException:
     return HTTPException(status_code=404, detail=f"unknown collection: {collection}")
 
 
-def _evidence_envelope(body: dict) -> dict:
+def _evidence_envelope(body: dict, host: dict | None = None) -> dict:
     """Stamp the discriminator and host onto an evidence response.
 
     Evidence was the last undeclared surface on the wire — capabilities and
@@ -640,7 +653,7 @@ def _evidence_envelope(body: dict) -> dict:
     so the live check and every consumer can validate the shape instead of
     sniffing it.
     """
-    out = {"schema": "se.evidence/1", "host": env.HOST, **body}
+    out = {"schema": "se.evidence/1", "host": host or env.HOST, **body}
     if "error" in out:
         out["error"] = env.reason(out["error"])
     return out
@@ -659,14 +672,17 @@ def _evidence_envelope(body: dict) -> dict:
 @app.get("/v1/evidence/{subsystem}/{collection}/{object_id:path}")
 async def evidence(subsystem: str, collection: str, object_id: str) -> dict:
     adapter = _adapter(subsystem)
+    locator = getattr(adapter, "host_block", None)
     reason = await _collection_state(adapter, collection)
     if reason is UNKNOWN_COLLECTION:
         raise _unknown(collection)
     if reason is not None:
         return _evidence_envelope(
-            {"object_id": object_id, "captured_at": env.utc_now(), "error": reason})
+            {"object_id": object_id, "captured_at": env.utc_now(), "error": reason},
+            host=locator)
     try:
-        return _evidence_envelope(await adapter.get_evidence(collection, object_id))
+        return _evidence_envelope(await adapter.get_evidence(collection, object_id),
+                                  host=locator)
     except env.UnknownCollection:
         raise HTTPException(status_code=404, detail=f"unknown collection: {collection}") from None
     except env.UnknownObject:
@@ -676,7 +692,7 @@ async def evidence(subsystem: str, collection: str, object_id: str) -> dict:
             "object_id": object_id,
             "captured_at": env.utc_now(),
             "error": f"{type(exc).__name__}: {exc}",
-        })
+        }, host=locator)
 
 
 @app.get("/v1/{subsystem}/{collection}/{object_id:path}")
@@ -692,6 +708,7 @@ async def get_object(subsystem: str, collection: str, object_id: str) -> dict:
                         "unknown", object_id),
             env.source(subsystem, "unavailable", ["(collection unavailable; see errors)"]),
             {}, status="error", errors=[reason],
+            host=getattr(adapter, "host_block", None),
         )
     try:
         return await adapter.get_object(collection, object_id)
@@ -706,6 +723,7 @@ async def get_object(subsystem: str, collection: str, object_id: str) -> dict:
                         "unknown", object_id),
             env.source(subsystem, "unavailable", ["(acquisition failed; see errors)"]),
             {}, status="error", errors=[f"{type(exc).__name__}: {exc}"],
+            host=getattr(adapter, "host_block", None),
         )
 
 
@@ -723,6 +741,7 @@ async def get_collection(subsystem: str, collection: str, request: Request) -> d
             [], applied_limit=limit or env.DEFAULT_LIMIT, next_cursor=None,
             requested_limit=limit, filters=filters or None,
             status="error", errors=[reason],
+            host=getattr(adapter, "host_block", None),
         )
     try:
         return await adapter.collect(collection, filters, limit, cursor)
@@ -743,4 +762,5 @@ async def get_collection(subsystem: str, collection: str, request: Request) -> d
             [], applied_limit=limit or env.DEFAULT_LIMIT, next_cursor=None,
             requested_limit=limit, filters=filters or None,
             status="error", errors=[f"{type(exc).__name__}: {exc}"],
+            host=getattr(adapter, "host_block", None),
         )

@@ -303,3 +303,53 @@ def test_the_transitions_receipt_matches_its_published_schema(tmp_path):
     jsonschema.Draft202012Validator(SCHEMAS["se.hub-transitions/1"]).validate(receipt)
     jsonschema.Draft202012Validator(
         strict(SCHEMAS["se.hub-transitions/1"])).validate(receipt)
+
+
+def test_a_mixed_process_keys_app_findings_under_the_app_locator(tmp_path):
+    registry = FindingsRegistry(tmp_path / "findings.db")
+    app_block = {"machine_id": "a" * 32, "hostname": "host-a",
+                 "app": "paperless"}
+    record = finding_records("paperless", "instance", [
+        env.item_summary("instance:paperless", "paperless-instance",
+                         "paperless", {"DocumentCount": 0},
+                         opinions=[env.opinion("paperless-empty", "critical",
+                                               "Zero documents.",
+                                               ["DocumentCount"])])])[0]
+    envelope = findings_envelope(T0, [{**record, "host": app_block}], [],
+                                 host=HOST_A, locators=[HOST_A, app_block])
+    registry.record_sweep(T0, [{"agent": "host-a", "envelope": envelope}], 90)
+    [row] = registry.rows()
+    assert row["key"][0:3] == ("a" * 32, "", "paperless")
+    view = assemble(T0, "site-a", False,
+                    [{"agent": "host-a", "envelope": envelope}],
+                    registry.rows(), registry.transitions())
+    [finding] = view["findings"]
+    assert finding["host"]["app"] == "paperless"
+    assert finding["current"] is True
+
+
+def test_one_narrowed_sibling_cannot_freeze_what_the_other_observed(tmp_path):
+    # Two processes, one machine: the apps process honestly declines the
+    # host subsystems (deselected -> unobserved under the host locator),
+    # while the host process observes them. The host process's clean sweep
+    # must still RESOLVE a stale host finding — a sibling's decline is not
+    # an estate-wide blindfold. And with only the apps process swept, the
+    # same finding freezes.
+    registry = FindingsRegistry(tmp_path / "findings.db")
+    registry.record_sweep(T0, [_sweep("host-a", HOST_A, [FAILED_UNIT], T0)], 90)
+    apps = {"agent": "host-a-apps", "envelope": findings_envelope(
+        T1, [], [{"subsystem": "units", "collection": "units",
+                  "reason": "subsystem not selected in this process"}],
+        host=HOST_A, locators=[HOST_A])}
+    host_clean = _sweep("host-a", HOST_A, [], T1)
+    both = [apps, host_clean]
+    registry.record_sweep(T1, both, 90)
+    view = assemble(T1, "site-a", False, both,
+                    registry.rows(), registry.transitions())
+    [finding] = view["findings"]
+    assert finding["observable"] is True and finding["current"] is False
+    apps_only = [apps]
+    view = assemble(T1, "site-a", False, apps_only,
+                    registry.rows(), registry.transitions())
+    [finding] = view["findings"]
+    assert finding["observable"] is False and "current" not in finding

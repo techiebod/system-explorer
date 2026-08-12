@@ -25,8 +25,8 @@ empty dict, not an error.
 
 from __future__ import annotations
 
-from . import (docker, hardware, logs, network, nix, packages, storage,
-               system, units, vms)
+from . import (docker, hardware, logs, network, nix, packages, paperless,
+               storage, system, units, vms)
 
 # Subsystems declared in SPEC section 4 with no adapter yet. Absence is a
 # capability statement, not an error — reported with a reason, never faked
@@ -59,6 +59,7 @@ def build_adapters(selected: list[str] | None = None) -> dict:
         network.Adapter(),
         docker.Adapter(),
         vms.Adapter(),
+        paperless.Adapter(),
     ]
     by_name = {adapter.subsystem: adapter for adapter in adapters}
     if selected is None:

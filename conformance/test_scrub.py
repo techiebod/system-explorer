@@ -61,3 +61,17 @@ def test_reason_scrubs_capability_text(monkeypatch):
     monkeypatch.setenv("SVC_API_KEY", "deadbeefcafe")
     assert "deadbeefcafe" not in env.reason(
         "probe failed: 401 at /api?apikey=deadbeefcafe")
+
+
+def test_url_userinfo_is_stripped_from_failure_text():
+    # httpx stringifies HTTPStatusError with the full request URL; an
+    # operator who routed through a basic-auth proxy put a credential
+    # INSIDE that URL (adversarial review, 2026-08-12).
+    scrubbed = text.scrub(
+        "HTTPStatusError: Client error '401' for url "
+        "'https://user:hunter2@paperless.internal/api/statistics/'")
+    assert "hunter2" not in scrubbed
+    assert "[userinfo-stripped]@paperless.internal" in scrubbed
+    # A URL with no userinfo is untouched.
+    assert text.scrub("GET https://paperless.internal/api/") == \
+        "GET https://paperless.internal/api/"

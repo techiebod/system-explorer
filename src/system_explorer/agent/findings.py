@@ -60,6 +60,21 @@ def finding_records(subsystem: str, collection: str, items: list[dict]) -> list[
     return out
 
 
+def locator_scoped(entries: list[dict], host_block: dict | None) -> list[dict]:
+    """Stamp an app adapter's narrowed locator onto finding records or
+    unobserved entries. The envelope's root host block describes the
+    PROCESS; one process can front host-scoped and app-scoped subsystems
+    at once, and a finding's rule-15 identity must match the locator its
+    collection and evidence envelopes declare — without this stamp, the
+    hub would key an app's finding under the host-native locator and the
+    same condition would carry two identities depending on which surface
+    stated it (adversarial review, 2026-08-12). None (a host-scoped
+    adapter) stamps nothing."""
+    if host_block is None:
+        return entries
+    return [{**entry, "host": host_block} for entry in entries]
+
+
 DESELECTED_REASON = ("subsystem not selected in this process (SE_ADAPTERS)"
                      " — another instance on this host may serve it")
 
@@ -85,12 +100,17 @@ def deselected_unobserved(collections_by_subsystem: dict[str, list[str]],
 
 def findings_envelope(now: str, findings: list[dict], unobserved: list[dict],
                       errors: list[str] | None = None,
-                      host: dict | None = None) -> dict:
+                      host: dict | None = None,
+                      locators: list[dict] | None = None) -> dict:
     """One se.findings/1 envelope. `unobserved` is required even when empty:
     an explicit empty list is the statement "everything evaluable was
     evaluated", which is what licenses the hub to treat a finding's absence
-    as resolution. Errors are scrubbed and bounded at this boundary like
-    every other envelope's (SPEC section 11, rule 10 extended)."""
+    as resolution. `locators` is that statement's scope — every locator
+    this process fronts, affirmatively, so the hub can tell "this process
+    swept the app and found nothing" from "no process mentioned the app at
+    all" (only the first is resolution). Errors are scrubbed and bounded
+    at this boundary like every other envelope's (SPEC section 11,
+    rule 10 extended)."""
     out: dict = {
         "schema": SCHEMA_FINDINGS,
         "host": host or env.HOST,
@@ -101,4 +121,6 @@ def findings_envelope(now: str, findings: list[dict], unobserved: list[dict],
         out["errors"] = [env.reason(entry) for entry in errors]
     out["findings"] = findings
     out["unobserved"] = unobserved
+    if locators:
+        out["locators"] = locators
     return out

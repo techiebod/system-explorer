@@ -8,6 +8,12 @@
   "properties": {
     "schema": { "const": "se.findings/1" },
     "host": { "$ref": "#/$defs/host" },
+    "locators": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/host" },
+      "description": "Every locator this process fronts — the affirmative scope of the unobserved statement. A consumer may treat a finding's absence as resolution only for locators listed here (falling back to the envelope host when absent), so a mixed host+app process states exactly which identities its sweep covered."
+    },
     "observed_at": { "$ref": "#/$defs/utcTimestamp" },
     "status": { "enum": ["ok", "partial"] },
     "errors": {
@@ -27,7 +33,11 @@
         "properties": {
           "subsystem": { "$ref": "#/$defs/subsystemName" },
           "collection": { "$ref": "#/$defs/subsystemName" },
-          "reason": { "type": "string", "minLength": 1 }
+          "reason": { "type": "string", "minLength": 1 },
+          "host": {
+            "$ref": "#/$defs/host",
+            "description": "The locator this entry narrows to, when it is not the envelope's (an app adapter in a mixed process)."
+          }
         }
       }
     }
@@ -57,6 +67,10 @@
       "properties": {
         "subsystem": { "$ref": "#/$defs/subsystemName" },
         "collection": { "$ref": "#/$defs/subsystemName" },
+        "host": {
+          "$ref": "#/$defs/host",
+          "description": "The locator this finding's identity keys under, when it is not the envelope's (an app adapter in a mixed process) — it must match what the same object's collection and evidence envelopes declare."
+        },
         "object": {
           "type": "object",
           "required": ["id", "type", "native_id"],

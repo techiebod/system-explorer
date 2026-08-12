@@ -19,8 +19,9 @@ import pytest
 from common import AGENT_DIR, UI_DIR, resolve_fact_path
 
 from system_explorer.agent import rules
-from system_explorer.agent.rules import (docker, hardware, logs, network, nix,
-                                         storage, system, units, vms)
+from system_explorer.agent.rules import (docker, hardware, logs, network,
+                                         nix, paperless, storage, system,
+                                         units, vms)
 
 RULES_DIR = AGENT_DIR / "rules"
 
@@ -33,6 +34,25 @@ RULES_DIR = AGENT_DIR / "rules"
 # ---------------------------------------------------------------------------
 
 CASES = [
+    # paperless: the archive's own answers, not its wrapper's.
+    ("paperless-healthy", paperless.instance_opinions,
+     {"DocumentCount": 38, "InboxCount": 2, "DatabaseStatus": "OK",
+      "RedisStatus": "OK", "CeleryStatus": "OK"}, set()),
+    ("paperless-emptied-library", paperless.instance_opinions,
+     {"DocumentCount": 0, "DatabaseStatus": "OK"},
+     {("paperless-empty", "critical")}),
+    ("paperless-database-error", paperless.instance_opinions,
+     {"DocumentCount": 38, "DatabaseStatus": "ERROR",
+      "DatabaseError": "connection refused"},
+     {("paperless-database", "critical")}),
+    ("paperless-classifier-warning", paperless.instance_opinions,
+     {"DocumentCount": 38, "ClassifierStatus": "WARNING",
+      "ClassifierError": "too little training data"},
+     {("paperless-classifier", "warn")}),
+    ("paperless-storage-tight", paperless.instance_opinions,
+     {"DocumentCount": 38, "StorageTotalBytes": 100, "StorageAvailableBytes": 8},
+     {("paperless-storage", "warn")}),
+
     # storage: mounts and datasets share the 90/95 capacity ladder.
     ("mount-92-warn", storage.mount_opinions,
      {"UsePercent": 92}, {("mount-capacity", "warn")}),

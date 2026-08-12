@@ -69,6 +69,12 @@ def one_line(value: object, limit: int = MAX_LENGTH) -> str:
 #      assumed to hold something that must never appear in an envelope.
 
 _QUERY_STRING = re.compile(r"""\?[^\s"'<>]+""")
+# URL userinfo is the OTHER place a URL carries a credential, and httpx
+# stringifies HTTPStatusError with the full request URL — so an operator
+# who configured basic-auth userinfo into an app URL would publish it in
+# every error envelope. Stripped wholesale like the query string: the
+# scheme and host that remain are the diagnostically useful halves.
+_URL_USERINFO = re.compile(r"(?<=://)[^/\s\"'<>@]+@")
 SECRET_ENV_SUFFIXES = ("_API_KEY", "_TOKEN", "_SECRET", "_PASSWORD", "_PASS")
 
 
@@ -91,6 +97,7 @@ def scrub(value: str) -> str:
     withheld.
     """
     out = _QUERY_STRING.sub("?[query-stripped]", value)
+    out = _URL_USERINFO.sub("[userinfo-stripped]@", out)
     for secret, name in _secret_values():
         if secret in out:
             out = out.replace(secret, f"[redacted:${name}]")

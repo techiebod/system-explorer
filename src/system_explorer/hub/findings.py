@@ -155,15 +155,19 @@ class FindingsRegistry:
         an acknowledgement cannot outlive the finding it attached to."""
         cutoff = (datetime.strptime(now, _ISO).replace(tzinfo=timezone.utc)
                   - timedelta(days=retention_days)).strftime(_ISO)
-        swept_locators, unobserved = _sweep_visibility(sweeps)
+        swept_locators, frozen = _sweep_visibility(sweeps)
         with closing(self._connect()) as conn, conn:
             for sweep in sweeps:
                 envelope = sweep["envelope"]
-                host = envelope.get("host") or {}
-                machine_id = host.get("machine_id")
-                if not machine_id:
-                    continue
+                envelope_host = envelope.get("host") or {}
                 for record in envelope.get("findings") or []:
+                    # A record's own host block (an app adapter in a mixed
+                    # process) outranks the envelope's: identity must match
+                    # the locator the collection surfaces declare.
+                    host = record.get("host") or envelope_host
+                    machine_id = host.get("machine_id") if isinstance(host, dict) else None
+                    if not machine_id:
+                        continue
                     key = identity_key(machine_id, record["object"]["id"],
                                        record["opinion"]["key"],
                                        host.get("container"), host.get("app"))
@@ -185,9 +189,9 @@ class FindingsRegistry:
                 f"SELECT {_KEY_COLUMNS}, subsystem, collection FROM findings"
                 " WHERE last_seen < ?", (cutoff,)).fetchall()
             for row in stale:
-                key, place = tuple(row[0:5]), (row[5], row[6])
-                if key[0:3] not in swept_locators or \
-                        place in unobserved.get(key[0:3], set()):
+                key = tuple(row[0:5])
+                triple = (key[0:3], row[5], row[6])
+                if key[0:3] not in swept_locators or triple in frozen:
                     continue  # frozen: absence was not observable this sweep
                 conn.execute(
                     "DELETE FROM transitions WHERE machine_id = ? AND"
@@ -255,32 +259,50 @@ _LEVEL_RANK = {"critical": 0, "warn": 1}
 Locator = tuple[str, str, str]
 
 
-def _sweep_visibility(sweeps: list[dict]) -> tuple[set, dict]:
-    """(swept locators, unobserved (subsystem, collection) pairs per
-    locator) from the envelopes in hand. Keyed on the rule-15 locator —
-    (machine_id, container, app), the identity key's first three members —
-    and never on the config-level agent NAME, because renaming or
-    repointing an agent entry must not change which findings count as
-    lookable-at (adversarial review, 2026-08-12: name-keyed visibility let
-    a repointed entry resolve one host's findings on the strength of a
-    different host's sweep)."""
+def _locator(block: object) -> Locator | None:
+    if not isinstance(block, dict) or not block.get("machine_id"):
+        return None
+    return (block["machine_id"], block.get("container") or "",
+            block.get("app") or "")
+
+
+def _sweep_visibility(sweeps: list[dict]) -> tuple[set, set]:
+    """(swept locators, frozen (locator, subsystem, collection) triples).
+
+    Keyed on the rule-15 locator — never the config-level agent NAME,
+    because renaming or repointing an agent entry must not change which
+    findings count as lookable-at. An envelope's `locators` member is its
+    affirmative coverage (a process fronting host and app subsystems at
+    once); absent, the envelope's own host block stands in. Per-entry
+    host blocks on unobserved entries carry the app scope the envelope
+    root cannot.
+
+    A triple freezes only when EVERY sweep covering its locator named it
+    unobserved: one narrowed process honestly declining a subsystem
+    (SE_ADAPTERS) must not freeze what its sibling process on the same
+    machine actually observed this sweep."""
+    covering: dict[Locator, int] = {}
+    listed: dict[tuple, int] = {}
     swept: set[Locator] = set()
-    unobserved: dict[Locator, set] = {}
     for sweep in sweeps:
         envelope = sweep.get("envelope")
         if not envelope:
             continue
         host = envelope.get("host") or {}
-        machine_id = host.get("machine_id")
-        if not machine_id:
-            continue
-        locator: Locator = (machine_id, host.get("container") or "",
-                            host.get("app") or "")
-        swept.add(locator)
-        unobserved[locator] = {
-            (item["subsystem"], item["collection"])
-            for item in envelope.get("unobserved") or []}
-    return swept, unobserved
+        blocks = envelope.get("locators") or [host]
+        covered = {loc for block in blocks if (loc := _locator(block))}
+        for loc in covered:
+            swept.add(loc)
+            covering[loc] = covering.get(loc, 0) + 1
+        for item in envelope.get("unobserved") or []:
+            loc = _locator(item.get("host")) or _locator(host)
+            if loc is None:
+                continue
+            triple = (loc, item["subsystem"], item["collection"])
+            listed[triple] = listed.get(triple, 0) + 1
+    frozen = {triple for triple, count in listed.items()
+              if count >= covering.get(triple[0], count)}
+    return swept, frozen
 
 
 def _order(entry: dict) -> tuple:
@@ -323,16 +345,20 @@ def assemble(now: str, site: str | None, writes_enabled: bool,
             if envelope.get(member):
                 sweep_entry[member] = envelope[member]
         hosts[name] = sweep_entry
-        host = envelope.get("host") or {}
-        machine_id = host.get("machine_id")
-        if not machine_id:
-            continue
+        envelope_host = envelope.get("host") or {}
         for record in envelope.get("findings") or []:
+            # A record's own host block (an app adapter in a mixed process)
+            # outranks the envelope's: identity must match the locator the
+            # collection surfaces declare.
+            host = record.get("host") or envelope_host
+            machine_id = host.get("machine_id") if isinstance(host, dict) else None
+            if not machine_id:
+                continue
             key = identity_key(machine_id, record["object"]["id"],
                                record["opinion"]["key"],
                                host.get("container"), host.get("app"))
             seen[key] = {"agent": name, "record": record, "host": host}
-    swept_locators, unobserved_by_locator = _sweep_visibility(sweeps)
+    swept_locators, frozen = _sweep_visibility(sweeps)
 
     transitions = transitions or {}
     entries: list[dict] = []
@@ -348,12 +374,12 @@ def assemble(now: str, site: str | None, writes_enabled: bool,
             entry["current"] = True
             entry["observable"] = True
         elif key[0:3] not in swept_locators:
-            # This host (this locator, not this config name) could not be
-            # swept: nobody can say whether the condition holds, so
-            # `current` is honestly absent (rule 7).
+            # This locator (not this config name) could not be swept:
+            # nobody can say whether the condition holds, so `current` is
+            # honestly absent (rule 7).
             entry["observable"] = False
-        elif (row["record"]["subsystem"], row["record"]["collection"]) \
-                in unobserved_by_locator.get(key[0:3], set()):
+        elif (key[0:3], row["record"]["subsystem"],
+              row["record"]["collection"]) in frozen:
             entry["observable"] = False
         else:
             # The host looked where this finding lives and no longer

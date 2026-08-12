@@ -4,6 +4,17 @@
     "machine_id": "0123456789abcdef0123456789abcdef",
     "hostname": "host-a"
   },
+  "locators": [
+    {
+      "machine_id": "0123456789abcdef0123456789abcdef",
+      "hostname": "host-a"
+    },
+    {
+      "machine_id": "0123456789abcdef0123456789abcdef",
+      "hostname": "host-a",
+      "app": "paperless"
+    }
+  ],
   "observed_at": "2026-08-12T21:00:00Z",
   "status": "ok",
   "findings": [
