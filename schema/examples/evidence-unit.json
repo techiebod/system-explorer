@@ -1,0 +1,15 @@
+{
+  "schema": "se.evidence/1",
+  "host": {"machine_id": "0123456789abcdef0123456789abcdef", "hostname": "host-a"},
+  "object_id": "unit:sshd.service",
+  "captured_at": "2026-08-12T19:40:00Z",
+  "interface": "org.freedesktop.systemd1",
+  "method": "org.freedesktop.DBus.Properties.GetAll",
+  "payload": {
+    "Id": "sshd.service",
+    "ActiveState": "active",
+    "SubState": "running",
+    "Environment": "SSH_OPTS=[redacted]"
+  },
+  "redacted": ["Environment.SSH_OPTS"]
+}

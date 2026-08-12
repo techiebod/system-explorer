@@ -354,7 +354,10 @@ Field semantics:
   when a reading is explained rather than alarming (reclaimable ARC counted as
   used memory, a PCIe card limited by its slot, an unwired spare link), and it
   earns a neutral mark rather than an attention badge.
-- **`evidence_ref`** fetches the raw native payload (D-Bus reply, JSON
+- **`evidence_ref`** fetches the raw native payload as `se.evidence/1` —
+  formerly the one undeclared surface on the wire, now schema'd like
+  every sibling (the discriminator and host are stamped at the route, so
+  an adapter cannot forget what it never had to remember) (D-Bus reply, JSON
   document, netlink dump) captured fresh at request time.
 - Freshness is the client's judgment from `observed_at`; the envelope does
   not claim it.

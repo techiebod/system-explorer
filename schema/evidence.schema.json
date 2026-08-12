@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "se.evidence.1.schema.json",
+  "title": "System Explorer native evidence",
+  "description": "The raw native payload behind one observation, captured fresh at request time. See docs/SPEC.md section 6. This was the last undeclared surface on the wire: capabilities and hub-hosts gained schemas earlier, and evidence carried none at all until the route migration made its shape worth pinning.",
+  "type": "object",
+  "required": ["schema", "host", "object_id", "captured_at"],
+  "properties": {
+    "schema": {"const": "se.evidence/1"},
+    "host": {"$ref": "#/$defs/host"},
+    "object_id": {"$ref": "#/$defs/objectId"},
+    "captured_at": {"type": "string", "format": "date-time"},
+    "interface": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The native interface the payload came from — a D-Bus name, 'findmnt -J', 'docker-engine-api'. Absent on the error shape, which never reached one."
+    },
+    "method": {"type": "string", "minLength": 1},
+    "payload": {
+      "description": "The native reply, verbatim modulo redaction: a D-Bus property map, a parsed JSON document, a sysfs walk. Any shape — the whole point of evidence is that the agent does not translate it."
+    },
+    "redacted": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "minItems": 1,
+      "description": "Paths within the payload whose values were withheld (SPEC section 11, rule 10). Present only when something actually was — an empty list would claim redaction that never happened."
+    },
+    "error": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Why no payload could be captured. An error evidence response still names its object and moment; it carries no interface or payload."
+    }
+  },
+  "$defs": {
+    "host": {
+      "type": "object",
+      "required": ["machine_id", "hostname"],
+      "properties": {
+        "machine_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+        "hostname": {"type": "string", "minLength": 1}
+      }
+    },
+    "objectId": {
+      "description": "<collection-singular>:<native-id>, e.g. unit:sshd.service",
+      "pattern": "^[a-z][a-z0-9-]*:\\S+$"
+    }
+  }
+}

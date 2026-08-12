@@ -546,6 +546,21 @@ def _unknown(collection: str) -> HTTPException:
     return HTTPException(status_code=404, detail=f"unknown collection: {collection}")
 
 
+def _evidence_envelope(body: dict) -> dict:
+    """Stamp the discriminator and host onto an evidence response.
+
+    Evidence was the last undeclared surface on the wire — capabilities and
+    hub-hosts gained their schemas earlier, and every adapter's
+    get_evidence() returns a bare dict. Stamped HERE, once, rather than in
+    ten adapters: the envelope-level members are the API's concern, the
+    payload is the adapter's, and a new adapter cannot forget what it never
+    had to remember. Declared as se.evidence/1 (schema/evidence.schema.json)
+    so the live check and every consumer can validate the shape instead of
+    sniffing it.
+    """
+    return {"schema": "se.evidence/1", "host": env.HOST, **body}
+
+
 # Prefix-first, not suffix: the old shape appended /evidence to the object
 # path, and because object_id is a {path} parameter and this route was
 # declared before get_object, any object whose id ended in /evidence was
@@ -563,19 +578,20 @@ async def evidence(subsystem: str, collection: str, object_id: str) -> dict:
     if reason is UNKNOWN_COLLECTION:
         raise _unknown(collection)
     if reason is not None:
-        return {"object_id": object_id, "captured_at": env.utc_now(), "error": reason}
+        return _evidence_envelope(
+            {"object_id": object_id, "captured_at": env.utc_now(), "error": reason})
     try:
-        return await adapter.get_evidence(collection, object_id)
+        return _evidence_envelope(await adapter.get_evidence(collection, object_id))
     except env.UnknownCollection:
         raise HTTPException(status_code=404, detail=f"unknown collection: {collection}") from None
     except env.UnknownObject:
         raise HTTPException(status_code=404, detail=f"unknown object: {object_id}") from None
     except Exception as exc:  # noqa: BLE001 - errors are observations
-        return {
+        return _evidence_envelope({
             "object_id": object_id,
             "captured_at": env.utc_now(),
             "error": f"{type(exc).__name__}: {exc}",
-        }
+        })
 
 
 @app.get("/v1/{subsystem}/{collection}/{object_id:path}")

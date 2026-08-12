@@ -1,0 +1,7 @@
+{
+  "schema": "se.evidence/1",
+  "host": {"machine_id": "0123456789abcdef0123456789abcdef", "hostname": "host-a"},
+  "object_id": "pool:backup",
+  "captured_at": "2026-08-12T19:40:00Z",
+  "error": "zpool not on PATH (OpenZFS not installed on this host)"
+}

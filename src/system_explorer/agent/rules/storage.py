@@ -109,6 +109,19 @@ def pool_opinions(facts: dict) -> list[dict]:
     # (zpool --json-int); the locale-string fallback and never-scrubbed
     # pools (no scan_stats — absence of history is not a finding yet)
     # carry no age, so the rule stays silent (SPEC rule 14).
+    # A resilver replaced the scrub's record: the stale-scrub rule below
+    # cannot evaluate, and its silence beside a possibly months-stale scrub
+    # is absence-as-health — the exact shape this product exists to kill,
+    # observed on a foreign host whose shelf read ScanAgeDays 9 from a
+    # resilver while the true scrub age was unknowable. A stated unknown at
+    # info: nothing is wrong, the agent simply cannot answer, and should
+    # say so rather than say nothing (rule 7).
+    if facts.get("LastScrubEndTimeUnobservable"):
+        opinions.append(env.opinion(
+            "pool-scrub-age-unknown", "info",
+            "Time since the last completed scrub is unknown: "
+            + str(facts["LastScrubEndTimeUnobservable"]) + ".",
+            ["ScanFunction", "LastScrubEndTimeUnobservable"]))
     age = facts.get("ScanAgeDays")
     if (facts.get("ScanFunction") == "SCRUB"
             and facts.get("ScanState") == "FINISHED"

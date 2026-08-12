@@ -180,6 +180,12 @@ FORWARD_COMPAT_EXTENSIONS: dict[str, list[tuple[str, object]]] = {
         ("poll_interval_seconds", 30),
         ("hosts.host-a.arch", "x86_64"),
     ],
+    # The redacted unit, because this needs an envelope that carries the
+    # optional members: an error evidence has neither payload nor interface.
+    "evidence-unit.json": [
+        ("payload_bytes", 512),
+        ("host.site", "site-a"),
+    ],
 }
 
 

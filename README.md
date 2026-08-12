@@ -57,9 +57,9 @@ are available to agents under `/v1/…` (see SPEC section 6).
 ## MCP
 
 `se-mcp` (SPEC section 9) aggregates one or more host agents for MCP
-clients — same envelopes, seven read-only tools (`list_hosts`,
-`get_status`, `get_collection`, `get_object`, `get_evidence`, `lookup`,
-`what_changed`). Enable it via `nixosModules.mcp`:
+clients — same envelopes, eight read-only tools (`list_hosts`,
+`get_status`, `get_fact_dictionary`, `get_collection`, `get_object`,
+`get_evidence`, `lookup`, `what_changed`). Enable it via `nixosModules.mcp`:
 
 ```nix
 services.systemExplorerMcp = {

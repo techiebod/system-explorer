@@ -144,6 +144,51 @@ def _zpool_evidence() -> dict:
     return {"status": _zpool_status(), "list": _zpool_list()}
 
 
+def scan_facts(scan: dict) -> dict:
+    """The pool's scan facts, honest in all three shapes zfs produces.
+
+    scan_stats is ONE record — the most recent scan, whatever kind it was —
+    and both dishonest readings of it reached deployed pools:
+
+    - A scan in progress renders end_time as 0 under --json-int, and 0 is an
+      int, so a pool mid-scrub derived ScanEndTime 1970-01-01 and a
+      twenty-thousand-day ScanAgeDays (found live on a scrubbing pool,
+      2026-08-12). Zero means "has not ended", not the epoch.
+    - A resilver REPLACES the scrub's record, so after one the time since
+      the last completed scrub cannot be read from this pool at all. The
+      stale-scrub rule guards on ScanFunction and simply went silent — and
+      silence beside a months-stale scrub is absence-as-health, observed on
+      a foreign host whose shelf showed ScanAgeDays 9 from a resilver. Per
+      rule 7 the value exists and cannot be seen, so LastScrubEndTime is
+      null with the reason in its Unobservable sibling, and a rule turns
+      the pair into a stated unknown instead of nothing.
+
+    --json-int's absence (older OpenZFS) leaves end_time a locale string:
+    kept verbatim, age omitted, exactly as before. Module-level and pure so
+    conformance feeds it every shape without a pool.
+    """
+    end_time = scan.get("end_time")
+    if end_time == 0:
+        end_time = None
+    scan_age_days = (int((time.time() - end_time) // 86400)
+                     if isinstance(end_time, int) else None)
+    function = scan.get("function")
+    out = {
+        "ScanFunction": function,
+        "ScanState": scan.get("state"),
+        "ScanEndTime": (_epoch_iso(end_time)
+                        if isinstance(end_time, int) else end_time),
+        **({"ScanAgeDays": scan_age_days} if scan_age_days is not None else {}),
+    }
+    if function is not None and function != "SCRUB":
+        out["LastScrubEndTime"] = None
+        out["LastScrubEndTimeUnobservable"] = (
+            f"the last recorded scan is a {function.lower()}, and ZFS keeps "
+            "only the most recent scan's record — the time since the last "
+            "completed scrub cannot be read from this pool")
+    return out
+
+
 def _int_or_none(raw: object) -> int | None:
     try:
         return int(str(raw))
@@ -348,8 +393,53 @@ def _flatten_mounts(nodes: list[dict], depth: int = 0) -> list[tuple[dict, int]]
     return out
 
 
+# The scan facts, documented because their scopes bit twice in one day: a
+# mid-scrub pool wore a 1970 scan end, and a resilver record left a stale
+# scrub reading as nothing-to-say. One record, three shapes — the sentences
+# carry what the names cannot (the LinkSpeed/LinkWidth lesson).
+_POOL_GLOSSARY = {
+    "ScanFunction": (
+        "What kind of scan the pool's single scan record describes — SCRUB "
+        "or RESILVER. ZFS keeps only the most recent scan, so a resilver "
+        "replaces the scrub's record entirely; see LastScrubEndTime for "
+        "what that does to scrub age."
+    ),
+    "ScanState": (
+        "Where that scan stands: SCANNING while in progress, FINISHED when "
+        "complete. A scan in progress has no end time yet, which is why "
+        "ScanEndTime and ScanAgeDays are empty mid-scrub."
+    ),
+    "ScanEndTime": (
+        "When the recorded scan finished, whatever kind it was. Null while "
+        "a scan is running; a plain prose date on OpenZFS too old to render "
+        "the machine-readable form, and then no age is derived from it."
+    ),
+    "ScanAgeDays": (
+        "Whole days since the recorded scan finished — the SCAN, not "
+        "necessarily the scrub: after a resilver this counts from the "
+        "resilver. The stale-scrub warning only reads it when the record "
+        "is a finished scrub."
+    ),
+    "LastScrubEndTime": (
+        "When the last completed scrub finished. Null with a reason in "
+        "LastScrubEndTimeUnobservable when a later resilver replaced the "
+        "scrub's record — the value exists, this pool just cannot report "
+        "it."
+    ),
+    "LastScrubEndTimeUnobservable": (
+        "Why the last scrub's end time cannot be read from this pool: ZFS "
+        "keeps one scan record, and a resilver overwrote the scrub's. "
+        "Present only in that state, and it carries an info opinion so the "
+        "unknown is stated rather than silent."
+    ),
+}
+
+
 class Adapter:
     subsystem = "storage"
+
+    def fact_glossary(self, collection: str) -> dict[str, str]:
+        return _POOL_GLOSSARY if collection == "pools" else {}
 
     # A failed probe is retried after this long; success is cached forever.
     # Without the retry a probe racing boot-time pool import pinned
@@ -535,26 +625,11 @@ class Adapter:
                            if any((vdev.get(key) or 0) for key in
                                   ("ReadErrors", "WriteErrors", "ChecksumErrors"))]
             cap_pct = _int_or_none(_prop_value(props, "capacity"))
-            # --json-int gives end_time as an epoch int; the plain -j
-            # fallback gives a locale string, kept verbatim with
-            # ScanAgeDays omitted so pool-scrub-stale simply does not
-            # evaluate (SPEC rule 14: a rule fires only when the facts it
-            # needs are present). The age is computed here, not in the
-            # rule — rules are pure, with no clock access (SPEC section
-            # 11, rule 8).
-            end_time = scan.get("end_time")
-            scan_age_days = (int((time.time() - end_time) // 86400)
-                             if isinstance(end_time, int) else None)
             facts = {
                 "State": pool.get("state"),
                 "StatusMessage": (pool.get("status") or "").strip() or None,
                 "Errors": pool.get("error_count"),
-                "ScanFunction": scan.get("function"),
-                "ScanState": scan.get("state"),
-                "ScanEndTime": (_epoch_iso(end_time)
-                                if isinstance(end_time, int) else end_time),
-                **({"ScanAgeDays": scan_age_days}
-                   if scan_age_days is not None else {}),
+                **scan_facts(scan),
                 "SizeBytes": _int_or_none(_prop_value(props, "size")),
                 "AllocatedBytes": _int_or_none(_prop_value(props, "allocated")),
                 "FreeBytes": _int_or_none(_prop_value(props, "free")),

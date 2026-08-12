@@ -106,6 +106,20 @@ CASES = [
       "ScanFunction": "SCRUB", "ScanState": "FINISHED",
       "ScanEndTime": "2026-07-04T03:50:21Z", "ScanAgeDays": 36},
      {("pool-scrub-stale", "warn")}),
+    # A resilver replaced the scrub's record: the stale rule cannot
+    # evaluate, so the pair below turns silence into a stated unknown
+    # (backlogged from a foreign shelf reading ScanAgeDays 9 off a
+    # resilver while the true scrub age was unknowable).
+    ("pool-resilver-record-states-unknown", storage.pool_opinions,
+     {"State": "ONLINE", "CapacityPercent": 40, "Vdevs": [],
+      "UnhealthyVdevs": [], "VdevsWithErrors": [],
+      "ScanFunction": "RESILVER", "ScanState": "FINISHED",
+      "ScanEndTime": "2026-08-11T03:50:21Z", "ScanAgeDays": 1,
+      "LastScrubEndTime": None,
+      "LastScrubEndTimeUnobservable": "the last recorded scan is a resilver, "
+      "and ZFS keeps only the most recent scan's record — the time since the "
+      "last completed scrub cannot be read from this pool"},
+     {("pool-scrub-age-unknown", "info")}),
     ("pool-scrub-34-days-quiet", storage.pool_opinions,
      {"State": "ONLINE", "CapacityPercent": 40, "Vdevs": [],
       "UnhealthyVdevs": [], "VdevsWithErrors": [],

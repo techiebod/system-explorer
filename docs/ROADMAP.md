@@ -75,10 +75,13 @@ The durable boundary, carried from the vision:
 > and presented through the System Explorer graph and its single operator
 > surface.
 
-Providers, when their slices arrive: Beszel for metric history, a UniFi
-controller adapter for network inventory, a dedicated NetFlow/IPFIX store
-for flow history, an advisory source for security evaluation, Healthchecks
-for dead-man state. System Explorer never becomes the storage engine for
+Providers, when their slices arrive (classes, deliberately — the product
+names once listed here went stale within a week, and selection is an
+estate decision made at adoption time, recorded 2026-08-12: adopt and
+wrap now, revisit building later): a metric-history store, a network
+controller adapter for inventory the controller owns, a NetFlow/IPFIX
+store for flow history, an advisory source for security evaluation, a
+dead-man's-switch service for scheduled-job liveness. System Explorer never becomes the storage engine for
 any of them, and none of them becomes the canonical source of object
 identity.
 

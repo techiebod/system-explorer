@@ -16,9 +16,9 @@ from one Python distribution:
 - **se-hub** — per-site hub. One URL fronting a site's agents: proxies
   their GETs verbatim and serves the same operator UI. Stateless.
 - **se-mcp** — MCP aggregator. Fronts one or more agents for AI clients.
-  Seven read-only tools: `list_hosts`, `get_status`, `get_collection`,
-  `get_object`, `get_evidence`, `lookup`, `what_changed`. Runs on one host,
-  reaches agents over HTTP.
+  Eight read-only tools: `list_hosts`, `get_status`, `get_fact_dictionary`,
+  `get_collection`, `get_object`, `get_evidence`, `lookup`, `what_changed`.
+  Runs on one host, reaches agents over HTTP.
 
 Trust model: **the API is unauthenticated by design** (SPEC section 7).
 Keep `listenAddress` on `127.0.0.1` unless every host on the network is
