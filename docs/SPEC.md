@@ -14,7 +14,14 @@ the composite locator in writing before its
 schema: optional `container` and `app` members join the `host` block and
 rule 15's finding-identity tuple — identity, not provenance — with
 `relationships[].target` gaining the same members and off-host subjects
-explicitly deferred. Implementation follows in the same version.
+explicitly deferred. Implementation follows in the same version: rows
+carry the warn/critical subset of their evaluated opinions (rule 14 made
+structural — one builder derives the severity and the subset from one
+list), agents grow `GET /v1/findings` (`se.findings/1`, whose `unobserved`
+member is what stops an unevaluable collection reading as all of its
+findings resolving), and the hub grows the §6.3 registry: `/hub/findings`
+(`se.hub-findings/1`) with first_seen/last_seen under the hub's state
+directory and the grant-gated transition route.
 
 0.5 (2026-08-12) amends §6.1 rule 4 — the hub holds metadata, never
 observations — and adds views (§6.2, `se.views/1`), the evidence envelope's
@@ -150,6 +157,12 @@ New in 0.4:
     deliberately omits an expensive fact simply does not evaluate that rule
     — divergence by acquisition-cost decision is allowed and documented per
     rule; divergence by drifted thresholds is a conformance failure.
+    Since 0.6 the rule is structural rather than a convention at every
+    call site: the row builder takes the evaluated list itself and derives
+    both the severity and the row's carried warn/critical subset
+    (`opinions` on `se.collection/1` items) in one place, so the red dot
+    and its explanation cannot disagree — and `/v1/findings` is a third
+    surface reading the same evaluation, never re-running it.
 15. **Findings have stable identity.** The composite
     `(host.machine_id, container?, app?, object.id, opinion.key)`
     identifies a condition across observations: object IDs are stable for
@@ -489,6 +502,7 @@ Base path `/v1`. All responses are envelopes or envelope pages.
 | `GET /v1/{subsystem}/{collection}/{object_id}` | one observation (`se.observation/1`) |
 | `GET /v1/evidence/{subsystem}/{collection}/{object_id}` | native evidence, fresh. Prefix-first because `{object_id}` is a path parameter that may itself contain slashes (`dataset:tank/photos`, lookup inputs): a trailing `/evidence` segment made any object whose id ended in `/evidence` unreachable, answering with its parent's evidence instead of a 404. |
 | `GET /v1/changes?since=…&subsystem=…` | what-changed diff (`se.changes/1`, §10) |
+| `GET /v1/findings` | every warn/critical opinion currently derivable from row facts (`se.findings/1`), with the rule-15 identity and an `unobserved` list naming every collection the sweep could not evaluate — the estate roll-up costs one request per host, and absence can only mean resolution where the envelope says the agent could look (§6.3) |
 
 Collection behaviour (carried from SE-004 §11, unchanged in spirit):
 
@@ -658,6 +672,20 @@ finding, its lifecycle, its transitions) the way /hub/views serves
 documents — hub metadata, honestly distinct from the live observations it
 was derived from, each finding carrying the evidence_ref-style pointer
 back to the object that can prove or refute it right now.
+
+Landed in 0.6, one addition the decisions above forced into the open:
+**absence only resolves where the host could look.** The agent's
+`/v1/findings` envelope carries `unobserved` — every collection the sweep
+could not evaluate, with its reason — and the hub freezes those findings
+(lifecycle untouched, `current` honestly unstated) instead of resolving
+them, because an adapter failure that read as "all of its findings
+cleared at once" would be the absence-as-health shape written into
+history. The same freeze applies to a whole agent that could not be
+swept. The hub parses these envelopes, deliberately and exceptionally:
+the registry is metadata DERIVED from findings under §6.1's amended rule
+4, and every observation behind them still travels rule 1's verbatim
+proxy. One clock — the hub's — stamps first_seen and last_seen, so
+lifecycle never depends on comparing host clocks.
 
 ### The fact dictionary — what a native name means
 

@@ -24,7 +24,6 @@ import time
 import anyio
 
 from .. import envelope as env
-from ..rules import worst_level
 from ..rules.storage import (MD_ACTIVE_SYNC, array_opinions, dataset_opinions,
                              mount_opinions, pool_opinions)
 
@@ -546,10 +545,9 @@ class Adapter:
                 "UsedBytes": node.get("used"), "AvailBytes": node.get("avail"),
                 "UsePercent": use,
             }
-            worst = worst_level(mount_opinions(facts),
-                                healthy="ok" if use is not None else "info")
             item = env.item_summary(f"mount:{target}", "mount", target, facts,
-                                    worst_opinion_level=worst)
+                                    opinions=mount_opinions(facts),
+                                    healthy="ok" if use is not None else "info")
             item["depth"] = depth
             items.append(item)
         return items
@@ -578,7 +576,7 @@ class Adapter:
             }
             items.append(env.item_summary(f"array:{name}", arr["level"] or "md-array",
                                           name, facts,
-                                          worst_opinion_level=worst_level(array_opinions(facts))))
+                                          opinions=array_opinions(facts)))
         return items
 
     async def _pool_items(self) -> list[dict]:
@@ -640,7 +638,7 @@ class Adapter:
                 "VdevsWithErrors": vdev_errors,
             }
             items.append(env.item_summary(f"pool:{name}", "pool", name, facts,
-                                          worst_opinion_level=worst_level(pool_opinions(facts))))
+                                          opinions=pool_opinions(facts)))
         return items
 
     async def _dataset_items(self) -> list[dict]:
@@ -693,9 +691,8 @@ class Adapter:
                     "carries the host's live read-only state.")
             items.append(env.item_summary(
                 f"dataset:{name}", ds.get("type", "filesystem"), name, facts,
-                worst_opinion_level=worst_level(
-                    dataset_opinions(facts),
-                    healthy="ok" if use_pct is not None else "info")))
+                opinions=dataset_opinions(facts),
+                healthy="ok" if use_pct is not None else "info"))
         return items
 
     def _source_for(self, collection: str) -> dict:

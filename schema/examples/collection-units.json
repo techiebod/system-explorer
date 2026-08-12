@@ -36,7 +36,21 @@
       "type": "service",
       "native_id": "systemd-observer.service",
       "facts": { "LoadState": "loaded", "ActiveState": "failed", "SubState": "failed", "NRestarts": 4 },
-      "worst_opinion_level": "critical"
+      "worst_opinion_level": "critical",
+      "opinions": [
+        {
+          "key": "unit-health",
+          "level": "critical",
+          "message": "Unit has failed (failed).",
+          "evidence": ["ActiveState", "SubState"]
+        },
+        {
+          "key": "restart-churn",
+          "level": "warn",
+          "message": "Service has restarted 4 times since activation.",
+          "evidence": ["NRestarts"]
+        }
+      ]
     }
   ]
 }

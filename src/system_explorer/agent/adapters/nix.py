@@ -28,7 +28,6 @@ import anyio
 
 from .. import envelope as env
 from .. import nixos as nx
-from ..rules import worst_level
 from ..rules.nix import generation_opinions
 
 GENERATIONS_REFERENCE = ["nixos-rebuild list-generations",
@@ -583,9 +582,8 @@ class Adapter:
             # are neutral history unless a rule fires.
             items.append(env.item_summary(
                 f"generation:{number}", "generation", str(number), facts,
-                worst_opinion_level=worst_level(
-                    generation_opinions(facts),
-                    healthy="ok" if facts["Current"] else "info")))
+                opinions=generation_opinions(facts),
+                healthy="ok" if facts["Current"] else "info"))
         return items
 
     # ── plumbing ─────────────────────────────────────────────

@@ -13,7 +13,6 @@ import xml.etree.ElementTree as ET
 import anyio
 
 from .. import envelope as env
-from ..rules import worst_level
 from ..rules.vms import domain_address_opinions, domain_opinions
 
 SOCKET_RO = "/var/run/libvirt/libvirt-sock-ro"
@@ -322,11 +321,10 @@ class Adapter:
             summary = summary_facts(facts)
             # Rules see the summary facts (State and Autostart both there), so
             # the row carries the same worst opinion an opened object would.
-            worst = worst_level(domain_opinions(summary) + domain_address_opinions(summary),
-                                healthy="ok" if dom["state"] == "running" else "info")
-            items.append(env.item_summary(f"domain:{dom['name']}", "domain",
-                                          dom["name"], summary,
-                                          worst_opinion_level=worst))
+            items.append(env.item_summary(
+                f"domain:{dom['name']}", "domain", dom["name"], summary,
+                opinions=domain_opinions(summary) + domain_address_opinions(summary),
+                healthy="ok" if dom["state"] == "running" else "info"))
         return items
 
     async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:

@@ -24,6 +24,7 @@ from ..paths import UI_DIR
 from . import envelope as env
 from . import history
 from .adapters import PLANNED, build_adapters
+from .findings import deselected_unobserved, finding_records, findings_envelope
 
 RESERVED_PARAMS = {"limit", "cursor"}
 
@@ -337,6 +338,80 @@ async def status() -> dict:
         out["errors"] = errors
     out["subsystems"] = {name: entries for name, (entries, _) in zip(ADAPTERS, results, strict=True)}
     return out
+
+
+# What this process is NOT running, owed to the findings surface: a
+# narrowed SE_ADAPTERS selection must name the deselected subsystems'
+# collections as unobserved, or its envelope claims full coverage and the
+# hub resolves findings nobody looked at (agent/findings.py). Computed once
+# — the adapter universe and its collections are static per build.
+_DESELECTED_UNOBSERVED = deselected_unobserved(
+    {name: adapter.collections()
+     for name, adapter in build_adapters(None).items()
+     if name not in ADAPTERS},
+    set(STATUS_DECLINES)) if _SELECTED else []
+
+
+async def _subsystem_findings(name: str, adapter) -> tuple[list, list, list[str]]:
+    """(findings, unobserved, errors) for one subsystem's sweep.
+
+    The decline table is /v1/status's, deliberately: a bounded journal query
+    is events, not standing conditions (its entry ids are cursors — no
+    stable rule-15 identity to attach lifecycle to), packages are inventory,
+    lookups are catalogs. Everything else that cannot be evaluated lands in
+    `unobserved` with its reason, because a collection the sweep skipped
+    silently would read at the hub as all of its findings resolving at once
+    (see agent/findings.py)."""
+    found: list = []
+    unobserved: list = []
+    errors: list[str] = []
+    try:
+        cap = await adapter.capability()
+    except Exception as exc:  # noqa: BLE001 - degrade the subsystem, not the endpoint
+        reason = env.reason(f"capability discovery failed: {type(exc).__name__}: {exc}")
+        errors.append(f"{name}: {reason}")
+        unobserved.extend({"subsystem": name, "collection": collection, "reason": reason}
+                          for collection in adapter.collections()
+                          if collection != "lookups"
+                          and (name, collection) not in STATUS_DECLINES)
+        return found, unobserved, errors
+    unavailable = cap.get("unavailable_collections", {})
+    for collection in adapter.collections():
+        if collection == "lookups" or (name, collection) in STATUS_DECLINES:
+            continue
+        if not cap["available"] or collection in unavailable:
+            unobserved.append({"subsystem": name, "collection": collection,
+                               "reason": unavailable.get(collection) or cap["reason"]})
+            continue
+        try:
+            items, _ = await _collect_items(adapter, collection)
+        except Exception as exc:  # noqa: BLE001 - errors are observations
+            reason = env.reason(f"{type(exc).__name__}: {exc}")
+            unobserved.append({"subsystem": name, "collection": collection,
+                               "reason": reason})
+            errors.append(f"{name}/{collection}: {reason}")
+            continue
+        found.extend(finding_records(name, collection, items))
+    return found, unobserved, errors
+
+
+@app.get("/v1/findings")
+async def findings() -> dict:
+    """Every warn/critical opinion this host derives right now, with the
+    rule-15 identity the hub's registry keys on (SPEC section 6.3). The
+    same sweep /v1/status makes — single-flighted acquisitions, subsystems
+    concurrent — but keeping the opinions the rows carry instead of
+    reducing them to counts, so the estate's attention roll-up is one
+    request per host rather than one per collection."""
+    results = await asyncio.gather(
+        *(_subsystem_findings(name, adapter) for name, adapter in ADAPTERS.items()))
+    return findings_envelope(
+        env.utc_now(),
+        [record for found, _, _ in results for record in found],
+        [entry for _, unobserved, _ in results for entry in unobserved]
+        + _DESELECTED_UNOBSERVED,
+        errors=[line for _, _, lines in results for line in lines] or None,
+    )
 
 
 # What the snapshot task stores: every collection EXCEPT the bounded journal

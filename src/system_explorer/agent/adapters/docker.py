@@ -18,7 +18,6 @@ import copy
 import httpx
 
 from .. import envelope as env
-from ..rules import worst_level
 from ..rules.docker import container_opinions
 
 SOCKET = "/var/run/docker.sock"
@@ -170,10 +169,10 @@ class Adapter:
             # Severity from the shared evaluator (agent/rules/docker.py):
             # running is the only positively-healthy state; created and
             # cleanly-exited containers are neutral rows, not warnings.
-            worst = worst_level(container_opinions(facts),
-                                healthy="ok" if facts["State"] == "running" else "info")
-            items.append(env.item_summary(f"container:{name}", "container", name, facts,
-                                          worst_opinion_level=worst))
+            items.append(env.item_summary(
+                f"container:{name}", "container", name, facts,
+                opinions=container_opinions(facts),
+                healthy="ok" if facts["State"] == "running" else "info"))
         return items
 
     async def _volume_items(self) -> list[dict]:

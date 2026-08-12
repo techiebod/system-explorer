@@ -34,7 +34,6 @@ from pathlib import Path
 import anyio
 
 from .. import envelope as env
-from ..rules import worst_level
 from ..rules.network import (LINK_QUIET_STATES, link_opinions,
                              resolver_opinions, route_opinions,
                              tailscale_opinions)
@@ -662,9 +661,9 @@ class Adapter:
             state = facts["OperState"]
             healthy = "ok" if state == "up" else (
                 None if state in LINK_QUIET_STATES else "info")
-            worst = worst_level(link_opinions(facts), healthy=healthy)
             items.append(env.item_summary(f"link:{name}", "link", name, facts,
-                                          worst_opinion_level=worst))
+                                          opinions=link_opinions(facts),
+                                          healthy=healthy))
 
         # Enslaved links sit under their master (bridge, bond) the way
         # partitions sit under disks — membership readable from the shape of
@@ -756,7 +755,7 @@ class Adapter:
                     facts["ShadowsLocalPrefix"] = True
                 items.append(env.item_summary(
                     f"route:{family}/{table}/{dst}/{dev}", "route", native, facts,
-                    worst_opinion_level=worst_level(route_opinions(facts), healthy=None)))
+                    opinions=route_opinions(facts), healthy=None))
         return items
 
     async def _routing_rules(self) -> dict[str, int]:
@@ -958,9 +957,8 @@ class Adapter:
         items = [env.item_summary(
             "tailscale:self", "tailscale-self",
             peer_native_id(node) or "self", facts,
-            worst_opinion_level=worst_level(
-                tailscale_opinions(facts),
-                healthy="ok" if facts["Online"] else "info"))]
+            opinions=tailscale_opinions(facts),
+            healthy="ok" if facts["Online"] else "info")]
         for peer in (status.get("Peer") or {}).values():
             name = peer_native_id(peer)
             if not name:
@@ -984,9 +982,8 @@ class Adapter:
                 peer_facts["PrimaryRoutes"] = peer["PrimaryRoutes"]
             items.append(env.item_summary(
                 f"tailscale:{name}", "tailscale-peer", name, peer_facts,
-                worst_opinion_level=worst_level(
-                    tailscale_opinions(peer_facts),
-                    healthy="ok" if peer_facts["Online"] else "info")))
+                opinions=tailscale_opinions(peer_facts),
+                healthy="ok" if peer_facts["Online"] else "info"))
         return items
 
     # ── lookups ──────────────────────────────────────────────
@@ -1186,7 +1183,7 @@ class Adapter:
             return [env.item_summary(
                 obs["object"]["id"], "resolver", obs["object"]["native_id"],
                 obs["facts"],
-                worst_opinion_level=worst_level(resolver_opinions(obs["facts"])))]
+                opinions=resolver_opinions(obs["facts"]))]
         raise env.UnknownCollection(collection)
 
     async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:

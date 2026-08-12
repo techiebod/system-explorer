@@ -35,7 +35,6 @@ from datetime import datetime, timedelta, timezone
 import anyio
 
 from .. import envelope as env
-from ..rules import worst_level
 from ..rules.logs import journal_opinions
 
 DEFAULT_LIMIT = 100
@@ -180,8 +179,8 @@ def _entry_item(record: dict, repeats: Counter | None = None,
         facts["RepeatWindow"] = window
     # Same evaluator as get_object (agent/rules/logs.py) — a red row and its
     # opened observation cannot disagree. Entries are neutral, never "ok".
-    level = worst_level(journal_opinions(facts), healthy="info")
-    return env.item_summary(f"entry:{cursor}", "entry", cursor, facts, worst_opinion_level=level)
+    return env.item_summary(f"entry:{cursor}", "entry", cursor, facts,
+                            opinions=journal_opinions(facts), healthy="info")
 
 
 class Adapter:

@@ -374,7 +374,9 @@ def names(path: str, token: str) -> bool:
     nobody would maintain, and unmaintained lists are the thing being fixed.
     """
     left, right = path.strip("/").split("/"), token.strip("/").split("/")
-    for mine, theirs in zip(left, right):
+    # strict=False is the semantics, not an oversight: the shorter side being
+    # a prefix of the longer is exactly the containment described above.
+    for mine, theirs in zip(left, right, strict=False):
         if not (fnmatch.fnmatch(mine, theirs) or fnmatch.fnmatch(theirs, mine)):
             return False
     return True

@@ -20,19 +20,12 @@ documented acquisition cost decision, never drifted thresholds.
 
 from __future__ import annotations
 
-# Re-exported, not defined here: env.opinion() validates against it, and every
-# module in this package imports the envelope, so defining it here and importing
-# it there would be a cycle. This name is how the rulebook and its consumers
-# (including the operator UI, via a conformance lint) refer to the vocabulary.
-from ..envelope import OPINION_LEVELS  # noqa: F401
-
-
-def worst_level(opinions: list[dict], healthy: str | None = "ok") -> str | None:
-    """Row severity from the object's opinions (collection.schema.json:
-    ok = positively healthy, info = neutral, warn/critical mirror the worst
-    opinion). `healthy` is the no-opinion value: "ok" when the evaluator
-    could vouch for the object, "info" when the deciding fact was absent,
-    None to omit the field entirely."""
-    if opinions:
-        return max((op["level"] for op in opinions), key=OPINION_LEVELS.index)
-    return healthy
+# Re-exported, not defined here: env.opinion() validates against the
+# vocabulary, and every module in this package imports the envelope, so
+# defining these here and importing them there would be a cycle. These names
+# are how the rulebook and its consumers (including the operator UI, via a
+# conformance lint) refer to the vocabulary and its ranking function —
+# worst_level moved to the envelope in 0.6 when item_summary() started
+# deriving row severity itself, and kept this address so the rulebook still
+# reads as owning its own ranking.
+from ..envelope import OPINION_LEVELS, worst_level  # noqa: F401

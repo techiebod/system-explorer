@@ -1,0 +1,115 @@
+{
+  "schema": "se.hub-findings/1",
+  "site": "site-a",
+  "observed_at": "2026-08-12T21:30:00Z",
+  "writes_enabled": true,
+  "hosts": {
+    "host-a": {
+      "swept": true,
+      "host": {
+        "machine_id": "0123456789abcdef0123456789abcdef",
+        "hostname": "host-a"
+      },
+      "status": "ok",
+      "unobserved": [
+        {
+          "subsystem": "vms",
+          "collection": "domains",
+          "reason": "no libvirt read-only socket at /var/run/libvirt/libvirt-sock-ro"
+        }
+      ]
+    },
+    "host-b": {
+      "swept": false,
+      "error": "ConnectError: [Errno 111] Connection refused"
+    }
+  },
+  "findings": [
+    {
+      "agent": "host-a",
+      "host": {
+        "machine_id": "0123456789abcdef0123456789abcdef",
+        "hostname": "host-a"
+      },
+      "subsystem": "units",
+      "collection": "units",
+      "object": {
+        "id": "unit:systemd-observer.service",
+        "type": "service",
+        "native_id": "systemd-observer.service"
+      },
+      "opinion": {
+        "key": "unit-health",
+        "level": "critical",
+        "message": "Unit has failed (failed).",
+        "evidence": ["ActiveState", "SubState"]
+      },
+      "evidence_ref": "/v1/evidence/units/units/unit:systemd-observer.service",
+      "observable": true,
+      "current": true,
+      "first_seen": "2026-08-11T09:00:00Z",
+      "last_seen": "2026-08-12T21:30:00Z",
+      "acknowledged": true,
+      "transitions": [
+        {
+          "transition": "acknowledged",
+          "by": "the operator",
+          "note": "known-bad service, replacement planned",
+          "at": "2026-08-11T10:00:00Z"
+        }
+      ]
+    },
+    {
+      "agent": "host-b",
+      "host": {
+        "machine_id": "fedcba9876543210fedcba9876543210",
+        "hostname": "host-b"
+      },
+      "subsystem": "storage",
+      "collection": "pools",
+      "object": {
+        "id": "pool:tank",
+        "type": "pool",
+        "native_id": "tank",
+        "name": "tank"
+      },
+      "opinion": {
+        "key": "pool-health",
+        "level": "critical",
+        "message": "Pool state is DEGRADED.",
+        "evidence": ["State"]
+      },
+      "evidence_ref": "/v1/evidence/storage/pools/pool:tank",
+      "observable": false,
+      "first_seen": "2026-08-10T08:00:00Z",
+      "last_seen": "2026-08-12T20:30:00Z",
+      "acknowledged": false
+    },
+    {
+      "agent": "host-a",
+      "host": {
+        "machine_id": "0123456789abcdef0123456789abcdef",
+        "hostname": "host-a"
+      },
+      "subsystem": "storage",
+      "collection": "datasets",
+      "object": {
+        "id": "dataset:tank/photos",
+        "type": "filesystem",
+        "native_id": "tank/photos"
+      },
+      "opinion": {
+        "key": "dataset-capacity",
+        "level": "warn",
+        "message": "Dataset has consumed 91% of its available headroom (quota- or pool-bounded).",
+        "evidence": ["UsePercent"]
+      },
+      "evidence_ref": "/v1/evidence/storage/datasets/dataset:tank/photos",
+      "observable": true,
+      "current": false,
+      "first_seen": "2026-08-09T12:00:00Z",
+      "last_seen": "2026-08-12T18:00:00Z",
+      "acknowledged": false
+    }
+  ]
+}

@@ -87,6 +87,25 @@
           "enum": ["ok", "info", "warn", "critical"],
           "description": "Triage level for lists: ok = positively healthy, info = neutral/no opinion, warn/critical mirror the worst opinion derivable from this summary's own facts via the shared rule evaluator (src/system_explorer/agent/rules/). A rule needing a fact the summary does not carry evaluates on the full object only — a documented acquisition-cost decision per rule, never divergent thresholds."
         },
+        "opinions": {
+          "type": "array",
+          "minItems": 1,
+          "description": "The warn/critical subset of the opinions worst_opinion_level was derived from — the same evaluated list, carried so a red row explains itself and /v1/findings can sweep rows without a per-object round trip. Deliberately never info: commentary stays on the opened object, and the enum below is the contract, not a summary of current behaviour.",
+          "items": {
+            "type": "object",
+            "required": ["key", "level", "message", "evidence"],
+            "properties": {
+              "key": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+              "level": { "enum": ["warn", "critical"] },
+              "message": { "type": "string", "minLength": 1 },
+              "evidence": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        },
         "depth": {
           "type": "integer",
           "minimum": 0,

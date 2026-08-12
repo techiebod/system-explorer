@@ -118,6 +118,20 @@ def check_agent(base: str) -> Report:
         if facts is not None:
             validate(report, facts, "/v1/facts")
 
+        findings = get(client, report, "/v1/findings")
+        if findings is not None:
+            validate(report, findings, "/v1/findings")
+            # The unobserved list is the member the hub's lifecycle relies
+            # on (SPEC section 6.3): a collection capabilities calls
+            # available must not be unevaluable for findings — that skew
+            # is an availability regression wearing the honest envelope.
+            unevaluable = {(entry["subsystem"], entry["collection"])
+                           for entry in findings.get("unobserved", [])}
+            for pair in available_collections(capabilities):
+                if pair in unevaluable:
+                    report.fail(f"/v1/findings: {pair[0]}/{pair[1]} is available"
+                                " per capabilities but unobserved in the sweep")
+
         for subsystem, collection in available_collections(capabilities):
             where = f"/v1/{subsystem}/{collection}"
 

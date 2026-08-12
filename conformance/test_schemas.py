@@ -190,6 +190,20 @@ FORWARD_COMPAT_EXTENSIONS: dict[str, list[tuple[str, object]]] = {
         ("generated_by", "estate-tooling/1.0"),
         ("views.0.panels.0.icon", "pool"),
     ],
+    # The hub's registry will stamp lifecycle onto these records (SPEC
+    # section 6.3), so the nested case is exactly the field it will add.
+    "findings-unit-failed.json": [
+        ("sweep_seconds", 1.4),
+        ("findings.0.first_seen", "2026-08-01T00:00:00Z"),
+    ],
+    "hub-findings-acknowledged.json": [
+        ("poll_interval_seconds", 300),
+        ("findings.0.transitions.0.via", "ui"),
+    ],
+    "hub-transitions-ack-then-unack.json": [
+        ("writes_enabled", True),
+        ("transitions.0.via", "ui"),
+    ],
 }
 
 

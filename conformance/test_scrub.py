@@ -8,7 +8,6 @@ routes. The scrub lives at the envelope boundary so adapter sixteen
 inherits what adapter one never had to remember.
 """
 
-import pytest
 
 from system_explorer import text
 from system_explorer.agent import envelope as env

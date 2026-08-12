@@ -182,3 +182,56 @@ def test_observation_accepts_a_narrowed_host():
         env.source("servarr-api", "servarr-v3", ["curl <api>/indexer"]),
         {"Name": "example"}, host=env.host_block(app="readarr-audio"))
     assert obs["host"]["app"] == "readarr-audio"
+
+
+# ---------------------------------------------------------------------------
+# Row severity and carried opinions (0.6): item_summary derives BOTH from one
+# evaluated list in one call, so the red dot and its explanation cannot
+# disagree — rule 14 made structural instead of a convention at fifteen call
+# sites, and the row surface /v1/findings sweeps.
+# ---------------------------------------------------------------------------
+
+ROW_OPINIONS = [
+    env.opinion("unit-health", "critical", "Unit has failed (failed).",
+                ["ActiveState"]),
+    env.opinion("restart-churn", "warn", "Service has restarted 4 times.",
+                ["NRestarts"]),
+    env.opinion("context", "info", "Neutral commentary.", ["ActiveState"]),
+]
+
+
+def test_a_row_carries_its_worst_and_its_attention_subset():
+    item = env.item_summary("unit:a.service", "service", "a.service",
+                            {"ActiveState": "failed"}, opinions=ROW_OPINIONS)
+    assert item["worst_opinion_level"] == "critical"
+    # warn/critical ride on the row; info stays on the opened object.
+    assert [op["key"] for op in item["opinions"]] == ["unit-health", "restart-churn"]
+
+
+def test_a_quiet_row_keeps_its_healthy_floor_and_no_opinions_member():
+    item = env.item_summary("unit:b.service", "service", "b.service",
+                            {"ActiveState": "active"}, opinions=[], healthy="ok")
+    assert item["worst_opinion_level"] == "ok"
+    assert "opinions" not in item
+    neutral = env.item_summary("entry:1", "entry", "1", {}, opinions=[],
+                               healthy="info")
+    assert neutral["worst_opinion_level"] == "info"
+    omitted = env.item_summary("route:main", "route", "main", {}, opinions=[],
+                               healthy=None)
+    assert "worst_opinion_level" not in omitted
+
+
+def test_a_row_with_no_evaluator_makes_no_severity_claim():
+    # packages' inventory rows: opinions=None is a statement, not a default
+    # sneaking "ok" onto rows nothing vouched for.
+    item = env.item_summary("package:zsh", "package", "zsh", {"Version": "5.9"})
+    assert "worst_opinion_level" not in item and "opinions" not in item
+
+
+def test_info_opinions_still_set_the_info_level_but_never_ride_along():
+    item = env.item_summary("entry:2", "entry", "2", {},
+                            opinions=[env.opinion("context", "info", "note",
+                                                  ["Fact"])],
+                            healthy=None)
+    assert item["worst_opinion_level"] == "info"
+    assert "opinions" not in item

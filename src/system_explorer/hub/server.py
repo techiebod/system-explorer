@@ -35,18 +35,23 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 from datetime import datetime, timezone
+from pathlib import Path
 
+import anyio
 import httpx
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .. import __version__
-from ..text import one_line
+from ..text import MAX_LENGTH, one_line
 from ..paths import UI_DIR
 from ..views import load_views
+from .findings import (SCHEMA_TRANSITIONS, TRANSITIONS, FindingsRegistry,
+                       assemble, envelope_problem, identity_key)
 
 
 def _params(request) -> list[tuple[str, str | int | float | bool | None]]:
@@ -77,6 +82,21 @@ SITE = os.environ.get("SE_HUB_SITE") or None
 # shared with se-mcp (system_explorer/views.py), which reads the same
 # deployed directory so view parity needs no hub dependency.
 VIEWS_DIR = os.environ.get("SE_HUB_VIEWS") or None
+
+# The findings registry (SPEC section 6.3): lifecycle metadata under
+# systemd's StateDirectory, the agent history arrangement. No
+# STATE_DIRECTORY means lifecycle is deliberately off — /hub/findings then
+# serves the live sweep with an errors line saying what is missing.
+_STATE_DIR = os.environ.get("STATE_DIRECTORY", "").split(":")[0]
+REGISTRY = FindingsRegistry(Path(_STATE_DIR) / "findings.db") if _STATE_DIR else None
+FINDINGS_RETENTION_DAYS = float(os.environ.get("SE_HUB_FINDINGS_RETENTION_DAYS", "90"))
+# The write grant (section 6.3, decision 1): default off, explicit yes only.
+# The route below is REGISTERED only under the grant — with it off the
+# hub's route table simply has no write verb, which is the strongest
+# available form of "the transition route exists only when enabled".
+FINDINGS_WRITES = os.environ.get("SE_HUB_FINDINGS_WRITES", "").lower() in ("1", "true", "yes")
+
+_MACHINE_ID = re.compile(r"^[0-9a-f]{32}$")
 
 app = FastAPI(title="System Explorer hub", version=__version__, docs_url=None, redoc_url=None)
 
@@ -166,6 +186,154 @@ async def hub_views() -> dict:
     configured directory per request. No directory configured means a
     deployment that made no views: an empty list, not an error."""
     return load_views(VIEWS_DIR, _utc_now(), SITE)
+
+
+async def _sweep_findings() -> list[dict]:
+    """Every configured agent's /v1/findings, fanned out concurrently. An
+    agent that cannot be swept — dark, or predating the findings surface —
+    is an entry saying so, and assemble() freezes its registry rows rather
+    than resolving them (hub/findings.py)."""
+    async def fetch(name: str, base: str) -> dict:
+        try:
+            response = await _client.get(f"{base}/v1/findings")
+            response.raise_for_status()
+            body = response.json()
+        except Exception as exc:  # noqa: BLE001 - an unswept host is data
+            return {"agent": name,
+                    "error": one_line(f"{type(exc).__name__}: {exc}")}
+        # The hub folds this envelope rather than proxying it, so shape is
+        # checked at this one choke point: a 200-with-garbage answer is
+        # "could not be swept" — the dark-host entry with a better error —
+        # never a 500 on the estate roll-up.
+        problem = envelope_problem(body)
+        if problem:
+            return {"agent": name,
+                    "error": one_line(f"malformed findings envelope: {problem}")}
+        return {"agent": name, "envelope": body}
+    return list(await asyncio.gather(*(fetch(n, b) for n, b in AGENTS.items())))
+
+
+@app.get("/hub/findings")
+async def hub_findings() -> dict:
+    """The estate's attention surface (SPEC section 6.3): every finding the
+    site's agents currently derive, folded into the registry so each carries
+    first_seen, last_seen and its acknowledgement history — one request per
+    host per sweep, not one per collection. The hub parses these envelopes,
+    deliberately and exceptionally: the registry is hub metadata DERIVED
+    from findings, sanctioned by section 6.1's amended rule 4, and every
+    observation behind them still travels rule 1's verbatim proxy."""
+    sweeps = await _sweep_findings()
+    now = _utc_now()
+    # Advertised writability is the grant AND a registry to write to: a
+    # grant with no STATE_DIRECTORY would advertise a route that answers
+    # every POST with 503, and the member exists so a consumer can offer
+    # acknowledgement only where it works.
+    writes = FINDINGS_WRITES and REGISTRY is not None
+    if REGISTRY is None:
+        return assemble(now, SITE, writes, sweeps, registry_note=(
+            "findings registry disabled: STATE_DIRECTORY is not set, so"
+            " lifecycle (first_seen, acknowledgement) is unavailable"
+            " (the NixOS module sets StateDirectory=se-hub)"))
+    swept = [s for s in sweeps if s.get("envelope")]
+    try:
+        await anyio.to_thread.run_sync(
+            REGISTRY.record_sweep, now, swept, FINDINGS_RETENTION_DAYS)
+        rows = await anyio.to_thread.run_sync(REGISTRY.rows)
+        transitions = await anyio.to_thread.run_sync(REGISTRY.transitions)
+    except Exception as exc:  # noqa: BLE001 - registry damage must not cost the live sweep
+        return assemble(now, SITE, writes, sweeps, registry_note=one_line(
+            f"findings registry unreadable: {type(exc).__name__}: {exc}"))
+    return assemble(now, SITE, writes, sweeps, rows, transitions)
+
+
+if FINDINGS_WRITES:
+    @app.post("/hub/findings/transitions")
+    async def findings_transition(request: Request) -> dict:
+        """The product's first accepted write, shaped by section 6.3: an
+        appended, attributed, reversible transition on one finding's
+        lifecycle. Registered only under the findingsWrites grant — no
+        grant, no route. The body carries the rule-15 identity plus
+        `transition` (acknowledged | unacknowledged), mandatory free-text
+        `by`, and an optional note."""
+        # Content-Type is a security check here, not pedantry: a browser
+        # sends cross-origin POSTs without preflight only for form/text
+        # content types, so requiring application/json forces a CORS
+        # preflight this hub never grants — which is what stops a web page
+        # acknowledging findings on an unauthenticated LAN hub from inside
+        # someone's browser (the Host-header defence cannot: a direct
+        # cross-site fetch carries the correct Host).
+        content_type = request.headers.get("content-type", "")
+        if content_type.split(";")[0].strip().lower() != "application/json":
+            raise HTTPException(status_code=415,
+                                detail="Content-Type must be application/json")
+        try:
+            body = await request.json()
+        except ValueError:
+            raise HTTPException(status_code=422, detail="body must be JSON") from None
+        if not isinstance(body, dict):
+            raise HTTPException(status_code=422, detail="body must be a JSON object")
+        machine_id = body.get("machine_id")
+        if not isinstance(machine_id, str) or not _MACHINE_ID.fullmatch(machine_id):
+            raise HTTPException(status_code=422,
+                                detail="machine_id must be 32 hex characters")
+        object_id = body.get("object_id")
+        opinion_key = body.get("opinion_key")
+        if not isinstance(object_id, str) or not object_id:
+            raise HTTPException(status_code=422, detail="object_id is required")
+        if not isinstance(opinion_key, str) or not opinion_key:
+            raise HTTPException(status_code=422, detail="opinion_key is required")
+        for member in ("container", "app"):
+            value = body.get(member)
+            if value is not None and (not isinstance(value, str) or not value):
+                raise HTTPException(status_code=422,
+                                    detail=f"{member} must be a non-empty string when given")
+        transition = body.get("transition")
+        if transition not in TRANSITIONS:
+            raise HTTPException(status_code=422,
+                                detail=f"transition must be one of {list(TRANSITIONS)}")
+        by = body.get("by")
+        if not isinstance(by, str) or not by.strip():
+            raise HTTPException(status_code=422, detail=(
+                "a transition is attributed: 'by' is mandatory free text"
+                " (SPEC section 6.3 — honest attribution without pretending"
+                " it is authentication)"))
+        note = body.get("note")
+        if note is not None and not isinstance(note, str):
+            raise HTTPException(status_code=422, detail="note must be a string")
+        # Bounded on refusal, never truncation: decision 2 stores a
+        # transition as given, so an oversized or control-character body is
+        # rejected rather than silently rewritten. MAX_LENGTH is the
+        # codebase's one declared bound for operator-facing text; without
+        # it, attacker-authored megabytes would be stored verbatim and
+        # re-amplified to every reader of /hub/findings.
+        for label, value, allowed in (("by", by, ""), ("note", note or "", "\n\t")):
+            if len(value) > MAX_LENGTH:
+                raise HTTPException(status_code=422, detail=(
+                    f"{label} exceeds {MAX_LENGTH} characters — the bound"
+                    " every operator-facing line in this product carries"))
+            if any(ord(ch) < 32 and ch not in allowed or ch == "\x7f"
+                   for ch in value):
+                raise HTTPException(status_code=422,
+                                    detail=f"{label} contains control characters")
+        if REGISTRY is None:
+            raise HTTPException(status_code=503, detail=(
+                "findings registry disabled: STATE_DIRECTORY is not set,"
+                " so there is nothing to attach a transition to"))
+        key = identity_key(machine_id, object_id, opinion_key,
+                           body.get("container"), body.get("app"))
+        history = await anyio.to_thread.run_sync(
+            REGISTRY.append_transition, _utc_now(), key, transition,
+            by.strip(), note)
+        if history is None:
+            raise HTTPException(status_code=404, detail=(
+                "no finding with this identity in the registry — transitions"
+                " attach to findings the estate has derived"))
+        return {"schema": SCHEMA_TRANSITIONS,
+                "finding": {"machine_id": machine_id,
+                            **({"container": body["container"]} if body.get("container") else {}),
+                            **({"app": body["app"]} if body.get("app") else {}),
+                            "object_id": object_id, "opinion_key": opinion_key},
+                "transitions": history}
 
 
 @app.get("/hub/hosts")

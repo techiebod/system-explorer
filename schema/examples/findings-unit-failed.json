@@ -1,0 +1,66 @@
+{
+  "schema": "se.findings/1",
+  "host": {
+    "machine_id": "0123456789abcdef0123456789abcdef",
+    "hostname": "host-a"
+  },
+  "observed_at": "2026-08-12T21:00:00Z",
+  "status": "ok",
+  "findings": [
+    {
+      "subsystem": "units",
+      "collection": "units",
+      "object": {
+        "id": "unit:systemd-observer.service",
+        "type": "service",
+        "native_id": "systemd-observer.service"
+      },
+      "opinion": {
+        "key": "unit-health",
+        "level": "critical",
+        "message": "Unit has failed (failed).",
+        "evidence": ["ActiveState", "SubState"]
+      },
+      "evidence_ref": "/v1/evidence/units/units/unit:systemd-observer.service"
+    },
+    {
+      "subsystem": "units",
+      "collection": "units",
+      "object": {
+        "id": "unit:systemd-observer.service",
+        "type": "service",
+        "native_id": "systemd-observer.service"
+      },
+      "opinion": {
+        "key": "restart-churn",
+        "level": "warn",
+        "message": "Service has restarted 4 times since activation.",
+        "evidence": ["NRestarts"]
+      },
+      "evidence_ref": "/v1/evidence/units/units/unit:systemd-observer.service"
+    },
+    {
+      "subsystem": "storage",
+      "collection": "datasets",
+      "object": {
+        "id": "dataset:tank/photos",
+        "type": "filesystem",
+        "native_id": "tank/photos"
+      },
+      "opinion": {
+        "key": "dataset-capacity",
+        "level": "warn",
+        "message": "Dataset has consumed 91% of its available headroom (quota- or pool-bounded).",
+        "evidence": ["UsePercent"]
+      },
+      "evidence_ref": "/v1/evidence/storage/datasets/dataset:tank/photos"
+    }
+  ],
+  "unobserved": [
+    {
+      "subsystem": "vms",
+      "collection": "domains",
+      "reason": "no libvirt read-only socket at /var/run/libvirt/libvirt-sock-ro"
+    }
+  ]
+}

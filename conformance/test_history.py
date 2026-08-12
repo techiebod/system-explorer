@@ -191,3 +191,20 @@ def test_store_round_trips_and_reads_legacy_rows(tmp_path):
         blob = conn.execute(
             "SELECT items FROM snapshots WHERE snapshot_id = 1").fetchone()[0]
     assert isinstance(blob, bytes) and blob[:1] == b"\x78"
+
+
+def test_diff_ignores_the_derived_opinions_member():
+    # Row opinions are derived from the row's own facts by the one
+    # evaluator (rule 14): any genuine change already reports at a facts
+    # path or worst_opinion_level. Diffing the derived subset would report
+    # a phantom "opinions" change on every warn/critical row the first
+    # sweep after the 0.6 upgrade, and double-report forever after.
+    before = [{"id": "unit:a.service", "type": "service",
+               "native_id": "a.service",
+               "facts": {"ActiveState": "failed"},
+               "worst_opinion_level": "critical"}]
+    after = [{**before[0],
+              "opinions": [{"key": "unit-health", "level": "critical",
+                            "message": "Unit has failed (failed).",
+                            "evidence": ["ActiveState"]}]}]
+    assert history.diff_items(before, after) == {}

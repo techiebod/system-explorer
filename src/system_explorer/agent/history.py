@@ -140,8 +140,17 @@ def diff_items(before: list[dict], after: list[dict]) -> dict:
     changed_paths(). Returns {} when nothing changed; empty sections are
     omitted, matching changes.schema.json.
     """
-    before_by_id = {item["id"]: item for item in before}
-    after_by_id = {item["id"]: item for item in after}
+    # The row's carried `opinions` are DERIVED — the one evaluator over the
+    # row's own facts (rule 14) — so any genuine change already reports at
+    # a facts path or worst_opinion_level. Diffing the derived subset only
+    # adds noise: a phantom "opinions" change on every warn/critical row
+    # when a pre-0.6 snapshot meets a post-0.6 live sweep, and a double
+    # report forever after.
+    def underived(item: dict) -> dict:
+        return {key: value for key, value in item.items() if key != "opinions"}
+
+    before_by_id = {item["id"]: underived(item) for item in before}
+    after_by_id = {item["id"]: underived(item) for item in after}
     added = sorted(after_by_id.keys() - before_by_id.keys())
     removed = sorted(before_by_id.keys() - after_by_id.keys())
     changed = []

@@ -26,7 +26,6 @@ import anyio
 
 from .. import envelope as env
 from .. import nixos as nx
-from ..rules import worst_level
 from ..rules.system import (boot_opinions,
                             overview_opinions, time_opinions)
 from ..sysbus import BUS, HOSTNAME1, SYSTEMD, SYSTEMD_MANAGER, SYSTEMD_PATH, TIMEDATE1
@@ -555,7 +554,7 @@ class Adapter:
         return [env.item_summary(
             obs["object"]["id"], obs["object"]["type"], obs["object"]["native_id"],
             obs["facts"],
-            worst_opinion_level=worst_level(obs.get("opinions", []), healthy=None),
+            opinions=obs.get("opinions", []), healthy=None,
         )]
 
     async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:

@@ -32,6 +32,30 @@ SCHEMA_COLLECTION = "se.collection/1"
 # agent.rules re-exports it as the rulebook's own vocabulary.
 OPINION_LEVELS = ("info", "warn", "critical")
 
+
+def worst_level(opinions: list[dict], healthy: str | None = "ok") -> str | None:
+    """Row severity from the object's opinions (collection.schema.json:
+    ok = positively healthy, info = neutral, warn/critical mirror the worst
+    opinion). `healthy` is the no-opinion value: "ok" when the evaluator
+    could vouch for the object, "info" when the deciding fact was absent,
+    None to omit the field entirely.
+
+    Moved here from agent.rules in 0.6 (re-exported there, the
+    OPINION_LEVELS arrangement in reverse) because item_summary() now
+    derives row severity itself, from the same list whose attention subset
+    it carries — the one-evaluator rule made structural instead of a
+    convention at fifteen call sites."""
+    if opinions:
+        return max((op["level"] for op in opinions), key=OPINION_LEVELS.index)
+    return healthy
+
+
+def attention(opinions: list[dict]) -> list[dict]:
+    """The warn/critical subset a row carries (see item_summary). Info
+    opinions stay on the opened object: they are commentary, not attention,
+    and ten thousand rows must not pay for them (the /v1/facts economy)."""
+    return [op for op in opinions if op["level"] != "info"]
+
 DEFAULT_LIMIT = 500
 MAX_LIMIT = 1000
 
@@ -336,12 +360,28 @@ def evidence_ref(subsystem: str, collection: str, object_id: str) -> str:
 
 
 def item_summary(object_id: str, obj_type: str, native_id: str, facts: dict,
-                 worst_opinion_level: str | None = None, name: str | None = None) -> dict:
+                 opinions: list[dict] | None = None, healthy: str | None = "ok",
+                 name: str | None = None) -> dict:
+    """One collection row. The caller hands over the row's evaluated
+    opinions and severity is derived HERE — worst_opinion_level and the
+    carried warn/critical subset come from the same list in the same call,
+    so the red dot and its explanation cannot disagree (rule 14, made
+    structural: the summary surface used to compute worst_level() beside
+    this call at fifteen sites, each one a place the two could drift).
+    The carried subset is what /v1/findings sweeps and what a consumer
+    needs to explain a red row without a per-object round trip.
+    `opinions=None` (an inventory row with no evaluator — packages) makes
+    no severity claim at all."""
     out: dict[str, Any] = {"id": object_id, "type": obj_type, "native_id": native_id, "facts": facts}
     if name:
         out["name"] = name
-    if worst_opinion_level:
-        out["worst_opinion_level"] = worst_opinion_level
+    if opinions is not None:
+        worst = worst_level(opinions, healthy=healthy)
+        if worst:
+            out["worst_opinion_level"] = worst
+        subset = attention(opinions)
+        if subset:
+            out["opinions"] = subset
     return out
 
 

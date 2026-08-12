@@ -1,7 +1,9 @@
 # se-hub — per-site hub service (ROADMAP slice 1). One URL fronting a
 # site's agents: proxies GETs verbatim and serves the operator UI. Needs
-# nothing but HTTP reach to the agents; stateless by design, so losing it
-# loses convenience, never data.
+# nothing but HTTP reach to the agents. The only state it keeps is
+# metadata in SPEC section 6.1's sense — the findings lifecycle registry
+# under its StateDirectory — so losing it loses convenience (first_seen,
+# acknowledgements), never an observation and never truth about a host.
 { config, lib, pkgs, ... }:
 
 let
@@ -107,6 +109,38 @@ in
         disables the check. Ports are ignored in the comparison.
       '';
     };
+
+    findingsWrites = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Register the findings transition route (SPEC section 6.3) — the
+        product's only write, and a grant in the grantDiskAccess idiom:
+        explicit, documented, per-deployment. Off, the hub's route table
+        has no write verb at all. The posture caveat lives here because the
+        grant does: until authentication exists, an enabled route trusts
+        the network the hub is bound to, so enable it only behind loopback
+        or a tailnet bind, never on a LAN the operator does not control. A
+        transition is appended and attributed, never a deletion, and
+        acknowledgement styles a finding without ever removing it from any
+        roll-up.
+      '';
+    };
+
+    findingsRetentionDays = lib.mkOption {
+      type = lib.types.numbers.positive;
+      default = 90;
+      description = ''
+        How long a finding's lifecycle record (first_seen and its
+        acknowledgement history) outlives the finding's last sighting.
+        Reappearance within this window is the same finding recurring;
+        beyond it, the record and its transitions age out together — but
+        only where the estate could look. A frozen finding (unswept host,
+        unobserved collection) is never pruned on the strength of absence
+        nobody observed. Longer than snapshot retention deliberately:
+        these records are tiny and their value is forensic.
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -130,6 +164,9 @@ in
       environment = {
         SE_HUB_AGENTS = lib.concatStringsSep ","
           (lib.mapAttrsToList (name: url: "${name}=${url}") cfg.agents);
+        SE_HUB_FINDINGS_RETENTION_DAYS = toString cfg.findingsRetentionDays;
+      } // lib.optionalAttrs cfg.findingsWrites {
+        SE_HUB_FINDINGS_WRITES = "1";
       } // lib.optionalAttrs (cfg.site != null) {
         SE_HUB_SITE = cfg.site;
       } // lib.optionalAttrs (cfg.views != null) {
@@ -153,6 +190,12 @@ in
         ExecStart = "${lib.getExe cfg.package} --host ${cfg.listenAddress} --port ${toString cfg.port}";
         Restart = "on-failure";
         RestartSec = 2;
+
+        # The findings lifecycle registry (SPEC section 6.3) — the agent
+        # history arrangement. Always present: the registry is useful with
+        # writes off (first_seen and last_seen need no grant), and a later
+        # findingsWrites=true must not orphan lifecycle already accrued.
+        StateDirectory = "se-hub";
 
         # Pure HTTP client/server: same posture as the mcp module — no
         # journal group, no capabilities, no netlink.

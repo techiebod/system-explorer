@@ -1123,8 +1123,12 @@ class Adapter:
         else:
             expected = "live" if collection == "nvme" else "running"
             healthy = "ok" if facts.get("State") == expected else "info"
-        item["worst_opinion_level"] = worst_level(
-            self._opinions(collection, item["type"], facts), healthy=healthy)
+        # Post-hoc because rows here are assembled before SMART merges in;
+        # both keys still come from one evaluated list, item_summary's rule.
+        opinions = self._opinions(collection, item["type"], facts)
+        item["worst_opinion_level"] = worst_level(opinions, healthy=healthy)
+        if subset := env.attention(opinions):
+            item["opinions"] = subset
 
     # ── protocol ─────────────────────────────────────────────
     _udisks_ok: bool | None = None

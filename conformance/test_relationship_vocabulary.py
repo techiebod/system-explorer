@@ -18,7 +18,6 @@ unenumerable relationship type cannot be linted and is therefore forbidden.
 """
 
 import ast
-import json
 
 from common import AGENT_DIR, SCHEMAS
 
