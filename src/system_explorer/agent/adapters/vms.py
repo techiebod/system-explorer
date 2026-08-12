@@ -24,6 +24,30 @@ STATES = {0: "nostate", 1: "running", 2: "blocked", 3: "paused",
 
 REFERENCE = ["virsh list --all", "virsh dominfo <name>", "virsh dumpxml <name>"]
 
+# The row's fact subset, in display order. Keys are copied only when the
+# object carries them: _facts() emits the address facts in three mutually
+# exclusive shapes (addresses observed; running but unobservable — null with
+# a reason sibling; not running — both omitted as inapplicable, rule 7), and
+# a copy that indexed the tuple unconditionally assumed the one shape that
+# sets the pair. Every domain in either other shape blanked its host's whole
+# collection: found live on two deployed hosts at once, 2026-08-12, as two
+# different KeyErrors from one deploy. Present-only is the rule for EVERY
+# key, not an allowlist of the two that broke — omission is a legitimate
+# shape for any fact under rule 7, so the next conditionally-emitted fact
+# must not be able to reintroduce the outage by missing a second table.
+_SUMMARY_KEYS = ("State", "IPAddresses", "IPAddressesUnobservable",
+                 "MemoryMiB", "VCPUs", "Autostart", "Persistent", "HostTaps")
+
+
+def summary_facts(facts: dict) -> dict:
+    """The collection-row subset of a domain's facts, shape-tolerant.
+
+    Module-level and pure so conformance can feed it every shape _facts()
+    produces without a libvirt socket — the failure this guards against
+    reached two deployed hosts before any test saw it.
+    """
+    return {k: facts[k] for k in _SUMMARY_KEYS if k in facts}
+
 
 # Which source an address came from is a provenance fact the operator needs:
 # a lease is a record with a lifetime, ARP is a cache that expires, and the
@@ -281,10 +305,7 @@ class Adapter:
             # HostTaps rides on the ROW, not just the opened object: the
             # consumer that needs it is looking at network/links and wants to
             # name every tap from one request, without opening each domain.
-            summary = {k: facts[k] for k in
-                       ("State", "IPAddresses", "IPAddressesUnobservable",
-                        "MemoryMiB", "VCPUs", "Autostart",
-                        "Persistent", "HostTaps")}
+            summary = summary_facts(facts)
             # Rules see the summary facts (State and Autostart both there), so
             # the row carries the same worst opinion an opened object would.
             worst = worst_level(domain_opinions(summary) + domain_address_opinions(summary),
@@ -339,7 +360,7 @@ class Adapter:
                        method="listAllDomains + XMLDesc + interfaceAddresses",
                        notes=[dom["ip_note"]] if dom.get("ip_note") else None),
             facts, opinions=opinions, relationships=relationships,
-            evidence_ref=f"/v1/vms/domains/{object_id}/evidence",
+            evidence_ref=env.evidence_ref("vms", "domains", object_id),
         )
 
     async def get_evidence(self, collection: str, object_id: str) -> dict:
