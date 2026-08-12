@@ -365,6 +365,13 @@ pre.v-json { margin: 0; font: 11px/1.5 var(--mono); color: var(--ident); white-s
   text-underline-offset: 3px;
   cursor: help;
 }
+/* A titled label that NAVIGATES is a link first. The help cursor is
+   reserved for elements whose only affordance IS the explanation; the
+   overview's filesystem rows are anchors that also carry a tooltip, and
+   they wore the question-mark cursor while their real behaviour was
+   navigation (asked live, 2026-08-12). The dotted underline stays — the
+   tooltip is still there — but the cursor tells the truth. */
+.ov-row a.lbl[title] { cursor: pointer; }
 .facts > div.cited { background: color-mix(in srgb, var(--warn) 8%, transparent); }
 
 .opinion {
