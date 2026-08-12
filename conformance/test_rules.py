@@ -318,6 +318,18 @@ CASES = [
      {"CurrentDNSServer": None, "DNSServersInUse": [],
       "GlobalDNSServers": [], "PerLinkDNS": {}},
      {("resolver-servers", "warn")}),
+    # The file shape (SPEC rule 16): a host without resolved answers the
+    # universal question from resolv.conf, and its one health rule is
+    # whether the file names any server.
+    ("resolver-file-healthy", network.resolver_opinions,
+     {"ResolverService": "libc-resolv.conf",
+      "Nameservers": ["192.168.123.1"], "SearchDomains": ["red.example"],
+      "Options": []},
+     set()),
+    ("resolver-file-empty", network.resolver_opinions,
+     {"ResolverService": "libc-resolv.conf", "Nameservers": [],
+      "SearchDomains": [], "Options": []},
+     {("resolver-servers", "warn")}),
     ("resolver-healthy", network.resolver_opinions,
      {"CurrentDNSServer": "192.168.1.1", "DNSServersInUse": ["192.168.1.1"],
       "GlobalDNSServers": [], "PerLinkDNS": {"eth0": ["192.168.1.1"]}},

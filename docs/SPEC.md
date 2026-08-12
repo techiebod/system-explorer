@@ -6,7 +6,9 @@
 condensed into this document; per-document disposition in Appendix A
 **Direction:** [ROADMAP.md](ROADMAP.md) — status, priorities, and the estate/portability tracks
 
-0.6 (unreleased) decides the composite locator in writing before its
+0.6 (unreleased) adds rule 16 — the mechanism is a fact — with the
+resolver's file shape as its second conformer after packages, and decides
+the composite locator in writing before its
 schema: optional `container` and `app` members join the `host` block and
 rule 15's finding-identity tuple — identity, not provenance — with
 `relationships[].target` gaining the same members and off-host subjects
@@ -183,6 +185,21 @@ New in 0.4:
       boundary. That contradiction is deferred with the non-Linux adapter
       case (§12), and this locator deliberately does not claim to solve
       it.
+
+New in 0.6:
+
+16. **The mechanism is a fact.** Where a capability can be served by more
+    than one native mechanism, which one answered is part of the
+    observation — a fact with a glossary sentence, never only a source
+    note — because consumers filter facts and columns render facts, and
+    "which one is in use?" is a question, not metadata. `packages` set the
+    pattern (`Manager`: nix, dpkg or rpm — the question is universal and
+    only the answer is not); `resolver` is the second conformer
+    (`ResolverService`: systemd-resolved, or glibc reading resolv.conf
+    directly — both are resolvers, and a host was wrongly declined for
+    running the older one). Candidates owing compliance as they are next
+    touched: SMART's depth order and the mounts namespace fallback, both
+    of which currently say which mechanism spoke only in source notes.
 
 Explicitly dropped from the SE-00x suite: the SE-005 UI framework (replaced by
 the one-page contract in §8), the WebSocket message protocol, placeholder

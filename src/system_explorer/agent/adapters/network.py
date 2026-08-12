@@ -49,6 +49,11 @@ LINK_REFERENCE = ["ip -d addr show", "networkctl status <link>"]
 ROUTE_REFERENCE = ["ip route show table all", "ip -6 route show table all",
                    "ip rule show"]
 RESOLVER_REFERENCE = ["resolvectl status", "resolvectl dns"]
+# The file shape: what glibc itself reads when no resolved stub is present.
+# A specified format (resolv.conf(5)), not human-readable command output —
+# reading it is rule-8 legitimate the way /etc/machine-id is.
+RESOLV_CONF = "/etc/resolv.conf"
+FILE_RESOLVER_REFERENCE = ["cat /etc/resolv.conf", "ls -l /etc/resolv.conf"]
 NFT_REFERENCE = ["nft list ruleset"]
 TAILSCALE_REFERENCE = ["tailscale status --json"]
 
@@ -200,7 +205,31 @@ _RESOLVER_GLOSSARY = {
     "SearchDomains": (
         "Domains appended to single-label names, plus route-only entries "
         "(marked) that steer matching queries to a specific link without "
-        "being used for completion."
+        "being used for completion. On a host without resolved this is the "
+        "file's search line, last one winning, exactly as glibc reads it."
+    ),
+    "ResolverService": (
+        "Which mechanism answers name lookups on this host: systemd-resolved "
+        "(the stub at 127.0.0.53, with per-link routing), or libc-resolv.conf "
+        "— glibc reading /etc/resolv.conf directly, the path every Unix has. "
+        "Both are resolvers; the facts beside this one differ because the "
+        "mechanisms genuinely do."
+    ),
+    "Nameservers": (
+        "The servers named in /etc/resolv.conf, in file order. glibc uses "
+        "only the first three; the rest are listed because they are in the "
+        "file, and a file that names five servers is telling you something "
+        "about how it is managed."
+    ),
+    "Options": (
+        "The file's options lines, accumulated across resolv.conf exactly "
+        "as glibc accumulates them — timeouts, attempts, rotation, ndots."
+    ),
+    "ResolvConfTarget": (
+        "Where /etc/resolv.conf points when it is a symlink — usually the "
+        "name of whoever manages resolution. A plain file has no target, "
+        "and then the writer is whoever last wrote it (commonly dhcpcd or "
+        "an operator)."
     ),
 }
 
@@ -343,6 +372,34 @@ def _tailscale_snapshot() -> tuple[dict, float] | None:
         return None
 
 
+def parse_resolv_conf(text: str) -> dict:
+    """resolv.conf(5) into facts, by the file's own grammar.
+
+    glibc semantics kept faithfully where they surprise: later `search`
+    (or deprecated `domain`) lines REPLACE earlier ones, while `options`
+    accumulate; comments open with # or ;. Nameservers are reported in
+    file order, all of them — the glossary carries the caveat that glibc
+    uses only the first three.
+    """
+    nameservers: list[str] = []
+    search: list[str] = []
+    options: list[str] = []
+    for raw in text.splitlines():
+        line = raw.split("#", 1)[0].split(";", 1)[0].strip()
+        if not line:
+            continue
+        keyword, _, rest = line.partition(" ")
+        args = rest.split()
+        if keyword == "nameserver" and args:
+            nameservers.append(args[0])
+        elif keyword in ("search", "domain") and args:
+            search = args
+        elif keyword == "options" and args:
+            options.extend(args)
+    return {"Nameservers": nameservers, "SearchDomains": search,
+            "Options": options}
+
+
 def peer_native_id(peer: dict) -> str | None:
     """A tailnet peer's native id: the DNS label, not the display name.
 
@@ -473,6 +530,21 @@ class Adapter:
             return False, env.reason(
                 f"resolve1 not available on the system bus: {exc}")
 
+    async def _resolver_mode(self) -> tuple[str | None, str]:
+        """Which resolver mechanism this host has: "resolve1", "file", or
+        (None, reason). The question is universal and only the answer is not
+        — the packages lesson, repeated here after a host that resolves
+        names all day through a dhcpcd-written resolv.conf spent its life
+        declined because ONE implementation was absent (asked live,
+        2026-08-12: "it's still a resolver, just a different path to it")."""
+        res_ok, res_reason = await self._resolver_available()
+        if res_ok:
+            return "resolve1", ""
+        if await anyio.to_thread.run_sync(lambda: Path(RESOLV_CONF).is_file()):
+            return "file", ""
+        return None, env.reason(
+            f"{res_reason}; and no {RESOLV_CONF} to read instead")
+
     async def capability(self) -> dict:
         unavailable: dict[str, str] = {
             "conntrack-summary": "netlink acquisition not yet implemented",
@@ -480,8 +552,8 @@ class Adapter:
         nft_ok, nft_reason = await self._nft_available()
         if not nft_ok:
             unavailable["nft-tables"] = nft_reason
-        res_ok, res_reason = await self._resolver_available()
-        if not res_ok:
+        res_mode, res_reason = await self._resolver_mode()
+        if res_mode is None:
             unavailable["resolver"] = res_reason
         if await anyio.to_thread.run_sync(_tailscale_snapshot) is None:
             unavailable["tailscale"] = TAILSCALE_UNAVAILABLE
@@ -745,6 +817,39 @@ class Adapter:
         return per_link
 
     async def _resolver_observation(self) -> dict:
+        mode, _reason = await self._resolver_mode()
+        if mode == "file":
+            return await self._file_resolver_observation()
+        return await self._resolve1_observation()
+
+    async def _file_resolver_observation(self) -> dict:
+        """The universal answer on a host without resolved: what glibc
+        reads. ResolverService says which mechanism is speaking — the
+        packages Manager pattern, now a rule (SPEC rule 16) — and
+        ResolvConfTarget carries where the symlink points when it is one,
+        which is usually the name of whoever manages the file."""
+        def read() -> tuple[str, str | None]:
+            path = Path(RESOLV_CONF)
+            target = None
+            if path.is_symlink():
+                target = str(path.resolve())
+            return path.read_text(), target
+        text, target = await anyio.to_thread.run_sync(read)
+        facts: dict = {"ResolverService": "libc-resolv.conf",
+                       **parse_resolv_conf(text)}
+        if target:
+            facts["ResolvConfTarget"] = target
+        obj = env.obj_ref(f"resolver:{env.HOST['hostname']}", "resolver",
+                          env.HOST["hostname"])
+        return env.observation(
+            self.subsystem, obj,
+            env.source("resolv-conf", "/etc/resolv.conf (glibc)",
+                       FILE_RESOLVER_REFERENCE),
+            facts, opinions=resolver_opinions(facts),
+            evidence_ref=env.evidence_ref("network", "resolver", obj["id"]),
+        )
+
+    async def _resolve1_observation(self) -> dict:
         props = await BUS.get_all(RESOLVE1, RESOLVE1_PATH, RESOLVE1_MANAGER)
         # Manager.DNS aggregates global and per-link servers; global entries
         # carry ifindex 0 in the (iiay) struct.
@@ -761,6 +866,7 @@ class Adapter:
         in_use = sorted({s for entry in per_link.values() for s in entry["DNSServers"]}
                         | set(servers))
         facts = {
+            "ResolverService": "systemd-resolved",
             "CurrentDNSServer": _server_addr(props.get("CurrentDNSServer")),
             "DNSServersInUse": in_use,
             "GlobalDNSServers": servers,

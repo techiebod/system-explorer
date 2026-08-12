@@ -54,6 +54,18 @@ def link_opinions(facts: dict) -> list[dict]:
 
 
 def resolver_opinions(facts: dict) -> list[dict]:
+    # The file shape (ResolverService libc-resolv.conf) has one health
+    # question: does the file name any server at all? An empty resolv.conf
+    # leaves glibc trying localhost, which on a host without a local
+    # resolver is a lookup that cannot succeed.
+    if "Nameservers" in facts:
+        if not facts["Nameservers"]:
+            return [env.opinion(
+                "resolver-servers", "warn",
+                "resolv.conf names no nameservers; glibc will try localhost, "
+                "which answers only if something local listens on 53.",
+                ["ResolverService", "Nameservers"])]
+        return []
     if "DNSServersInUse" not in facts:
         return []
     if not facts.get("DNSServersInUse") and not facts.get("CurrentDNSServer"):
