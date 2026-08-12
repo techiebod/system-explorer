@@ -1186,11 +1186,27 @@ class Adapter:
                 opinions=resolver_opinions(obs["facts"]))]
         raise env.UnknownCollection(collection)
 
+    async def _resolver_source(self) -> dict:
+        """The envelope-level source follows the MECHANISM that answered —
+        rule 16's provenance half. Verified live after the file shape
+        deployed (2026-08-12): two dhcpcd hosts answered from
+        /etc/resolv.conf while the collection page's source still claimed
+        resolve1-dbus with resolvectl reference commands — an interface
+        that never spoke and commands that cannot run there. The opened
+        object already carried the honest source; the page now agrees."""
+        mode, _reason = await self._resolver_mode()
+        if mode == "file":
+            return env.source("resolv-conf", "/etc/resolv.conf (glibc)",
+                              FILE_RESOLVER_REFERENCE)
+        return self._source_for("resolver")
+
     async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:
         fetched = await self.acquire(collection)
         items = env.apply_fact_filters(fetched, query)
         page, applied, next_cursor, total = env.paginate(items, limit, cursor)
-        return env.collection_page(self.subsystem, collection, self._source_for(collection),
+        source = (await self._resolver_source() if collection == "resolver"
+                  else self._source_for(collection))
+        return env.collection_page(self.subsystem, collection, source,
                                    page, applied, next_cursor, requested_limit=limit,
                                    total=total, filters=query or None)
 
