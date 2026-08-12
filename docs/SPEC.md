@@ -6,8 +6,10 @@
 condensed into this document; per-document disposition in Appendix A
 **Direction:** [ROADMAP.md](ROADMAP.md) — status, priorities, and the estate/portability tracks
 
-0.6 (unreleased) adds rule 16 — the mechanism is a fact — with the
-resolver's file shape as its second conformer after packages, and decides
+0.6 (unreleased) adds rule 16 — the mechanism is a fact — settles the
+findings write posture (§6.3: a grant, appended transitions, no
+suppression, resolution observed not declared) before the findings layer
+exists, and decides
 the composite locator in writing before its
 schema: optional `container` and `app` members join the `host` block and
 rule 15's finding-identity tuple — identity, not provenance — with
@@ -611,6 +613,51 @@ knows is a fourth thing to disagree with it).
   when the hub is down, so it reads the directory itself.
 - The agent knows nothing of views. An agent-only deployment simply has none,
   and the UI shows the section only where `/hub/views` answers.
+
+### 6.3 Findings at the hub — the write posture, decided before the route
+
+Slice 2's findings layer gives conditions a lifecycle: the rule-15 key
+`(host.machine_id, container?, app?, object.id, opinion.key)` gains
+first_seen, last_seen, and operator acknowledgement, persisted at the hub
+under §6.1's metadata rule. Acknowledgement is a WRITE — the first this
+product has ever accepted — and its posture is settled here, in writing,
+before any code, because §6.1's read posture is licensed by "read-only by
+construction" and that licence does not stretch to cover a mutation
+nobody wrote down. Four decisions:
+
+1. **Writes are a grant, default off.** The transition route exists only
+   when the deployment enables it (`findingsWrites` in the hub module —
+   the `grantDiskAccess` idiom: an explicit, documented, per-deployment
+   yes). The posture caveat is stated where the grant is: until
+   authentication exists (a hard prerequisite of the actions phase), an
+   enabled write route trusts the network the hub is bound to, so it
+   belongs behind loopback or a tailnet bind, not a LAN the operator does
+   not control.
+2. **A transition is appended, attributed, and reversible — never a
+   deletion.** POST adds a record carrying the transition, a mandatory
+   free-text `by` (honest attribution without pretending it is
+   authentication), an optional note, and the hub's timestamp. Un-
+   acknowledging is another appended transition; the history is the
+   record and nothing rewrites it.
+3. **Acknowledgement never removes a finding from anything.** The
+   condition is still true on the host — the agent re-derives it on every
+   status poll, and hub state cannot say otherwise. Roll-ups keep
+   acknowledged findings in their counts, marked; projections (views, the
+   home-automation surface) may STYLE acknowledged differently and may
+   never drop it. Suppression is the one power this design refuses to
+   create, because a suppressed truth is the absence-as-health shape with
+   a signature on it.
+4. **Resolution is observed, not declared.** A finding leaves the roll-up
+   when the condition stops being derived — the host stopped saying it —
+   never because an operator marked it done. last_seen stops advancing;
+   the record remains; reappearance within the record's retention is the
+   same finding recurring, not a new one.
+
+The read side needs no grant: GET routes serve the registry (every
+finding, its lifecycle, its transitions) the way /hub/views serves
+documents — hub metadata, honestly distinct from the live observations it
+was derived from, each finding carrying the evidence_ref-style pointer
+back to the object that can prove or refute it right now.
 
 ### The fact dictionary — what a native name means
 
