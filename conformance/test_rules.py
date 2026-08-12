@@ -21,7 +21,7 @@ from common import AGENT_DIR, UI_DIR, resolve_fact_path
 from system_explorer.agent import rules
 from system_explorer.agent.rules import (docker, hardware, logs, network,
                                          nix, paperless, storage, system,
-                                         units, vms)
+                                         traefik, units, vms)
 
 RULES_DIR = AGENT_DIR / "rules"
 
@@ -34,6 +34,32 @@ RULES_DIR = AGENT_DIR / "rules"
 # ---------------------------------------------------------------------------
 
 CASES = [
+    # traefik: the ingress speaks for itself.
+    ("traefik-router-clean", traefik.router_opinions,
+     {"Rule": "Host(`app.example.internal`)", "Status": "enabled",
+      "Service": "app@docker"}, set()),
+    ("traefik-router-rejected", traefik.router_opinions,
+     {"Rule": "Host(`app.example.internal`)", "Status": "disabled",
+      "Error": ["middleware \"missing@docker\" does not exist"]},
+     {("router-error", "critical"), ("router-disabled", "warn")}),
+    ("traefik-router-warning-still-routes", traefik.router_opinions,
+     {"Rule": "Host(`app.example.internal`)", "Status": "warning",
+      "Error": ["entryPoint \"typo\" doesn't exist"]},
+     {("router-warning", "warn")}),
+    ("traefik-service-degraded", traefik.service_opinions,
+     {"Status": "enabled", "ServersUp": 1, "ServersDown": 1,
+      "DownServers": ["http://172.18.0.9:8000"]},
+     {("service-servers-down", "warn")}),
+    ("traefik-service-dead", traefik.service_opinions,
+     {"Status": "enabled", "ServersUp": 0, "ServersDown": 2,
+      "DownServers": ["http://172.18.0.9:8000", "http://172.18.0.10:8000"]},
+     {("service-servers-down", "critical")}),
+    ("traefik-overview-middleware-errors", traefik.overview_opinions,
+     {"MiddlewaresTotal": 4, "MiddlewaresErrors": 1},
+     {("middlewares-errors", "warn")}),
+    ("traefik-overview-clean", traefik.overview_opinions,
+     {"MiddlewaresTotal": 4, "MiddlewaresErrors": 0}, set()),
+
     # paperless: the archive's own answers, not its wrapper's.
     ("paperless-healthy", paperless.instance_opinions,
      {"DocumentCount": 38, "InboxCount": 2, "DatabaseStatus": "OK",
