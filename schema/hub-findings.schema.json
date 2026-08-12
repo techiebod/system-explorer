@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "se/hub-findings.v1",
   "title": "System Explorer estate findings roll-up",
-  "description": "Every finding the site's agents derive, folded into the hub's lifecycle registry (SPEC section 6.3). `current` is a statement only where the estate could look: a finding from an unswept agent or an unobserved collection carries observable=false and NO current member, because nobody can currently say — absence of the claim, never a fabricated value. Acknowledged findings stay in this list, marked: suppression is the one power the design refuses to create. Shared $defs are duplicated from findings.schema.json deliberately so each schema file is standalone.",
+  "description": "The hub's findings registry, whole: one list holding CURRENT findings, FROZEN ones (nobody could look), and RESOLVED HISTORY within retention, together by design — reappearance within retention is the same finding recurring, and history that vanished would be suppression. A consumer reading this cold must band on two members before anything else: observable=false means frozen (no `current` claim exists, because nobody can currently say), observable=true splits on current true/false — and current:false rows are deliberate history, not a registry leak (misread exactly that way by a careful consumer on day one, 2026-08-13). Acknowledged findings stay in this list, marked: suppression is the one power the design refuses to create. Shared $defs are duplicated from findings.schema.json deliberately so each schema file is standalone.",
   "type": "object",
   "required": ["schema", "site", "observed_at", "writes_enabled", "hosts", "findings"],
   "properties": {
@@ -27,6 +27,7 @@
     },
     "findings": {
       "type": "array",
+      "description": "Sorted attention-first: current findings (critical before warn), then frozen, then resolved history. Band on observable and current before reading anything else.",
       "items": { "$ref": "#/$defs/hubFinding" }
     }
   },
