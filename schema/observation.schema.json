@@ -119,7 +119,7 @@
       "required": ["type", "direction", "target"],
       "properties": {
         "type": {
-          "enum": ["requires", "wants", "after", "member-of", "mounts", "attached-to", "backs", "routes-via", "runs", "plumbed-onto", "owns"]
+          "enum": ["requires", "wants", "after", "member-of", "mounts", "attached-to", "backs", "routes-via", "runs", "plumbed-onto", "owns", "dispatches-to", "provisions", "tracks"]
         },
         "direction": { "enum": ["out", "in"] },
         "target": {

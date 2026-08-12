@@ -108,6 +108,27 @@ async def get_status(host: str | None = None) -> dict:
 
 
 @mcp.tool()
+async def get_findings(host: str | None = None) -> dict:
+    """Every warn/critical opinion a host currently derives (se.findings/1)
+    — one host, or every configured host at once.
+
+    This is get_status with the identities kept: each finding carries its
+    object, its opinion key and message, and an evidence_ref, so "what
+    needs attention" arrives ready to act on instead of as counts to
+    chase. Read `unobserved` before trusting absence: it names every
+    collection the sweep could NOT evaluate, and a finding's absence
+    means resolution only where the host says it could look. Lifecycle
+    (first_seen, acknowledgement) lives at the hub's /hub/findings — this
+    tool is the live sweep, deliberately hub-independent like every other
+    tool here."""
+    if host is not None:
+        return await _get(host, "/v1/findings")
+    names = list(AGENTS)
+    sweeps = await asyncio.gather(*(_get(name, "/v1/findings") for name in names))
+    return {"hosts": dict(zip(names, sweeps, strict=True))}
+
+
+@mcp.tool()
 async def get_collection(host: str, subsystem: str, collection: str,
                          filters: dict[str, str] | None = None,
                          limit: int | None = None,

@@ -21,7 +21,10 @@ list), agents grow `GET /v1/findings` (`se.findings/1`, whose `unobserved`
 member is what stops an unevaluable collection reading as all of its
 findings resolving), and the hub grows the §6.3 registry: `/hub/findings`
 (`se.hub-findings/1`) with first_seen/last_seen under the hub's state
-directory and the grant-gated transition route.
+directory and the grant-gated transition route. The app tier's flow-edge
+vocabulary (§3: `dispatches-to`, `provisions`, `tracks`; `routes-via`
+and `backs` reused for ingress) is decided here before the first app
+adapter emits an edge.
 
 0.5 (2026-08-12) amends §6.1 rule 4 — the hub holds metadata, never
 observations — and adds views (§6.2, `se.views/1`), the evidence envelope's
@@ -262,6 +265,31 @@ A small closed set, extended deliberately rather than ad hoc:
 Cross-subsystem edges are the point: `unit:compose-stack-web.service` →
 `member-of` ← `container:web-frontend` is what makes "why is this container
 down" answerable from the graph.
+
+**Flow edges (0.6, decided before any adapter emits one).** The app tier
+turns the graph into a pipeline — a request enters at the ingress and work
+moves between applications — and "show the flow between them" is answered
+by edges, never by a hand-drawn picture. Three additions, each with the
+refusal that shaped it, plus two deliberate reuses:
+
+| Type | Example |
+|---|---|
+| `dispatches-to` | an app sends selected work to another (a media manager → its download client; a request portal → the manager it files requests with) |
+| `provisions` | an app supplies configuration into another (an indexer manager syncing indexers into each manager; a config templater writing quality profiles) |
+| `tracks` | this object and the target are the same underlying work item seen by two apps (a queue item → the transfer it created, joined on the download id BOTH sides state) |
+
+Ingress hops need nothing new: a proxy router `routes-via` its service
+(the existing conduit semantics), and a backend `backs` the service that
+balances onto it.
+
+The refusals: no generic `related-to` (an edge that cannot say what it
+means is decoration); no inferred edges — every flow edge derives from a
+member the SOURCE app's own API states (its configured client, its sync
+target, its download id), cited like any fact, so the pipeline picture
+can only ever show what the apps themselves claim; and path-overlap
+edges (a manager's root folder against a media server's library) are
+deferred until path-identity semantics are decided — filesystem
+coincidence is not an API statement.
 
 ---
 

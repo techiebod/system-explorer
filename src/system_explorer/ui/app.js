@@ -746,6 +746,15 @@ function navModel() {
                               route: `view/${doc.name}` }] });
   }
 
+  // The estate attention surface (SPEC section 6.3): hub mode only,
+  // because /hub/findings is the hub's registry — a directly-browsed
+  // agent has /v1/findings but no lifecycle to show for it.
+  if (state.hub) {
+    sections.push({ solo: false, heading: "estate", available: true,
+                    items: [{ sub: "estate", coll: "findings",
+                              label: "findings", route: "estate/findings" }] });
+  }
+
   const listed = (sub, coll) =>
     subsystems[sub]?.available && (subsystems[sub].collections || []).includes(coll);
 
@@ -991,7 +1000,8 @@ async function switchHost(host, rest) {
   const cols = state.capabilities.subsystems[rest[0]]?.collections || [];
   const isView = rest[0] === "view" &&
     (state.views?.views || []).some(doc => doc.name === rest[1]);
-  if (!isView && (!rest[0] || !(rest[1] ? cols.includes(rest[1]) : cols.length))) {
+  const isEstate = rest[0] === "estate" && rest[1] === "findings";
+  if (!isView && !isEstate && (!rest[0] || !(rest[1] ? cols.includes(rest[1]) : cols.length))) {
     history.replaceState(null, "", hashFor(...defaultRoute()));
   }
   state.subsystem = null;                   // force a reload on the new host
@@ -1031,6 +1041,8 @@ async function loadCollection(deepLinkId = null) {
     return loadOverview();
   if (state.subsystem === "view")
     return loadView(state.collection);
+  if (state.subsystem === "estate" && state.collection === "findings")
+    return loadFindings();
   $("overview").hidden = true;
   $("views-pane").hidden = true;
   $("collection-pane").hidden = false;
@@ -1316,6 +1328,101 @@ function cpuBusy(now, prev) {
    panel would need the roll-up the findings phase owns, and a quiet
    per-host view that switches hosts honestly beats a clever aggregation
    the hub contract forbids. */
+
+/* ── estate findings (SPEC section 6.3) ───────────────────
+   The registry's read side, rendered in three honest bands: current
+   (derived this sweep), unobservable (nobody could look — lifecycle
+   frozen, no `current` claim to render), and resolved (an agent that
+   could look stopped deriving it). Acknowledgement STYLES a row and
+   never removes it — the one power the design refuses is suppression,
+   and this renderer holds that line by construction: every finding in
+   the envelope gets a row, unconditionally. */
+
+async function loadFindings() {
+  const { epoch } = state;
+  $("overview").hidden = true;
+  $("collection-pane").hidden = true;
+  const pane = $("views-pane");
+  pane.hidden = false;
+  pane.textContent = "loading…";
+  let body;
+  try {
+    const res = await fetch("/hub/findings");
+    body = await res.json();
+  } catch (err) {
+    if (state.epoch !== epoch) return;
+    pane.textContent = "";
+    banner(`The hub's findings surface did not answer: ${err}`);
+    return;
+  }
+  if (state.epoch !== epoch) return;
+  pane.textContent = "";
+  banner("");
+  state.observedAt = body.observed_at || null;
+
+  const head = el("div", "vw-head");
+  head.appendChild(el("h2", "vw-title", "Estate findings"));
+  if (body.site) head.appendChild(el("div", "vw-audience", `site ${body.site}`));
+  pane.appendChild(head);
+
+  for (const note of body.errors || [])
+    pane.appendChild(el("div", "vw-error", note));
+  const unswept = Object.entries(body.hosts || {})
+    .filter(([, entry]) => !entry.swept);
+  for (const [name, entry] of unswept)
+    pane.appendChild(el("div", "vw-error",
+      `${name} could not be swept: ${entry.error || "no answer"} — its findings below are frozen, not resolved`));
+
+  const bands = [
+    ["current", "Needs attention", (f) => f.current === true],
+    ["frozen", "Unobservable right now", (f) => f.observable === false],
+    ["resolved", "Resolved — condition no longer derived", (f) => f.current === false],
+  ];
+  const findings = body.findings || [];
+  if (!findings.length) {
+    pane.appendChild(el("div", "vw-note",
+      "No findings anywhere the estate can currently see."));
+    return;
+  }
+  for (const [, title, match] of bands) {
+    const rows = findings.filter(match);
+    if (!rows.length) continue;
+    const card = el("section", "vw-card");
+    card.appendChild(el("h3", "vw-panel-title", `${title} (${rows.length})`));
+    for (const finding of rows) card.appendChild(findingRow(finding));
+    pane.appendChild(card);
+  }
+}
+
+function findingRow(finding) {
+  const row = el("a", "fnd-row");
+  // Cross-host deep link: hub-mode hashes lead with the agent name, and
+  // the registry names which agent last stated this finding.
+  row.href = `#/${finding.agent}/${finding.subsystem}/${finding.collection}/`
+    + idPath(finding.object.id);
+  row.appendChild(el("span", `dot ${finding.opinion.level}`));
+  const where = [finding.host?.hostname || finding.agent,
+                 finding.host?.container, finding.host?.app]
+    .filter(Boolean).join(" · ");
+  const main = el("div", "fnd-main");
+  main.appendChild(el("div", "fnd-title",
+    `${finding.object.name || finding.object.native_id} — ${finding.opinion.message}`));
+  const parts = [where, `${finding.subsystem}/${finding.collection}`,
+                 finding.opinion.key];
+  if (finding.first_seen) parts.push(`first seen ${ageOf(finding.first_seen)}`);
+  if (finding.current === false && finding.last_seen)
+    parts.push(`last seen ${ageOf(finding.last_seen)}`);
+  main.appendChild(el("div", "fnd-meta", parts.join("  ·  ")));
+  row.appendChild(main);
+  if (finding.acknowledged) {
+    const last = (finding.transitions || []).at(-1);
+    const chip = el("span", "fnd-ack", "acknowledged");
+    if (last?.by) chip.title = `by ${last.by}${last.note ? ` — ${last.note}` : ""}`;
+    row.appendChild(chip);
+  }
+  return row;
+}
+
 
 async function loadView(name) {
   const { epoch } = state;

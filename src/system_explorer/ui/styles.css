@@ -759,3 +759,14 @@ a.ov-sub:hover { color: var(--accent); }
    Same treatment as an unavailable subsystem heading, one level down. */
 .nav-item.unavailable { color: var(--text-faint); }
 .nav-item.unavailable::after { content: "·"; margin-left: auto; }
+
+/* ── estate findings (SPEC section 6.3) ─────────────────── */
+.fnd-row { display: flex; align-items: baseline; gap: 10px; padding: 8px 6px;
+  border-top: 1px solid var(--border); text-decoration: none; color: var(--text); }
+.fnd-row:first-of-type { border-top: none; }
+.fnd-row:hover { background: var(--panel-hover, rgba(128,128,128,.08)); }
+.fnd-main { min-width: 0; flex: 1; }
+.fnd-title { font-size: 13px; }
+.fnd-meta { color: var(--text-faint); font-size: 11px; margin-top: 2px; }
+.fnd-ack { color: var(--text-faint); font-size: 11px; border: 1px solid var(--border);
+  border-radius: 8px; padding: 1px 7px; white-space: nowrap; }
