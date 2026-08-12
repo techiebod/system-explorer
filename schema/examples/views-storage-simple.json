@@ -13,7 +13,11 @@
           "title": "Pools",
           "subsystem": "storage",
           "collection": "pools",
-          "columns": ["State", "CapacityPercent", "ScanAgeDays"],
+          "columns": [
+            "State",
+            "CapacityPercent",
+            "ScanAgeDays"
+          ],
           "note": "Each pool is one big protected store. ONLINE means healthy."
         },
         {
@@ -21,22 +25,37 @@
           "title": "What is on them",
           "subsystem": "storage",
           "collection": "datasets",
-          "columns": ["UsedBytes", "AvailableBytes", "Mountpoint"]
+          "columns": [
+            "Mountpoint",
+            "UsedBytes",
+            "AvailBytes",
+            "UsePercent"
+          ]
         },
         {
           "key": "disks",
           "title": "The disks themselves",
           "subsystem": "hardware",
           "collection": "scsi",
-          "filters": {"type": "disk"},
-          "columns": ["Model", "Enclosure", "EnclosureSlot",
-                      "SmartOverallPassed", "SmartTemperatureC"],
+          "filters": {
+            "type": "disk"
+          },
+          "columns": [
+            "Model",
+            "Enclosure",
+            "EnclosureSlot",
+            "SmartOverallPassed",
+            "SmartTemperatureC"
+          ],
           "note": "Every physical drive, which bay it sits in, and whether it says it is healthy."
         }
       ]
     }
   ],
   "errors": [
-    {"file": "half-finished.json", "error": "views.0.panels: [] should be non-empty"}
+    {
+      "file": "half-finished.json",
+      "error": "views.0.panels: [] should be non-empty"
+    }
   ]
 }

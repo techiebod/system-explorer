@@ -17,6 +17,7 @@
 const $ = (id) => document.getElementById(id);
 
 const state = {
+  views: null,          // se.views/1 from /hub/views; null = not a hub, or none
   hub: null,             // /hub/hosts payload when the hub serves us, else null
   currentHost: null,     // hub mode: the agent every api() call is proxied to
   capabilities: null,
@@ -448,6 +449,18 @@ async function boot() {
     const res = await fetch("/hub/hosts");
     if (res.ok) state.hub = await res.json();
   } catch { /* server unreachable entirely; loadHost reports it below */ }
+  if (state.hub) {
+    // Views are hub-served operator projections (SPEC 6.2); an agent 404s
+    // the route and the section simply never exists. Failure here is a
+    // missing feature, never a broken page.
+    try {
+      const res = await fetch("/hub/views");
+      if (res.ok) {
+        const body = await res.json();
+        if (body?.schema === "se.views/1") state.views = body;
+      }
+    } catch { /* hub without views; nothing to show */ }
+  }
   if (state.hub && !Object.keys(state.hub.hosts).length) {
     banner("The hub has no agents configured (SE_HUB_AGENTS).");
     return;
@@ -711,6 +724,19 @@ function navModel() {
   const sections = [];
   const claimed = new Set();
 
+  // Operator-authored views lead the nav when the hub serves any: they are
+  // the curated front doors, and the person they were written for should
+  // meet them before the raw subsystem list. Absent entirely otherwise —
+  // an empty heading would be a lie about what is here (same rule as
+  // groups below). The route shape is view/<name>; "view" is not a
+  // subsystem and the router dispatches it before capabilities are asked.
+  for (const doc of state.views?.views || []) {
+    sections.push({ solo: false, heading: sections.length ? null : "views",
+                    available: true,
+                    items: [{ sub: "view", coll: doc.name, label: doc.title,
+                              route: `view/${doc.name}` }] });
+  }
+
   const listed = (sub, coll) =>
     subsystems[sub]?.available && (subsystems[sub].collections || []).includes(coll);
 
@@ -943,7 +969,9 @@ async function switchHost(host, rest) {
     return;
   }
   const cols = state.capabilities.subsystems[rest[0]]?.collections || [];
-  if (!rest[0] || !(rest[1] ? cols.includes(rest[1]) : cols.length)) {
+  const isView = rest[0] === "view" &&
+    (state.views?.views || []).some(doc => doc.name === rest[1]);
+  if (!isView && (!rest[0] || !(rest[1] ? cols.includes(rest[1]) : cols.length))) {
     history.replaceState(null, "", hashFor(...defaultRoute()));
   }
   state.subsystem = null;                   // force a reload on the new host
@@ -981,7 +1009,10 @@ const MAX_ROWS = 2000;   // client-side ceiling; the crumb says when it's hit
 async function loadCollection(deepLinkId = null) {
   if (state.subsystem === "system" && state.collection === "overview")
     return loadOverview();
+  if (state.subsystem === "view")
+    return loadView(state.collection);
   $("overview").hidden = true;
+  $("views-pane").hidden = true;
   $("collection-pane").hidden = false;
   const { subsystem, collection, epoch } = state;
   $("refresh").classList.add("spin");
@@ -1255,8 +1286,132 @@ function cpuBusy(now, prev) {
   };
 }
 
+/* ── views (SPEC 6.2): operator-authored projections ─────────
+
+   A view defers truth, never hides it: every panel is a real collection
+   fetched through the same host-scoped api() the grid uses, every row
+   links to its full observation, and every fact name resolves its meaning
+   through factHelp() — nothing here re-states what an agent knows. Panels
+   render for the CURRENTLY SELECTED host, deliberately: an estate-wide
+   panel would need the roll-up the findings phase owns, and a quiet
+   per-host view that switches hosts honestly beats a clever aggregation
+   the hub contract forbids. */
+
+async function loadView(name) {
+  const { epoch } = state;
+  const doc = (state.views?.views || []).find(v => v.name === name);
+  $("overview").hidden = true;
+  $("collection-pane").hidden = true;
+  const pane = $("views-pane");
+  pane.hidden = false;
+  pane.textContent = "";
+  if (!doc) {
+    // A stale bookmark for a view the operator since removed: say so and
+    // stay useful, exactly the unreachable-host shape.
+    banner(`No view named ${name} is served by this hub.`);
+    return;
+  }
+  banner("");
+  const head = el("div", "vw-head");
+  head.appendChild(el("h2", "vw-title", doc.title));
+  if (doc.audience) head.appendChild(el("div", "vw-audience", doc.audience));
+  pane.appendChild(head);
+  // Malformed sibling documents are part of the envelope, and an operator
+  // editing views deserves to see the refusal where they look first.
+  for (const bad of state.views?.errors || []) {
+    pane.appendChild(el("div", "vw-error",
+      `${bad.file}: ${bad.error} — this document is not being served`));
+  }
+  for (const panel of doc.panels) {
+    pane.appendChild(renderViewPanel(panel, epoch));
+  }
+}
+
+function renderViewPanel(panel, epoch) {
+  const card = el("section", "vw-card");
+  card.appendChild(el("h3", "vw-panel-title", panel.title));
+  if (panel.note) card.appendChild(el("div", "vw-note", panel.note));
+  const body = el("div", "vw-body", "loading…");
+  card.appendChild(body);
+  const query = new URLSearchParams(panel.filters || {});
+  query.set("limit", String(PAGE_LIMIT));
+  api(`/v1/${panel.subsystem}/${panel.collection}?${query}`)
+    .then(page => {
+      if (state.epoch !== epoch) return;
+      body.textContent = "";
+      if (page.status === "error") {
+        // The agent's reason, verbatim — a declined collection on this host
+        // is a true statement the audience can read.
+        body.appendChild(el("div", "vw-error", (page.errors || []).join("; ")));
+        return;
+      }
+      if (!page.items.length) {
+        body.appendChild(el("div", "empty", "nothing here right now"));
+        return;
+      }
+      body.appendChild(viewTable(panel, page.items));
+      if (page.total > page.items.length) {
+        const more = el("a", "vw-more",
+          `showing ${page.items.length} of ${page.total} — open the full collection`);
+        more.href = hashFor(panel.subsystem, panel.collection);
+        body.appendChild(more);
+      }
+    })
+    .catch(exc => {
+      if (state.epoch !== epoch) return;
+      body.textContent = "";
+      body.appendChild(el("div", "vw-error", String(exc.message || exc)));
+    });
+  return card;
+}
+
+function viewTable(panel, items) {
+  const table = el("table", "vw-table");
+  const thead = el("thead");
+  const hrow = el("tr");
+  hrow.appendChild(el("th", null, ""));   // severity dot column
+  for (const key of panel.columns || []) {
+    const th = el("th", null, key);
+    const help = factHelp(key, panel.subsystem, panel.collection);
+    if (help) th.title = help;
+    hrow.appendChild(th);
+  }
+  thead.appendChild(hrow);
+  table.appendChild(thead);
+  const tbody = el("tbody");
+  for (const item of items) {
+    const row = el("tr");
+    row.className = "vw-row";
+    const dotCell = el("td");
+    const dot = el("span", `dot ${item.worst_opinion_level || "none"}`);
+    dot.title = item.worst_opinion_level || "no severity claim";
+    dotCell.appendChild(dot);
+    row.appendChild(dotCell);
+    for (const key of panel.columns || []) {
+      row.appendChild(el("td", "vw-cell", viewCellText(key, item)));
+    }
+    // The whole row is the drill: one click from any panel to the full
+    // observation, which is what "defers, never hides" means in pixels.
+    row.onclick = () => goTo(panel.subsystem, panel.collection, item.id);
+    tbody.appendChild(row);
+  }
+  table.appendChild(tbody);
+  return table;
+}
+
+function viewCellText(key, item) {
+  const value = cellValue(key, item);
+  if (value === undefined || value === null) return "";
+  if (typeof value === "number" && /Bytes$/.test(key)) return humanBytes(value);
+  if (Array.isArray(value)) return value.map(String).join(", ");
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+
 async function loadOverview() {
   const { epoch } = state;
+  $("views-pane").hidden = true;
   $("refresh").classList.add("spin");
   // The overview composes from the same public collections everything else
   // reads (two consumers, one contract) — each ask is capability-guarded
