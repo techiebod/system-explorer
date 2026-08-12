@@ -140,6 +140,11 @@ EVIDENCE_REDACTION_EXEMPTIONS: dict[str, str] = {
                "snapshot — which carries node PUBLIC keys and DERP topology. "
                "The one member worth watching is AuthURL, a single-use login "
                "URL present only while the node is logged out.",
+    "servarr": "system status, health items and queue records: versions, "
+               "the apps' own diagnostic messages, download titles, client "
+               "and indexer names, transfer ids and paths. The API key "
+               "travels only in the request header this adapter sends and "
+               "appears in none of the three document families served.",
     "vms": "libvirt domain XML from XMLDesc(0). Flag 0 omits "
            "VIR_DOMAIN_XML_SECURE material such as <graphics passwd=...>, and "
            "a read-only connection cannot request it. That premise is what "

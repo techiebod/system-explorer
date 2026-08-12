@@ -42,3 +42,25 @@ def test_comments_and_blank_lines_vanish():
 def test_an_empty_file_is_empty_facts_not_an_error():
     facts = parse_resolv_conf("")
     assert facts == {"Nameservers": [], "SearchDomains": [], "Options": []}
+
+
+def test_systemd_261_rehomes_loopback_globals_onto_lo():
+    # Raw probe from a live estate host on systemd 261.1 (2026-08-13):
+    # resolved.conf says DNS=127.0.0.1 ::1, yet Manager.DNS presents those
+    # servers with ifindex 1 (loopback), not the classic global ifindex 0
+    # — while resolvectl still files them under "Global". The ifindex-0
+    # filter read empty globals and fired a false fallback warn on a host
+    # running a deliberate local recursive resolver.
+    from system_explorer.agent.adapters.network import global_dns_servers
+    jar_probe = [
+        [1, 2, bytes([127, 0, 0, 1])],
+        [1, 10, bytes([0] * 15 + [1])],
+        [7, 2, bytes([100, 100, 100, 100])],
+        [7, 10, bytes.fromhex("fd7a115ca1e00000000000000000" + "0053")],
+    ]
+    servers = global_dns_servers(jar_probe)
+    assert "127.0.0.1" in servers and "::1" in servers
+    # The per-link (tailscale, ifindex 7) servers stay per-link.
+    assert "100.100.100.100" not in servers
+    # The classic ifindex-0 shape keeps working on older resolved.
+    assert global_dns_servers([[0, 2, bytes([9, 9, 9, 9])]]) == ["9.9.9.9"]

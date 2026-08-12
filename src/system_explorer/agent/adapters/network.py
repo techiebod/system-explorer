@@ -483,6 +483,30 @@ def _server_addr(struct_entry) -> str | None:
     return None
 
 
+# lo is ifindex 1 by kernel construction: it is the first interface every
+# netns registers.
+_LOOPBACK_IFINDEX = 1
+
+
+def global_dns_servers(entries: list) -> list[str]:
+    """System-scope servers from Manager.DNS's (ifindex, family, addr)
+    structs: ifindex 0 (the classic global scope) OR the loopback link.
+
+    The loopback half is a measured systemd-261 behaviour, not a guess: a
+    host whose resolved.conf plainly says `DNS=127.0.0.1 ::1` presented
+    those servers with ifindex 1 in BOTH Manager.DNS and DNSEx (raw
+    busctl probe, estate host, 2026-08-13) while resolvectl still filed
+    them under "Global" — so an ifindex-0 filter reported empty globals
+    and the fallback-carries-default rule fired a false warn on a host
+    running a deliberate local recursive resolver. Servers homed on lo
+    are system-scope by construction either way: loopback is not a
+    network, so there is no per-link narrowing for them to mean."""
+    return [addr for entry in entries
+            if isinstance(entry, (list, tuple)) and len(entry) == 3
+            and entry[0] in (0, _LOOPBACK_IFINDEX)
+            and (addr := _server_addr(entry))]
+
+
 class Adapter:
     subsystem = "network"
 
@@ -850,11 +874,7 @@ class Adapter:
 
     async def _resolve1_observation(self) -> dict:
         props = await BUS.get_all(RESOLVE1, RESOLVE1_PATH, RESOLVE1_MANAGER)
-        # Manager.DNS aggregates global and per-link servers; global entries
-        # carry ifindex 0 in the (iiay) struct.
-        servers = [addr for entry in props.get("DNS") or []
-                   if isinstance(entry, (list, tuple)) and len(entry) == 3 and entry[0] == 0
-                   and (addr := _server_addr(entry))]
+        servers = global_dns_servers(props.get("DNS") or [])
         fallback = [addr for entry in props.get("FallbackDNS") or []
                     if (addr := _server_addr(entry))]
         domains = [f"{d[1]}{' (route-only)' if d[2] else ''}"

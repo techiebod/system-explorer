@@ -20,8 +20,8 @@ from common import AGENT_DIR, UI_DIR, resolve_fact_path
 
 from system_explorer.agent import rules
 from system_explorer.agent.rules import (docker, hardware, logs, network,
-                                         nix, paperless, storage, system,
-                                         traefik, units, vms)
+                                         nix, paperless, servarr, storage,
+                                         system, traefik, units, vms)
 
 RULES_DIR = AGENT_DIR / "rules"
 
@@ -34,6 +34,40 @@ RULES_DIR = AGENT_DIR / "rules"
 # ---------------------------------------------------------------------------
 
 CASES = [
+    # servarr: the managers' own self-diagnosis, mirrored.
+    ("servarr-app-clean", servarr.app_opinions,
+     {"App": "example-manager", "Version": "4.0.0", "HealthErrors": 0,
+      "HealthWarnings": 0, "QueueTotal": 3}, set()),
+    ("servarr-app-self-reported-warnings", servarr.app_opinions,
+     {"App": "example-manager", "HealthErrors": 0, "HealthWarnings": 2},
+     {("servarr-health", "warn")}),
+    ("servarr-app-self-reported-errors", servarr.app_opinions,
+     {"App": "example-manager", "HealthErrors": 1, "HealthWarnings": 2},
+     {("servarr-health", "critical")}),
+    ("servarr-app-unconfigured", servarr.app_opinions,
+     {"App": "example-manager", "ConfigMissing": ["SE_EXAMPLE_MANAGER_URL"]},
+     {("servarr-unconfigured", "warn")}),
+    ("servarr-app-dark", servarr.app_opinions,
+     {"App": "example-manager",
+      "StatusUnobservable": "ConnectError: connection refused"},
+     {("servarr-unreachable", "critical")}),
+    ("servarr-health-error-mirrors-critical", servarr.health_opinions,
+     {"App": "example-manager", "Source": "DownloadClientCheck",
+      "Type": "error", "Message": "All download clients are unavailable"},
+     {("servarr-health-item", "critical")}),
+    ("servarr-health-warning-mirrors-warn", servarr.health_opinions,
+     {"App": "example-manager", "Source": "IndexerStatusCheck",
+      "Type": "warning", "Message": "Indexers unavailable due to failures"},
+     {("servarr-health-item", "warn")}),
+    ("servarr-queue-stuck-import", servarr.queue_opinions,
+     {"App": "example-manager", "TrackedDownloadStatus": "warning",
+      "TrackedDownloadState": "importBlocked",
+      "StatusMessages": "Found archive file, might need to be extracted"},
+     {("queue-item-stuck", "warn")}),
+    ("servarr-queue-clean", servarr.queue_opinions,
+     {"App": "example-manager", "TrackedDownloadStatus": "ok",
+      "TrackedDownloadState": "downloading"}, set()),
+
     # traefik: the ingress speaks for itself.
     ("traefik-router-clean", traefik.router_opinions,
      {"Rule": "Host(`app.example.internal`)", "Status": "enabled",
