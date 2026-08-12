@@ -52,7 +52,9 @@ async def lifespan(app: FastAPI):
     # The snapshot loop is an in-process task, not a systemd timer (SPEC
     # section 10): it needs the adapters anyway, and this way history stops
     # with the service instead of racing its shutdown.
-    task = asyncio.create_task(_snapshot_loop()) if HISTORY else None
+    # The store rides as a parameter: the None check happens once,
+    # here, and the loop's signature says it cannot run without one.
+    task = asyncio.create_task(_snapshot_loop(HISTORY)) if HISTORY else None
     yield
     if task:
         task.cancel()
@@ -261,6 +263,7 @@ async def _status_rollup(adapter, collection: str) -> dict:
         counts[level] = counts.get(level, 0) + 1
     # critical > warn > any positively-healthy row > occupied-but-neutral
     # > null for an empty collection.
+    worst: str | None
     if counts.get("critical"):
         worst = "critical"
     elif counts.get("warn"):
@@ -368,16 +371,16 @@ async def _subsystem_snapshot(name: str, adapter) -> dict[str, list[dict]]:
     return collections
 
 
-async def _take_snapshot() -> None:
+async def _take_snapshot(store: history.HistoryStore) -> None:
     results = await asyncio.gather(
         *(_subsystem_snapshot(name, adapter) for name, adapter in ADAPTERS.items()))
     data = {name: colls for name, colls in zip(ADAPTERS, results, strict=True) if colls}
     await anyio.to_thread.run_sync(
-        HISTORY.write_snapshot, env.utc_now(), history.read_boot_id(),
+        store.write_snapshot, env.utc_now(), history.read_boot_id(),
         data, SNAPSHOT_RETENTION_DAYS)
 
 
-async def _snapshot_loop() -> None:
+async def _snapshot_loop(store: history.HistoryStore) -> None:
     """The SE_SNAPSHOT_INTERVAL_SECONDS cadence, resumable across restarts:
     the startup snapshot is taken only when the newest stored one is missing
     or already older than the interval, so a redeploy does not stack extra
@@ -386,10 +389,10 @@ async def _snapshot_loop() -> None:
     while True:
         delay = SNAPSHOT_INTERVAL
         try:
-            newest = await anyio.to_thread.run_sync(HISTORY.newest_snapshot_at)
+            newest = await anyio.to_thread.run_sync(store.newest_snapshot_at)
             age = history.iso_age_seconds(newest) if newest else None
             if age is None or age >= SNAPSHOT_INTERVAL:
-                await _take_snapshot()
+                await _take_snapshot(store)
             else:
                 delay = SNAPSHOT_INTERVAL - age
         except Exception as exc:  # noqa: BLE001 - log-and-continue, never crash the loop

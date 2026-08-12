@@ -586,7 +586,7 @@ class Adapter:
                 raise env.UnknownObject(object_id)
             # The raw file contents, captured fresh (SPEC section 2, rule 4);
             # absent files (no PSI, no ZFS) are absent from the payload too.
-            payload = {}
+            payload: dict = {}
             for path in OVERVIEW_FILES:
                 content = _read(path)
                 if content:

@@ -123,7 +123,8 @@ def _domains_raw() -> list[dict]:
         out = []
         for dom in conn.listAllDomains():
             state, max_kib, cur_kib, vcpus, _cpu_time = dom.info()
-            ips, ip_note = ({}, None)
+            ips: dict[str, list[str]] = {}
+            ip_note: str | None = None
             if state == 1:  # running
                 ips, ip_note = _interface_addresses(dom)
             out.append({
@@ -146,7 +147,9 @@ def _domains_raw() -> list[dict]:
 
 def _devices(xml: str) -> tuple[list[dict], list[dict], list[dict]]:
     """(disks, NICs, passed-through hostdevs) from domain XML."""
-    disks, nics, hostdevs = [], [], []
+    disks: list[dict] = []
+    nics: list[dict] = []
+    hostdevs: list[dict] = []
     try:
         root = ET.fromstring(xml)
     except ET.ParseError:
@@ -183,7 +186,7 @@ def _devices(xml: str) -> tuple[list[dict], list[dict], list[dict]]:
                 # addr binds as a default, not a closure: same-iteration use
                 # is safe today, but a closure over a loop variable is one
                 # refactor from reading a later iteration's element.
-                def hexpart(key: str, _addr: dict = addr) -> int:
+                def hexpart(key: str, _addr: ET.Element = addr) -> int:
                     return int(_addr.get(key) or "0", 16)
                 hostdevs.append({"Type": "pci", "Address":
                                  f"{hexpart('domain'):04x}:{hexpart('bus'):02x}"

@@ -498,8 +498,9 @@ def _lscpu_fields(raw: dict) -> dict[str, str]:
     def walk(entries: list) -> None:
         for entry in entries:
             if isinstance(entry, dict):
-                if entry.get("field"):
-                    fields[entry["field"].rstrip(":")] = entry.get("data")
+                data = entry.get("data")
+                if entry.get("field") and data is not None:
+                    fields[entry["field"].rstrip(":")] = data
                 walk(entry.get("children") or [])
 
     walk(raw.get("lscpu") or [])
@@ -640,6 +641,7 @@ class Adapter:
             recorded_reason = await anyio.to_thread.run_sync(_smart_no_reading, dev)
             if recorded_reason:
                 info["SmartSnapshotReason"] = recorded_reason
+            data: dict | None = None
             snapshot = await anyio.to_thread.run_sync(_smart_snapshot, dev)
             if snapshot is not None:
                 data, mtime = snapshot
@@ -656,7 +658,6 @@ class Adapter:
                 # reason. Dropping the device silently would discard the only
                 # explanation the operator can get for why a drive shows no
                 # health at all.
-                data = None
                 if have_tool:
                     path = next((p for p in paths if os.access(p, os.R_OK)), None)
                     if path is not None:
@@ -875,7 +876,7 @@ class Adapter:
             base = f"{SCSI_HOSTS}/{host}"
             pci_addr = _pci_addr_of(base)
             driver = _read(f"{base}/proc_name")
-            facts = {"Driver": driver,
+            facts: dict = {"Driver": driver,
                      "State": _read(f"{base}/state"),
                      # SATA and USB storage are presented through the SCSI
                      # subsystem, so an AHCI port and a SAS HBA were both just

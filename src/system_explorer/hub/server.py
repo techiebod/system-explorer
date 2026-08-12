@@ -48,6 +48,16 @@ from ..text import one_line
 from ..paths import UI_DIR
 
 
+def _params(request) -> list[tuple[str, str | int | float | bool | None]]:
+    """multi_items() as the element type httpx.get declares.
+
+    The values really are plain strings; lists are invariant, so the
+    narrower list[tuple[str, str]] is rejected by the checker despite being
+    safe to pass. Restating the element type here says so once, instead of
+    an ignore comment at each call site."""
+    return list(request.query_params.multi_items())
+
+
 def _pairs_from_env(variable: str) -> dict[str, str]:
     raw = os.environ.get(variable, "")
     pairs: dict[str, str] = {}
@@ -198,7 +208,7 @@ async def _proxy(name: str, path: str, request: Request) -> Response:
             "error": f"unknown host {name!r}", "known_hosts": sorted(AGENTS)})
     try:
         upstream = await _client.get(f"{base}{path}",
-                                     params=request.query_params.multi_items() or None)
+                                     params=_params(request) or None)
     except httpx.HTTPError as exc:
         return JSONResponse(status_code=502, content={
             "error": one_line(f"agent unreachable: {type(exc).__name__}: {exc}"),
@@ -234,7 +244,7 @@ async def _forward_to_site(site: str, name: str, suffix: str,
     try:
         upstream = await _client.get(
             f"{base}/agents/{name}{suffix}",
-            params=request.query_params.multi_items() or None)
+            params=_params(request) or None)
     except httpx.HTTPError as exc:
         # A dark sibling costs that site's hosts and nothing else: this hub
         # keeps serving its own, which is the invariant federation exists to

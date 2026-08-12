@@ -383,8 +383,10 @@ def _delta_rows(older: dict, newer: dict) -> list[dict]:
     if old_revision != new_revision:
         rows.append({"Kind": "revision", "Name": "configuration",
                      "From": old_revision, "To": new_revision})
-    old_inputs = older.get("inputs") if isinstance(older.get("inputs"), dict) else {}
-    new_inputs = newer.get("inputs") if isinstance(newer.get("inputs"), dict) else {}
+    raw_old = older.get("inputs")
+    raw_new = newer.get("inputs")
+    old_inputs = raw_old if isinstance(raw_old, dict) else {}
+    new_inputs = raw_new if isinstance(raw_new, dict) else {}
     for name in sorted(set(old_inputs) | set(new_inputs)):
         before = _input_identity(old_inputs.get(name))
         after = _input_identity(new_inputs.get(name))

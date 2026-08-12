@@ -888,7 +888,7 @@ class Adapter:
         res_ok, res_reason = await self._resolver_available()
         items = []
         for name, spec in LOOKUPS.items():
-            facts = dict(spec)
+            facts: dict = dict(spec)
             if name == "resolve" and not res_ok:
                 facts["Available"] = False
                 facts["Note"] = res_reason
@@ -996,7 +996,7 @@ class Adapter:
                                       f"The resolver answered {verdict} for this query.",
                                       ["Resolved", "Result"])])
         flags = reply["flags"]
-        facts: dict = {"Query": arg, "Resolved": True}
+        facts = {"Query": arg, "Resolved": True}
         if "names" in reply:
             facts["Names"] = [n for _, n in reply["names"]]
         else:
@@ -1028,7 +1028,7 @@ class Adapter:
         name, arg = self._parse_lookup_id(object_id)
         obj = env.obj_ref(object_id, "lookup", object_id[len("lookup:"):])
         if not arg:
-            facts = dict(LOOKUPS[name])
+            facts: dict = dict(LOOKUPS[name])
             facts["Usage"] = f"GET /v1/network/lookups/lookup:{name}/<input>"
             if name == "resolve":
                 res_ok, res_reason = await self._resolver_available()

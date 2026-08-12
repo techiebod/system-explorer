@@ -160,8 +160,9 @@ def _entry_facts(record: dict) -> dict:
     ts = record.get("__REALTIME_TIMESTAMP")
     if ts is not None:
         facts["Timestamp"] = env.usec_to_iso(int(ts))
-    if isinstance(facts.get("Priority"), str):
-        facts["Priority"] = int(facts["Priority"])
+    priority = facts.get("Priority")
+    if isinstance(priority, str):
+        facts["Priority"] = int(priority)
     return facts
 
 

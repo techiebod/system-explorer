@@ -534,7 +534,7 @@ class Adapter:
             vdev_errors = [vdev["Name"] for vdev in vdevs
                            if any((vdev.get(key) or 0) for key in
                                   ("ReadErrors", "WriteErrors", "ChecksumErrors"))]
-            cap = _int_or_none(_prop_value(props, "capacity"))
+            cap_pct = _int_or_none(_prop_value(props, "capacity"))
             # --json-int gives end_time as an epoch int; the plain -j
             # fallback gives a locale string, kept verbatim with
             # ScanAgeDays omitted so pool-scrub-stale simply does not
@@ -558,7 +558,7 @@ class Adapter:
                 "SizeBytes": _int_or_none(_prop_value(props, "size")),
                 "AllocatedBytes": _int_or_none(_prop_value(props, "allocated")),
                 "FreeBytes": _int_or_none(_prop_value(props, "free")),
-                "CapacityPercent": cap,
+                "CapacityPercent": cap_pct,
                 "FragmentationPercent": _int_or_none(_prop_value(props, "fragmentation")),
                 "Vdevs": vdevs,
                 "UnhealthyVdevs": unhealthy,
@@ -703,7 +703,7 @@ class Adapter:
         obj = env.obj_ref(object_id, "lookup", object_id[len("lookup:"):])
         src = self._source_for("lookups")
         if not arg:
-            facts = dict(STORAGE_LOOKUPS[name])
+            facts: dict = dict(STORAGE_LOOKUPS[name])
             facts["Usage"] = f"GET /v1/storage/lookups/lookup:{name}/<dataset>"
             return env.observation(self.subsystem, obj, src, facts)
         try:

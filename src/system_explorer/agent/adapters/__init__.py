@@ -36,7 +36,7 @@ PLANNED: dict[str, str] = {}
 
 
 def build_adapters() -> dict:
-    adapters = [
+    adapters: list = [
         system.Adapter(),
         nix.Adapter(),
         packages.Adapter(),
