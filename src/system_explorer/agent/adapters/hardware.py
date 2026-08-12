@@ -777,7 +777,7 @@ class Adapter:
             self.subsystem, obj,
             env.source("hardware-fs", "sysfs DMI + lscpu -J + /proc/meminfo",
                        PLATFORM_REFERENCE),
-            facts, evidence_ref=f"/v1/hardware/platform/{obj['id']}/evidence")
+            facts, evidence_ref=env.evidence_ref("hardware", "platform", obj['id']))
 
     # ── pci ──────────────────────────────────────────────────
     async def _pci_items(self) -> list[dict]:
@@ -1201,7 +1201,7 @@ class Adapter:
             env.obj_ref(object_id, match["type"], match["native_id"]),
             self._source_for(collection), facts,
             opinions=opinions, relationships=relationships,
-            evidence_ref=f"/v1/hardware/{collection}/{object_id}/evidence")
+            evidence_ref=env.evidence_ref("hardware", collection, object_id))
 
     async def get_evidence(self, collection: str, object_id: str) -> dict:
         payload: dict

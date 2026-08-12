@@ -733,7 +733,7 @@ class Adapter:
         return env.observation(
             self.subsystem, obj, src, facts,
             relationships=[env.rel("member-of", "out", f"dataset:{dataset}")],
-            evidence_ref=f"/v1/storage/lookups/{object_id}/evidence",
+            evidence_ref=env.evidence_ref("storage", "lookups", object_id),
         )
 
     async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:
@@ -832,7 +832,7 @@ class Adapter:
             match["facts"],
             opinions=self._opinions(collection, match),
             relationships=await self._relationships(collection, match),
-            evidence_ref=f"/v1/storage/{collection}/{object_id}/evidence",
+            evidence_ref=env.evidence_ref("storage", collection, object_id),
         )
 
     async def get_evidence(self, collection: str, object_id: str) -> dict:

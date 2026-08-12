@@ -181,6 +181,9 @@ A small closed set, extended deliberately rather than ad hoc:
 | `attached-to` | container → docker network; VM NIC → bridge link |
 | `backs` | block device → pool vdev; qcow2 file → VM disk |
 | `routes-via` | route → link |
+| `runs` | unit → machine (a `machine-*.scope` hosting a VM or container) |
+| `plumbed-onto` | docker network → bridge link |
+| `owns` | VM domain → its host tap link (the edge that attributes a `vnet` to a workload) |
 
 Cross-subsystem edges are the point: `unit:compose-stack-web.service` →
 `member-of` ← `container:web-frontend` is what makes "why is this container
@@ -312,7 +315,7 @@ The prose here explains semantics; the schemas win on shape.
     { "type": "after", "direction": "out", "target": { "id": "unit:network-online.target" } },
     { "type": "wants", "direction": "in",  "target": { "id": "unit:multi-user.target" } }
   ],
-  "evidence_ref": "/v1/units/units/unit:sshd.service/evidence"
+  "evidence_ref": "/v1/evidence/units/units/unit:sshd.service"
 }
 ```
 
@@ -420,12 +423,22 @@ Base path `/v1`. All responses are envelopes or envelope pages.
 | `GET /v1/facts` | the fact dictionary (`se.facts/1`): what each fact means |
 | `GET /v1/{subsystem}/{collection}` | collection page (`se.collection/1`) |
 | `GET /v1/{subsystem}/{collection}/{object_id}` | one observation (`se.observation/1`) |
-| `GET /v1/{subsystem}/{collection}/{object_id}/evidence` | native evidence, fresh |
+| `GET /v1/evidence/{subsystem}/{collection}/{object_id}` | native evidence, fresh. Prefix-first because `{object_id}` is a path parameter that may itself contain slashes (`dataset:tank/photos`, lookup inputs): a trailing `/evidence` segment made any object whose id ended in `/evidence` unreachable, answering with its parent's evidence instead of a 404. |
 | `GET /v1/changes?since=…&subsystem=…` | what-changed diff (`se.changes/1`, §10) |
 
 Collection behaviour (carried from SE-004 §11, unchanged in spirit):
 
-- Filtering by fact equality: `?type=service&ActiveState=failed`.
+- Filtering by fact equality: `?type=service&ActiveState=failed`. A key that
+  is a case or underscore near-miss of a carried fact (`activestate`,
+  `active_state`) is refused with HTTP 422 naming the real fact — the same
+  status a malformed `limit` gets — because a typo and a healthy zero used to
+  be byte-identical, which is rule 7's lie arriving through the query string.
+  Refusal stops at provable near-misses: the fact vocabulary is open (the
+  glossary is partial, and rule 7 makes omission a legitimate shape for any
+  fact), so an unknown key with no near-miss returns the honest empty page —
+  `?RuntimeSynthesised=True` on a host with no synthesised mounts is a
+  correct query whose answer is nothing, and refusing it would make the same
+  query flip between ok and error as host state drifts.
 - Pagination is explicit: `?limit=` and `?cursor=`; responses always carry
   `applied_limit` and `next_cursor` (nullable). **The server never silently
   truncates; the client never infers truncation.**
@@ -528,7 +541,7 @@ discovery, browsing, deep links and evidence need no new machinery:
 | `GET /v1/{subsystem}/lookups` | available lookups; each item's facts are its documentation (`Question`, `Input`, `Example`) |
 | `GET /v1/{subsystem}/lookups/lookup:{name}` | one lookup's descriptor, including a `Usage` fact |
 | `GET /v1/{subsystem}/lookups/lookup:{name}/{input}` | the answer, as a normal `se.observation/1` |
-| `…/{input}/evidence` | the raw native payload, captured fresh (the lookup re-runs) |
+| `GET /v1/evidence/{subsystem}/lookups/lookup:{name}/{input}` | the raw native payload, captured fresh (the lookup re-runs) |
 
 Rules, tightening rule 13 rather than relaxing anything:
 
@@ -690,7 +703,7 @@ legacy sse (`/sse` + `/messages/`, the broker layout):
 | `get_fact_dictionary(host)` | `GET /v1/facts` — what each native fact name means |
 | `get_collection(host, subsystem, collection, filters?, limit?, cursor?)` | `GET /v1/...` |
 | `get_object(host, subsystem, collection, id)` | `GET /v1/.../{id}` |
-| `get_evidence(host, subsystem, collection, id)` | `GET /v1/.../evidence` |
+| `get_evidence(host, subsystem, collection, id)` | `GET /v1/evidence/{subsystem}/{collection}/{id}` |
 | `lookup(host, name, input, subsystem?)` | `GET /v1/{subsystem}/lookups/lookup:{name}/{input}` |
 | `what_changed(host, since, subsystem?)` | `GET /v1/changes` (§10) |
 

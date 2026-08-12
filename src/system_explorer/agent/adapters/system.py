@@ -404,7 +404,7 @@ class Adapter:
             env.source("system-dbus", HOSTNAME1, ["hostnamectl status", "hostnamectl --json=pretty"],
                        method="org.freedesktop.DBus.Properties.GetAll"),
             facts,
-            evidence_ref=f"/v1/system/identity/{obj['id']}/evidence",
+            evidence_ref=env.evidence_ref("system", "identity", obj['id']),
         )
 
     async def _time(self) -> dict:
@@ -443,7 +443,7 @@ class Adapter:
                        method="org.freedesktop.DBus.Properties.GetAll",
                        notes=notes or None),
             facts, opinions=time_opinions(facts),
-            evidence_ref=f"/v1/system/time/{obj['id']}/evidence",
+            evidence_ref=env.evidence_ref("system", "time", obj['id']),
         )
 
     async def _boot(self) -> dict:
@@ -509,7 +509,7 @@ class Adapter:
                                "SystemProfile) are filesystem reads, not D-Bus."]
                               if _is_nixos() else None)),
             facts, opinions=boot_opinions(facts),
-            evidence_ref=f"/v1/system/boot/{obj['id']}/evidence",
+            evidence_ref=env.evidence_ref("system", "boot", obj['id']),
         )
 
     async def _overview(self) -> dict:
@@ -519,7 +519,7 @@ class Adapter:
             self.subsystem, obj,
             env.source("procfs", "/proc", OVERVIEW_REFERENCE),
             facts, opinions=overview_opinions(facts),
-            evidence_ref=f"/v1/system/overview/{obj['id']}/evidence",
+            evidence_ref=env.evidence_ref("system", "overview", obj['id']),
         )
 
     async def _single(self, collection: str) -> dict:

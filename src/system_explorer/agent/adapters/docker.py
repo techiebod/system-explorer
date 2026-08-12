@@ -299,7 +299,7 @@ class Adapter:
         return env.observation(
             self.subsystem, obj, _source(f"/{collection}/inspect"),
             facts, opinions=opinions, relationships=relationships,
-            evidence_ref=f"/v1/docker/{collection}/{object_id}/evidence",
+            evidence_ref=env.evidence_ref("docker", collection, object_id),
         )
 
     async def get_evidence(self, collection: str, object_id: str) -> dict:

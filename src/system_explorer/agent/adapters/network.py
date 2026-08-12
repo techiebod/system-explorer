@@ -296,6 +296,28 @@ def _tailscale_snapshot() -> tuple[dict, float] | None:
         return None
 
 
+def peer_native_id(peer: dict) -> str | None:
+    """A tailnet peer's native id: the DNS label, not the display name.
+
+    The coordination map's DNSName carries the tailnet's own canonical
+    machine name ("henrys-macbook-pro…"), already lowercase and
+    whitespace-free — it is the identity `tailscale status` itself prints.
+    HostName is the peer's self-reported display name, free text in every
+    sense: a stock Mac calls itself "Henry's MacBook Pro", which put a space
+    and a typographic apostrophe inside an object id whose grammar is
+    `^[a-z][a-z0-9-]*:\\S+$` — live on every deployed host with the grant
+    (found by the live check the day it was written, 2026-08-12), and
+    unstable identity besides, since renaming the laptop would re-key the
+    object (rule 7). HostName stays as a fact and never becomes an id: a
+    peer the coordination map gives no DNS label is skipped by the caller,
+    which is one fewer id shape in the world than patching free text into
+    the grammar — review verdict over the first draft's sanitising fallback.
+    Module-level and pure so conformance can exercise the derivation
+    without a tailscaled snapshot.
+    """
+    return (peer.get("DNSName") or "").split(".")[0] or None
+
+
 def _epoch_iso(seconds: float) -> str:
     return datetime.fromtimestamp(seconds, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -702,7 +724,7 @@ class Adapter:
             env.source("resolve1-dbus", RESOLVE1, RESOLVER_REFERENCE,
                        method="Properties.GetAll + GetLink per interface"),
             facts, opinions=resolver_opinions(facts),
-            evidence_ref=f"/v1/network/resolver/{obj['id']}/evidence",
+            evidence_ref=env.evidence_ref("network", "resolver", obj['id']),
         )
 
     # ── nftables ─────────────────────────────────────────────
@@ -770,14 +792,16 @@ class Adapter:
             facts["PrimaryRoutes"] = node["PrimaryRoutes"]
         if status.get("Health"):
             facts["Health"] = status["Health"]
+        # Same identity rule as the peers below: the tailnet's DNS label,
+        # never the free-text HostName (which stays as a fact).
         items = [env.item_summary(
             "tailscale:self", "tailscale-self",
-            facts["HostName"] or "self", facts,
+            peer_native_id(node) or "self", facts,
             worst_opinion_level=worst_level(
                 tailscale_opinions(facts),
                 healthy="ok" if facts["Online"] else "info"))]
         for peer in (status.get("Peer") or {}).values():
-            name = peer.get("HostName") or (peer.get("DNSName") or "").split(".")[0]
+            name = peer_native_id(peer)
             if not name:
                 continue
             peer_facts = {
@@ -894,7 +918,7 @@ class Adapter:
             relationships.append(env.rel("routes-via", "out", f"link:{facts['Device']}"))
         return env.observation(
             self.subsystem, obj, src, facts, relationships=relationships,
-            evidence_ref=f"/v1/network/lookups/{obj['id']}/evidence")
+            evidence_ref=env.evidence_ref("network", "lookups", obj['id']))
 
     async def _resolve_observation(self, obj: dict, arg: str) -> dict:
         src = self._lookup_source("resolve", arg)
@@ -928,7 +952,7 @@ class Adapter:
         facts["QueryTimeMs"] = reply["query_time_ms"]
         return env.observation(
             self.subsystem, obj, src, facts,
-            evidence_ref=f"/v1/network/lookups/{obj['id']}/evidence")
+            evidence_ref=env.evidence_ref("network", "lookups", obj['id']))
 
     @staticmethod
     def _scoped_addr(entry) -> str | None:
@@ -1042,7 +1066,7 @@ class Adapter:
             self._source_for(collection),
             match["facts"], opinions=self._opinions(collection, match),
             relationships=relationships,
-            evidence_ref=f"/v1/network/{collection}/{object_id}/evidence",
+            evidence_ref=env.evidence_ref("network", collection, object_id),
         )
 
     async def get_evidence(self, collection: str, object_id: str) -> dict:

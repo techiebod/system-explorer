@@ -94,3 +94,57 @@ def test_a_level_outside_the_closed_enum_is_refused(level):
     for either is a category error the builder should catch, not pass on."""
     with pytest.raises(ValueError, match="enum is closed"):
         env.opinion("k", level, "m", ["Fact"])
+
+
+# ---------------------------------------------------------------------------
+# Filter-key validation (SPEC section 6): a NEAR-MISS of a carried fact is
+# refused with the real name; an unknown key with no near-miss is the honest
+# empty page, because the vocabulary is open (rule 7 makes omission a
+# legitimate shape for any fact). Found live 2026-08-12: ?activestate=failed
+# and ?ActiveState=failed answered byte-identical `status ok, total 0`.
+# ---------------------------------------------------------------------------
+
+FILTER_ITEMS = [
+    env.item_summary("unit:a.service", "service", "a.service",
+                     {"ActiveState": "active", "SubState": "running"}),
+    env.item_summary("unit:b.mount", "mount", "b.mount",
+                     {"ActiveState": "inactive", "RuntimeSynthesised": True}),
+]
+
+
+def test_a_valid_key_matching_nothing_is_the_honest_empty_answer():
+    assert env.apply_fact_filters(FILTER_ITEMS, {"ActiveState": "failed"}) == []
+
+
+def test_a_case_near_miss_is_refused_with_the_real_name():
+    with pytest.raises(env.UnknownFilterKey) as err:
+        env.apply_fact_filters(FILTER_ITEMS, {"activestate": "failed"})
+    assert "'ActiveState'" in str(err.value)
+
+
+def test_an_underscore_near_miss_is_refused_with_the_real_name():
+    with pytest.raises(env.UnknownFilterKey) as err:
+        env.apply_fact_filters(FILTER_ITEMS, {"active_state": "failed"})
+    assert "'ActiveState'" in str(err.value)
+
+
+def test_an_unknown_key_with_no_near_miss_is_the_empty_page():
+    # The vocabulary is open: this key may be a fact the collection carries
+    # in another host state (RuntimeSynthesised when no mount is synthesised)
+    # or on the opened object only. Refusing would make the same query flip
+    # between ok and error as host state drifts.
+    assert env.apply_fact_filters(FILTER_ITEMS, {"NoSuchFact": "x"}) == []
+
+
+def test_a_key_held_by_only_some_items_is_valid():
+    kept = env.apply_fact_filters(FILTER_ITEMS, {"RuntimeSynthesised": "True"})
+    assert [item["id"] for item in kept] == ["unit:b.mount"]
+
+
+def test_type_is_always_a_legal_key():
+    kept = env.apply_fact_filters(FILTER_ITEMS, {"type": "service"})
+    assert [item["id"] for item in kept] == ["unit:a.service"]
+
+
+def test_an_empty_collection_validates_nothing_and_stays_empty():
+    assert env.apply_fact_filters([], {"activestate": "x"}) == []

@@ -31,5 +31,5 @@
     { "type": "member-of", "direction": "in", "target": { "id": "dataset:backup/apps", "subsystem": "storage" } },
     { "type": "backs", "direction": "in", "target": { "id": "block-device:sda", "subsystem": "storage" } }
   ],
-  "evidence_ref": "/v1/storage/pools/pool:backup/evidence"
+  "evidence_ref": "/v1/evidence/storage/pools/pool:backup"
 }

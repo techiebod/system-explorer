@@ -25,6 +25,7 @@ from urllib.parse import quote
 import httpx
 from mcp.server.fastmcp import FastMCP
 
+from ..agent import envelope as env
 from ..text import one_line
 
 
@@ -158,7 +159,10 @@ async def get_evidence(host: str, subsystem: str, collection: str,
     """The raw native payload behind an observation (D-Bus reply, inspect
     document, sysfs walk), captured fresh at request time. Payloads may
     carry a 'redacted' list naming paths whose values were withheld."""
-    return await _get(host, f"/v1/{subsystem}/{collection}/{_idpath(object_id)}/evidence")
+    # The agent's helper is the one place the evidence URL is spelled, and
+    # it owns the percent-encoding — passing a pre-encoded id would encode
+    # twice.
+    return await _get(host, env.evidence_ref(subsystem, collection, object_id))
 
 
 @mcp.tool()

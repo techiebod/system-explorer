@@ -546,7 +546,17 @@ def _unknown(collection: str) -> HTTPException:
     return HTTPException(status_code=404, detail=f"unknown collection: {collection}")
 
 
-@app.get("/v1/{subsystem}/{collection}/{object_id:path}/evidence")
+# Prefix-first, not suffix: the old shape appended /evidence to the object
+# path, and because object_id is a {path} parameter and this route was
+# declared before get_object, any object whose id ended in /evidence was
+# unreachable — the request answered with its PARENT's evidence instead of
+# 404ing (measured live, 2026-08-12; mount:, dataset: and route: ids all
+# carry slashes, so `dataset:tank/evidence` was one `zfs create` away). A
+# leading segment the id grammar cannot occupy removes the ambiguity for
+# every current and future id shape. env.evidence_ref() is the only place
+# the URL is spelled; this route must stay declared before get_object so
+# "evidence" is never parsed as a subsystem name.
+@app.get("/v1/evidence/{subsystem}/{collection}/{object_id:path}")
 async def evidence(subsystem: str, collection: str, object_id: str) -> dict:
     adapter = _adapter(subsystem)
     reason = await _collection_state(adapter, collection)
@@ -617,6 +627,14 @@ async def get_collection(subsystem: str, collection: str, request: Request) -> d
         return await adapter.collect(collection, filters, limit, cursor)
     except env.UnknownCollection:
         raise HTTPException(status_code=404, detail=f"unknown collection: {collection}")
+    except env.UnknownFilterKey as exc:
+        # A near-miss filter key is a malformed request, not an acquisition
+        # failure: the same 422 a bad `limit` gets (_query above). Left to the
+        # generic handler below it rendered as "acquisition failed" with the
+        # class name leaked — a client typo wearing an outage's envelope, so
+        # retry logic hammered a permanently-bad request and the UI reported
+        # a healthy collection unavailable (three review passes converged).
+        raise HTTPException(status_code=422, detail=str(exc))
     except Exception as exc:  # noqa: BLE001 - errors are observations
         return env.collection_page(
             subsystem, collection,

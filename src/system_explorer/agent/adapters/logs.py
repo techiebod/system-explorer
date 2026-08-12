@@ -326,7 +326,7 @@ class Adapter:
             self.subsystem, env.obj_ref(object_id, "entry", record["__CURSOR"]),
             env.source("journal-json", "systemd-journal", REFERENCE, method="journalctl -o json --cursor"),
             facts, opinions=journal_opinions(facts), relationships=relationships,
-            evidence_ref=f"/v1/logs/journal/{object_id}/evidence",
+            evidence_ref=env.evidence_ref("logs", "journal", object_id),
         )
 
     async def get_evidence(self, collection: str, object_id: str) -> dict:

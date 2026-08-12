@@ -17,6 +17,7 @@ import socket
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from .. import text as _text
 
@@ -231,6 +232,31 @@ def collection_page(subsystem: str, collection: str, src: dict, items: list[dict
     return out
 
 
+def evidence_ref(subsystem: str, collection: str, object_id: str) -> str:
+    """The one place an evidence URL is spelled.
+
+    /v1/evidence/<subsystem>/<collection>/<id>, prefix-first deliberately: the
+    old form appended /evidence to the object path, and because the object id
+    is a {path} route parameter, any object whose native id itself ended in
+    /evidence was unreachable — the request answered with its parent's
+    evidence instead of the object (measured live, 2026-08-12: a mount named
+    <target>/evidence would have; dataset and route ids carry slashes too).
+    A prefix the id grammar cannot produce ends the ambiguity for every
+    current and future id shape, which is why this is a function and not
+    eighteen f-strings.
+
+    The id is percent-encoded HERE, `:` and `/` preserved — the same rule as
+    the MCP client's _idpath and the UI's idPath. The ref is followed
+    verbatim by both consumers, so the emitter owns the encoding: an
+    unencoded `#` in a mount or dataset id would be cut off as a URL
+    fragment by the browser, silently fetching a DIFFERENT object's
+    evidence with HTTP 200 — the parent's-evidence failure this helper was
+    written to end, arriving through the other door (cross-file review,
+    2026-08-12).
+    """
+    return f"/v1/evidence/{subsystem}/{collection}/{quote(object_id, safe=':/')}"
+
+
 def item_summary(object_id: str, obj_type: str, native_id: str, facts: dict,
                  worst_opinion_level: str | None = None, name: str | None = None) -> dict:
     out: dict[str, Any] = {"id": object_id, "type": obj_type, "native_id": native_id, "facts": facts}
@@ -241,9 +267,55 @@ def item_summary(object_id: str, obj_type: str, native_id: str, facts: dict,
     return out
 
 
+class UnknownFilterKey(ValueError):
+    """A filter key that is a near-miss of a fact the collection carries."""
+
+
+def _fold(key: str) -> str:
+    # The near-miss equivalence: case and underscores. `activestate`,
+    # `ACTIVESTATE` and `active_state` all fold to what `ActiveState` folds
+    # to — the guesses a consumer typing from memory actually makes.
+    return key.lower().replace("_", "")
+
+
 def apply_fact_filters(items: list[dict], filters: dict[str, str]) -> list[dict]:
     """Generic equality filters: 'type' matches the object type, anything else
-    matches the stringified summary fact of that name."""
+    matches the stringified summary fact of that name.
+
+    A key that is a NEAR-MISS of a carried fact is refused with the real
+    name: `?activestate=failed` and `?ActiveState=failed` used to return
+    byte-identical `status ok, total 0` envelopes, so a mistyped question was
+    indistinguishable from a healthy empty answer — rule 7's exact lie, and
+    it lands hardest on the MCP consumer, which cannot glance at a column
+    header to notice its own typo.
+
+    Refusal stops at provable near-misses, deliberately. The fact vocabulary
+    is OPEN — the glossary is partial by design, and rule 7 makes omission a
+    legitimate shape for any fact — so "no item carries this key right now"
+    is a statement about the moment, not about the vocabulary:
+    `?RuntimeSynthesised=True` on a host with no synthesised mounts, or
+    `?IPAddresses=…` while every domain is off, are correct queries whose
+    honest answer is the empty page. Refusing them would make the same query
+    flip between ok and error as host state drifts (three independent review
+    passes converged on this before the first version shipped). A typo with
+    no near-miss therefore also gets the empty page: on an open vocabulary
+    the two cases cannot be told apart, and inventing an error would claim
+    knowledge the agent does not have.
+    """
+    if items and filters:
+        carried: set[str] = {"type"}
+        for item in items:
+            carried.update(item["facts"].keys())
+        for key in filters:
+            if key in carried:
+                continue
+            folded = _fold(key)
+            twin = next((k for k in sorted(carried) if _fold(k) == folded), None)
+            if twin:
+                raise UnknownFilterKey(
+                    f"no fact named {key!r} here, but {twin!r} is carried — "
+                    "fact names are matched exactly")
+
     def keep(item: dict) -> bool:
         for key, wanted in filters.items():
             actual = item["type"] if key == "type" else item["facts"].get(key)

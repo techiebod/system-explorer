@@ -625,7 +625,7 @@ class Adapter:
             self.subsystem,
             env.obj_ref(object_id, match["type"], match["native_id"]),
             self._source(collection), match["facts"], opinions=opinions,
-            evidence_ref=f"/v1/nix/{collection}/{object_id}/evidence")
+            evidence_ref=env.evidence_ref("nix", collection, object_id))
 
     async def get_evidence(self, collection: str, object_id: str) -> dict:
         if collection == "generations":

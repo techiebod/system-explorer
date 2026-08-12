@@ -24,5 +24,5 @@
     { "type": "after", "direction": "out", "target": { "id": "unit:network-online.target" } },
     { "type": "wants", "direction": "in", "target": { "id": "unit:multi-user.target" } }
   ],
-  "evidence_ref": "/v1/units/units/unit:sshd.service/evidence"
+  "evidence_ref": "/v1/evidence/units/units/unit:sshd.service"
 }

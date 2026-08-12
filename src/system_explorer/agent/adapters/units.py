@@ -478,7 +478,7 @@ class Adapter:
             self.subsystem, env.obj_ref(object_id, unit_type, name),
             _source("LoadUnit + org.freedesktop.DBus.Properties.GetAll"),
             facts, opinions=opinions, relationships=relationships,
-            evidence_ref=f"/v1/units/units/{object_id}/evidence",
+            evidence_ref=env.evidence_ref("units", "units", object_id),
         )
 
     async def get_evidence(self, collection: str, object_id: str) -> dict:

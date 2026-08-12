@@ -191,7 +191,7 @@ class Adapter:
         return env.observation(
             self.subsystem, env.obj_ref(object_id, "package", match["native_id"]),
             self._source(manager), match["facts"],
-            evidence_ref=f"/v1/packages/packages/{object_id}/evidence")
+            evidence_ref=env.evidence_ref("packages", "packages", object_id))
 
     async def get_evidence(self, collection: str, object_id: str) -> dict:
         self._check(collection)
