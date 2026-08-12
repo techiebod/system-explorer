@@ -769,6 +769,18 @@ function navModel() {
     const items = (cap.collections || [])
       .filter(coll => !claimed.has(`${name}/${coll}`))
       .map(coll => ({ sub: name, coll, label: coll, route: `${name}/${coll}` }));
+    // An unavailable COLLECTION inside an available subsystem used to vanish
+    // without trace, so "where's resolver gone?" had no answer on the very
+    // product built to answer it (asked live, 2026-08-12 — resolver exists
+    // on a host running resolved and is declined on one that is not, and
+    // the nav showed the difference as silent absence). Dimmed, reason as
+    // the tooltip, still a link: the route itself serves the reason as an
+    // error envelope, so the click-through IS the explanation.
+    for (const [coll, reason] of Object.entries(cap.unavailable_collections || {})) {
+      if (claimed.has(`${name}/${coll}`)) continue;
+      items.push({ sub: name, coll, label: coll, route: `${name}/${coll}`,
+                   unavailable: true, reason });
+    }
     // A subsystem whose collections were all promoted or grouped has nothing
     // left to head. An unavailable one still shows, carrying its reason.
     if (!items.length && cap.available) continue;
@@ -802,9 +814,11 @@ function renderNav() {
       box.appendChild(label);
     }
     for (const item of section.items) {
-      const link = el("a", "nav-item", item.label);
+      const link = el("a", "nav-item" + (item.unavailable ? " unavailable" : ""),
+                      item.label);
       link.href = hashFor(item.sub, item.coll);
       link.dataset.route = item.route;
+      if (item.unavailable) link.title = item.reason || "unavailable";
       box.appendChild(link);
     }
     nav.appendChild(box);

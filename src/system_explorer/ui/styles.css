@@ -753,3 +753,9 @@ a.ov-sub:hover { color: var(--accent); }
 .vw-more { display: inline-block; margin-top: 8px; font-size: 12px;
   color: var(--text-dim); }
 .vw-error { color: var(--crit); font-size: 12px; margin: 6px 0; }
+
+/* An unavailable collection is present and dimmed, never absent: the reason
+   rides as the tooltip and the click-through serves it as an error envelope.
+   Same treatment as an unavailable subsystem heading, one level down. */
+.nav-item.unavailable { color: var(--text-faint); }
+.nav-item.unavailable::after { content: "·"; margin-left: auto; }
