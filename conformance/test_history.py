@@ -150,3 +150,44 @@ def test_diff_items_product_validates_in_envelope():
         "subsystems": {"units": {"units": history.diff_items(before, after)}},
     }
     jsonschema.Draft202012Validator(SCHEMAS["se.changes/1"]).validate(envelope)
+
+
+# ---------------------------------------------------------------------------
+# The store round-trips both eras of the items column. Rows written since
+# compression landed are zlib BLOBs (the store had reached 94 MB in three
+# days on one host); rows before it are plain JSON text, and both stay
+# readable forever — sniffed, never migrated. This is the store's first
+# test with a real file: the pure-function stance above stands, but a
+# format change earns a round trip.
+# ---------------------------------------------------------------------------
+
+def test_store_round_trips_and_reads_legacy_rows(tmp_path):
+    import json
+    import sqlite3
+    from datetime import datetime, timedelta, timezone
+
+    store = history.HistoryStore(tmp_path / "history.db")
+    stamp = datetime.now(timezone.utc)
+    early = (stamp - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    late = (stamp - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    items = [{"id": "unit:a.service", "type": "service", "native_id": "a.service",
+              "facts": {"ActiveState": "active"}}]
+    store.write_snapshot(early, "boot-1", {"units": {"units": items}},
+                         retention_days=30)
+    # A pre-compression row, exactly as the old writer stored it: text.
+    with sqlite3.connect(store.db_path) as conn:
+        conn.execute(
+            "INSERT INTO snapshots VALUES (2, 'units', 'units', ?, 'boot-1', ?)",
+            (late, json.dumps([{"id": "unit:b.service", "facts": {}}])))
+
+    compressed_era = store.baseline(early)
+    assert compressed_era["data"]["units"]["units"] == items
+    legacy_era = store.baseline(late)
+    assert legacy_era["data"]["units"]["units"][0]["id"] == "unit:b.service"
+
+    # And the new row really is compressed at rest, not text wearing a BLOB.
+    with sqlite3.connect(store.db_path) as conn:
+        blob = conn.execute(
+            "SELECT items FROM snapshots WHERE snapshot_id = 1").fetchone()[0]
+    assert isinstance(blob, bytes) and blob[:1] == b"\x78"

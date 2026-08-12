@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import zlib
 from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -30,6 +31,20 @@ _ISO = "%Y-%m-%dT%H:%M:%SZ"
 
 _RELATIVE = re.compile(r"^-(\d+)([smhd])$")
 _UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+
+
+def _maybe_expand(items) -> str:
+    """A stored items column, whichever era wrote it.
+
+    Rows written since compression landed are zlib BLOBs (first byte 0x78,
+    the deflate header every zlib level emits); rows before it are plain
+    JSON text. Sniffing beats a schema migration: both shapes stay readable
+    forever, and an over-eager migration of a 94 MB store on a fanless host
+    is exactly the work this change exists to avoid.
+    """
+    if isinstance(items, bytes):
+        return zlib.decompress(items).decode()
+    return items
 
 
 def read_boot_id() -> str:
@@ -189,10 +204,16 @@ class HistoryStore:
         with closing(self._connect()) as conn, conn:
             snapshot_id = conn.execute(
                 "SELECT COALESCE(MAX(snapshot_id), 0) + 1 FROM snapshots").fetchone()[0]
+            # Compressed at rest: a snapshot is the same fact names and mostly
+            # the same values 96 times a day, which is what zlib eats — the
+            # store had reached 94 MB in three days on one host (~30 MB/day,
+            # projecting ~900 MB at the 30-day retention default), acceptable
+            # on a NAS and not on a fanless NUC. Reads sniff the zlib magic,
+            # so rows written before this stay readable and no migration runs.
             conn.executemany(
                 "INSERT INTO snapshots VALUES (?, ?, ?, ?, ?, ?)",
                 [(snapshot_id, subsystem, collection, taken_at, boot_id,
-                  json.dumps(items, separators=(",", ":")))
+                  zlib.compress(json.dumps(items, separators=(",", ":")).encode()))
                  for subsystem, collections in data.items()
                  for collection, items in collections.items()])
             conn.execute("DELETE FROM snapshots WHERE taken_at < ? AND snapshot_id != ?",
@@ -232,6 +253,6 @@ class HistoryStore:
                 params += (subsystem,)
             data: dict[str, dict[str, list[dict]]] = {}
             for sub, collection, items in conn.execute(query, params):
-                data.setdefault(sub, {})[collection] = json.loads(items)
+                data.setdefault(sub, {})[collection] = json.loads(_maybe_expand(items))
         return {"snapshot_at": taken_at, "boot_id": boot_id,
                 "fallback": fallback, "data": data}

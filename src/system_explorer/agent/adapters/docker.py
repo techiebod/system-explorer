@@ -198,12 +198,22 @@ class Adapter:
             for n in raw
         ]
 
-    async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:
+    @env.single_flight
+    async def acquire(self, collection: str) -> list[dict]:
+        """The full materialisation, shared: collect() pages it and main.py's
+        status/snapshot/changes sweeps consume it directly (envelope.
+        single_flight — coalescing, not caching). get_object() deliberately
+        does NOT come through here: the Engine API has a per-object inspect
+        endpoint, and one targeted GET beats listing a collection to find
+        one name in it."""
         fetch = {"containers": self._container_items, "volumes": self._volume_items,
                  "networks": self._network_items}
         if collection not in fetch:
             raise env.UnknownCollection(collection)
-        items = env.apply_fact_filters(await fetch[collection](), query)
+        return await fetch[collection]()
+
+    async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:
+        items = env.apply_fact_filters(await self.acquire(collection), query)
         page, applied, next_cursor, total = env.paginate(items, limit, cursor)
         return env.collection_page(self.subsystem, collection, _source(f"/{collection}/json"),
                                    page, applied, next_cursor, requested_limit=limit,

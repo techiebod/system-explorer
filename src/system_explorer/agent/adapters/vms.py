@@ -297,7 +297,15 @@ class Adapter:
                 facts["IPAddressesUnobservable"] = dom["ip_note"]
         return facts
 
-    async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:
+    @env.single_flight
+    async def acquire(self, collection: str) -> list[dict]:
+        """The full materialisation, shared: collect() pages it and main.py's
+        status/snapshot/changes sweeps consume it directly instead of
+        re-acquiring per page. Single-flighted so concurrent callers ride one
+        domain walk (envelope.single_flight — coalescing, not caching).
+        get_object() does NOT search this list: the summary rows drop the
+        domain XML and address-source note it builds from, so it keeps its
+        own _find() over the raw walk."""
         self._check(collection)
         items = []
         for dom in await anyio.to_thread.run_sync(_domains_raw):
@@ -313,7 +321,10 @@ class Adapter:
             items.append(env.item_summary(f"domain:{dom['name']}", "domain",
                                           dom["name"], summary,
                                           worst_opinion_level=worst))
-        items = env.apply_fact_filters(items, query)
+        return items
+
+    async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:
+        items = env.apply_fact_filters(await self.acquire(collection), query)
         page, applied, next_cursor, total = env.paginate(items, limit, cursor)
         return env.collection_page(
             self.subsystem, collection,

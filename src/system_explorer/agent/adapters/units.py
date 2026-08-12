@@ -299,7 +299,16 @@ class Adapter:
         except Exception:  # noqa: BLE001 - unit may vanish mid-walk
             return name, None
 
-    async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:
+    @env.single_flight
+    async def acquire(self, collection: str) -> list[dict]:
+        """The full materialisation, shared: collect() pages it, and main.py's
+        status/snapshot/changes sweeps consume it directly instead of paying
+        ListUnits, ListUnitFiles, the cgroup walk and the slice gather once
+        per page. Single-flighted so a sweep and a concurrent UI poll ride one
+        acquisition (envelope.single_flight — coalescing, not caching). The
+        slice-membership gather and the tree ordering live here too: the
+        systemctl-status order is part of what the collection IS, not a
+        presentation step collect() adds."""
         self._check(collection)
         listed = await BUS.call(SYSTEMD, SYSTEMD_PATH, SYSTEMD_MANAGER, "ListUnits")
         # Which units exist as a FILE, in one call rather than a FragmentPath
@@ -396,8 +405,11 @@ class Adapter:
                       key=lambda item: (TAIL_ORDER.index(item["type"])
                                         if item["type"] in TAIL_ORDER else len(TAIL_ORDER),
                                         item["type"], item["native_id"]))
+        return ordered + tail
 
-        items = env.apply_fact_filters(ordered + tail, query)
+    async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:
+        fetched = await self.acquire(collection)
+        items = env.apply_fact_filters(fetched, query)
         page, applied, next_cursor, total = env.paginate(items, limit, cursor)
         return env.collection_page(self.subsystem, collection,
                                    _source("ListUnits + Slice per service/scope + cgroup PSI"),

@@ -168,10 +168,20 @@ class Adapter:
             raise RuntimeError("no readable package manager on this host")
         return manager
 
-    async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:
+    @env.single_flight
+    async def acquire(self, collection: str) -> list[dict]:
+        """The full materialisation, shared: collect() pages it, get_object
+        searches it, and main.py's status/snapshot/changes sweeps consume it
+        directly instead of re-acquiring per page. Single-flighted so
+        concurrent callers ride one acquisition (envelope.single_flight —
+        coalescing, not caching)."""
         self._check(collection)
         manager = await self._manager()
-        fetched = await anyio.to_thread.run_sync(self._items, manager)
+        return await anyio.to_thread.run_sync(self._items, manager)
+
+    async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:
+        fetched = await self.acquire(collection)
+        manager = await self._manager()
         items = env.apply_fact_filters(fetched, query)
         page, applied, next_cursor, total = env.paginate(items, limit, cursor)
         return env.collection_page(self.subsystem, collection,
@@ -182,7 +192,7 @@ class Adapter:
     async def get_object(self, collection: str, object_id: str) -> dict:
         self._check(collection)
         manager = await self._manager()
-        fetched = await anyio.to_thread.run_sync(self._items, manager)
+        fetched = await self.acquire(collection)
         match = next((i for i in fetched if i["id"] == object_id), None)
         if match is None:
             raise env.UnknownObject(object_id)

@@ -12,7 +12,9 @@ Key invariants enforced here rather than left to discipline:
 
 from __future__ import annotations
 
+import asyncio
 import copy
+import functools
 import socket
 from datetime import datetime, timezone
 from pathlib import Path
@@ -230,6 +232,41 @@ def collection_page(subsystem: str, collection: str, src: dict, items: list[dict
     if filters:
         out["filters"] = filters
     return out
+
+
+def single_flight(method):
+    """Concurrent identical acquisitions share one in-flight result.
+
+    Coalescing, NOT caching — nothing survives the flight, so rule 4 (no
+    capability or observation carried between requests) stays intact: the
+    next caller after the flight lands starts a fresh acquisition. What this
+    removes is the pile-up: the UI re-polls a collection every 15 s while
+    `zpool status -j` carries a 15 s subprocess timeout and no route timeout
+    exists, so on a degraded pool — where acquisition is slowest and the
+    operator is most likely to be watching — every poll started another full
+    acquisition beside the ones still running, on an endpoint that needs no
+    authentication. Keyed per (instance, args); the shared task is shielded
+    from any single waiter's cancellation, so a browser navigating away does
+    not kill the acquisition three other callers are awaiting. If the
+    creating waiter is cancelled the flight is unregistered while the
+    orphaned task completes harmlessly — a new caller then starts its own
+    flight, which costs one duplicate acquisition and retains nothing.
+    """
+    flights: dict = {}
+
+    @functools.wraps(method)
+    async def wrapper(self, *args):
+        key = (id(self), args)
+        existing = flights.get(key)
+        if existing is not None:
+            return await asyncio.shield(existing)
+        task = asyncio.ensure_future(method(self, *args))
+        flights[key] = task
+        try:
+            return await asyncio.shield(task)
+        finally:
+            flights.pop(key, None)
+    return wrapper
 
 
 def evidence_ref(subsystem: str, collection: str, object_id: str) -> str:

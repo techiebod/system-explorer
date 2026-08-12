@@ -366,6 +366,18 @@ def _efi_facts() -> dict:
 class Adapter:
     subsystem = "system"
 
+    def __init__(self) -> None:
+        # acquire() returns rows, but every collection here is one object
+        # deep: the page's source and get_object's whole observation come out
+        # of the same acquisition the row does, and the source cannot be
+        # rebuilt outside it without duplicating decisions made during it
+        # (the timesync1-unavailable note on time, the NixOS pointer note on
+        # boot). So each flight parks its observation here and callers read
+        # it only after awaiting a fresh acquire() — nothing is ever served
+        # that was not just observed, which keeps this coalescing, not
+        # caching (SPEC section 2, rule 4).
+        self._observed: dict[str, dict] = {}
+
     def collections(self) -> list[str]:
         return ["identity", "time", "boot", "overview"]
 
@@ -528,26 +540,42 @@ class Adapter:
         if builder is None:
             raise env.UnknownCollection(collection)
         return await builder()
-    async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:
+
+    @env.single_flight
+    async def acquire(self, collection: str) -> list[dict]:
+        """The full materialisation, shared: collect() pages it, get_object()
+        serves the observation behind it, and main.py's status/snapshot/changes
+        sweeps consume it directly instead of re-acquiring per page.
+        Single-flighted so concurrent callers ride one acquisition
+        (envelope.single_flight — coalescing, not caching)."""
         obs = await self._single(collection)
+        self._observed[collection] = obs
         # healthy=None keeps the single-object rows' historical shape: no
         # opinions omits the severity field rather than asserting "ok".
-        item = env.item_summary(
+        return [env.item_summary(
             obs["object"]["id"], obs["object"]["type"], obs["object"]["native_id"],
             obs["facts"],
             worst_opinion_level=worst_level(obs.get("opinions", []), healthy=None),
-        )
-        items = env.apply_fact_filters([item], query)
+        )]
+
+    async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:
+        fetched = await self.acquire(collection)
+        # No await between acquire() returning and this read, so the source
+        # is the one the acquisition just built, notes and all.
+        source = self._observed[collection]["source"]
+        items = env.apply_fact_filters(fetched, query)
         page, applied, next_cursor, total = env.paginate(items, limit, cursor)
-        return env.collection_page(self.subsystem, collection, obs["source"], page,
+        return env.collection_page(self.subsystem, collection, source, page,
                                    applied, next_cursor, requested_limit=limit,
                                    total=total, filters=query or None)
 
     # Every collection here is a single object whose evaluator is attached
     # inside _single() (agent/rules/system.py), shared verbatim with the
-    # summary path so rows and opened objects cannot disagree.
+    # summary path so rows and opened objects cannot disagree — routed through
+    # acquire() so an open object and a concurrent sweep ride one flight.
     async def get_object(self, collection: str, object_id: str) -> dict:
-        obs = await self._single(collection)
+        await self.acquire(collection)
+        obs = self._observed[collection]
         if obs["object"]["id"] != object_id:
             raise env.UnknownObject(object_id)
         return obs

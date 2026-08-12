@@ -333,3 +333,28 @@ def test_no_real_machine_ids_in_the_public_repo():
         "a real machine-id in the public repo:\n  " + "\n  ".join(hits[:10])
         + "\nUse 0123456789abcdef0123456789abcdef in fixtures."
     )
+
+
+def test_every_adapter_has_single_flighted_acquire():
+    """The acquire() contract is load-bearing for main.py's sweeps: the
+    status roll-up, the snapshot task and /v1/changes call it directly, so
+    an adapter without one fails at runtime on a deployed host — status for
+    that subsystem goes dark, which is precisely the absence-as-health shape
+    this product exists to kill. logs is the documented exception (a bounded
+    journal query has no "all items" to materialise) and every sweep
+    declines logs/journal by name before calling."""
+    from system_explorer.agent.adapters import build_adapters
+
+    for name, adapter in build_adapters().items():
+        if name == "logs":
+            assert not hasattr(adapter, "acquire"), (
+                "logs grew an acquire(); update the sweeps' decline tables "
+                "and this test together")
+            continue
+        acquire = getattr(adapter, "acquire", None)
+        assert acquire is not None, f"{name}: no acquire()"
+        # single_flight wraps with functools.wraps, so the marker is the
+        # wrapper's closure — assert on the documented decorator, not a name.
+        assert acquire.__wrapped__ is not None, (
+            f"{name}: acquire() is not @env.single_flight-decorated — "
+            "concurrent sweeps and UI polls would stack acquisitions")

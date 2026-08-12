@@ -1002,7 +1002,14 @@ class Adapter:
         adapter, iface, refs = table[collection]
         return env.source(adapter, iface, refs)
 
-    async def _items(self, collection: str) -> list[dict]:
+    @env.single_flight
+    async def acquire(self, collection: str) -> list[dict]:
+        """The full materialisation, shared: collect() pages it, get_object
+        searches it, and main.py's status/snapshot/changes sweeps consume it
+        directly instead of re-acquiring per page. lookups is here like any
+        other collection — the catalog's items ARE the documentation.
+        Single-flighted so concurrent callers ride one acquisition
+        (envelope.single_flight — coalescing, not caching)."""
         if collection == "links":
             return await self._link_items()
         if collection == "routes":
@@ -1022,7 +1029,8 @@ class Adapter:
         raise env.UnknownCollection(collection)
 
     async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:
-        items = env.apply_fact_filters(await self._items(collection), query)
+        fetched = await self.acquire(collection)
+        items = env.apply_fact_filters(fetched, query)
         page, applied, next_cursor, total = env.paginate(items, limit, cursor)
         return env.collection_page(self.subsystem, collection, self._source_for(collection),
                                    page, applied, next_cursor, requested_limit=limit,
@@ -1047,7 +1055,7 @@ class Adapter:
                 raise env.UnknownObject(object_id)
             return obs
 
-        items = await self._items(collection)
+        items = await self.acquire(collection)
         match = next((i for i in items if i["id"] == object_id), None)
         if match is None:
             raise env.UnknownObject(object_id)

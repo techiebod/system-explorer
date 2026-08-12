@@ -232,25 +232,22 @@ LOOKUPS_DECLINE = "parameterised catalog"
 
 
 async def _collect_items(adapter, collection: str) -> tuple[list[dict], str]:
-    """Follow one collection's pagination to completion: every item summary
-    plus the last page's observed_at. One collector serves the status
-    roll-up, the snapshot task, and the /v1/changes live side, so all three
-    see the same materialisation. An error envelope becomes a raise —
-    collect() built it instead of raising, and treating its zero items as
-    data would misreport an empty, healthy collection."""
-    items: list[dict] = []
-    observed_at = env.utc_now()
-    cursor: str | None = None
-    while True:
-        page = await adapter.collect(collection, {}, None, cursor)
-        if page["status"] == "error":
-            raise RuntimeError("; ".join(page["errors"]))
-        observed_at = page["observed_at"]
-        items.extend(page["items"])
-        cursor = page["next_cursor"]
-        if cursor is None:
-            break
-    return items, observed_at
+    """Every item summary, in one acquisition. One collector serves the
+    status roll-up, the snapshot task, and the /v1/changes live side, so all
+    three see the same materialisation.
+
+    This used to follow collect()'s pagination to completion — and because
+    every page re-ran the whole acquisition before slicing, a two-page
+    collection paid ListUnits, ListUnitFiles and ~800 procfs reads TWICE to
+    produce one severity count, which was most of why /v1/status took 2 s to
+    answer 3 KB (measured 2026-08-12; limit=1 cost what limit=1000 cost).
+    acquire() is the materialisation alone — no filter, no paginate, no
+    envelope — and it is single-flighted, so this sweep and a concurrent UI
+    poll of the same collection share one acquisition instead of stacking
+    two. Acquisition failures propagate as exceptions; the callers already
+    treat any raise as one collection degrading, never the endpoint."""
+    items = await adapter.acquire(collection)
+    return items, env.utc_now()
 
 
 async def _status_rollup(adapter, collection: str) -> dict:

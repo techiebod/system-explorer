@@ -598,11 +598,24 @@ class Adapter:
             raise env.UnknownCollection(collection)
         return self._generation_items(detailed)
 
-    async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:
+    @env.single_flight
+    async def acquire(self, collection: str) -> list[dict]:
+        """The full materialisation, shared: collect() pages it and main.py's
+        status/snapshot/changes sweeps consume it directly instead of
+        re-acquiring per page. Single-flighted so concurrent callers ride one
+        acquisition (envelope.single_flight — coalescing, not caching).
+
+        Summary payload only: DeltaCounts, never the delta rows themselves —
+        the payload decision _delta_facts records. get_object() runs its own
+        detailed walk for exactly that reason, so it does not route here.
+        """
         # The link-farm and profile scandir walks are synchronous filesystem
         # work — off the event loop like every other adapter's acquisition
         # (backlog note, 2026-08-09: async hygiene).
-        fetched = await anyio.to_thread.run_sync(self._items, collection)
+        return await anyio.to_thread.run_sync(self._items, collection)
+
+    async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:
+        fetched = await self.acquire(collection)
         items = env.apply_fact_filters(fetched, query)
         page, applied, next_cursor, total = env.paginate(items, limit, cursor)
         return env.collection_page(self.subsystem, collection,
@@ -615,6 +628,9 @@ class Adapter:
     _RULES = {"generations": generation_opinions}
 
     async def get_object(self, collection: str, object_id: str) -> dict:
+        # Not routed through acquire(): the detailed flag carries the
+        # DeltaFromPrevious rows only an opened object shows, so this walk is
+        # the same acquisition with a different payload, not a duplicate of it.
         fetched = await anyio.to_thread.run_sync(self._items, collection, True)
         match = next((i for i in fetched if i["id"] == object_id), None)
         if match is None:

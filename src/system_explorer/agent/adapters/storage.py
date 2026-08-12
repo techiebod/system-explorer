@@ -653,7 +653,16 @@ class Adapter:
                      "skews it (ProtectSystem=strict shows / as ro)"]
         return env.source(adapter, iface, refs, notes=notes)
 
-    async def _items(self, collection: str) -> list[dict]:
+    @env.single_flight
+    async def acquire(self, collection: str) -> list[dict]:
+        """The full materialisation, shared: collect() pages it, get_object
+        searches it, and main.py's status/snapshot/changes sweeps consume it
+        directly (envelope.single_flight — coalescing, not caching). The
+        lookups catalog dispatches here like any other collection: its items
+        ARE the documentation. Acquiring mounts sets _findmnt_fallback as a
+        side effect, which is why collect() builds its source only after the
+        acquisition lands — the note must describe the read that produced
+        this page, not the previous one's."""
         if collection in ("pools", "datasets") and not self._zfs:
             raise env.UnknownCollection(collection)
         fetch = {"block-devices": self._block_items, "mounts": self._mount_items,
@@ -737,10 +746,15 @@ class Adapter:
         )
 
     async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:
-        items = env.apply_fact_filters(await self._items(collection), query)
-        for item in items:
-            item.pop("_parent", None)
+        items = env.apply_fact_filters(await self.acquire(collection), query)
         page, applied, next_cursor, total = env.paginate(items, limit, cursor)
+        # _parent is plumbing for get_object's member-of edge, not a wire
+        # fact. Stripped on copies, after slicing: single_flight hands the
+        # same item dicts to every caller riding one flight, so the old
+        # in-place pop would race a concurrent get_object out of its parent
+        # relationship.
+        page = [{k: v for k, v in item.items() if k != "_parent"}
+                for item in page]
         return env.collection_page(self.subsystem, collection, self._source_for(collection),
                                    page, applied, next_cursor, requested_limit=limit,
                                    total=total, filters=query or None)
@@ -820,7 +834,7 @@ class Adapter:
     async def get_object(self, collection: str, object_id: str) -> dict:
         if collection == "lookups":
             return await self._lookup_observation(object_id)
-        items = await self._items(collection)
+        items = await self.acquire(collection)
         match = next((i for i in items if i["id"] == object_id), None)
         if match is None:
             raise env.UnknownObject(object_id)

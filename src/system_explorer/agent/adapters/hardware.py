@@ -1150,7 +1150,15 @@ class Adapter:
                          "hwmon (nvme/drivetemp) temperatures are the remaining floor"]
         return env.source(adapter, iface, refs, notes=notes)
 
-    async def _items(self, collection: str) -> list[dict]:
+    @env.single_flight
+    async def acquire(self, collection: str) -> list[dict]:
+        """The full materialisation, shared: collect() pages it, get_object
+        searches it, and main.py's status/snapshot/changes sweeps consume it
+        directly instead of re-acquiring per page. Single-flighted so a sweep
+        and a concurrent UI poll ride one acquisition (envelope.single_flight
+        — coalescing, not caching). The scsi/nvme walks set _udisks_ok on
+        self, which is what keeps the source note truthful for whoever
+        builds an envelope after this lands."""
         if collection == "pci":
             return await self._pci_items()
         if collection == "usb":
@@ -1166,7 +1174,8 @@ class Adapter:
         raise env.UnknownCollection(collection)
 
     async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:
-        items = env.apply_fact_filters(await self._items(collection), query)
+        fetched = await self.acquire(collection)
+        items = env.apply_fact_filters(fetched, query)
         page, applied, next_cursor, total = env.paginate(items, limit, cursor)
         return env.collection_page(self.subsystem, collection, self._source_for(collection),
                                    page, applied, next_cursor, requested_limit=limit,
@@ -1174,11 +1183,14 @@ class Adapter:
 
     async def get_object(self, collection: str, object_id: str) -> dict:
         if collection == "platform":
+            # Not routed through acquire(): the item summary acquire() serves
+            # is derived FROM this observation, so going through it would mean
+            # rebuilding the original out of its own derivative.
             obs = await self._platform_observation()
             if obs["object"]["id"] != object_id:
                 raise env.UnknownObject(object_id)
             return obs
-        match = next((i for i in await self._items(collection) if i["id"] == object_id), None)
+        match = next((i for i in await self.acquire(collection) if i["id"] == object_id), None)
         if match is None:
             raise env.UnknownObject(object_id)
         facts = match["facts"]
