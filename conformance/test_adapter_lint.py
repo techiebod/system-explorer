@@ -253,9 +253,21 @@ ESTATE_EXEMPT_FILES = {"README.md", "AGENTS.md", "pyproject.toml",
 def _repo_sources():
     """Tracked files only — .venv, result symlinks and build output are not the
     repository, and scanning them produces nothing but false positives (httpx
-    has a cookie `jar`)."""
-    listed = subprocess.run(["git", "ls-files"], cwd=PROJECT_DIR,
-                            capture_output=True, text=True, check=False).stdout.split()
+    has a cookie `jar`).
+
+    A missing git BINARY is the same situation as a missing .git directory:
+    no repository context, nothing to scan, the lint bites on developer
+    checkouts where git exists. check=False already covered "git ran and
+    failed" (a GitHub-archive source inside a nix build has no .git), but a
+    `path:` flake override copies the working tree WITH .git into a sandbox
+    that has no git on PATH, and subprocess raised FileNotFoundError before
+    check=False could matter — every hostname case failed the package build
+    the first time SE_LOCAL was used after this lint landed (2026-08-12)."""
+    try:
+        listed = subprocess.run(["git", "ls-files"], cwd=PROJECT_DIR,
+                                capture_output=True, text=True, check=False).stdout.split()
+    except FileNotFoundError:
+        listed = []
     exts = {".py", ".js", ".mjs", ".md", ".sh", ".json", ".nix", ".css", ".html"}
     for name in listed:
         rel = pathlib.Path(name)
