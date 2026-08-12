@@ -6,6 +6,13 @@ __pycache__/
 /dist/
 *.egg-info/
 
+# uv writes this on every `uv run` (the convenient local way to run the
+# conformance suite), and nothing consumes it: pyproject.toml is the single
+# dependency truth and nix/package.nix resolves from it, so committing a
+# second pinned resolution would be a second thing to disagree with the
+# first. Ignored rather than committed, deliberately.
+/uv.lock
+
 # nix build symlinks
 /result
 /result-*
