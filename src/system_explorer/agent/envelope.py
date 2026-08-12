@@ -166,11 +166,37 @@ def redact_list_properties(payload: dict, keys: tuple[str, ...]) -> tuple[dict, 
     return out, paths
 
 
-def rel(rel_type: str, direction: str, target_id: str, subsystem: str | None = None) -> dict:
+def rel(rel_type: str, direction: str, target_id: str, subsystem: str | None = None,
+        container: str | None = None, app: str | None = None) -> dict:
+    """A typed edge. container/app scope the TARGET (rule 15's locator):
+    an app-scoped object naming a host-scoped one omits them, a host-scoped
+    object naming an app-scoped one carries them — the cross-locator edge a
+    cross-app trace walks. Absent means host-native, like everywhere."""
     target: dict[str, Any] = {"id": target_id}
     if subsystem:
         target["subsystem"] = subsystem
+    if container:
+        target["container"] = container
+    if app:
+        target["app"] = app
     return {"type": rel_type, "direction": direction, "target": target}
+
+
+def host_block(container: str | None = None, app: str | None = None) -> dict:
+    """The envelope's host member, optionally narrowed by the composite
+    locator (SPEC rule 15, decided 0.6): same machine identity, plus which
+    container and which application instance the observing process fronts.
+    Absent members mean host-native — never a zero value, because an
+    invented identity is worse than an admitted absence. Host-scoped
+    adapters never call this; they get plain HOST by default."""
+    if not container and not app:
+        return HOST
+    out = dict(HOST)
+    if container:
+        out["container"] = container
+    if app:
+        out["app"] = app
+    return out
 
 
 def obj_ref(object_id: str, obj_type: str, native_id: str, name: str | None = None) -> dict:
@@ -184,10 +210,11 @@ def observation(subsystem: str, obj: dict, src: dict, facts: dict,
                 opinions: list[dict] | None = None,
                 relationships: list[dict] | None = None,
                 status: str = "ok", errors: list[str] | None = None,
-                evidence_ref: str | None = None) -> dict:
+                evidence_ref: str | None = None,
+                host: dict | None = None) -> dict:
     out: dict[str, Any] = {
         "schema": SCHEMA_OBSERVATION,
-        "host": HOST,
+        "host": host or HOST,
         "subsystem": subsystem,
         "object": obj,
         "observed_at": utc_now(),
@@ -210,10 +237,11 @@ def collection_page(subsystem: str, collection: str, src: dict, items: list[dict
                     applied_limit: int, next_cursor: str | None,
                     requested_limit: int | None = None, total: int | None = None,
                     filters: dict[str, str] | None = None,
-                    status: str = "ok", errors: list[str] | None = None) -> dict:
+                    status: str = "ok", errors: list[str] | None = None,
+                    host: dict | None = None) -> dict:
     out: dict[str, Any] = {
         "schema": SCHEMA_COLLECTION,
-        "host": HOST,
+        "host": host or HOST,
         "subsystem": subsystem,
         "collection": collection,
         "observed_at": utc_now(),

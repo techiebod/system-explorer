@@ -58,7 +58,9 @@
       "required": ["machine_id", "hostname"],
       "properties": {
         "machine_id": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
-        "hostname": { "type": "string", "minLength": 1 }
+        "hostname": { "type": "string", "minLength": 1 },
+        "container": { "type": "string", "minLength": 1 },
+        "app": { "type": "string", "minLength": 1 }
       }
     },
     "subsystemName": {

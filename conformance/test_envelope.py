@@ -148,3 +148,37 @@ def test_type_is_always_a_legal_key():
 
 def test_an_empty_collection_validates_nothing_and_stays_empty():
     assert env.apply_fact_filters([], {"activestate": "x"}) == []
+
+
+# ---------------------------------------------------------------------------
+# The composite locator (SPEC rule 15, 0.6): container/app narrow identity,
+# absent means host-native, and a zero value never exists to invent.
+# ---------------------------------------------------------------------------
+
+def test_host_block_without_locator_is_plain_host():
+    assert env.host_block() is env.HOST
+
+
+def test_host_block_narrows_without_mutating_host():
+    block = env.host_block(container="readarr-audio", app="readarr-audio")
+    assert block["machine_id"] == env.HOST["machine_id"]
+    assert block["container"] == "readarr-audio"
+    assert block["app"] == "readarr-audio"
+    assert "container" not in env.HOST  # the module constant stays pure
+
+
+def test_rel_carries_target_locator_only_when_given():
+    plain = env.rel("member-of", "out", "unit:compose-stack-arr.service",
+                    subsystem="units")
+    assert "container" not in plain["target"] and "app" not in plain["target"]
+    scoped = env.rel("member-of", "in", "indexer:3", subsystem="servarr",
+                     app="readarr-audio")
+    assert scoped["target"]["app"] == "readarr-audio"
+
+
+def test_observation_accepts_a_narrowed_host():
+    obs = env.observation(
+        "servarr", env.obj_ref("indexer:3", "indexer", "3"),
+        env.source("servarr-api", "servarr-v3", ["curl <api>/indexer"]),
+        {"Name": "example"}, host=env.host_block(app="readarr-audio"))
+    assert obs["host"]["app"] == "readarr-audio"
