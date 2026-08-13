@@ -33,11 +33,18 @@ the envelope's app locator is the fleet ("servarr"), and the App fact on
 every row is the filterable instance handle. bazarr is deliberately NOT
 here — it does not speak this API family and gets its own thin adapter.
 
-Flow: rows carry the join keys the apps state (DownloadClient, Indexer,
-DownloadId) as facts. The dispatches-to / tracks edges the vocabulary
-defines are emitted when BOTH ends exist — the downloaders adapter
-lands next and brings the target ids; guessing them now would mint
-edges nothing can resolve.
+Flow: the first emitted edges in the app tier, each derived from a
+member THIS app's API states (the vocabulary's rule). A queue object
+`tracks` its transfer — target `transfer:<client>/<join>` in the
+downloaders subsystem, where the join key is the downloadId both sides
+state (info-hashes normalised lowercase, matching the downloaders
+adapter's ids; sabnzbd nzo ids verbatim, they are case-sensitive) — and
+an app object `dispatches-to` each download client it declares enabled
+(/downloadclient), target `client:<name lowercased>`. The client label
+is the app's own; a whitespace-free nonstandard label mints an edge
+whose target simply does not resolve, and a label that cannot mint a
+schema-valid id at all (whitespace) gets NO edge — its name still rides
+the facts, because an invalid envelope is worse than a missing arrow.
 
 A dark instance narrows, never masks: health and queue serve the
 instances that answered, their envelope goes status partial naming who
@@ -173,6 +180,8 @@ _APP_GLOSSARY = {
     "ConfigMissing": "The receipts this named instance still needs before it can be observed, or the fault in its name.",
     "ConfigDuplicate": "Entries in SE_SERVARR_INSTANCES that duplicated this name and were dropped; the first entry won.",
     "StatusUnobservable": "Why the instance's API could not be asked, when it could not — the row stays, because a configured manager that does not answer is a statement rather than a gap.",
+    "DownloadClients": "The download clients this app declares enabled, in its own labels — each whitespace-free label becomes a dispatches-to edge on the opened object (a label that cannot mint a valid id keeps its fact and gets no edge).",
+    "DownloadClientsUnobservable": "Why the app\u2019s download-client list could not be read when it could not — no dispatches-to edges can be minted without it.",
 }
 
 _HEALTH_GLOSSARY = {
@@ -189,7 +198,7 @@ _QUEUE_GLOSSARY = {
     "Status": "The transfer's state as the app sees it (downloading, completed, …).",
     "TrackedDownloadStatus": "The app's verdict on the whole tracked download: ok, warning or error — warning is where completed-but-not-imported lives.",
     "TrackedDownloadState": "Where in the pipeline the app says this item sits (downloading, importPending, importBlocked, …).",
-    "DownloadClient": "Which download client holds the transfer — the dispatches-to join key, as a fact until both ends of the edge exist.",
+    "DownloadClient": "Which download client holds the transfer, in the app\u2019s own label — lowercased, it is the client half of the tracks target (transfer:<client>/<join>).",
     "Indexer": "Which indexer supplied the release.",
     "Protocol": "Which transfer world the release came from: torrent or usenet.",
     "DownloadId": "The client's own id for the transfer — the tracks join key both sides state.",
@@ -412,12 +421,64 @@ class Adapter:
                                    errors=failures or None,
                                    host=HOST_BLOCK)
 
+    @staticmethod
+    def _queue_relationships(facts: dict) -> list[dict]:
+        """The tracks edge, from the two members the app itself stated."""
+        client = facts.get("DownloadClient")
+        join = facts.get("DownloadId")
+        if not client or not join:
+            return []
+        if facts.get("Protocol") == "torrent":
+            join = str(join).lower()  # the downloaders adapter's id casing
+        target = f"transfer:{str(client).lower()}/{join}"
+        if any(ch.isspace() for ch in target):
+            # A label with whitespace cannot mint a schema-valid id
+            # (objectId forbids it): no edge, never an invalid envelope --
+            # the label still rides the DownloadClient fact.
+            return []
+        return [env.rel("tracks", "out", target, subsystem="downloaders")]
+
+    async def _app_relationships(
+            self, spec: dict) -> tuple[list[dict], list[str], str | None]:
+        """dispatches-to edges from the app's own /downloadclient list —
+        an enrichment on the opened object only, so a failure narrows the
+        observation and SAYS so (DownloadClientsUnobservable): silence
+        here would make a transient endpoint error indistinguishable from
+        an app that dispatches to nothing."""
+        try:
+            declared = await self._get(spec, "/downloadclient")
+        except Exception as exc:  # noqa: BLE001 - narrowed, and stated
+            return [], [], env.reason(f"{type(exc).__name__}: {exc}")
+        names = [str(entry["name"]) for entry in declared
+                 if isinstance(entry, dict) and entry.get("enable")
+                 and entry.get("name")]
+        edges = [env.rel("dispatches-to", "out",
+                         f"client:{name.lower()}", subsystem="downloaders")
+                 for name in names
+                 if not any(ch.isspace() for ch in name)]
+        return edges, names, None
+
     async def get_object(self, collection: str, object_id: str) -> dict:
         matches = [item for item in await self.acquire(collection)
                    if item["id"] == object_id]
         if not matches:
             raise env.UnknownObject(object_id)
         item = matches[0]
+        facts = dict(item["facts"])
+        relationships: list[dict] = []
+        if collection == "queue":
+            relationships = self._queue_relationships(facts)
+        elif (collection == "apps" and "StatusUnobservable" not in facts
+                and "ConfigMissing" not in facts):
+            spec = self._spec_named(facts.get("App") or "")
+            if spec is not None and spec["name"] in self._clients:
+                relationships, names, why_not = (
+                    await self._app_relationships(spec))
+                if names:
+                    facts["DownloadClients"] = names
+                elif why_not:
+                    facts["DownloadClientsUnobservable"] = why_not
+        item = {**item, "facts": facts}
         opinions = {"apps": app_opinions, "health": health_opinions,
                     "queue": queue_opinions}[collection](item["facts"])
         return env.observation(
@@ -425,6 +486,7 @@ class Adapter:
             env.obj_ref(item["id"], item["type"], item["native_id"],
                         name=item.get("name")),
             self._source(collection), item["facts"], opinions=opinions,
+            relationships=relationships or None,
             evidence_ref=env.evidence_ref(self.subsystem, collection,
                                           item["id"]),
             host=HOST_BLOCK)

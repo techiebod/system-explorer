@@ -24,9 +24,11 @@ router: rule, entrypoints, service, TLS, the router's own error list),
 `services` (one row per service with the load balancer's per-server
 health map folded to counts — a green router over all-down backends is
 the wrapper-is-not-the-app shape at the ingress tier, and the map is
-where it shows). Router→service flow stays a FACT (`Service`,
-filterable) until the relationship vocabulary for flow edges is decided
-in the SPEC — an edge type invented here would pre-empt that decision.
+where it shows). An opened service carries the ingress flow edges the
+vocabulary reuses: one `routes-via` per router in its own usedBy list —
+emitted from the SERVICE side because usedBy carries the routers' FULL
+names, where the router document's service member is the short name a
+provider join would have to guess at.
 """
 
 from __future__ import annotations
@@ -361,10 +363,16 @@ class Adapter:
         opinions = {"overview": overview_opinions,
                     "routers": router_opinions,
                     "services": service_opinions}[collection](item["facts"])
+        relationships = None
+        if collection == "services":
+            relationships = [env.rel("routes-via", "in", f"router:{name}",
+                                     subsystem="traefik")
+                             for name in item["facts"].get("UsedBy") or []] or None
         return env.observation(
             self.subsystem,
             env.obj_ref(item["id"], item["type"], item["native_id"]),
             self._source(collection), item["facts"], opinions=opinions,
+            relationships=relationships,
             evidence_ref=env.evidence_ref(self.subsystem, collection,
                                           item["id"]),
             host=HOST_BLOCK)

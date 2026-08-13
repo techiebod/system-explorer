@@ -436,8 +436,12 @@ SNAPSHOT_EXCLUDES: set[tuple[str, str]] = {("logs", "journal")}
 
 
 def _history_log(message: str) -> None:
-    # The agent has no logger; under systemd, stderr is the journal.
-    print(f"history: {message}", file=sys.stderr)
+    # The agent has no logger; under systemd, stderr is the journal — which
+    # is exactly why the scrub happens HERE, at the chokepoint: a snapshot
+    # failure's exception text can carry a request URL, and the first
+    # query-string credential in the estate (sabnzbd) made that a leak
+    # path into journalctl (adversarial review, 2026-08-13).
+    print(f"history: {env.reason(message)}", file=sys.stderr)
 
 
 async def _subsystem_snapshot(name: str, adapter) -> dict[str, list[dict]]:
@@ -522,7 +526,7 @@ async def _subsystem_changes(name: str, baseline: dict[str, list[dict]]) -> tupl
         try:
             after, _ = await _collect_items(adapter, collection)
         except Exception as exc:  # noqa: BLE001 - errors are observations
-            errors.append(f"{name}/{collection}: {type(exc).__name__}: {exc}")
+            errors.append(env.reason(f"{name}/{collection}: {type(exc).__name__}: {exc}"))
             continue
         diff = history.diff_items(before, after)
         if diff:
