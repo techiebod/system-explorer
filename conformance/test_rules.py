@@ -81,10 +81,23 @@ CASES = [
      {("protection-proof-failed", "warn"), ("protection-unproven", "info")}),
     ("protection-irreplaceable-with-no-durable-copy",
      protection.target_opinions,
-     {"Class": "backup", "Destinations": ["near", "offsite"],
+     {"Class": "backup", "Kind": "zfs-dataset",
+      "Destinations": ["near", "offsite"],
       "IndependentDestinations": ["offsite"],
       "ImplementedHops": ["near"], "UnimplementedHops": ["offsite"]},
      {("protection-no-durable-copy", "warn"),
+      ("protection-unproven", "info")}),
+    # Same class, same unbuilt hop, DIFFERENT kind: a provider still holds
+    # the tree, so the loss is the deletion history rather than the data.
+    # Grading it beside the row above overstates two of the estate's rows
+    # and teaches the operator to distrust the severity column.
+    ("protection-cloud-mirror-loses-only-its-history",
+     protection.target_opinions,
+     {"Class": "backup", "Kind": "saas-pull",
+      "Destinations": ["near", "offsite"],
+      "IndependentDestinations": ["offsite"],
+      "ImplementedHops": ["near"], "UnimplementedHops": ["offsite"]},
+     {("protection-no-durable-history", "info"),
       ("protection-unproven", "info")}),
     ("protection-green-but-never-restored", protection.target_opinions,
      {"Class": "backup", "Destinations": ["offsite"],

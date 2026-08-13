@@ -564,3 +564,27 @@ def test_evidence_refuses_the_ids_the_collection_itself_refuses(
         asyncio.run(adapter.get_object("targets", "target:malformed"))
     with pytest.raises(mod.env.UnknownObject):
         asyncio.run(adapter.get_evidence("targets", "target:malformed"))
+
+
+def test_a_cloud_mirrors_kind_reaches_the_verdict_from_the_manifest():
+    """class says the ESTATE cannot rebuild this; kind says whether anyone
+    else still holds it. The first shipped without the second, and two live
+    rows read "Irreplaceable ... nothing here survives losing the site"
+    about data Dropbox and Apple were still holding (2026-08-13)."""
+    entry = {
+        "class": "backup", "kind": "saas-pull", "ownerHost": "host-a",
+        "source": "pool/mirror", "cadence": "daily",
+        "destinations": ["near-zfs", "offsite"],
+        "implementedBy": {"near-zfs": "host-a:mirror"},
+        "proofs": [], "lastProvenAt": {},
+    }
+    facts = mod.target_facts("mirror", entry, MANIFEST["destinations"])
+    assert facts["Kind"] == "saas-pull"        # it was always on the wire
+    keys = {op["key"]: op["level"] for op in rules.target_opinions(facts)}
+    assert keys["protection-no-durable-history"] == "info"
+    assert "protection-no-durable-copy" not in keys
+    # The same shape with a kind that has no upstream authority keeps warn.
+    grounded = mod.target_facts("grounded", {**entry, "kind": "zfs-dataset"},
+                                MANIFEST["destinations"])
+    assert {op["key"] for op in rules.target_opinions(grounded)} \
+        >= {"protection-no-durable-copy"}

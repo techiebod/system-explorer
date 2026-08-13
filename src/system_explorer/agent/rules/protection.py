@@ -13,7 +13,12 @@ from how alarming a word sounds:
   whether the data survives the site: an irreplaceable target whose
   independent destination is unbuilt has no durable copy at all, and
   nine of those hid behind green replication until the estate started
-  asking per hop instead of per target.
+  asking per hop instead of per target. That grading reads TWO fields,
+  because one of them cannot answer: `class` says the estate cannot
+  rebuild this from its own definitions, which is not the same as the
+  data existing nowhere else, and `kind` is where the difference is
+  declared. A saas-pull is a mirror of something a provider still
+  holds; its exposure is the deletion history, not the tree.
 - A job that was built and has NEVER succeeded is not debt, it is a
   broken promise: for irreplaceable data there is no copy, which is the
   one condition here that is critical. Where the declaration does not
@@ -74,9 +79,32 @@ def target_opinions(facts: dict) -> list[dict]:
     if missing:
         independent = set(facts.get("IndependentDestinations") or [])
         durable_gap = bool(independent) and independent.issubset(set(missing))
+        # TWO fields, not one. `class` says the ESTATE cannot recreate this
+        # from its own definitions; it does not say the data exists nowhere
+        # else. `kind` is what distinguishes them: a saas-pull's original
+        # still lives with a provider the estate does not control, so
+        # losing every copy here costs a re-download — and the deletion
+        # history, which is the actual reason such a target is classed
+        # backup at all (a two-way sync propagates removals, so anything
+        # deleted upstream survives only in the snapshots here). Grading it
+        # beside a target that exists nowhere else overstates the loss on
+        # exactly the rows an operator would check first, and teaches them
+        # the severity column cannot be trusted.
         irreplaceable = facts.get("Class") == "backup"
+        mirrored = facts.get("Kind") == "saas-pull"
         listed = ", ".join(str(hop) for hop in missing)
-        if irreplaceable and durable_gap:
+        if irreplaceable and durable_gap and mirrored:
+            opinions.append(env.opinion(
+                "protection-no-durable-history", "info",
+                f"No independent copy of this mirror's history ({listed}"
+                f" unbuilt). The provider still holds the tree, so the data"
+                f" survives losing the site — what does not is the deletion"
+                f" history these snapshots carry: anything removed upstream"
+                f" exists only here.",
+                ["Class", "Kind", "UnimplementedHops",
+                 "IndependentDestinations"],
+                look=LOOK_JOBS))
+        elif irreplaceable and durable_gap:
             opinions.append(env.opinion(
                 "protection-no-durable-copy", "warn",
                 f"Irreplaceable, and every independent destination it"
