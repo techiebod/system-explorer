@@ -982,31 +982,58 @@ def _rules_by_chain(document: dict) -> dict:
     return out
 
 
-def _walk_input_path(document: dict) -> list[dict]:
-    """Every rule reachable from an input base chain, in evaluation order.
+def _walk_input_path(document: dict) -> list[tuple[dict, list]]:
+    """Every rule reachable from an input base chain, in evaluation order,
+    WITH the conditions guarding it.
 
     Jumps are followed because the estate's own firewalls are built out of
     them — a NixOS host's input chain is a jump to nixos-fw and nothing else,
     so a walk that stopped at base chains would report that no rule admits
-    anything. Cycles and depth are bounded; a chain already walked is not
-    re-entered, which is conservative in the right direction (it can only
-    shorten the list, and a shorter list can only narrow the certain answer).
+    anything.
+
+    The guarding conditions are carried, and getting this wrong is the
+    dangerous direction. NixOS admits a port by jumping to nixos-fw-accept
+    under `iifname tailscale0 tcp dport 22`, and nixos-fw-accept holds a bare
+    `counter accept` with no conditions of its own. A walk that flattened the
+    two would find an unconditional accept and report every port on the host
+    as admitted from anywhere — the exact inversion this collection exists to
+    prevent, arriving through the path instead of through the renderer.
+    Measured against beacon's live ruleset, 2026-08-13.
+
+    Cycles and depth are bounded; a chain already on the current path is not
+    re-entered, which is conservative in the right direction — it can only
+    shorten the list, and a shorter list can only narrow the certain answer.
     """
     by_chain = _rules_by_chain(document)
-    ordered: list[dict] = []
+    ordered: list[tuple[dict, list]] = []
 
-    def walk(key, depth, seen):
+    def walk(key, depth, seen, guards):
         if depth > CHAIN_WALK_MAX_DEPTH or key in seen:
             return
         seen = seen | {key}
         for rule in by_chain.get(key, []):
-            ordered.append(rule)
-            rendered = _render_rule(rule.get("expr") or [])
+            expr = rule.get("expr") or []
+            ordered.append((rule, guards))
+            rendered = _render_rule(expr)
             if rendered["jump_target"]:
-                walk((key[0], key[1], rendered["jump_target"]), depth + 1, seen)
+                # Everything in the target chain runs only if this rule
+                # matched, so its conditions guard the whole subtree.
+                # EVERY statement of the jumping rule, not only the ones
+                # this renderer understands. Keeping just the readable
+                # matches turns an opaque guard into NO guard: beacon's
+                # `xt match "conntrack" jump nixos-fw-accept` then made the
+                # bare accept inside look unconditional, and every port on
+                # the host reported "certainly admitted from anywhere" — the
+                # inversion again, arriving through the path rather than the
+                # renderer. Carrying the whole expression means the residue
+                # travels with it and the descendant can never be certain.
+                walk((key[0], key[1], rendered["jump_target"]), depth + 1,
+                     seen, guards + [st for st in expr
+                                     if not (isinstance(st, dict)
+                                             and ("jump" in st or "goto" in st))])
 
     for key in _input_chains(document):
-        walk(key, 0, frozenset())
+        walk(key, 0, frozenset(), [])
     return ordered
 
 
@@ -1621,8 +1648,11 @@ class Adapter:
             certain: list[str] = []
             possible: list[str] = []
             gap_rules: list[str] = []
-            for rule in path:
-                expr = rule.get("expr") or []
+            for rule, guards in path:
+                # The guards first: a rule inside a jumped-to chain is
+                # reached only under the jumping rule's conditions, and they
+                # constrain what it admits exactly as its own do.
+                expr = guards + (rule.get("expr") or [])
                 rendered = _render_rule(expr)
                 if rendered["verdict"] != "accept":
                     continue

@@ -182,7 +182,7 @@ def test_the_walk_follows_the_jump_because_the_estate_is_built_of_them(
     every host in the estate."""
     document = estate(monkeypatch, tmp_path, [IIF_TS, DPORT22, ACCEPT])
     walked = network._walk_input_path(document)
-    assert [r["handle"] for r in walked] == [1, 10]
+    assert [rule["handle"] for rule, _guards in walked] == [1, 10]
 
 
 def test_a_chain_cycle_terminates(monkeypatch, tmp_path):
@@ -244,3 +244,58 @@ def test_an_unreadable_ruleset_declines_the_collection_by_name():
     caps = aio.run(adapter.capability())
     reason = caps["unavailable_collections"]["port-exposure"]
     assert "unread ruleset rather than a closed one" in reason
+
+
+# ── the guard the estate's own firewall depends on ───────────────────────
+
+def test_conditions_on_a_jumping_rule_guard_the_chain_it_jumps_to(
+        monkeypatch, tmp_path):
+    """The bug this found on a live host. NixOS admits a port by jumping to
+    nixos-fw-accept under `iifname tailscale0 tcp dport 22`, and
+    nixos-fw-accept holds a bare `counter accept` with no conditions of its
+    own. A walk that flattened the two finds an unconditional accept and
+    reports EVERY port on the host as admitted from anywhere."""
+    monkeypatch.setattr(network, "PROC_NET", str(tmp_path))
+    for name in ("tcp", "tcp6", "udp", "udp6"):
+        (tmp_path / name).write_text(
+            TCP_HEADER + (line("00000000:0016") if name == "tcp" else ""))
+    document = {"nftables": [
+        {"chain": {"family": "ip", "table": "filter", "name": "INPUT",
+                   "hook": "input", "policy": "drop"}},
+        {"rule": {"family": "ip", "table": "filter", "chain": "INPUT",
+                  "handle": 1, "expr": [{"jump": {"target": "nixos-fw"}}]}},
+        {"rule": {"family": "ip", "table": "filter", "chain": "nixos-fw",
+                  "handle": 2, "expr": [IIF_TS, DPORT22,
+                                        {"jump": {"target": "nixos-fw-accept"}}]}},
+        {"rule": {"family": "ip", "table": "filter", "chain": "nixos-fw-accept",
+                  "handle": 3, "expr": [{"counter": {"packets": 1, "bytes": 1}},
+                                        ACCEPT]}},
+    ]}
+    monkeypatch.setattr(network, "_nft_json", lambda: document)
+    [item] = asyncio.run(network.Adapter()._exposure_items())
+    facts = item["facts"]
+    assert facts["AdmittedFromCertain"] == ["meta iifname tailscale0"], (
+        "the jumping rule's conditions did not reach the accept it guards")
+    assert facts["AdmittedFromCertain"] != ["anywhere"]
+
+
+def test_a_guarded_accept_does_not_leak_to_an_unrelated_port(
+        monkeypatch, tmp_path):
+    """The same guard, from the other side: an accept reached only under
+    `tcp dport 22` must not admit port 443."""
+    monkeypatch.setattr(network, "PROC_NET", str(tmp_path))
+    for name in ("tcp", "tcp6", "udp", "udp6"):
+        (tmp_path / name).write_text(
+            TCP_HEADER + (line("00000000:01BB") if name == "tcp" else ""))
+    document = {"nftables": [
+        {"chain": {"family": "ip", "table": "filter", "name": "INPUT",
+                   "hook": "input", "policy": "drop"}},
+        {"rule": {"family": "ip", "table": "filter", "chain": "INPUT",
+                  "handle": 1, "expr": [DPORT22,
+                                        {"jump": {"target": "ok"}}]}},
+        {"rule": {"family": "ip", "table": "filter", "chain": "ok",
+                  "handle": 2, "expr": [ACCEPT]}},
+    ]}
+    monkeypatch.setattr(network, "_nft_json", lambda: document)
+    [item] = asyncio.run(network.Adapter()._exposure_items())
+    assert "AdmittingRules" not in item["facts"]
