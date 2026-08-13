@@ -40,11 +40,17 @@ downloaders subsystem, where the join key is the downloadId both sides
 state (info-hashes normalised lowercase, matching the downloaders
 adapter's ids; sabnzbd nzo ids verbatim, they are case-sensitive) — and
 an app object `dispatches-to` each download client it declares enabled
-(/downloadclient), target `client:<name lowercased>`. The client label
-is the app's own; a whitespace-free nonstandard label mints an edge
-whose target simply does not resolve, and a label that cannot mint a
-schema-valid id at all (whitespace) gets NO edge — its name still rides
-the facts, because an invalid envelope is worse than a missing arrow.
+(/downloadclient). The client half of every target is the client's
+IMPLEMENTATION lowercased (Transmission -> transmission) — the member
+the API states beside the label — because the label is the operator's
+pet name (LocalTransmission) while the downloaders adapter files its
+rows under the product, and label-minted targets dangled on the first
+real estate (live repro, 2026-08-13). Where the implementation cannot
+be read, the lowercased label is the honest fallback: an edge whose
+target simply does not resolve. A handle that cannot mint a
+schema-valid id at all (whitespace) gets NO edge — the name still
+rides the facts, because an invalid envelope is worse than a missing
+arrow.
 
 A dark instance narrows, never masks: health and queue serve the
 instances that answered, their envelope goes status partial naming who
@@ -180,7 +186,7 @@ _APP_GLOSSARY = {
     "ConfigMissing": "The receipts this named instance still needs before it can be observed, or the fault in its name.",
     "ConfigDuplicate": "Entries in SE_SERVARR_INSTANCES that duplicated this name and were dropped; the first entry won.",
     "StatusUnobservable": "Why the instance's API could not be asked, when it could not — the row stays, because a configured manager that does not answer is a statement rather than a gap.",
-    "DownloadClients": "The download clients this app declares enabled, in its own labels — each whitespace-free label becomes a dispatches-to edge on the opened object (a label that cannot mint a valid id keeps its fact and gets no edge).",
+    "DownloadClients": "The download clients this app declares enabled, in its own labels — each becomes a dispatches-to edge targeted by the client’s implementation, deduplicated (a handle that cannot mint a valid id keeps its fact and gets no edge).",
     "DownloadClientsUnobservable": "Why the app\u2019s download-client list could not be read when it could not — no dispatches-to edges can be minted without it.",
 }
 
@@ -198,7 +204,7 @@ _QUEUE_GLOSSARY = {
     "Status": "The transfer's state as the app sees it (downloading, completed, …).",
     "TrackedDownloadStatus": "The app's verdict on the whole tracked download: ok, warning or error — warning is where completed-but-not-imported lives.",
     "TrackedDownloadState": "Where in the pipeline the app says this item sits (downloading, importPending, importBlocked, …).",
-    "DownloadClient": "Which download client holds the transfer, in the app\u2019s own label — lowercased, it is the client half of the tracks target (transfer:<client>/<join>).",
+    "DownloadClient": "Which download client holds the transfer, in the app\u2019s own label — the tracks edge resolves it to the client\u2019s implementation (transfer:<implementation>/<join>) so the arrow lands on the row the downloaders adapter actually serves.",
     "Indexer": "Which indexer supplied the release.",
     "Protocol": "Which transfer world the release came from: torrent or usenet.",
     "DownloadId": "The client's own id for the transfer — the tracks join key both sides state.",
@@ -421,18 +427,45 @@ class Adapter:
                                    errors=failures or None,
                                    host=HOST_BLOCK)
 
+    async def _declared_clients(
+            self, spec: dict) -> tuple[list[dict] | None, str | None]:
+        """The app's own enabled /downloadclient entries, or why they
+        could not be read — one fetch shared by both edge surfaces."""
+        try:
+            declared = await self._get(spec, "/downloadclient")
+        except Exception as exc:  # noqa: BLE001 - enrichment, narrowed and stated
+            return None, env.reason(f"{type(exc).__name__}: {exc}")
+        return [entry for entry in declared
+                if isinstance(entry, dict) and entry.get("enable")], None
+
     @staticmethod
-    def _queue_relationships(facts: dict) -> list[dict]:
-        """The tracks edge, from the two members the app itself stated."""
+    def _impl_by_label(declared: list[dict]) -> dict[str, str]:
+        """label.lower() -> implementation.lower(): the source-stated
+        bridge between the app's pet names for its clients and the
+        product names the downloaders adapter files its rows under."""
+        return {str(entry["name"]).lower(): str(entry["implementation"]).lower()
+                for entry in declared
+                if entry.get("name") and entry.get("implementation")}
+
+    @staticmethod
+    def _queue_relationships(
+            facts: dict,
+            impl_by_label: dict[str, str] | None = None) -> list[dict]:
+        """The tracks edge, from the members the app itself stated. The
+        client half of the target resolves through the implementation
+        map when the app's client list could be read; without it the
+        lowercased label is the honest fallback."""
         client = facts.get("DownloadClient")
         join = facts.get("DownloadId")
         if not client or not join:
             return []
         if facts.get("Protocol") == "torrent":
             join = str(join).lower()  # the downloaders adapter's id casing
-        target = f"transfer:{str(client).lower()}/{join}"
+        handle = str(client).lower()
+        handle = (impl_by_label or {}).get(handle, handle)
+        target = f"transfer:{handle}/{join}"
         if any(ch.isspace() for ch in target):
-            # A label with whitespace cannot mint a schema-valid id
+            # A handle with whitespace cannot mint a schema-valid id
             # (objectId forbids it): no edge, never an invalid envelope --
             # the label still rides the DownloadClient fact.
             return []
@@ -444,18 +477,25 @@ class Adapter:
         an enrichment on the opened object only, so a failure narrows the
         observation and SAYS so (DownloadClientsUnobservable): silence
         here would make a transient endpoint error indistinguishable from
-        an app that dispatches to nothing."""
-        try:
-            declared = await self._get(spec, "/downloadclient")
-        except Exception as exc:  # noqa: BLE001 - narrowed, and stated
-            return [], [], env.reason(f"{type(exc).__name__}: {exc}")
-        names = [str(entry["name"]) for entry in declared
-                 if isinstance(entry, dict) and entry.get("enable")
-                 and entry.get("name")]
-        edges = [env.rel("dispatches-to", "out",
-                         f"client:{name.lower()}", subsystem="downloaders")
-                 for name in names
-                 if not any(ch.isspace() for ch in name)]
+        an app that dispatches to nothing. Targets resolve through the
+        implementation map and deduplicate — two labels for one product
+        are one arrow — while the labels themselves ride the
+        DownloadClients fact in the app's own words."""
+        declared, why_not = await self._declared_clients(spec)
+        if declared is None:
+            return [], [], why_not
+        names = [str(entry["name"]) for entry in declared if entry.get("name")]
+        impl_by_label = self._impl_by_label(declared)
+        targets: list[str] = []
+        for name in names:
+            handle = impl_by_label.get(name.lower(), name.lower())
+            if any(ch.isspace() for ch in handle):
+                continue  # cannot mint a schema-valid id; the fact keeps the name
+            if handle not in targets:
+                targets.append(handle)
+        edges = [env.rel("dispatches-to", "out", f"client:{handle}",
+                         subsystem="downloaders")
+                 for handle in targets]
         return edges, names, None
 
     async def get_object(self, collection: str, object_id: str) -> dict:
@@ -467,7 +507,13 @@ class Adapter:
         facts = dict(item["facts"])
         relationships: list[dict] = []
         if collection == "queue":
-            relationships = self._queue_relationships(facts)
+            impl_by_label = None
+            spec = self._spec_named(facts.get("App") or "")
+            if spec is not None and spec["name"] in self._clients:
+                declared, _ = await self._declared_clients(spec)
+                if declared is not None:
+                    impl_by_label = self._impl_by_label(declared)
+            relationships = self._queue_relationships(facts, impl_by_label)
         elif (collection == "apps" and "StatusUnobservable" not in facts
                 and "ConfigMissing" not in facts):
             spec = self._spec_named(facts.get("App") or "")

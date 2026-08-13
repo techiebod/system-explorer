@@ -120,6 +120,32 @@ def test_an_emitted_edge_satisfies_the_published_id_pattern():
     assert re.fullmatch(r"[a-z][a-z0-9-]*:\S+", edge["target"]["id"])
 
 
+def test_the_tracks_target_resolves_the_label_to_its_implementation():
+    # The estate's labels are pet names (LocalTransmission); the
+    # downloaders adapter files rows under the product. The app's own
+    # /downloadclient list states implementation beside name, and the
+    # edge must land on the row that exists — label-minted targets
+    # dangled on the first real estate (live repro, 2026-08-13).
+    facts = queue_record_facts("example-tv", {
+        "id": 14, "title": "x", "protocol": "torrent",
+        "downloadClient": "LocalTransmission", "downloadId": "ABCDEF01"})
+    [edge] = ServarrAdapter._queue_relationships(
+        facts, {"localtransmission": "transmission"})
+    assert edge["target"]["id"] == "transfer:transmission/abcdef01"
+    # A spaced label that resolves through the map mints a clean id too;
+    # the whitespace guard is the fallback's guard, not the map's.
+    facts = queue_record_facts("example-tv", {
+        "id": 15, "title": "y", "protocol": "torrent",
+        "downloadClient": "Transmission (VPN)", "downloadId": "ABCDEF01"})
+    [edge] = ServarrAdapter._queue_relationships(
+        facts, {"transmission (vpn)": "transmission"})
+    assert edge["target"]["id"] == "transfer:transmission/abcdef01"
+    # And the map builds from exactly the shape the API states.
+    assert ServarrAdapter._impl_by_label([
+        {"name": "LocalTransmission", "implementation": "Transmission",
+         "enable": True}]) == {"localtransmission": "transmission"}
+
+
 def test_a_keyless_sab_is_a_named_transfer_failure_not_a_silent_gap():
     # SE_SABNZBD_URL without its key must NOT make "sab has no transfers"
     # and "sab could not be asked" byte-identical envelopes: the sweep
