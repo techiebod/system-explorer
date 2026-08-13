@@ -258,8 +258,19 @@ _RESOLVER_GLOSSARY = {
     ),
 }
 
+_LISTENING_GLOSSARY = {
+    "Protocol": "Which /proc/net table this socket came from — tcp, tcp6, udp or udp6. A host that binds both stacks appears twice, deliberately: they are two sockets and a ruleset can admit one and not the other.",
+    "LocalAddress": "The address this socket is bound to. The wildcard (0.0.0.0 or ::) means every interface the host has now or gains later, which is the binding the firewall question actually hangs off.",
+    "LocalPort": "The port this socket accepts on.",
+    "Scope": "What the binding says about reach before any rule is consulted: all-interfaces, loopback, or specific-address. A loopback socket is unreachable from off the host whatever the ruleset permits, and a wildcard one is reachable from wherever the ruleset allows — so this is the fact that decides whether the firewall matters for this row at all.",
+    "Uid": "The user that owns the socket, from /proc/net itself. It is not the process name and does not pretend to be; it is what can be said about ownership without the privilege the join below needs.",
+    "SocketInode": "The socket's inode, which is the key /proc/<pid>/fd entries point at — the join a privileged reader would use to name the process.",
+    "ProcessUnobservable": "Why no process is named on this row. A socket whose owner could not be established is not a socket nobody owns, and this states which it is.",
+}
+
 _NETWORK_GLOSSARY = {"links": _LINK_GLOSSARY, "routes": _ROUTE_GLOSSARY,
-                     "resolver": _RESOLVER_GLOSSARY}
+                     "resolver": _RESOLVER_GLOSSARY,
+                     "listening": _LISTENING_GLOSSARY}
 
 
 def _link_kind(link: dict) -> str | None:
@@ -533,6 +544,125 @@ def global_dns_servers(entries: list) -> list[str]:
             and (addr := _server_addr(entry))]
 
 
+# ── listening sockets ────────────────────────────────────────────────
+#
+# The question an operator arrives with on an internet-facing host is "what is
+# listening, and who can reach it". This collection answers the first half; the
+# firewall answers the second, and port-exposure below joins them. Splitting
+# them this way is not a decomposition anyone here invented: ufw's `show
+# listening` has presented sockets first and the rules bearing on each socket
+# second for years, and GCP, Azure and AWS each independently built a derived
+# per-interface view for the same reason — a rule list is evidence for the
+# answer, never the answer.
+#
+# Read from /proc/net, which is world-readable, so this needs no privilege at
+# all. What it CANNOT do without privilege is name the process behind a socket:
+# that join goes through /proc/<pid>/fd, which is readable only by the process
+# owner, and this agent runs as a DynamicUser. The uid is carried instead —
+# it is in /proc/net itself and it already separates a root listener from a
+# service one — and the absent half says why it is absent rather than being
+# quietly dropped.
+PROC_NET = "/proc/net"
+LISTENING_REFERENCE = [
+    "ss -lntu",
+    "ss -lntup   # adds the process, and needs privilege this agent does not hold",
+    "cat /proc/net/tcp", "cat /proc/net/tcp6",
+    "cat /proc/net/udp", "cat /proc/net/udp6",
+]
+
+# /proc/net/tcp's st column. 0A is LISTEN; a UDP socket has no listen state, so
+# a bound unconnected one (07) is the equivalent "accepting traffic" reading.
+TCP_LISTEN = "0A"
+UDP_UNCONNECTED = "07"
+
+# Why a process cannot be named here, stated once and carried on every row that
+# wants it. Named after the grant that would change the answer, the way every
+# other declined capability in this adapter is.
+LISTENING_NOTES = [
+    "Sockets only. What may REACH them is the ruleset's answer, and this"
+    " collection deliberately makes no claim about it — a socket on the"
+    " wildcard address is not an exposed one until a rule admits it.",
+    "No process is named on any row. That join reads /proc/<pid>/fd, which"
+    " only the owning user may open, and this agent runs as a DynamicUser;"
+    " the uid on each row is what /proc/net itself carries.",
+]
+
+PROCESS_UNOBSERVABLE = (
+    "the listening process cannot be named from this agent: the socket-inode to"
+    " process join reads /proc/<pid>/fd, which only the owning user may open,"
+    " and the agent runs as a DynamicUser. The uid beside this fact is from"
+    " /proc/net itself and is what can be said without that privilege."
+)
+
+
+def _read_text(path: str) -> str | None:
+    """One /proc file, or None where it will not open. Every read here goes
+    through this rather than calling open() directly: the reference-command
+    lint resolves paths through a reviewed table of reader helpers, and a bare
+    open() is invisible to it."""
+    try:
+        with open(path) as handle:
+            return handle.read()
+    except OSError:
+        return None
+
+
+def _hex_addr(raw: str) -> str | None:
+    """/proc/net's address encoding: 32-bit words in HOST byte order, printed
+    big-endian-looking. Getting this wrong silently produces plausible
+    addresses — 0100007F reads as 1.0.0.127 rather than 127.0.0.1 — so it is
+    decoded word-wise rather than by reversing the whole string, which is the
+    form that also happens to be correct for IPv6's four words."""
+    try:
+        if len(raw) == 8:
+            packed = int(raw, 16).to_bytes(4, "little")
+            return socket.inet_ntop(socket.AF_INET, packed)
+        if len(raw) == 32:
+            words = [int(raw[i:i + 8], 16).to_bytes(4, "little")
+                     for i in range(0, 32, 8)]
+            return socket.inet_ntop(socket.AF_INET6, b"".join(words))
+    except (ValueError, OSError):
+        return None
+    return None
+
+
+def _listening_scope(address: str) -> str:
+    """What an address binding says about reach, in the words an operator
+    would use. This is the fact the firewall question hangs off: a socket on
+    the wildcard is reachable from wherever the ruleset allows, and one on
+    loopback is reachable from nowhere off the host whatever the ruleset says.
+    """
+    if address in ("0.0.0.0", "::"):
+        return "all-interfaces"
+    if address.startswith("127.") or address in ("::1",):
+        return "loopback"
+    return "specific-address"
+
+
+def _read_proc_net(name: str) -> tuple[list[dict], str | None]:
+    """One /proc/net table's listening rows, or (partial, why-not)."""
+    text = _read_text(f"{PROC_NET}/{name}")
+    if text is None:
+        return [], f"{PROC_NET}/{name} could not be read"
+    wanted = TCP_LISTEN if name.startswith("tcp") else UDP_UNCONNECTED
+    rows = []
+    for line in text.splitlines()[1:]:
+        fields = line.split()
+        if len(fields) < 10 or fields[3] != wanted:
+            continue
+        local, _, port = fields[1].rpartition(":")
+        address = _hex_addr(local)
+        if address is None:
+            continue
+        try:
+            rows.append({"Protocol": name, "LocalAddress": address,
+                         "LocalPort": int(port, 16), "Uid": int(fields[7]),
+                         "SocketInode": int(fields[9])})
+        except ValueError:
+            continue
+    return rows, None
+
+
 class Adapter:
     subsystem = "network"
 
@@ -547,7 +677,8 @@ class Adapter:
         self._nft_probed_at: float = 0.0
 
     def collections(self) -> list[str]:
-        return ["links", "routes", "resolver", "nft-tables", "tailscale", "lookups"]
+        return ["links", "routes", "resolver", "listening", "nft-tables",
+                "tailscale", "lookups"]
 
     def fact_glossary(self, collection: str) -> dict[str, str]:
         return _NETWORK_GLOSSARY.get(collection, {})
@@ -933,6 +1064,45 @@ class Adapter:
             evidence_ref=env.evidence_ref("network", "resolver", obj['id']),
         )
 
+    # ── listening sockets ────────────────────────────────────
+    def _listening_items(self) -> list[dict]:
+        """One row per listening socket, across both stacks and both
+        protocols.
+
+        Ordered by port then address so the page reads the way an operator
+        scans it — by the number they are looking for — rather than by the
+        order the kernel happened to hash them into.
+        """
+        rows: list[dict] = []
+        unread: list[str] = []
+        for table in ("tcp", "tcp6", "udp", "udp6"):
+            found, problem = _read_proc_net(table)
+            if problem:
+                unread.append(problem)
+                continue
+            rows.extend(found)
+        items = []
+        for row in sorted(rows, key=lambda r: (r["LocalPort"], r["Protocol"],
+                                               r["LocalAddress"])):
+            facts = dict(row)
+            facts["Scope"] = _listening_scope(row["LocalAddress"])
+            # Stated on every row rather than once on the collection: a
+            # consumer reading one object must not have to have read the
+            # source block to know the process is missing for a reason.
+            facts["ProcessUnobservable"] = PROCESS_UNOBSERVABLE
+            if unread:
+                # A table that would not open is not a table with nothing in
+                # it. Without this a host whose /proc/net/udp6 was unreadable
+                # would publish a complete-looking list of TCP sockets.
+                facts["TablesUnreadable"] = "; ".join(unread)
+            items.append(env.item_summary(
+                f"socket:{row['Protocol']}/{row['LocalAddress']}"
+                f"/{row['LocalPort']}",
+                "listening-socket",
+                f"{row['Protocol']} {row['LocalAddress']}:{row['LocalPort']}",
+                facts, opinions=[], healthy=None))
+        return items
+
     # ── nftables ─────────────────────────────────────────────
     async def _nft_tables(self) -> list[dict]:
         data = await anyio.to_thread.run_sync(_nft_json)
@@ -1196,6 +1366,8 @@ class Adapter:
             "links": ("ip-json", "ip -j (rtnetlink)", LINK_REFERENCE),
             "routes": ("ip-json", "ip -j (rtnetlink)", ROUTE_REFERENCE),
             "resolver": ("resolve1-dbus", RESOLVE1, RESOLVER_REFERENCE),
+            "listening": ("proc-net", "/proc/net", LISTENING_REFERENCE,
+                          LISTENING_NOTES),
             "nft-tables": ("nft-json", "nft -j", NFT_REFERENCE, NFT_NOTES),
             "tailscale": ("tailscale-json",
                           f"tailscale status --json snapshots ({TAILSCALE_SNAPSHOT})",
@@ -1218,6 +1390,8 @@ class Adapter:
             return await self._link_items()
         if collection == "routes":
             return await self._route_items()
+        if collection == "listening":
+            return await anyio.to_thread.run_sync(self._listening_items)
         if collection == "nft-tables":
             return await self._nft_tables()
         if collection == "tailscale":
