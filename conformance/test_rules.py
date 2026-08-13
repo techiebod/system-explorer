@@ -21,8 +21,8 @@ from common import AGENT_DIR, UI_DIR, resolve_fact_path
 from system_explorer.agent import rules
 from system_explorer.agent.rules import (bazarr, docker, downloaders,
                                          hardware, kea, logs, network, nix,
-                                         paperless, plex, servarr, storage,
-                                         system, traefik, units, vms)
+                                         paperless, plex, protection, servarr,
+                                         storage, system, traefik, units, vms)
 
 RULES_DIR = AGENT_DIR / "rules"
 
@@ -35,6 +35,115 @@ RULES_DIR = AGENT_DIR / "rules"
 # ---------------------------------------------------------------------------
 
 CASES = [
+    # protection: the five states graded. Built-and-green is quiet, admitted
+    # debt is info, an irreplaceable target with no durable copy is warn, a
+    # restore tried and failed is worse than one never tried, and a job that
+    # has never once succeeded is the only critical here.
+    ("protection-fully-built-and-proven", protection.target_opinions,
+     {"Class": "backup", "Destinations": ["offsite"],
+      "IndependentDestinations": ["offsite"],
+      "ImplementedHops": ["offsite"], "ProvenRungs": ["offsite"],
+      "LastProvenAt": ["offsite: 2026-08-13"]}, set()),
+    ("protection-unbuilt-hop-is-admitted-debt", protection.target_opinions,
+     {"Class": "replicate", "Destinations": ["near", "offsite"],
+      "IndependentDestinations": ["offsite"],
+      "UnimplementedHops": ["offsite"],
+      "LastProvenAt": ["offsite: 2026-08-13"]},
+     {("protection-hop-unimplemented", "info")}),
+    # Proven from the rung an operator reaches for FIRST, which is not a
+    # destination and survives neither the disk nor the site. A single
+    # cross-rung date reads this as a proven target.
+    ("protection-proven-at-one-rung-only", protection.target_opinions,
+     {"Class": "backup", "Destinations": ["near", "offsite"],
+      "IndependentDestinations": ["offsite"],
+      "ImplementedHops": ["near", "offsite"],
+      "ProvenRungs": ["local-snapshots"],
+      "UnprovenRungs": ["near", "offsite"],
+      "LastProvenAt": ["local-snapshots: 2026-08-13"]},
+     {("protection-unproven", "info")}),
+    # Proven off-site and NOT from the near rung: the estate's live shape.
+    ("protection-proven-off-site-with-a-rung-unproven",
+     protection.target_opinions,
+     {"Class": "backup", "Destinations": ["near", "offsite"],
+      "IndependentDestinations": ["offsite"],
+      "ImplementedHops": ["near", "offsite"],
+      "ProvenRungs": ["offsite"], "UnprovenRungs": ["near"],
+      "LastProvenAt": ["offsite: 2026-08-13"]},
+     {("protection-unproven", "info")}),
+    # Tried and failed is not never-tried, and is worse.
+    ("protection-restore-tried-and-failed", protection.target_opinions,
+     {"Class": "backup", "Destinations": ["near", "offsite"],
+      "IndependentDestinations": ["offsite"],
+      "ImplementedHops": ["near", "offsite"],
+      "UnprovenRungs": ["near", "offsite"],
+      "FailedProofRungs": ["offsite"], "LastFailedProofAt": "2026-08-13",
+      "ProofRecord": "docs/recovery-proofs.md"},
+     {("protection-proof-failed", "warn"), ("protection-unproven", "info")}),
+    ("protection-irreplaceable-with-no-durable-copy",
+     protection.target_opinions,
+     {"Class": "backup", "Destinations": ["near", "offsite"],
+      "IndependentDestinations": ["offsite"],
+      "ImplementedHops": ["near"], "UnimplementedHops": ["offsite"]},
+     {("protection-no-durable-copy", "warn"),
+      ("protection-unproven", "info")}),
+    ("protection-green-but-never-restored", protection.target_opinions,
+     {"Class": "backup", "Destinations": ["offsite"],
+      "IndependentDestinations": ["offsite"],
+      "ImplementedHops": ["offsite"], "UnprovenRungs": ["offsite"]},
+     {("protection-unproven", "info")}),
+    ("protection-job-green", protection.job_opinions,
+     {"Job": "example", "State": "ok", "Basis": "last-success",
+      "AgeSeconds": 3600, "MaxAgeSeconds": 90000,
+      "LastResult": "success", "TargetClass": "backup"}, set()),
+    ("protection-job-never-succeeded-irreplaceable", protection.job_opinions,
+     {"Job": "example", "State": "stale",
+      "Basis": "registered-never-succeeded", "AgeSeconds": 200000,
+      "MaxAgeSeconds": 90000, "TargetClass": "backup"},
+     {("protection-never-succeeded", "critical")}),
+    ("protection-job-never-succeeded-derived", protection.job_opinions,
+     {"Job": "example", "State": "stale",
+      "Basis": "registered-never-succeeded", "AgeSeconds": 200000,
+      "MaxAgeSeconds": 90000, "TargetClass": "replicate"},
+     {("protection-never-succeeded", "warn")}),
+    ("protection-job-stale-after-success", protection.job_opinions,
+     {"Job": "example", "State": "stale", "Basis": "last-success",
+      "AgeSeconds": 200000, "MaxAgeSeconds": 90000,
+      "LastSuccessAt": "2026-08-01T02:00:00+00:00"},
+     {("protection-stale", "warn")}),
+    ("protection-job-failed-inside-its-window", protection.job_opinions,
+     {"Job": "example", "State": "ok", "Basis": "last-success",
+      "AgeSeconds": 3600, "MaxAgeSeconds": 90000, "LastResult": "exit-code",
+      "LastFinishedAt": "2026-08-13T04:00:00+00:00"},
+     {("protection-last-run-failed", "warn")}),
+    # A failed run with no success behind it is not the row above: it is
+    # unstale only because its first window has not passed yet.
+    ("protection-job-first-run-failed-inside-its-window",
+     protection.job_opinions,
+     {"Job": "example", "State": "ok", "Basis": "registered-never-succeeded",
+      "AgeSeconds": 7200, "MaxAgeSeconds": 129600, "LastResult": "exit-code",
+      "LastFinishedAt": "2026-08-13T01:00:00+00:00", "TargetClass": "backup"},
+     {("protection-first-run-failed", "warn")}),
+    # The class did not join: the gentler grade is deliberate AND stated.
+    ("protection-job-never-succeeded-class-unjoined", protection.job_opinions,
+     {"Job": "example-offsite", "State": "stale",
+      "Basis": "registered-never-succeeded", "AgeSeconds": 200000,
+      "MaxAgeSeconds": 90000,
+      "TargetClassUnjoined": "no declared target names this job"},
+     {("protection-never-succeeded", "warn")}),
+    # A verdict nobody has recomputed is not a current green row.
+    ("protection-job-verdict-frozen", protection.job_opinions,
+     {"Job": "example", "State": "ok", "Basis": "last-success",
+      "AgeSeconds": 3600, "MaxAgeSeconds": 90000, "LastResult": "success",
+      "CheckedAt": "2026-07-04T11:18:36Z", "CheckedAgeSeconds": 3456000,
+      "TargetClass": "backup"},
+     {("protection-verdict-stale", "warn")}),
+    # A receipt that exists and will not open is not a job that never ran.
+    ("protection-job-receipt-unreadable", protection.job_opinions,
+     {"Job": "example", "State": "ok", "Basis": "last-success",
+      "AgeSeconds": 3600, "MaxAgeSeconds": 90000,
+      "ReceiptsUnobservable": "example.last-success.json: JSONDecodeError: "
+                              "Expecting ',' delimiter: line 1 column 25"},
+     {("protection-receipt-unreadable", "warn")}),
     # kea: pool arithmetic that fails silently when it runs out.
     ("kea-pool-comfortable", kea.subnet_opinions,
      {"SubnetId": 1, "Subnet": "192.0.2.0/24", "TotalAddresses": 200,
@@ -81,6 +190,11 @@ CASES = [
     # own warn names the culprit (one condition, one alert).
     ("slice-io-stall-is-info", units.slice_unit_opinions,
      {"ActiveState": "active", "PsiIoFullAvg60": 33.43},
+     {("slice-stall", "info")}),
+    # Both resources, because each picks its own route hint out of
+    # SLICE_STALL_LOOK and an unexercised branch is an unexercised link.
+    ("slice-memory-stall-is-info", units.slice_unit_opinions,
+     {"ActiveState": "active", "PsiMemoryFullAvg60": 4.1},
      {("slice-stall", "info")}),
     ("slice-failed-is-still-critical", units.slice_unit_opinions,
      {"ActiveState": "failed", "SubState": "failed"},

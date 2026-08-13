@@ -191,6 +191,15 @@ EVIDENCE_REDACTION_EXEMPTIONS: dict[str, str] = {
     "bazarr": "status and health documents: versions and the app's own "
               "issue sentences. The API key travels in a request header "
               "and appears in neither document.",
+    "protection": "the estate's own protection surfaces: the rendered "
+                  "declaration under /etc (classes, cadences, destination "
+                  "names, immutability and prune-authority prose), the "
+                  "hourly staleness verdict, and job receipts naming units "
+                  "and timestamps. No credential is reachable from here by "
+                  "construction — the repositories these jobs write to are "
+                  "deliberately never opened, because reading the off-site "
+                  "one needs the delete-capable identity the estate keeps "
+                  "away from every source host.",
     "system:overview": "the verbatim procfs summary files (uptime, loadavg, "
                        "stat, meminfo, the PSI trio, net/dev, diskstats, "
                        "ZFS arcstats): kernel counters with no credential "
