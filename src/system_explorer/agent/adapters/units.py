@@ -565,6 +565,24 @@ ABSENT_REFERENCE_INVERSE = {
     "After": "Before",
 }
 
+# Every reverse property that names a unit which wrote SOMETHING about this
+# name, used only for the absent name's own page. Deliberately a superset of
+# ABSENT_REFERENCE_INVERSE, because the two maps answer different questions:
+# that one is "what did an author write that has a consequence they can fix",
+# which is why Conflicts= and PartOf= are excluded from it; this one is "why is
+# this inert entry in the listing at all", and for a name whose only referrers
+# conflict with it those two directives are the entire answer. Observed live: a
+# not-found unit referenced by nothing but ConflictedBy, whose page could
+# otherwise say only that it was absent and unwanted, which is exactly the
+# honest-but-useless row this page exists to avoid being.
+#
+# Socket, path and timer activation (TriggeredBy) is not here: there is no
+# directive to name — the pairing is by unit name — and the activating unit
+# already appears through the ordering edge systemd adds alongside it.
+REFERRER_PROPERTIES = {**ABSENT_REFERENCE_INVERSE,
+                       "ConsistsOf": "PartOf",
+                       "ConflictedBy": "Conflicts"}
+
 # The bound: one probe per not-found unit, so the cost is len(not-found), which
 # was 23-42 on every host measured and is far below the ~180 slice reads this
 # same acquisition already makes. The cap is defensive rather than expected —
@@ -595,6 +613,34 @@ def _absent_reference_facts(pairs: Iterable[tuple[str, str]]) -> dict:
         if fact:
             out.setdefault(fact, set()).add(f"{absent} ({directive}=)")
     return {fact: sorted(values) for fact, values in sorted(out.items())}
+
+
+def _referenced_by_facts(props: dict) -> dict:
+    """{"ReferencedBy": [...]} — the same edges read from the absent name's end.
+
+    This is the answer to the only question a reader can arrive at one of these
+    rows with. A unit systemd could not load has no fragment, no cgroup and no
+    runtime of any kind; what it HAS is the reason it is listed at all, which is
+    that other units name it. Stated as "<referencing unit> (<Directive>=)", so
+    the page says who and under which word in one line.
+
+    Not a duplicate of the relationships: the dependency edges this adapter
+    emits (DEPENDENCY_RELS) carry no Before, so the commonest case by far — a
+    unit ordered After= this name — would appear nowhere in the graph.
+    Confirmed live: an absent unit referenced only that way had one line of
+    facts and an empty relationship list. It has to be a fact, and the fact has
+    to name the directive, for the same reason the referencing row's does:
+    Wants= here and Requires= here are one shape with two consequences.
+
+    Deliberately carries no opinion. The defect belongs to the unit that wrote
+    the reference, which has a file and an owner; this row is where a reader
+    finds out which unit that is, not where the finding is restated without a
+    fix attached.
+    """
+    found = {f"{referrer} ({directive}=)"
+             for prop, directive in REFERRER_PROPERTIES.items()
+             for referrer in props.get(prop) or []}
+    return {"ReferencedBy": sorted(found)} if found else {}
 
 
 # Unit types that live in the cgroup tree, and where their Slice lives.
@@ -711,6 +757,24 @@ _UNIT_GLOSSARY = {
         "Common and harmless for container overlay and netns mounts, which "
         "nothing declares; it matters where something does."
     ),
+    "ReferencedBy": (
+        "Names the units that point at this one and the directive each wrote, "
+        "carried on rows for names systemd could not load. Such a unit is "
+        "listed at all only because something references it, so this is both "
+        "the reason it appears and the only thing about it worth reading — a "
+        "reader who arrives wondering what an inert, fileless entry is doing "
+        "in the listing is asking exactly this. The finding, where there is "
+        "one, belongs to the units named here, because those have a file and "
+        "an owner and this has neither."
+    ),
+    "LoadError": (
+        "Carries systemd's own reason for failing to load a unit, in its own "
+        "words. It separates the two situations that read identically from "
+        "outside: no file of that name anywhere, versus a file that exists and "
+        "could not be parsed or was rejected. Present only when systemd "
+        "recorded a reason, so a unit that loaded cleanly does not carry an "
+        "empty one."
+    ),
     "MissingRequirements": (
         "Names the units this one hard-depends on — Requires=, Requisite= or "
         "BindsTo= — for which systemd can load nothing of that name on this "
@@ -822,9 +886,9 @@ class Adapter:
                                 or type(error).__name__)
 
     async def _absent_unit_references(
-            self, listed: list) -> tuple[dict[str, dict], dict[str, str]]:
-        """({referencing unit: its absent-reference facts}, {absent unit: why
-        its references could not be read}).
+            self, listed: list) -> tuple[dict[str, dict], dict[str, dict]]:
+        """({referencing unit: its absent-reference facts},
+            {absent unit: the facts for ITS row}).
 
         The backwards walk described above CGROUP_ROOT's neighbour comment.
         Only units systemd listed but could not load are probed, so a host with
@@ -833,35 +897,48 @@ class Adapter:
 
         The two returns are different subjects on purpose. Facts about a
         reference land on the unit that WROTE it, which is the row with a
-        fragment and an owner. A probe that failed can be attributed to no
-        such row, because the very thing that went unread is which units those
-        are — so it is stated on the absent name's own row, where it says that
-        nothing here has been established about what references it.
+        fragment and an owner. The absent name's own row gets the other half of
+        the same walk: who references it when the probe worked, and why that is
+        unknown when it did not. Those two are mutually exclusive by
+        construction — one dict, never both keys — because "nobody references
+        this" and "nobody could be asked" are the pair this module exists to
+        keep apart, and a shape that could carry both at once would let a
+        reader take the empty one for an answer.
         """
         absent = sorted((row[0], row[6]) for row in listed
                         if row[2] == "not-found")
-        unobservable: dict[str, str] = {}
+        by_absent: dict[str, dict] = {}
         for name, _path in absent[MISSING_UNIT_PROBE_LIMIT:]:
-            unobservable[name] = (
+            by_absent[name] = {"MissingReferenceUnobservable": (
                 f"this host lists {len(absent)} units it could not load, more "
                 f"than the {MISSING_UNIT_PROBE_LIMIT} one collection will "
                 "probe, and this name was not among those probed — so which "
-                "units reference it is unread here, not none")
+                "units reference it is unread here, not none")}
         pairs: dict[str, list] = {}
         for name, props, error in await asyncio.gather(
                 *(self._probe_absent_unit(name, path)
                   for name, path in absent[:MISSING_UNIT_PROBE_LIMIT])):
             if props is None:
-                unobservable[name] = (
+                by_absent[name] = {"MissingReferenceUnobservable": (
                     "the dependency properties of this absent name could not "
                     f"be read ({error}), so which units reference it is "
-                    "unknown rather than none")
+                    "unknown rather than none")}
                 continue
+            # Same formatter the opened object uses, so the row and the page
+            # cannot come to answer "who asked for this?" differently. Stored
+            # only when it found something: a probe that ran and turned up no
+            # referrer leaves BOTH facts absent, and that pair is itself the
+            # answer — the unobservable fact is what marks the reading that
+            # never happened, so its absence beside an absent ReferencedBy says
+            # the question was asked and came back empty.
+            found = _referenced_by_facts(props)
+            if found:
+                by_absent[name] = found
             for prop, directive in ABSENT_REFERENCE_INVERSE.items():
                 for referrer in props.get(prop) or []:
                     pairs.setdefault(referrer, []).append((directive, name))
         return ({referrer: _absent_reference_facts(found)
-                 for referrer, found in pairs.items()}, unobservable)
+                 for referrer, found in pairs.items()}, by_absent)
 
     @env.single_flight
     async def acquire(self, collection: str) -> list[dict]:
@@ -896,7 +973,7 @@ class Adapter:
         # Before the row loop, because a row's severity is derived from its
         # facts inside the same item_summary call that builds it — a fact
         # merged afterwards would reach the screen with no opinion behind it.
-        absent_refs, absent_unread = await self._absent_unit_references(listed[0])
+        absent_refs, absent_facts = await self._absent_unit_references(listed[0])
         items_by_name: dict[str, dict] = {}
         paths: dict[str, str] = {}
         for name, description, load, active, sub, _following, path, *_job in sorted(listed[0]):
@@ -930,8 +1007,10 @@ class Adapter:
             # because the operator sorting a units page for configuration debt
             # cannot open eight hundred units to find the four that carry it.
             facts.update(absent_refs.get(name) or {})
-            if name in absent_unread:
-                facts["MissingReferenceUnobservable"] = absent_unread[name]
+            # And, on a row for a name systemd could not load, who asked for
+            # it — the only thing such a row can say beyond the fact of its own
+            # absence, and the reason the operator keeps these rows at all.
+            facts.update(absent_facts.get(name) or {})
             # Same evaluator as get_object (agent/rules/units.py) — a failed
             # unit is a critical opinion, so the row derives critical; an
             # active unit with no opinions is positively ok, anything else
@@ -1001,22 +1080,57 @@ class Adapter:
                                    page, applied, next_cursor, requested_limit=limit,
                                    total=total, filters=query or None)
 
-    async def _unit_props(self, object_id: str) -> tuple[str, dict, dict]:
+    async def _unit_props(self, object_id: str) -> tuple[str, dict, dict, set[str], str]:
+        """(name, Unit properties, type-specific properties, the names this
+        host lists but could not load, why that listing is unknown).
+
+        LoadUnit SYNTHESISES a Unit object for any name at all, so it can never
+        decide on its own whether an object exists: asking for a name nobody
+        ever wrote gets back a complete, inert, not-found unit that would
+        otherwise serve as a 200. That is what the not-found refusal here has
+        always been protecting, and it still is.
+
+        What changed is the discriminator. The collection SERVES the units
+        systemd listed and could not load — deliberately, because systemctl
+        reports them and their very emptiness can be what tells an
+        administrator something — and a row a collection serves that 404s when
+        opened is the product contradicting itself. So the question is no
+        longer "did this load" but "was this name in the listing", which is a
+        different question with a different answer for exactly the invented
+        names. The listing is fetched once here and handed back, because the
+        opened object needs the same set again to say which of a LOADED unit's
+        dependencies are absent — one manager call either way, never two.
+
+        Where the listing itself could not be read the refusal stands, and that
+        is the deliberate direction: unprovable existence must fail closed, or
+        a degraded manager becomes the way an invented name gets served. Such a
+        host has already failed the collection page that would have offered the
+        link, so the 404 is consistent with the rest of what it can answer.
+        """
         if not object_id.startswith("unit:"):
             raise env.UnknownObject(object_id)
         name = object_id.split(":", 1)[1]
         path = (await BUS.call(SYSTEMD, SYSTEMD_PATH, SYSTEMD_MANAGER, "LoadUnit", "s", [name]))[0]
         unit = await BUS.get_all(SYSTEMD, path, UNIT_IFACE)
-        if unit.get("LoadState") == "not-found":
+        unloadable, unreadable = await self._unloadable_units()
+        absent = unit.get("LoadState") == "not-found"
+        if absent and name not in unloadable:
             raise env.UnknownObject(object_id)
         typed: dict = {}
         iface = TYPED_IFACES.get(_unit_type(name))
-        if iface:
+        # Not for a unit that did not load. The type-specific interfaces answer
+        # GetAll for one of those too, with several hundred DEFAULTS — a
+        # not-found .service reports Result "success", NRestarts 0, MainPID 0,
+        # Restart "no" — and every one of those is a property of nothing. Facts
+        # that read as a healthy idle service, on a unit with no file, is
+        # precisely the manufacture this product exists to refuse; the honest
+        # answer is that these do not apply, which is silence.
+        if iface and not absent:
             try:
                 typed = await BUS.get_all(SYSTEMD, path, iface)
             except RuntimeError:
                 typed = {}
-        return name, unit, typed
+        return name, unit, typed, unloadable, unreadable
 
     async def _unloadable_units(self) -> tuple[set[str], str]:
         """(the names this host lists but could not load, why that is unknown).
@@ -1041,57 +1155,84 @@ class Adapter:
 
     async def get_object(self, collection: str, object_id: str) -> dict:
         self._check(collection)
-        name, unit, typed = await self._unit_props(object_id)
+        name, unit, typed, unloadable, unreadable = await self._unit_props(object_id)
         unit_type = _unit_type(name)
+        absent = unit.get("LoadState") == "not-found"
 
         facts = {
             "LoadState": unit.get("LoadState"),
             "ActiveState": unit.get("ActiveState"),
             "SubState": unit.get("SubState"),
             "Description": unit.get("Description"),
-            "UnitFileState": unit.get("UnitFileState"),
-            "FragmentPath": unit.get("FragmentPath"),
-            "ActiveEnterTimestamp": env.usec_to_iso(unit.get("ActiveEnterTimestamp")),
         }
-        facts.update(_workload_facts(name))
-        if unit_type == "service":
-            for key in SERVICE_FACTS:
-                facts[key] = env.norm_u64(typed.get(key))
-            facts["ExecMainStartTimestamp"] = env.usec_to_iso(typed.get("ExecMainStartTimestamp"))
-        elif unit_type == "timer":
-            facts["NextElapse"] = env.usec_to_iso(typed.get("NextElapseUSecRealtime"))
-            facts["LastTrigger"] = env.usec_to_iso(typed.get("LastTriggerUSec"))
+        # systemd's own account of why a unit did not load, present only when
+        # there is one. It is the most informative thing on the page for a name
+        # with no file — and it separates the ordinary absence from a unit whose
+        # fragment exists and is broken, which reads identically otherwise.
+        load_error = unit.get("LoadError") or []
+        if isinstance(load_error, list) and any(load_error):
+            facts["LoadError"] = load_error[-1] or load_error[0]
 
-        # Per-unit pressure: the same kernel accounting the host overview
-        # reports, scoped to this unit's cgroup. Every window here (the row
-        # carries only the judged one), because on the detail view the shape
-        # over 10s/60s/300s is what separates a spike from a sustained stall.
-        # A slice gets its attribution facts from the same call: the rule
-        # below is shared with the row path, and a detail view that omitted
-        # them would leave it judging the same slice on less than the list
-        # did — the two views disagreeing about one unit.
-        facts.update(await anyio.to_thread.run_sync(_unit_pressure, name))
-
-        # The same facts the row carries, read from the other end of the same
-        # edges: this unit's own forward directives, filtered to the names
-        # systemd could not load. The row has to walk backwards because it
-        # cannot afford a property read per unit; here the properties are
-        # already in hand, so the forward reading is both cheaper and more
-        # direct — and both go through _absent_reference_facts, so the list and
-        # the opened object cannot come to say different things about one unit.
-        # A reference to a name that is not listed AT ALL is deliberately not
-        # claimed: systemd keeps a Unit object for every name something
-        # references, which is exactly why the absent ones are listable, so a
-        # name missing from the listing is a listing that moved under us.
-        unloadable, unreadable = await self._unloadable_units()
-        if unreadable:
-            facts["MissingReferenceUnobservable"] = unreadable
+        if absent:
+            # Everything below this line describes a unit systemd loaded: a
+            # file it came from, a state that file is installed in, a moment it
+            # last started, a cgroup it accounts to. A name with no file has
+            # none of them, and systemd answers for all of them anyway — with
+            # "" and 0. Absent facts, because omission reads as does-not-apply
+            # where an empty string reads as a measured emptiness.
+            #
+            # What such a unit does have is the reason it is listed at all,
+            # which is that other units name it. That is the whole question a
+            # reader arrives here with, so it is the whole answer this page
+            # gives.
+            facts.update(_referenced_by_facts(unit))
         else:
-            facts.update(_absent_reference_facts(
-                (directive, dep)
-                for directive in ABSENT_REFERENCE_FACTS
-                for dep in unit.get(directive) or []
-                if dep in unloadable))
+            facts["UnitFileState"] = unit.get("UnitFileState")
+            facts["FragmentPath"] = unit.get("FragmentPath")
+            facts["ActiveEnterTimestamp"] = env.usec_to_iso(
+                unit.get("ActiveEnterTimestamp"))
+            facts.update(_workload_facts(name))
+            if unit_type == "service":
+                for key in SERVICE_FACTS:
+                    facts[key] = env.norm_u64(typed.get(key))
+                facts["ExecMainStartTimestamp"] = env.usec_to_iso(
+                    typed.get("ExecMainStartTimestamp"))
+            elif unit_type == "timer":
+                facts["NextElapse"] = env.usec_to_iso(typed.get("NextElapseUSecRealtime"))
+                facts["LastTrigger"] = env.usec_to_iso(typed.get("LastTriggerUSec"))
+
+            # Per-unit pressure: the same kernel accounting the host overview
+            # reports, scoped to this unit's cgroup. Every window here (the row
+            # carries only the judged one), because on the detail view the shape
+            # over 10s/60s/300s is what separates a spike from a sustained stall.
+            # A slice gets its attribution facts from the same call: the rule
+            # below is shared with the row path, and a detail view that omitted
+            # them would leave it judging the same slice on less than the list
+            # did — the two views disagreeing about one unit. Skipped entirely
+            # for a unit that did not load: it owns no cgroup, so the walk could
+            # only ever confirm it, and it costs a filesystem sweep to do so.
+            facts.update(await anyio.to_thread.run_sync(_unit_pressure, name))
+
+            # The same facts the row carries, read from the other end of the
+            # same edges: this unit's own forward directives, filtered to the
+            # names systemd could not load. The row has to walk backwards
+            # because it cannot afford a property read per unit; here the
+            # properties are already in hand, so the forward reading is both
+            # cheaper and more direct — and both go through
+            # _absent_reference_facts, so the list and the opened object cannot
+            # come to say different things about one unit. A reference to a name
+            # that is not listed AT ALL is deliberately not claimed: systemd
+            # keeps a Unit object for every name something references, which is
+            # exactly why the absent ones are listable, so a name missing from
+            # the listing is a listing that moved under us.
+            if unreadable:
+                facts["MissingReferenceUnobservable"] = unreadable
+            else:
+                facts.update(_absent_reference_facts(
+                    (directive, dep)
+                    for directive in ABSENT_REFERENCE_FACTS
+                    for dep in unit.get(directive) or []
+                    if dep in unloadable))
 
         # Shared verbatim with the summary path, plus the detail-only
         # restart-churn rule (NRestarts is fetched per-unit, never in
@@ -1121,14 +1262,34 @@ class Adapter:
 
         return env.observation(
             self.subsystem, env.obj_ref(object_id, unit_type, name),
-            _source("LoadUnit + org.freedesktop.DBus.Properties.GetAll"),
+            _source("LoadUnit + org.freedesktop.DBus.Properties.GetAll + "
+                    "ListUnits (does this name exist, and which of its "
+                    "dependencies do not)"),
             facts, opinions=opinions, relationships=relationships,
             evidence_ref=env.evidence_ref("units", "units", object_id),
         )
 
     async def get_evidence(self, collection: str, object_id: str) -> dict:
+        """The raw properties behind the object, including for a unit systemd
+        could not load.
+
+        Evidence and the object share one contract deliberately: an object this
+        adapter will serve must be able to show its own document, or the
+        provenance promise has a hole exactly where a reader would go to check
+        a surprising claim. There IS a document for these — the Unit interface
+        answers GetAll for a not-found name with real values, which is how the
+        reverse-reference facts are acquired in the first place — so the same
+        gate in _unit_props admits both routes, and an invented name is refused
+        by both.
+
+        What it does NOT carry is the type-specific interface, for the reason
+        _unit_props declines to fetch it: those properties are several hundred
+        defaults describing nothing. Evidence is the place a reader goes to
+        check what was really said, so it is the last place that may show them
+        a fabricated Result "success".
+        """
         self._check(collection)
-        name, unit, typed = await self._unit_props(object_id)
+        name, unit, typed, _unloadable, _unreadable = await self._unit_props(object_id)
         payload = {UNIT_IFACE: unit,
                    **({TYPED_IFACES[_unit_type(name)]: typed} if typed else {})}
         payload, redacted = env.redact_list_properties(payload, SECRET_LIST_PROPERTIES)
