@@ -2,7 +2,10 @@
    Vanilla, no build step. Consumes only the public /v1 API; renders only
    what is in the envelope. Deep links: #/subsystem/collection[/object-id] —
    behind the per-site hub (hub/server.py) a host name is the first segment
-   (#/host/…) and every agent call is proxied through /agents/<host>.
+   (#/host/…) and every agent call is proxied through /agents/<host>. A
+   machine served by several agent processes is ONE page, addressed by its
+   primary member's name: the mates' subsystems merge into the nav, and
+   api() re-aims each subsystem's fetches at the process that owns it.
 
    Detail is an inline expansion beneath the row that produced it. Evidence
    offers two views of one captured payload — a command-style rendering and
@@ -21,6 +24,12 @@ const state = {
   hub: null,             // /hub/hosts payload when the hub serves us, else null
   currentHost: null,     // hub mode: the agent every api() call is proxied to
   capabilities: null,
+  // Merged machine: which machine-mate answers for each subsystem the primary
+  // does not serve itself. api() consults it at fetch time; absent (or empty)
+  // means every ask goes to the current host. The primary's own subsystems
+  // are deliberately never entered, which is what makes it win any collision
+  // without a tie-break ever running.
+  agentForSubsystem: {},
   status: null,          // /v1/status roll-up for the current host (nav badges)
   subsystem: null,
   collection: null,
@@ -46,6 +55,7 @@ const state = {
   refreshTimer: null,
   suppressAutoOpen: false,
   epoch: 0,
+  hostGen: 0,            // bumped only by loadHost: identifies a load invocation
 };
 
 const COLUMNS = {
@@ -331,23 +341,33 @@ async function api(path) {
   // Hub mode reaches each agent same-origin through the proxy; the paths
   // themselves (including evidence_ref values) stay agent-relative.
   //
+  // WHICH agent answers is decided here, at fetch time, from the subsystem
+  // the path names. A merged machine serves one nav from several agent
+  // processes, and resolving at the fetch is what keeps every caller — grid,
+  // detail, evidence, lookups, views, keyboard cycling — safe by
+  // construction: routes stay plain subsystem/collection and nothing
+  // upstream ever holds a cross-process URL to leak. (The previous design
+  // put mate hrefs into the nav itself, and the key-cycler walked into
+  // them.)
+  //
   // The site is named in the URL because the hub is stateless: a host at a
   // sibling site is forwarded to the hub that owns it, and without the site in
   // the path that hub would have to ask every sibling who owns the host on
   // every single request. The browser already knows, from /hub/hosts.
-  const res = await fetch(state.hub ? `${hubBase()}${path}` : path);
+  const res = await fetch(state.hub ? `${hubBaseFor(agentFor(path))}${path}` : path);
   if (!res.ok) throw new Error(`${res.status} ${await res.text().then(t => t.slice(0, 140))}`);
   return res.json();
 }
 
-/* Proxy prefix for the current host. Falls back to the unscoped route when the
-   hub reports no site for it — an older hub, or one started without
-   SE_HUB_SITE — so a mixed-version estate degrades to today's behaviour rather
-   than 404ing. */
-function hubBase() {
-  const site = state.hub?.hosts?.[state.currentHost]?.site;
-  return site ? `/sites/${encodeURIComponent(site)}/agents/${state.currentHost}`
-              : `/agents/${state.currentHost}`;
+/* The agent a /v1 path is asked of: the machine-mate that owns the subsystem
+   the path names, else the current host — which also covers the host-scoped
+   routes (capabilities, status, facts) that name no subsystem at all.
+   Evidence paths (/v1/evidence/<subsystem>/…) name their subsystem in the
+   SECOND segment, so the prefix is skipped — safe because the server
+   guarantees "evidence" is never a subsystem name. */
+function agentFor(path) {
+  const named = /^\/v1\/(?:evidence\/)?([^/?]+)/.exec(path)?.[1];
+  return state.agentForSubsystem[named] ?? state.currentHost;
 }
 
 function humanBytes(n) {
@@ -489,23 +509,51 @@ function knownHost(name) {
 
 /* Agents sharing this host's machine_id — the per-process split (one
    machine, several agent processes: the host agent plus credential-scoped
-   app instances). One machine should READ as one machine even while the
-   processes stay separate entries: the dropdown nests the mates and the
-   nav cross-links their subsystems, because "the apps you are looking
-   for are one dropdown entry away" was invisible from the host's own
-   page (operator report, 2026-08-13). */
+   app instances). The split is a deployment fact and it now stops at the
+   deployment: the UI shows ONE machine as ONE page, fronted by the
+   machine's primary member. The earlier projection — two dropdown entries,
+   cross-linking nav sections — was withdrawn on the operator's verdict
+   ("too confusing visually as you move between them", 2026-08-13).
+
+   Mateship requires the SAME SITE: a machine's agent processes register at
+   one site's hub by construction, so the legitimate per-process split always
+   shares a site, while two physical machines at different sites that share a
+   machine_id (a cloned /etc/machine-id, the classic VM-clone artifact) must
+   never be presented as one machine. Two entries both lacking a site (an
+   older hub) still mate via undefined === undefined — the same mixed-version
+   degradation hubBaseFor documents. */
 function machineMates(name) {
-  const mine = state.hub?.hosts?.[name]?.host?.machine_id;
+  const me = state.hub?.hosts?.[name];
+  const mine = me?.host?.machine_id;
   if (!mine) return [];
   return Object.entries(state.hub.hosts)
     .filter(([other, probe]) => other !== name
-            && probe.host?.machine_id === mine)
+            && probe.host?.machine_id === mine
+            && probe.site === me.site)
     .map(([other]) => other);
+}
+
+/* The member that fronts a machine everywhere the machine reads as one
+   thing: the dropdown's single entry, the URL the merged page lives at, the
+   process whose own subsystems win a collision. It is the member whose name
+   matches the hostname it reports, else the first alphabetically — computed
+   over the sorted membership so every member names the same primary. A solo
+   host (or a name the hub does not know) is its own primary. */
+function machinePrimary(name) {
+  const members = [name, ...machineMates(name)].sort((a, b) => a.localeCompare(b));
+  return members.find(m => m === (state.hub?.hosts?.[m]?.host?.hostname || m))
+      ?? members[0];
 }
 
 function defaultHost() {
   const names = Object.keys(state.hub.hosts);
-  return names.find(n => state.hub.hosts[n].reachable) ?? names[0];
+  // Primaries before mates: landing on a machine's app process by accident
+  // of listing order would open the page the dropdown deliberately does not
+  // offer. A reachable mate still beats an unreachable everything.
+  const primaries = names.filter(n => machinePrimary(n) === n);
+  return primaries.find(n => state.hub.hosts[n].reachable)
+      ?? names.find(n => state.hub.hosts[n].reachable)
+      ?? names[0];
 }
 
 /* Fetch the current host's capabilities and rebuild the chrome around them.
@@ -513,19 +561,36 @@ function defaultHost() {
    host die on the epoch bump. */
 async function loadHost() {
   const epoch = ++state.epoch;
+  const gen = ++state.hostGen;   // this load invocation's identity, see below
   state.lookupCatalog = null;
   state.status = null;
   state.ovPrev = null;         // counter deltas never span two hosts
   state.owners = null;         // and neither does attribution
   state.capabilities = null;   // stale caps must not describe the new host
   state.factDict = null;       // and vocabulary belongs to the host that served it
-  state.mateCaps = null;       // the machine-mates' sections rebuild per host
+  state.agentForSubsystem = {}; // the merge rebuilds per machine; empty = solo
+  state.mateMergeDone = null;   // resolves when the mates' answers have merged
   renderHostCard();
   /* Started alongside capabilities rather than in front of them, and never
      awaited on the failure path: an agent too old to serve /v1/facts (or a hub
      proxying one) simply has no fact tooltips. Missing help must never be the
      difference between a page that renders and one that does not. */
   const dictionary = api("/v1/facts").catch(() => null);
+  /* The machine's other agent processes, asked for capabilities and facts IN
+     PARALLEL with the host's own fetches above. Only the machine's PRIMARY
+     merges its mates: a mate browsed directly (#/<mate-agent>/…) stays a
+     standalone page — the debugging escape hatch the dropdown deliberately
+     does not offer. Every member failure resolves to null; a machine never
+     loses its page to a sibling process being down. */
+  const mateHost = state.currentHost;
+  const mates = state.hub && machinePrimary(mateHost) === mateHost
+    ? machineMates(mateHost) : [];
+  const mateFetch = Promise.all(mates.map(mate => Promise.all([
+    fetch(`${hubBaseFor(mate)}/v1/capabilities`)
+      .then(res => res.ok ? res.json() : null).catch(() => null),
+    fetch(`${hubBaseFor(mate)}/v1/facts`)
+      .then(res => res.ok ? res.json() : null).catch(() => null),
+  ]).then(([caps, dict]) => ({ mate, caps, dict }))));
   let caps;
   try {
     caps = await api("/v1/capabilities");
@@ -566,35 +631,68 @@ async function loadHost() {
   } catch (err) {
     banner(`Navigation failed to render: ${err.message}`);
   }
-  // The machine-mates' subsystems arrive AFTER the first paint, on purpose:
-  // this host's own nav must never wait on a sibling process. Guarded on host
-  // identity, NOT the collection epoch: route() bumps the epoch synchronously
-  // after loadHost returns, so an epoch guard would discard every response
-  // before it could land (the refreshStatus arrangement).
-  const mates = machineMates(state.currentHost);
-  const mateHost = state.currentHost;
+  // The mates' answers LAND after the first paint, on purpose: this host's
+  // own nav must never wait on a sibling process. Guarded on the LOAD
+  // INVOCATION (hostGen), not the host name: revisiting the same host runs
+  // loadHost again, and a straggler continuation from the earlier visit must
+  // not replay against the new visit's state. The collection epoch still
+  // cannot be the guard: route() bumps it synchronously after loadHost
+  // returns, so an epoch guard would discard every response before it could
+  // land (the refreshStatus arrangement) — hostGen is bumped only here.
   if (mates.length) {
-    Promise.all(mates.map(mate =>
-      fetch(`${hubBaseFor(mate)}/v1/capabilities`)
-        .then(res => res.ok ? res.json() : null)
-        .then(caps => [mate, caps])
-        .catch(() => [mate, null])))
-      .then(pairs => {
-        if (mateHost !== state.currentHost) return;
-        state.mateCaps = Object.fromEntries(
-          pairs.filter(([, caps]) => caps));
-        try { renderNav(); } catch { /* the mates' section is a bonus */ }
-      });
+    state.mateMergeDone = mateFetch.then(async results => {
+      if (gen !== state.hostGen || !state.capabilities) return;
+      for (const { mate, caps: mateCaps, dict } of results)
+        adoptMate(mate, mateCaps, dict);
+      // AWAITED before the merged sections first paint, for the same reason
+      // loadHost awaits its own: offering a mate's honestly-empty collection
+      // and withdrawing it when the status lands is the nav shrinking under
+      // the pointer again.
+      await refreshStatus();   // now covers the mates' subsystems too
+      if (gen !== state.hostGen || !state.capabilities) return;
+      try { renderNav(); } catch { /* the merged sections are additive */ }
+      // A deep link straight into a mate's subsystem raced this merge and
+      // asked the primary, which honestly 404ed. The owner is known now:
+      // re-route from the hash, so the collection (and any deep-linked
+      // object) loads again — from the right process this time.
+      if (state.agentForSubsystem[state.subsystem]) {
+        state.subsystem = null;
+        state.collection = null;
+        route();
+      }
+    });
   }
   return true;
 }
 
-/* hubBase for an arbitrary agent name — the mates' capability fetches
-   need the proxy prefix without switching the current host. */
+/* Proxy prefix for an agent, by name. Falls back to the unscoped route when
+   the hub reports no site for it — an older hub, or one started without
+   SE_HUB_SITE — so a mixed-version estate degrades to today's behaviour
+   rather than 404ing. */
 function hubBaseFor(name) {
   const site = state.hub?.hosts?.[name]?.site;
   return site ? `/sites/${encodeURIComponent(site)}/agents/${name}`
               : `/agents/${name}`;
+}
+
+/* Fold one mate's capabilities and fact dictionary into the merged
+   projection. The primary wins every collision by construction: a subsystem
+   it already serves is never re-pointed, and a fact vocabulary it already
+   carries is never overwritten. Pure bookkeeping on state, factored out of
+   loadHost so the smoke harness can drive the merge without a DOM. */
+function adoptMate(mate, caps, dict) {
+  const subsystems = (state.capabilities.subsystems ??= {});
+  for (const [sub, cap] of Object.entries(caps?.subsystems || {})) {
+    if (sub in subsystems) continue;
+    subsystems[sub] = cap;
+    state.agentForSubsystem[sub] = mate;
+  }
+  if (!dict?.subsystems) return;
+  const mine = (state.factDict ??= { subsystems: {} });
+  mine.subsystems ??= {};
+  for (const [sub, colls] of Object.entries(dict.subsystems)) {
+    if (!(sub in mine.subsystems)) mine.subsystems[sub] = colls;
+  }
 }
 
 function onHostSelect() {
@@ -670,35 +768,36 @@ function renderHostCard() {
       ? `${site} — site unreachable` : site;
     const group = bySite.size > 1 || site ? el("optgroup") : null;
     if (group) group.label = label || "(unnamed site)";
-    // One machine reads as one machine: entries sharing a machine_id sort
-    // adjacent, the primary first (the one whose name matches its reported
-    // hostname), its process-mates nested under it. The machine_id only
-    // supplies ADJACENCY — the group's position in the list comes from its
-    // primary's name, so five ordinary solo hosts still read alphabetically
-    // rather than shuffled by opaque hex.
+    // ONE MACHINE = ONE ENTRY (operator verdict, 2026-08-13): members
+    // sharing a machine_id collapse into a single option naming the
+    // machine's primary — their subsystems merge into its page, so a second
+    // entry would be a second door into the same room. Solo hosts are
+    // exactly as before, and the list reads alphabetically by what it
+    // SHOWS: a machine sorts by its primary's name, never by machine_id hex.
     const entries = bySite.get(site);
-    const primaryNameById = new Map();
+    const byMachine = new Map();
     for (const [name, probe] of entries) {
-      const id = probe.host?.machine_id;
-      if (!id) continue;
-      if (name === (probe.host?.hostname || name)) primaryNameById.set(id, name);
-      else if (!primaryNameById.has(id)) primaryNameById.set(id, name);
+      const key = probe.host?.machine_id || `solo:${name}`;
+      if (!byMachine.has(key)) byMachine.set(key, []);
+      byMachine.get(key).push([name, probe]);
     }
-    const groupKey = ([name, probe]) =>
-      primaryNameById.get(probe.host?.machine_id) ?? name;
-    const primaryFirst = ([name, probe]) =>
-      name === (probe.host?.hostname || name) ? 0 : 1;
-    entries.sort((a, b) =>
-      groupKey(a).localeCompare(groupKey(b))
-      || primaryFirst(a) - primaryFirst(b)
-      || a[0].localeCompare(b[0]));
-    for (const [name, probe] of entries) {
-      const nested = probe.host?.machine_id
-        && name !== (probe.host?.hostname || name);
+    const options = [];
+    for (const members of byMachine.values()) {
+      const primary = members.find(([name]) => name === machinePrimary(name))
+        ?? members[0];
+      options.push(primary);
+      // A mate browsed directly (#/<mate-agent>/…) is never OFFERED here, but
+      // the select must still be able to SAY it: while it is the current
+      // host it rides along as an option, gone once navigation moves on.
+      const current = members.find(([name]) => name === state.currentHost);
+      if (current && current !== primary) options.push(current);
+    }
+    options.sort((a, b) => a[0].localeCompare(b[0]));
+    for (const [name, probe] of options) {
       // Unreachable hosts stay listed and selectable — picking one shows the
       // error banner rather than silently hiding the host.
-      const label = probe.reachable ? name : `${name} — unreachable`;
-      const opt = el("option", null, nested ? `\u2003\u21b3 ${label}` : label);
+      const opt = el("option", null,
+                     probe.reachable ? name : `${name} — unreachable`);
       opt.value = name;
       (group || select).appendChild(opt);
     }
@@ -711,8 +810,23 @@ function renderHostCard() {
   // The host's OWN site, not the hub's — they differ for a sibling's host, and
   // showing the hub's would misattribute it.
   const hostSite = probe?.site || state.hub.site;
-  $("host-meta").textContent = (hostSite ? `${hostSite} · ` : "")
-    + (machineId ? machineId.slice(0, 12) + "…" : "unreachable");
+  // A merged machine names its member processes where the machine is named:
+  // "host + apps" says who answers on this page without resurrecting the
+  // two-entry split the dropdown gave up. Short labels shed the primary's
+  // own prefix (host-apps → apps); a mate sharing no separator-delimited
+  // prefix keeps its whole name — a label must never manufacture ambiguity.
+  const mates = machinePrimary(state.currentHost) === state.currentHost
+    ? machineMates(state.currentHost).sort((a, b) => a.localeCompare(b)) : [];
+  const shortLabel = (mate) => {
+    const rest = mate.startsWith(state.currentHost)
+      ? mate.slice(state.currentHost.length) : "";
+    return /^[-_.]/.test(rest) ? rest.replace(/^[-_.]+/, "") || mate : mate;
+  };
+  $("host-meta").textContent = [
+    hostSite || null,
+    mates.length ? [state.currentHost, ...mates.map(shortLabel)].join(" + ") : null,
+    machineId ? machineId.slice(0, 12) + "…" : "unreachable",
+  ].filter(Boolean).join(" · ");
 }
 
 /* The order [ and ] walk, read from the RENDERED nav rather than rebuilt from
@@ -744,10 +858,7 @@ function navRoutes() {
   const out = [];
   for (const section of navModel()) {
     for (const item of section.items) {
-      // Items carrying their own href are cross-host links (the machine
-      // mates): cycling into their [sub, coll] would point the CURRENT
-      // host at a collection it does not serve.
-      if (!hidden.has(item.route) && !item.href) out.push([item.sub, item.coll]);
+      if (!hidden.has(item.route)) out.push([item.sub, item.coll]);
     }
   }
   return out;
@@ -780,6 +891,26 @@ const GROUPS = [
   // instead of falling out of the order the loops happen to run in.
   { heading: "disks", after: "storage",
     members: [["hardware", "scsi"], ["hardware", "nvme"]] },
+];
+
+/* Nav headings that group whole SUBSYSTEMS by operator domain — the taxonomy
+   a person browses by, not the API family that happens to serve each piece.
+   Ordered in the same review that merged the machine page: "bazarr is one of
+   the *arr apps, why is it not in with them?" — the nav was organised by
+   which adapter owns a route, which is invisible and irrelevant from a
+   chair. Presentation only, exactly like GROUPS above: routes, object ids,
+   status keys and stored history all keep their subsystem names.
+
+   Host-OS subsystems are deliberately absent — units is units on every
+   machine — and a subsystem this table does not name keeps its own heading,
+   so a future app is never hidden, merely ungrouped until someone files it.
+   One tree, stable across machines: a host without a domain's subsystems
+   simply never shows that heading (the honest-empty rule, again). */
+const DOMAINS = [
+  { heading: "media", members: ["servarr", "bazarr", "downloaders", "plex"] },
+  { heading: "ingress", members: ["traefik"] },
+  { heading: "documents", members: ["paperless"] },
+  { heading: "dns & dhcp", members: ["kea", "unbound"] },
 ];
 
 /* THE nav structure, computed once and consumed by everything.
@@ -822,23 +953,6 @@ function navModel() {
                               route: `view/${doc.name}` }] });
   }
 
-  // The other processes on THIS machine, each with its available
-  // subsystems as cross-links — the credential-isolated apps instance
-  // stops being invisible from the host page it shares a machine with.
-  for (const [mate, caps] of Object.entries(state.mateCaps || {})) {
-    const items = [];
-    for (const [sub, cap] of Object.entries(caps.subsystems || {})) {
-      if (!cap.available || !(cap.collections || []).length) continue;
-      items.push({ sub, coll: cap.collections[0], label: sub,
-                   route: `mate/${mate}/${sub}`,
-                   href: `#/${mate}/${sub}/${cap.collections[0]}` });
-    }
-    if (!items.length) continue;
-    items.sort((a, b) => a.label.localeCompare(b.label));
-    sections.push({ solo: false, heading: `${mate} \u00b7 this machine`,
-                    available: true, items });
-  }
-
   // The estate attention surface (SPEC section 6.3): hub mode only,
   // because /hub/findings is the hub's registry — a directly-browsed
   // agent has /v1/findings but no lifecycle to show for it.
@@ -876,6 +990,11 @@ function navModel() {
                   grouped: true, after: group.after ?? null, items });
   }
 
+  const domainOf = {};
+  for (const domain of DOMAINS)
+    for (const member of domain.members) domainOf[member] = domain.heading;
+  const domainItems = new Map(DOMAINS.map(domain => [domain.heading, []]));
+
   for (const [name, cap] of Object.entries(subsystems)) {
     const items = (cap.collections || [])
       .filter(coll => !claimed.has(`${name}/${coll}`))
@@ -893,6 +1012,18 @@ function navModel() {
     // likewise contributes no section: a heading over nothing is not
     // information, it is furniture.
     if (!items.length || !cap.available) continue;
+    if (domainOf[name]) {
+      // A domained subsystem's items lead with the app's name, because that
+      // is how the operator says them: "bazarr" is an app that happens to
+      // expose one collection, and "servarr · queue" says whose queue where
+      // a bare "queue" — or a second "instance", a second "daemon" — says
+      // nothing. The route underneath is untouched.
+      domainItems.get(domainOf[name]).push(...items.map(item => ({
+        ...item,
+        label: items.length === 1 ? name : `${name} · ${item.coll}`,
+      })));
+      continue;
+    }
     sections.push({ solo: false, heading: name, available: true, items });
   }
 
@@ -906,6 +1037,22 @@ function navModel() {
     if (at === -1) sections.push(group);
     else sections.splice(at + 1, 0, group);
   }
+
+  // The domains, in their declared order, AFTER the host-OS sections: the
+  // mates' subsystems land asynchronously, and appending keeps the top of
+  // the nav where the eye left it rather than reflowing under the pointer —
+  // "the nav bar can't bounce around" is the verdict this whole shape
+  // answers. Within a domain the members keep the table's order (stable
+  // sort, so a subsystem's own collection order survives). A domain with
+  // nothing on this machine renders no heading at all.
+  for (const domain of DOMAINS) {
+    const items = domainItems.get(domain.heading);
+    if (!items.length) continue;
+    items.sort((a, b) =>
+      domain.members.indexOf(a.sub) - domain.members.indexOf(b.sub));
+    sections.push({ solo: false, heading: domain.heading, available: true,
+                    domain: true, items });
+  }
   return sections;
 }
 
@@ -915,6 +1062,7 @@ function renderNav() {
   for (const section of navModel()) {
     const box = el("div", "nav-sub"
       + (section.solo ? " nav-solo" : "")
+      + (section.domain ? " domain" : "")
       + (section.available ? "" : " unavailable"));
     if (section.heading) {
       const label = el("div", "sub-label", section.heading);
@@ -924,9 +1072,13 @@ function renderNav() {
     for (const item of section.items) {
       const link = el("a", "nav-item" + (item.unavailable ? " unavailable" : ""),
                       item.label);
-      link.href = item.href || hashFor(item.sub, item.coll);
+      link.href = hashFor(item.sub, item.coll);
       link.dataset.route = item.route;
       if (item.unavailable) link.title = item.reason || "unavailable";
+      // On a merged machine, the hover answers "which process serves this" —
+      // the one home of the subsystem→process mapping the fetches route by.
+      else if (state.agentForSubsystem[item.sub])
+        link.title = `served by ${state.agentForSubsystem[item.sub]}`;
       box.appendChild(link);
     }
     nav.appendChild(box);
@@ -937,15 +1089,47 @@ function renderNav() {
 /* ── status badges ───────────────────────────────────────── */
 
 /* The nav's attention layer (ROADMAP slice 1). Failures clear the badges
-   rather than freeze them — a stale count is worse than none. */
+   rather than freeze them — a stale count is worse than none.
+
+   On a merged machine every member answers for its own subsystems: the
+   pages merge per-subsystem, the primary winning any collision, so badges
+   and the hide-empty rule work across the whole machine. The mate list
+   derives from agentForSubsystem — a mate whose capabilities never landed
+   has no nav entries to badge, so its status is not asked for. A member
+   that fails to answer simply contributes nothing: its subsystems keep
+   their nav entries (capabilities said they exist) and navigating to one
+   reports the failure in the banner, never a silently vanished machine. */
 async function refreshStatus() {
-  const host = state.currentHost;
-  let status = null;
-  try { status = await api("/v1/status"); }
-  catch { /* no roll-up (old agent, dead host) → no badges */ }
-  if (host !== state.currentHost) return;   // host switched mid-flight
-  state.status = status;
+  const gen = state.hostGen;   // answers belong to this load invocation only
+  const mates = [...new Set(Object.values(state.agentForSubsystem))];
+  const asks = mates.map(mate =>
+    fetch(`${hubBaseFor(mate)}/v1/status`)
+      .then(res => res.ok ? res.json() : null)
+      .catch(() => null));
+  let primary = null;
+  try { primary = await api("/v1/status"); }
+  catch { /* no roll-up (old agent, dead host) → no badges for its rows */ }
+  const matePages = await Promise.all(asks);
+  if (gen !== state.hostGen) return;   // the host reloaded mid-flight
+  state.status = mergeMemberStatuses(primary, matePages);
   applyNavBadges();
+}
+
+/* Per-subsystem union of the members' roll-ups, folded in OWNERSHIP order —
+   the primary first, then mates in adoption order, first claim winning —
+   mirroring adoptMate's capability merge exactly, so a badge can never
+   describe a collection a click would fetch from a different process. Null
+   in, null out when nobody answered: no roll-up means the nav must offer
+   everything rather than guess at emptiness. */
+function mergeMemberStatuses(primary, matePages) {
+  let merged = null;
+  for (const page of [primary, ...matePages]) {  // first claim wins — adoptMate's rule
+    if (!page?.subsystems) continue;
+    merged ??= { subsystems: {} };
+    for (const [sub, entry] of Object.entries(page.subsystems))
+      if (!(sub in merged.subsystems)) merged.subsystems[sub] = entry;
+  }
+  return merged;
 }
 
 /* Applied onto the built nav rather than rebuilding it: warn+critical row
@@ -1075,8 +1259,10 @@ function route() {
 async function switchHost(host, rest) {
   state.currentHost = host;
   clearInterval(state.refreshTimer);   // no polls of the old route mid-switch
-  const ok = await loadHost();
-  if (state.currentHost !== host) return;   // switched again while loading
+  const loading = loadHost();  // bumps state.hostGen synchronously
+  const gen = state.hostGen;
+  const ok = await loading;
+  if (gen !== state.hostGen) return;   // superseded by a newer load
   if (!ok) {
     // Unreachable host: the banner (set by loadHost) plus an emptied grid;
     // the select still lists it, so recovery is one change event away.
@@ -1094,8 +1280,26 @@ async function switchHost(host, rest) {
   const isView = rest[0] === "view" &&
     (state.views?.views || []).some(doc => doc.name === rest[1]);
   const isEstate = rest[0] === "estate" && rest[1] === "findings";
-  if (!isView && !isEstate && (!rest[0] || !(rest[1] ? cols.includes(rest[1]) : cols.length))) {
-    history.replaceState(null, "", hashFor(...defaultRoute()));
+  // A machine with mates cannot judge an unknown subsystem bogus yet — the
+  // mates' capabilities land after first paint, and bouncing the route to
+  // the default here would eat a deep link into a subsystem a mate serves.
+  const merging = !!rest[0] && machinePrimary(host) === host
+    && machineMates(host).length > 0;
+  if (!isView && !isEstate
+      && (!rest[0] || !(rest[1] ? cols.includes(rest[1]) : cols.length))) {
+    if (merging) {
+      // The mates may own this route; their answer, not a guess, decides.
+      // First paint already happened inside loadHost — this wait only
+      // postpones the route verdict, never the page. A route NO member
+      // serves still bounces to the default, as the solo contract promises.
+      await state.mateMergeDone;
+      if (gen !== state.hostGen) return;   // switched again while waiting
+      const merged = state.capabilities.subsystems[rest[0]]?.collections || [];
+      if (!(rest[1] ? merged.includes(rest[1]) : merged.length))
+        history.replaceState(null, "", hashFor(...defaultRoute()));
+    } else {
+      history.replaceState(null, "", hashFor(...defaultRoute()));
+    }
   }
   state.subsystem = null;                   // force a reload on the new host
   state.collection = null;
@@ -1156,7 +1360,11 @@ async function loadCollection(deepLinkId = null) {
     }
   } catch (err) {
     if (epoch === state.epoch) {
-      banner(`Failed to load ${subsystem}/${collection}: ${err.message}`);
+      // Name the owning process when a mate serves this subsystem: "which
+      // member is down" must be answerable from the failure itself. A solo
+      // host's banner is unchanged (no owner recorded).
+      const owner = state.agentForSubsystem[subsystem];
+      banner(`Failed to load ${subsystem}/${collection}${owner ? ` (agent ${owner})` : ""}: ${err.message}`);
       state.page = null;
       renderCrumb(); renderFacets(); renderGrid();
     }
@@ -1504,10 +1712,13 @@ async function loadFindings() {
 
 function findingRow(finding) {
   const row = el("a", "fnd-row");
-  // Cross-host deep link: hub-mode hashes lead with the agent name, and
-  // the registry names which agent last stated this finding.
-  row.href = `#/${finding.agent}/${finding.subsystem}/${finding.collection}/`
-    + idPath(finding.object.id);
+  // Cross-host deep link. The registry names which AGENT last stated the
+  // finding; the link leads with that agent's machine primary, because the
+  // merged page serves the mate's subsystems and landing there keeps the
+  // one nav — the agent name still decides which machine. An agent the hub
+  // no longer lists passes through unchanged.
+  row.href = `#/${machinePrimary(finding.agent)}/${finding.subsystem}/`
+    + `${finding.collection}/` + idPath(finding.object.id);
   row.appendChild(el("span", `dot ${finding.opinion.level}`));
   const where = [finding.host?.hostname || finding.agent,
                  finding.host?.container, finding.host?.app]
@@ -2619,7 +2830,8 @@ async function openDetail(objectId, { quiet = false } = {}) {
     obs = await api(`/v1/${subsystem}/${collection}/${idPath(objectId)}`);
   } catch (err) {
     if (epoch === state.epoch && state.selectedId === objectId) {
-      banner(`Failed to load ${objectId}: ${err.message}`);
+      const owner = state.agentForSubsystem[subsystem];
+      banner(`Failed to load ${objectId}${owner ? ` (agent ${owner})` : ""}: ${err.message}`);
     }
     return;
   }
