@@ -319,6 +319,7 @@ def _stall_attribution(nodes: dict[str, dict],
             out[name] = facts
     return out
 
+
 # ── naming the workload behind a transient scope ─────────────────────
 #
 # Container and VM runtimes register their workloads as transient scopes whose
