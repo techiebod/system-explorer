@@ -1672,6 +1672,238 @@ function takeLookArrival() {
   return true;
 }
 
+/* ── resources: what is eating this machine ──────────────────────────────
+ *
+ * A purpose-built page rather than the generic table, because the question
+ * has a shape the table cannot take: a total, a decomposition of it, a
+ * remainder, and two different measurements that must sit side by side.
+ *
+ * INDEXED BACK INTO THE FACTS, without exception. Every number here is a
+ * fact from resources/workloads and nothing else; every label carries that
+ * fact's own sentence from /v1/facts as its tooltip, so the page explains
+ * itself out of the agent's dictionary rather than out of a copy in here;
+ * and every row links to the object it came from. Nothing on this page is
+ * computed that the collection does not already carry, except the shares —
+ * which are ratios of two facts on the same row and say so.
+ *
+ * The shares are cumulative, not rates, and the wording says so. These are
+ * counters since boot; a percentage of them is "of all the CPU this host has
+ * spent, this much went here", which needs no window and is honest without
+ * one. A live rate would need two samples and a stated interval, and that is
+ * a different feature — see SPARK_SAMPLES for where the browser does keep
+ * its own history and says as much. */
+
+const RESOURCE_METRICS = [
+  { key: "CpuUsageUsec", label: "CPU", format: (v) => humanSeconds(v / 1e6) },
+  { key: "MemoryCurrentBytes", label: "memory", format: humanBytes },
+  { key: "IoWrittenBytes", label: "written", format: humanBytes },
+  { key: "IoReadBytes", label: "read", format: humanBytes },
+];
+
+/* A label that explains itself out of the agent's dictionary. The tooltip is
+   never written here — a second copy of what a fact means is the drift the
+   fact dictionary exists to prevent. */
+function factLabel(cls, text, fact) {
+  const node = el("span", cls, text);
+  const help = factHelp(fact, "resources", "workloads");
+  if (help) node.title = help;
+  return node;
+}
+
+function resourceRow(label, valueText, pct, fact, href, cls) {
+  const row = el("div", "ov-row");
+  const lbl = href ? el("a", "lbl wide", label) : el("span", "lbl wide", label);
+  if (href) lbl.href = href;
+  lbl.title = label;
+  row.appendChild(lbl);
+  // "aux" is a SEGMENT style, not a meter style — styles.css paints
+  // `.meter .seg.aux`, so passing it as a class produced an unstyled bar.
+  row.appendChild(cls === "aux"
+    ? meter(0, null, [], [{ pct, aux: true }])
+    : meter(pct, cls));
+  const val = factLabel("val", valueText, fact);
+  row.appendChild(val);
+  return row;
+}
+
+async function loadResources() {
+  const { epoch } = state;
+  $("overview").hidden = true;
+  $("views-pane").hidden = true;
+  $("collection-pane").hidden = false;
+  $("refresh").classList.add("spin");
+  const subs = state.capabilities?.subsystems || {};
+  const has = (s, c) => subs[s]?.available && (subs[s].collections || []).includes(c);
+  let page, containers = new Map();
+  try {
+    page = await api("/v1/resources/workloads?limit=1000");
+    // Only to put a human name on a container scope, and only where this host
+    // serves docker at all. A failure here costs names, never the page.
+    if (has("docker", "containers")) {
+      try { containers = containerNames(await api("/v1/docker/containers?limit=200")); }
+      catch { containers = new Map(); }
+    }
+  } catch (err) {
+    $("refresh").classList.remove("spin");
+    banner(`Failed to load resources: ${err.message}`);
+    return;
+  }
+  if (epoch !== state.epoch) return;
+  $("refresh").classList.remove("spin");
+  renderResources(page, containers);
+}
+
+function renderResources(page, containers) {
+  const host = $("collection-pane");
+  host.textContent = "";
+  const items = page.items || [];
+  const byName = new Map(items.map((i) => [i.native_id, i]));
+  const root = byName.get("-.slice");
+  const grid = el("div", "ov-grid");
+  const link = (id) => hashFor("resources", "workloads", id);
+
+  /* ── the host total, and the part of it that is nobody's ── */
+  if (root) {
+    const f = root.facts || {};
+    const busy = f.HostCpuBusyUsec;
+    const unattributed = f.UnattributedCpuUsec;
+    const p = el("div", "ov-panel");
+    p.appendChild(el("h3", null, "This host, since boot"));
+    if (typeof busy === "number" && busy > 0) {
+      const share = (100 * (unattributed || 0)) / busy;
+      p.appendChild(resourceRow(
+        "in no slice", `${share.toFixed(1)}%`, share, "UnattributedCpuUsec",
+        link(root.id), share >= 50 ? "warn" : null));
+      p.appendChild(el("div", "ov-sub",
+        `${humanSeconds((unattributed || 0) / 1e6)} of ${humanSeconds(busy / 1e6)}` +
+        " of this host's CPU is in no top-level slice — kernel threads, an md" +
+        " resync, a scrub. No workload row below accounts for it."));
+    }
+    if (typeof f.HostCpuStolenUsec === "number") {
+      p.appendChild(el("div", "ov-sub",
+        `${humanSeconds(f.HostCpuStolenUsec / 1e6)} stolen by the hypervisor —` +
+        " time this machine wanted and did not get. Neither busy nor idle, and" +
+        " deliberately outside the total above."));
+    }
+    grid.appendChild(p);
+  }
+
+  /* ── the ladder: where the attributed total went ── */
+  const top = items.filter((i) => i.facts?.Depth === 1
+                                  && typeof i.facts?.CpuUsageUsec === "number");
+  if (top.length) {
+    const total = top.reduce((n, i) => n + i.facts.CpuUsageUsec, 0)
+                  + (root?.facts?.UnattributedCpuUsec || 0);
+    const p = el("div", "ov-panel");
+    p.appendChild(el("h3", null, "The ladder · CPU"));
+    for (const item of [...top].sort((a, b) => b.facts.CpuUsageUsec - a.facts.CpuUsageUsec)) {
+      const value = item.facts.CpuUsageUsec;
+      p.appendChild(resourceRow(
+        item.native_id, humanSeconds(value / 1e6), total ? (100 * value) / total : 0,
+        "CpuUsageUsec", link(item.id)));
+    }
+    if (root && typeof root.facts?.UnattributedCpuUsec === "number") {
+      // The remainder as a row of the same list, because it is a share of the
+      // same total — a footnote would let the bars above read as the whole.
+      const value = root.facts.UnattributedCpuUsec;
+      p.appendChild(resourceRow(
+        "(no slice)", humanSeconds(value / 1e6), total ? (100 * value) / total : 0,
+        "UnattributedCpuUsec", link(root.id), "aux"));
+    }
+    grid.appendChild(p);
+  }
+
+  /* ── the leaves, ranked, one panel per resource ── */
+  const leaves = items.filter((i) => i.type !== "slice");
+  for (const metric of RESOURCE_METRICS) {
+    const ranked = leaves
+      .filter((i) => typeof i.facts?.[metric.key] === "number" && i.facts[metric.key] > 0)
+      .sort((a, b) => b.facts[metric.key] - a.facts[metric.key])
+      .slice(0, 6);
+    if (!ranked.length) continue;
+    const worst = ranked[0].facts[metric.key];
+    const p = el("div", "ov-panel");
+    p.appendChild(el("h3", null, `Most ${metric.label}`));
+    for (const item of ranked) {
+      const value = item.facts[metric.key];
+      p.appendChild(resourceRow(
+        stallingName(item, containers), metric.format(value),
+        worst ? (100 * value) / worst : 0, metric.key, link(item.id)));
+    }
+    grid.appendChild(p);
+  }
+
+  /* ── things that happened to a workload and left no other trace ── */
+  const oom = leaves.filter((i) => (i.facts?.MemoryOomKills || 0) > 0);
+  const throttled = leaves.filter((i) => (i.facts?.CpuThrottledUsec || 0) > 0);
+  if (oom.length || throttled.length) {
+    const p = el("div", "ov-panel");
+    p.appendChild(el("h3", null, "Killed and held back"));
+    for (const item of oom) {
+      p.appendChild(resourceRow(
+        stallingName(item, containers), `${item.facts.MemoryOomKills} killed`,
+        100, "MemoryOomKills", link(item.id), "warn"));
+    }
+    for (const item of throttled) {
+      p.appendChild(resourceRow(
+        stallingName(item, containers),
+        humanSeconds(item.facts.CpuThrottledUsec / 1e6),
+        100, "CpuThrottledUsec", link(item.id), "aux"));
+    }
+    p.appendChild(el("div", "ov-sub",
+      "An OOM kill leaves no trace anywhere else — systemd restarts the" +
+      " service and its unit returns to active. Throttling is a workload" +
+      " stopped by its own quota rather than by contention, which no pressure" +
+      " reading reports."));
+    grid.appendChild(p);
+  }
+
+  /* ── who is suffering, which is a different question ── */
+  const stalling = items
+    .filter((i) => (i.facts?.PsiIoFullAvg60 ?? 0) > 0)
+    .filter((i) => !(i.facts?.StallExplainedBy || {}).PsiIoFullAvg60)
+    .sort((a, b) => (b.facts.PsiIoFullAvg60 ?? 0) - (a.facts.PsiIoFullAvg60 ?? 0))
+    .slice(0, 5);
+  const p = el("div", "ov-panel");
+  p.appendChild(el("h3", null, "Waiting on I/O · last 60s"));
+  if (!stalling.length) {
+    p.appendChild(el("div", "ov-sub", "No workload reports an I/O stall."));
+  } else {
+    for (const item of stalling) {
+      const share = item.facts.PsiIoFullAvg60;
+      p.appendChild(resourceRow(
+        stallingName(item, containers), `${share}%`, share,
+        "PsiIoFullAvg60", link(item.id), share >= 20 ? "warn" : null));
+      const unexplained = (item.facts.StallUnexplained || {}).PsiIoFullAvg60;
+      const unsettled = (item.facts.StallAttributionUnobservable || {}).PsiIoFullAvg60;
+      if (unexplained || unsettled) {
+        // The same two classes, and the same two SUBJECTS, the units page
+        // uses: the finding speaks about the slice, the hedge about the
+        // reading. The host's own sentence stays a hover — this panel
+        // prints no sentence it did not write.
+        const note = el("div",
+          `ov-sub row-note ${unexplained ? "note-finding" : "note-unsettled"}`,
+          unexplained
+            ? "nothing inside this slice accounts for it"
+            : "part of this slice could not be read — neither ruled in nor out");
+        note.title = unexplained || unsettled;
+        p.appendChild(note);
+      }
+    }
+  }
+  p.appendChild(el("div", "ov-sub",
+    "Utilisation says who is causing load; this says who is suffering from" +
+    " it. They disagree in the interesting cases — a workload pegging a core" +
+    " with nothing contended stalls nobody."));
+  grid.appendChild(p);
+
+  host.appendChild(grid);
+  const foot = el("div", "ov-sub",
+    `${items.length} workloads · every figure is a fact on` +
+    " resources/workloads, and every row opens the object it came from.");
+  host.appendChild(foot);
+}
+
 /* ── collection view ─────────────────────────────────────── */
 
 const PAGE_LIMIT = 500;
@@ -1684,6 +1916,8 @@ async function loadCollection(deepLinkId = null) {
     return loadView(state.collection);
   if (state.subsystem === "estate" && state.collection === "findings")
     return loadFindings();
+  if (state.subsystem === "resources" && state.collection === "workloads")
+    return loadResources();
   $("overview").hidden = true;
   $("views-pane").hidden = true;
   $("collection-pane").hidden = false;

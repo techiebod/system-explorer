@@ -174,7 +174,7 @@ const context = vm.createContext(sandbox);
 // its state and helpers with const, which in a vm script are lexically scoped
 // and never become properties of the sandbox. Only code inside that script can
 // see them.
-const EXPORTS = "\n;globalThis.__ui = { state, renderNav, applyNavBadges, renderBuild, navRoutes, navModel, cellValue, PSEUDO_COLUMNS, linkPanel, scalarText, factHelp, renderOverview, renderGrid, worstOpinionLevel, OPINION_LEVELS, ATTENTION_LEVELS };";
+const EXPORTS = "\n;globalThis.__ui = { state, renderNav, applyNavBadges, renderBuild, navRoutes, navModel, cellValue, PSEUDO_COLUMNS, linkPanel, scalarText, factHelp, renderOverview, renderGrid, renderResources, factLabel, worstOpinionLevel, OPINION_LEVELS, ATTENTION_LEVELS };";
 vm.runInContext(readFileSync(APP, "utf8") + EXPORTS, context, { filename: "app.js" });
 const ui = sandbox.__ui;
 
@@ -185,6 +185,120 @@ const check = (name, fn) => {
 };
 
 console.log("operator UI chrome smoke test");
+
+/* ── the resources page ──────────────────────────────────────────────────
+ *
+ * Executed rather than eyeballed, for the reason this whole harness exists:
+ * a render path nothing runs is exactly how the nav blanked. These build the
+ * page from facts shaped like a real host's and assert the claims the page
+ * makes about itself — every figure a fact, every row a link, and the
+ * remainder present as a row rather than a footnote. */
+
+const RES_ITEMS = [
+  { id: "unit:-.slice", type: "slice", native_id: "-.slice",
+    facts: { Depth: 0, CpuUsageUsec: 400_000_000, HostCpuBusyUsec: 500_000_000,
+             UnattributedCpuUsec: 100_000_000, HostCpuStolenUsec: 18_500_000,
+             PsiIoFullAvg60: 54.55,
+             StallUnexplained: { PsiIoFullAvg60: "every member cgroup was read" } } },
+  { id: "unit:system.slice", type: "slice", native_id: "system.slice",
+    facts: { Depth: 1, Parent: "-.slice", CpuUsageUsec: 300_000_000,
+             PsiIoFullAvg60: 5.14,
+             StallExplainedBy: { PsiIoFullAvg60: "nix-daemon.service" } } },
+  { id: "unit:user.slice", type: "slice", native_id: "user.slice",
+    facts: { Depth: 1, Parent: "-.slice", CpuUsageUsec: 100_000_000 } },
+  { id: "unit:nix-daemon.service", type: "service", native_id: "nix-daemon.service",
+    facts: { Depth: 2, Parent: "system.slice", CpuUsageUsec: 250_000_000,
+             MemoryCurrentBytes: 2_000_000_000, IoWrittenBytes: 9_000_000_000,
+             IoReadBytes: 1_000_000, PsiIoFullAvg60: 33.4 } },
+  { id: "unit:hungry.service", type: "service", native_id: "hungry.service",
+    facts: { Depth: 2, Parent: "system.slice", CpuUsageUsec: 40_000_000,
+             MemoryCurrentBytes: 500_000_000, MemoryOomKills: 3,
+             CpuThrottledUsec: 12_000_000 } },
+];
+
+const resourcesPage = () => ({ items: RES_ITEMS.map((i) => ({ ...i, facts: { ...i.facts } })) });
+
+const renderRes = () => {
+  ui.state.subsystem = "resources";
+  ui.state.collection = "workloads";
+  ui.renderResources(resourcesPage(), new Map());
+  return document.getElementById("collection-pane");
+};
+
+check("the resources page renders without throwing", () => {
+  const pane = renderRes();
+  if (!pane.textContent.length) throw new Error("the page rendered empty");
+});
+
+check("the unattributed remainder is a row, not a footnote", () => {
+  const text = renderRes().textContent;
+  if (!text.includes("(no slice)"))
+    throw new Error("the remainder is missing from the ladder");
+  if (!text.includes("in no slice"))
+    throw new Error("the host total does not state its unattributed share");
+});
+
+check("stolen time is shown only where the host has any", () => {
+  if (!renderRes().textContent.includes("stolen by the hypervisor"))
+    throw new Error("stolen time was not surfaced");
+  const bare = resourcesPage();
+  delete bare.items[0].facts.HostCpuStolenUsec;
+  ui.renderResources(bare, new Map());
+  if (document.getElementById("collection-pane").textContent.includes("stolen"))
+    throw new Error("bare metal was told about stolen time it does not have");
+});
+
+check("an OOM kill and a throttle are surfaced, with their reason", () => {
+  const text = renderRes().textContent;
+  if (!text.includes("3 killed")) throw new Error("OOM kills are not shown");
+  if (!text.includes("leaves no trace anywhere else"))
+    throw new Error("the panel does not say why an OOM kill matters here");
+});
+
+check("a slice whose stall a member explains is not listed again", () => {
+  const text = renderRes().textContent;
+  if (text.includes("5.14"))
+    throw new Error("an explained slice was restated over its member");
+  if (!text.includes("33.4")) throw new Error("the member that explains it is missing");
+});
+
+check("the root's unexplained stall keeps its note and its own sentence", () => {
+  const pane = renderRes();
+  // The stub matches by class, not by tag — which is why the selector is the
+  // class the page actually puts on the note.
+  const note = [...pane.querySelectorAll("row-note")]
+    .find((d) => /nothing inside this slice accounts/.test(d.textContent || ""));
+  if (!note) throw new Error("the unexplained stall lost its note");
+  if (!/every member cgroup was read/.test(note.title || ""))
+    throw new Error("the host's own sentence is not carried as the hover");
+});
+
+check("every row links back to the object the figure came from", () => {
+  const labels = [...renderRes().querySelectorAll("lbl")];
+  if (!labels.length) throw new Error("the page built no row labels");
+  const links = labels.filter((n) => n.href);
+  if (!links.length) throw new Error("no row is a link");
+  for (const a of links) {
+    if (!/resources\/workloads/.test(a.href))
+      throw new Error(`a row links somewhere else: ${a.href}`);
+  }
+});
+
+check("labels explain themselves out of the fact dictionary", () => {
+  ui.state.factDict = { subsystems: { resources: { workloads: {
+    CpuUsageUsec: "Total CPU time this workload has consumed." } } } };
+  const node = ui.factLabel("val", "1s", "CpuUsageUsec");
+  if (node.title !== "Total CPU time this workload has consumed.")
+    throw new Error("the tooltip is not the agent's own sentence");
+  ui.state.factDict = null;
+  if (ui.factLabel("val", "1s", "CpuUsageUsec").title)
+    throw new Error("a missing dictionary invented a tooltip");
+});
+
+check("the page states that every figure is a fact", () => {
+  if (!renderRes().textContent.includes("every figure is a fact"))
+    throw new Error("the page does not say where its numbers come from");
+});
 
 check("renderNav builds sections without throwing", () => {
   ui.state.capabilities = CAPABILITIES;
