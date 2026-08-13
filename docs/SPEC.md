@@ -1,12 +1,12 @@
 # System Explorer — Specification
 
-**Version:** 0.5
+**Version:** 0.6
 **Status:** Accepted for build
 **Supersedes:** SE-001 through SE-006 — the predecessor design suite,
 condensed into this document; per-document disposition in Appendix A
 **Direction:** [ROADMAP.md](ROADMAP.md) — status, priorities, and the estate/portability tracks
 
-0.6 (unreleased) adds rule 16 — the mechanism is a fact — settles the
+0.6 (2026-08-13) adds rule 16 — the mechanism is a fact — settles the
 findings write posture (§6.3: a grant, appended transitions, no
 suppression, resolution observed not declared) before the findings layer
 exists, and decides
@@ -23,8 +23,15 @@ findings resolving), and the hub grows the §6.3 registry: `/hub/findings`
 (`se.hub-findings/1`) with first_seen/last_seen under the hub's state
 directory and the grant-gated transition route. The app tier's flow-edge
 vocabulary (§3: `dispatches-to`, `provisions`, `tracks`; `routes-via`
-and `backs` reused for ingress) is decided here before the first app
-adapter emits an edge.
+and `backs` reused for ingress) is decided before the first app adapter
+emits one — and the app tier then lands whole: paperless, traefik, the
+servarr fleet, downloaders, the plex family and bazarr as app-scoped
+explorers, kea and unbound as host-scoped socket explorers, the first
+emitted flow edges (tracks, dispatches-to, routes-via), pipeline view
+panels whose stages are authored and whose relations are the rows' own
+join keys, view host-targeting, the two filter operators (`!`, `*`),
+and the hub findings sweep moved to its own cadence with `swept_at` as
+the read's honesty stamp.
 
 0.5 (2026-08-12) amends §6.1 rule 4 — the hub holds metadata, never
 observations — and adds views (§6.2, `se.views/1`), the evidence envelope's
@@ -534,14 +541,23 @@ Base path `/v1`. All responses are envelopes or envelope pages.
 
 Collection behaviour (carried from SE-004 §11, unchanged in spirit):
 
-- Filtering by fact equality: `?type=service&ActiveState=failed`. A key that
-  is a case or underscore near-miss of a carried fact (`activestate`,
-  `active_state`) is refused with HTTP 422 naming the real fact — the same
-  status a malformed `limit` gets — because a typo and a healthy zero used to
-  be byte-identical, which is rule 7's lie arriving through the query string.
-  Refusal stops at provable near-misses: the fact vocabulary is open (the
-  glossary is partial, and rule 7 makes omission a legitimate shape for any
-  fact), so an unknown key with no near-miss returns the honest empty page —
+- Filtering by fact value: `?type=service&ActiveState=failed`. Equality is
+  the default; two operators on the VALUE extend it — a leading `!` negates
+  (`?ActiveState=!active`), a trailing `*` prefix-matches
+  (`?Mountpoint=/run*`), and they compose (`?Mountpoint=!/run*`). An absent
+  fact matches only negated filters — absence is not equal to anything, but
+  it is honestly not-equal to everything. No escape syntax exists: exact
+  equality against a value that itself begins with `!` or ends with `*`
+  cannot be expressed through the query string. Operators belong on the
+  value, never the key — a key wearing one (`?!ActiveState=failed`) is
+  refused as the near-miss it is. A key that is a case or underscore
+  near-miss of a carried fact (`activestate`, `active_state`) is refused
+  with HTTP 422 naming the real fact — the same status a malformed `limit`
+  gets — because a typo and a healthy zero used to be byte-identical, which
+  is rule 7's lie arriving through the query string. Refusal stops at
+  provable near-misses: the fact vocabulary is open (the glossary is
+  partial, and rule 7 makes omission a legitimate shape for any fact), so an
+  unknown key with no near-miss returns the honest empty page —
   `?RuntimeSynthesised=True` on a host with no synthesised mounts is a
   correct query whose answer is nothing, and refusing it would make the same
   query flip between ok and error as host state drifts.
