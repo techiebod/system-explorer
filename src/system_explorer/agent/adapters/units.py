@@ -97,11 +97,13 @@ def _pressure_nodes() -> dict[str, dict]:
 
     A node is {"facts": PSI facts, "path": the cgroup directory this node IS,
     "parent": the enclosing cgroup's key or None, "depth": nesting below the
-    root, "unit": whether its name is a systemd unit's, "pruned": children
-    left unread — the depth bound, or a listing that failed part-way}. The
-    parent link is what makes a slice's stall attributable at all: the kernel
-    aggregates PSI over the CGROUP tree, so that tree is the join, and it
-    costs nothing beyond the walk the row facts already need.
+    root, "unit": whether its name is a systemd unit's, "managed": whether
+    every cgroup between this one and the root is a slice, which is what makes
+    it THIS host's systemd's own, "pruned": children left unread — the depth
+    bound, or a listing that failed part-way}. The parent link is what makes a
+    slice's stall attributable at all: the kernel aggregates PSI over the
+    CGROUP tree, so that tree is the join, and it costs nothing beyond the
+    walk the row facts already need.
 
     A node is recorded even when it yielded no readings. Presence and
     readability are different answers — a member whose pressure could not be
@@ -190,14 +192,46 @@ def _pressure_nodes() -> dict[str, dict]:
     by_path = {node["path"]: key for key, node in nodes.items()}
     for node in nodes.values():
         node["parent"] = by_path.get(os.path.dirname(node["path"]))
+
+    # Which of these cgroups this host's systemd is the one that named. A
+    # reading may only reach the row of the unit whose OWN cgroup it is, and
+    # that is decided by the ancestry: systemd puts services and scopes in
+    # slices and slices in slices, so a cgroup reached from the root through
+    # slices alone is this manager's, and anything below a delegated .service
+    # or .scope was named by whatever runs inside it. Same boundary
+    # _slice_members refuses to descend past, applied to rows instead of
+    # members — without it, a container's own nginx.service, unique enough to
+    # survive the collision rule above, hands its readings to the host's
+    # loaded-but-inactive unit of that name: a bare number on a row that is
+    # not about it, with nothing to mark it.
+    root = CGROUP_ROOT.rstrip("/")
+    for node in sorted(nodes.values(), key=lambda entry: entry["depth"]):
+        parent_key = node["parent"]
+        if parent_key is None:
+            # Not in the map: either the root, so this is a top-level cgroup
+            # and ours, or a cgroup that lost the name collision — a hierarchy
+            # this walk declined to represent, so nothing under it is.
+            node["managed"] = os.path.dirname(node["path"]) == root
+        else:
+            parent = nodes[parent_key]
+            node["managed"] = (parent["managed"] and parent["unit"]
+                               and parent_key.endswith(".slice"))
     return nodes
 
 
 def _pressure_by_unit(nodes: dict[str, dict]) -> dict[str, dict]:
-    """{unit name: PSI facts} — the row-facing half of the walk. Rows are
-    units: a cgroup systemd did not name has nothing here to be."""
+    """{unit name: PSI facts} — the row-facing half of the walk, and the one
+    place a reading becomes a row's.
+
+    Two things stop it. A cgroup systemd did not name has nothing here to be,
+    and a cgroup below a delegated unit is another manager's ("managed"): the
+    delegating unit's own cgroup already carries its aggregate and is already
+    a row. So a host unit that owns no cgroup gets no pressure facts at all —
+    absent, which reads as does-not-apply, rather than the zero that would
+    read as measured calm.
+    """
     return {name: node["facts"] for name, node in nodes.items()
-            if node["facts"] and node["unit"]}
+            if node["facts"] and node["unit"] and node["managed"]}
 
 
 def _pressure_and_attribution() -> tuple[dict[str, dict], dict[str, dict]]:
@@ -217,14 +251,18 @@ def _unit_pressure(name: str) -> dict:
     read to say anything about it, and the same walk settles the name
     collision above for every other type. Units that never get a cgroup —
     targets, devices, timers, paths — still cost nothing.
+
+    Readings come through _pressure_by_unit rather than out of the node map
+    directly, so the detail view and the list cannot disagree about which
+    cgroup is this unit's own.
     """
     if not name.endswith(CGROUP_UNIT_SUFFIXES):
         return {}
     nodes = _pressure_nodes()
-    node = nodes.get(name)
-    if node is None:
+    facts = _pressure_by_unit(nodes).get(name)
+    if facts is None:
         return {}
-    return {**node["facts"], **_stall_attribution(nodes, only=name).get(name, {})}
+    return {**facts, **_stall_attribution(nodes, only=name).get(name, {})}
 
 
 # What a collection row carries. The full set belongs on the object; a row
@@ -324,7 +362,11 @@ def _stall_attribution(nodes: dict[str, dict],
 
     out: dict[str, dict] = {}
     for name, node in nodes.items():
-        if not (node["unit"] and name.endswith(".slice")):
+        # Keyed by name, and consumed by the row of that name: a slice inside
+        # a delegated hierarchy would otherwise publish its members onto the
+        # host's slice of the same name, naming units this collection cannot
+        # resolve. Its own manager's aggregate is the delegating unit's row.
+        if not (node["unit"] and node["managed"] and name.endswith(".slice")):
             continue
         if only is not None and name != only:
             continue

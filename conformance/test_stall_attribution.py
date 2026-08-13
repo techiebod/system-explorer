@@ -59,7 +59,7 @@ def nodes(*spec: tuple[str, str | None, dict]) -> dict[str, dict]:
     below, which build directories instead of dicts.
     """
     built = {name: {"facts": dict(readings), "parent": parent, "depth": 0,
-                    "path": "", "unit": True, "pruned": False}
+                    "path": "", "unit": True, "managed": True, "pruned": False}
              for name, parent, readings in spec}
     for name, node in built.items():
         chain = [name]
@@ -69,6 +69,11 @@ def nodes(*spec: tuple[str, str | None, dict]) -> dict[str, dict]:
             walk = built[walk]["parent"]
         node["depth"] = len(chain) - 1
         node["path"] = "/".join([units_adapter.CGROUP_ROOT, *reversed(chain)])
+        # Derived, not asserted: a cgroup is this host's systemd's only where
+        # every cgroup above it is a slice, and a fixture that claimed
+        # otherwise would prove the delegation rule against a tree systemd
+        # cannot build.
+        node["managed"] = all(above.endswith(".slice") for above in chain[1:])
     return built
 
 
@@ -465,6 +470,89 @@ def test_a_cgroup_below_a_losing_namesake_is_a_member_of_nothing(tmp_path, monke
     [opinion] = units_rules.slice_unit_opinions(
         {"ActiveState": "active", IO: 56.35, **facts})
     assert opinion["key"] == "slice-stall-unexplained"
+
+
+# ── and whose readings a row may show as its own ─────────────────────────
+#
+# Attaching the tree by path stops a guest's units becoming MEMBERS of a host
+# slice, but the row facts are a second join on the same names: the walk
+# returns {name: readings} and the collection asks for each unit by name. A
+# guest unit whose name is unique in the tree survives the collision rule with
+# no host namesake to lose to — and hands its readings to a host unit of that
+# name that owns no cgroup at all.
+
+def test_a_guest_unit_does_not_hand_its_readings_to_the_host_row_of_that_name(
+        tmp_path, monkeypatch):
+    """The live shape: a container runs systemd with its own nginx.service;
+    the host has nginx.service loaded but inactive, so it owns no cgroup and
+    the name collides with nothing. The host's ROW then showed the container's
+    stall as its own — a bare fact on a row that is not about it, with nothing
+    to mark it, and no slice to argue about. A reading is a row's only where
+    the cgroup is that unit's own: every cgroup between it and the root a
+    slice, the boundary _slice_members already refuses to descend past."""
+    scope = "system.slice/docker-4d1f9c02ab77.scope"
+    found = walk_tree(monkeypatch, tmp_path,
+                      (("system.slice", 40.0),
+                       ("system.slice/sshd.service", 1.0),
+                       (scope, 41.5),
+                       (f"{scope}/system.slice", 60.0),
+                       (f"{scope}/system.slice/nginx.service", 60.5)))
+    assert found["nginx.service"]["managed"] is False
+    assert found["sshd.service"]["managed"] is True
+
+    rows = units_adapter._pressure_by_unit(found)
+    assert "nginx.service" in found, "the walk saw it; the ROW is what it may not reach"
+    assert "nginx.service" not in rows
+    # Spelled the way the collection spells it (see acquire): absent, so the
+    # row carries no such fact at all. A zero would read as measured calm on a
+    # unit that was never measured.
+    for key in units_adapter.ROW_PRESSURE_FACTS:
+        assert rows.get("nginx.service", {}).get(key) is None
+    assert units_adapter._unit_pressure("nginx.service") == {}, "the object view agrees"
+
+    # And nothing was stripped from the units that legitimately have readings.
+    assert rows["sshd.service"][IO] == 1.0
+    assert rows["docker-4d1f9c02ab77.scope"][IO] == 41.5, "the delegating unit owns its own"
+    assert rows["system.slice"][IO] == 40.0
+
+
+def test_a_guest_slice_does_not_publish_its_members_on_the_host_row_of_that_name(
+        tmp_path, monkeypatch):
+    """The same second join, for the derived facts, and worse: attribution is
+    keyed by name too, so a delegated slice with a name of its own would put
+    StallExplainedBy on the host's slice of that name — a member reference
+    into a hierarchy this collection cannot resolve, on a row that never
+    contained it."""
+    scope = "system.slice/docker-4d1f9c02ab77.scope"
+    found = walk_tree(monkeypatch, tmp_path,
+                      (("system.slice", 5.0),
+                       (scope, 41.5),
+                       (f"{scope}/app-guest.slice", 60.0),
+                       (f"{scope}/app-guest.slice/worker.service", 60.5)))
+    assert "app-guest.slice" not in units_adapter._stall_attribution(found)
+    assert units_adapter._unit_pressure("app-guest.slice") == {}
+    # The host's own slice keeps its answer, and it is the scope: the
+    # delegating unit is where the guest's aggregate legitimately lands.
+    assert units_adapter._stall_attribution(found)["system.slice"][
+        "StallExplainedBy"] == {IO: "docker-4d1f9c02ab77.scope"}
+
+
+@pytest.mark.parametrize("path,name", [
+    ("system.slice/example.service", "example.service"),
+    ("system.slice/system-example.slice/example@1.service", "example@1.service"),
+    ("system.slice/docker-4d1f9c02ab77.scope", "docker-4d1f9c02ab77.scope"),
+    ("init.scope", "init.scope"),
+    ("user.slice/user-1000.slice/user@1000.service", "user@1000.service"),
+])
+def test_a_unit_whose_cgroup_is_its_own_keeps_every_reading(
+        tmp_path, monkeypatch, path, name):
+    """The half that must not move. Slices nest and a service or scope hangs
+    from one: that is the shape of every ordinary row on the host, including
+    the delegating units themselves, which own their cgroup however foreign
+    the hierarchy below it is."""
+    found = walk_tree(monkeypatch, tmp_path, ((path, 33.0),))
+    assert units_adapter._pressure_by_unit(found)[name][IO] == 33.0
+    assert units_adapter._unit_pressure(name)[IO] == 33.0
 
 
 # ── a walk that stopped early must not report a complete tree ────────────
