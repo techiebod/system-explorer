@@ -39,6 +39,14 @@ const state = {
   evidence: null,        // {data, view}
   sortKey: null,
   sortDir: 1,
+  // A `look` link's arrival intent, armed on click and consumed once at the
+  // route it names. Deliberately session state and not part of the URL: the
+  // link's href is the destination collection's own address and must stay
+  // copyable as that (see lookLinks).
+  lookArrival: null,
+  // {route, fact}: the ordering fact that arrival made visible, for this
+  // visit only. Nothing about it is stored — see columnsFor.
+  lookColumn: null,
   filterText: "",
   facet: null,
   showHidden: false,     // reveal rows a HIDDEN rule suppresses by default
@@ -1251,6 +1259,15 @@ function route() {
   } else if (!objectId && state.selectedId) {
     collapseDetail();
   }
+
+  /* After the reset above (which clears sortKey), so the arrival survives it;
+     before the rows land, so the destination ARRIVES sorted rather than
+     resorting under the reader a moment later. A collection that did not
+     change loads nothing and must be repainted here instead. */
+  if (takeLookArrival() && !changedCollection) {
+    renderGrid();
+    renderCrumb();
+  }
 }
 
 /* The host changed under the route. Rebuild the host-scoped chrome, then
@@ -1306,11 +1323,18 @@ async function switchHost(host, rest) {
   route();
 }
 
-function hashFor(subsystem, collection, objectId) {
+/* `host` names a machine OTHER than the one on screen, and only the estate
+   surfaces need it: a finding states its condition on its own agent's
+   machine, so resolving its links against the selected host would send the
+   reader to the wrong box entirely. The machine's PRIMARY fronts the URL,
+   because that is where the merged page lives and where a mate's subsystems
+   are served from — the same rule the findings row itself follows. */
+function hashFor(subsystem, collection, objectId, host = null) {
   const path = objectId
     ? `${subsystem}/${collection}/${idPath(objectId)}`
     : `${subsystem}/${collection}`;
-  return state.hub ? `#/${state.currentHost}/${path}` : `#/${path}`;
+  const at = host ? machinePrimary(host) : state.currentHost;
+  return state.hub ? `#/${at}/${path}` : `#/${path}`;
 }
 
 function goTo(subsystem, collection, objectId, { replace = false } = {}) {
@@ -1326,6 +1350,83 @@ function goTo(subsystem, collection, objectId, { replace = false } = {}) {
 
 function stripObjectFromHash() {
   history.replaceState(null, "", hashFor(state.subsystem, state.collection));
+}
+
+/* ── an opinion's onward step (`look`) ───────────────────────
+   An opinion MAY carry `look`: route hints naming where the diagnosis it
+   summarises actually lives. "This host is I/O bound" is a true sentence the
+   reader cannot act on — the attribution sits one route away on units/units,
+   and until now they had to know that. The rulebook knows it, so it says it,
+   and this is the only place in the UI that turns one into a link.
+
+   Real anchors with real hrefs, for the reason the pipeline rows already
+   insist on: a destination that cannot be middle-clicked or copied is not a
+   route, it is a sentence about one.
+
+   `host` is the machine the OPINION belongs to, not the one on screen —
+   null everywhere a host speaks about itself, and the finding's own agent on
+   the estate panel. An opinion with no `look` returns null and grows nothing:
+   no empty row, no dangling separator. */
+function lookLinks(opinion, host = null) {
+  const hints = opinion?.look || [];
+  if (!hints.length) return null;
+  const box = el("div", "look");
+  for (const hint of hints) {
+    const href = hashFor(hint.subsystem, hint.collection, null, host);
+    const link = el("a", "look-link",
+                    hint.label || `${hint.subsystem}/${hint.collection}`);
+    link.href = href;
+    if (hint.fact) link.title = `ordered by ${hint.fact}, worst first`;
+    link.onclick = (event) => {
+      // A modified click belongs to the browser: a new tab is a fresh load
+      // with no session to carry the arrival intent, and it still lands on
+      // the right collection, which is the part that must never depend on us.
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      armLookArrival(hint);
+      // Already at exactly this address: no hashchange will fire, so route()
+      // has to be asked. Same shape as goTo's own no-op guard.
+      if (location.hash === href) route();
+    };
+    box.appendChild(link);
+  }
+  return box;
+}
+
+/* `fact` names the fact that ORDERS the answer at the far end, so the culprit
+   is row one instead of something to hunt for. It is carried, never stored:
+   a click is navigation, and navigation must not rewrite what the reader has
+   saved. "I followed a warning last week and my columns changed" is an
+   annoyance nobody can trace back to its cause. */
+function armLookArrival(hint) {
+  state.lookArrival = hint.fact
+    ? { route: `${hint.subsystem}/${hint.collection}`, fact: hint.fact }
+    : null;
+}
+
+/* One shot, and only at the route that asked for it: a reader who went
+   somewhere else instead must not find that page reordered under them, so
+   the intent is spent on the first route change either way. Returns whether
+   it applied, because a route that did not otherwise change still has to
+   repaint.
+
+   The order is state.sortKey/sortDir — the very pair a column header click
+   sets, because a second ordering path that could disagree with the header's
+   is exactly the fourth-copy failure this file names elsewhere.
+
+   lookColumn outlives the intent by one thing: it lasts while the reader
+   stays on the route that asked for it, since opening a row is not leaving.
+   Cleared here, the one place that sees every route change, so no visit can
+   inherit the previous one's extra column. */
+function takeLookArrival() {
+  const want = state.lookArrival;
+  state.lookArrival = null;
+  const here = `${state.subsystem}/${state.collection}`;
+  if (state.lookColumn && state.lookColumn.route !== here) state.lookColumn = null;
+  if (!want || want.route !== here) return false;
+  state.sortKey = want.fact;
+  state.sortDir = -1;          // descending: worst first is the whole point
+  state.lookColumn = want;
+  return true;
 }
 
 /* ── collection view ─────────────────────────────────────── */
@@ -1703,7 +1804,19 @@ async function loadFindings() {
     if (!rows.length) continue;
     const card = el("section", "vw-card");
     card.appendChild(el("h3", "vw-panel-title", `${title} (${rows.length})`));
-    for (const finding of rows) card.appendChild(findingRow(finding));
+    for (const finding of rows) {
+      card.appendChild(findingRow(finding));
+      /* The finding's own agent, not the selected host: every link an estate
+         finding offers belongs to the machine the finding is about.
+
+         A SIBLING of the row, never a child of it — the row is itself an
+         anchor and an anchor inside an anchor is not a link any browser will
+         honour. Findings with no `look` add nothing here, which is also what
+         keeps `.fnd-row:first-of-type` (the card's missing top border) still
+         picking the first row: these are divs among the anchors. */
+      const onward = lookLinks(finding.opinion, finding.agent);
+      if (onward) card.appendChild(onward);
+    }
     next.push(card);
   }
   pane.replaceChildren(...next);
@@ -2426,8 +2539,14 @@ function renderOverview(obs, got = {}) {
   // meters above are these opinions' visual form, not a replacement.
   if ((obs.opinions || []).length) {
     const box = el("div", "ov-opinions");
-    for (const op of obs.opinions)
-      box.appendChild(el("div", `opinion ${op.level}`, `${op.key} — ${op.message}`));
+    for (const op of obs.opinions) {
+      // The strip an operator meets first, and the one that started this: a
+      // pressure verdict with nowhere to click was the whole complaint.
+      const line = el("div", `opinion ${op.level}`, `${op.key} — ${op.message}`);
+      const onward = lookLinks(op);
+      if (onward) line.appendChild(onward);
+      box.appendChild(line);
+    }
     root.appendChild(box);
   }
 
@@ -2521,6 +2640,11 @@ function renderFacets() {
       opt.append(el("span", "tick", current.has(key) ? "✓" : NBSP), key);
       opt.onclick = () => {
         const prefs = colPrefs(route);
+        // An arrival's transient column ticks like any other, so unticking it
+        // must actually drop it — the stored preferences hold nothing to
+        // remove. Clicking it again then adds it for good, which is the
+        // deliberate choice the transient one deliberately is not.
+        if (state.lookColumn?.fact === key) state.lookColumn = null;
         if (current.has(key)) {
           if (preset.includes(key)) prefs.remove = [...(prefs.remove || []), key];
           prefs.add = (prefs.add || []).filter(k => k !== key);
@@ -2563,6 +2687,14 @@ function columnsFor() {
   const removed = new Set(prefs.remove || []);
   const cols = baseColumnsFor(route).filter(c => !removed.has(c));
   for (const extra of prefs.add || []) if (!cols.includes(extra)) cols.push(extra);
+  /* The fact a `look` link arrived ordering by, unioned in for THIS VISIT
+     ONLY and stored nowhere. A sort by a column nobody can see explains
+     nothing — PsiIoFullAvg60 is not among units/units' presets — but the
+     answer to that is one transient column, not an edit to the reader's saved
+     layout: leaving the route restores exactly what they chose. Making it
+     permanent is the picker's job, and theirs to decide. */
+  const arrived = state.lookColumn?.fact;
+  if (arrived && !cols.includes(arrived)) cols.push(arrived);
   return cols;
 }
 
@@ -2895,6 +3027,11 @@ function renderExpansion(colspan) {
       ev.appendChild(chip);
     }
     o.appendChild(ev);
+    // Below the evidence, because the evidence is what this opinion read and
+    // the link is where the reader goes next. This host speaks about itself
+    // here, so no host is named.
+    const onward = lookLinks(op);
+    if (onward) o.appendChild(onward);
     box.appendChild(o);
   }
 

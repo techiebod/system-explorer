@@ -51,6 +51,30 @@
       "evidence_ref": "/v1/evidence/units/units/unit:systemd-observer.service"
     },
     {
+      "subsystem": "system",
+      "collection": "overview",
+      "object": {
+        "id": "overview:host",
+        "type": "overview",
+        "native_id": "host"
+      },
+      "opinion": {
+        "key": "psi-io",
+        "level": "warn",
+        "message": "This host made no progress for 54.55% of the last minute: every task that had work to do was waiting on I/O. Tasks with nothing to do are not counted.",
+        "evidence": ["PsiIoFullAvg60"],
+        "look": [
+          {
+            "subsystem": "units",
+            "collection": "units",
+            "fact": "PsiIoFullAvg60",
+            "label": "which units are waiting on I/O"
+          }
+        ]
+      },
+      "evidence_ref": "/v1/evidence/system/overview/overview:host"
+    },
+    {
       "subsystem": "storage",
       "collection": "datasets",
       "object": {

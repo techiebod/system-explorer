@@ -102,14 +102,38 @@
                 "type": "array",
                 "minItems": 1,
                 "items": { "type": "string", "minLength": 1 }
-              }
+              },
+              "look": { "$ref": "#/$defs/look" }
             }
           }
         },
         "depth": {
           "type": "integer",
           "minimum": 0,
-          "description": "Tree depth for naturally hierarchical collections (block devices, mounts). Structural observation data, not presentation."
+          "description": "Tree depth for naturally hierarchical collections (block devices, mounts). Structural observation data, not presentation. A device reachable from more than one parent (an md array under each of its mirror members) appears once, at the depth of its first appearance, and names its parents in facts rather than being emitted per appearance."
+        }
+      }
+    },
+    "look": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Where to look next: collection routes on this same agent that carry the attribution this opinion cannot. Pure routing data — the agent resolves none of it. See observation.schema.json for why this is not a filter.",
+      "items": {
+        "type": "object",
+        "required": ["subsystem", "collection", "label"],
+        "properties": {
+          "subsystem": { "$ref": "#/$defs/subsystemName" },
+          "collection": { "$ref": "#/$defs/subsystemName" },
+          "fact": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The fact that ORDERS the answer at that route — what a consumer sorts and highlights by. Absent when no single fact ranks it."
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The human phrase the link is worded with."
+          }
         }
       }
     },

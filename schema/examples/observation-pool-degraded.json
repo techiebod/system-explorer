@@ -24,7 +24,10 @@
       "key": "pool-health",
       "level": "critical",
       "message": "Pool is DEGRADED: one vdev member is unavailable and a resilver is in progress.",
-      "evidence": ["state", "vdevs.degraded", "scan"]
+      "evidence": ["state", "vdevs.degraded", "scan"],
+      "look": [
+        { "subsystem": "storage", "collection": "block-devices", "label": "the devices backing this pool" }
+      ]
     }
   ],
   "relationships": [

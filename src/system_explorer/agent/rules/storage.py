@@ -26,6 +26,15 @@ POOL_CAPACITY_CRITICAL = 90
 # unscrubbed with nothing on the row to say so.
 SCRUB_STALE_DAYS = 35
 
+# A full pool's next question is which datasets ate it. Ordered by UsedBytes,
+# not UsePercent: a dataset's UsePercent is its share of what IT could grow
+# into, which is pool-bounded, so on a full pool every dataset reads high and
+# the ranking says nothing. Bytes name the consumer. Both facts are on the
+# dataset row (adapters/storage.py _dataset_items).
+LOOK_DATASETS_BY_USED = [{"subsystem": "storage", "collection": "datasets",
+                          "fact": "UsedBytes",
+                          "label": "which datasets are using the space"}]
+
 
 def _capacity_opinion(key: str, use: object, message: str) -> list[dict]:
     if not isinstance(use, int) or use < CAPACITY_WARN:
@@ -99,7 +108,7 @@ def pool_opinions(facts: dict) -> list[dict]:
             "pool-capacity",
             "critical" if cap >= POOL_CAPACITY_CRITICAL else "warn",
             f"Pool is {cap}% full; ZFS performance degrades as pools "
-            "fill.", ["CapacityPercent"]))
+            "fill.", ["CapacityPercent"], look=LOOK_DATASETS_BY_USED))
     if facts.get("ScanState") == "SCANNING":
         opinions.append(env.opinion(
             "pool-scan", "info",

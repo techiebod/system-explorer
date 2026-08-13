@@ -376,12 +376,45 @@ def _use_percent(raw: str | None) -> int | None:
 
 
 def _flatten_devices(nodes: list[dict], parent: str | None = None,
-                     depth: int = 0) -> list[tuple[dict, str | None, int]]:
-    out = []
-    for node in nodes:
-        out.append((node, parent, depth))
-        out.extend(_flatten_devices(node.get("children", []), node.get("name"), depth + 1))
-    return out
+                     depth: int = 0) -> list[tuple[dict, list[str], int]]:
+    """The lsblk tree as one row per DEVICE, not per appearance.
+
+    lsblk -J is a tree of containment, and containment is not a tree: an md
+    array is listed under every member it is assembled from, so a two-disk
+    mirror publishes md126 twice. Emitting a row per appearance put the same
+    object id in one collection page twice — which breaks rule 15 identity,
+    overstates `total` by however many mirror members exist, and makes
+    get_object's matches[0] an arbitrary choice between two rows that differ
+    (measured live, 2026-08-13: GET /v1/storage/block-devices returned
+    block-device:md126 twice on a host with an md array).
+
+    First appearance wins for `depth`, and every parent is kept. Those are
+    different decisions for a reason. Depth is the tree coordinate a list
+    renders indentation from and a multi-parent device HAS no single one, so
+    the first is a real path to it rather than a truth about it — a claim
+    small enough to state and honour. The PARENTS are the thing that would
+    have been a lie: silently keeping the first would say md126 is assembled
+    from sda1, which is false, and the falsehood would travel as a member-of
+    relationship. So the row carries all of them and get_object emits one edge
+    each. Insertion order preserved, so the first appearance stays first
+    wherever a consumer treats the list as ranked.
+    """
+    seen: dict[str, tuple[dict, list[str], int]] = {}
+    order: list[str] = []
+
+    def walk(children: list[dict], parent_name: str | None, node_depth: int) -> None:
+        for node in children:
+            name = node["name"]
+            entry = seen.get(name)
+            if entry is None:
+                seen[name] = (node, [parent_name] if parent_name else [], node_depth)
+                order.append(name)
+            elif parent_name and parent_name not in entry[1]:
+                entry[1].append(parent_name)
+            walk(node.get("children", []), name, node_depth + 1)
+
+    walk(nodes, parent, depth)
+    return [seen[name] for name in order]
 
 
 def _flatten_mounts(nodes: list[dict], depth: int = 0) -> list[tuple[dict, int]]:
@@ -434,11 +467,23 @@ _POOL_GLOSSARY = {
 }
 
 
+_BLOCK_DEVICE_GLOSSARY = {
+    "Parents": (
+        "The devices this one is assembled from or carved out of — a "
+        "partition names its disk, an md array names every member it was "
+        "assembled from. More than one entry means containment here is not a "
+        "tree, and the row's depth can only describe the first path to it."
+    ),
+}
+
+
 class Adapter:
     subsystem = "storage"
 
     def fact_glossary(self, collection: str) -> dict[str, str]:
-        return _POOL_GLOSSARY if collection == "pools" else {}
+        if collection == "pools":
+            return _POOL_GLOSSARY
+        return _BLOCK_DEVICE_GLOSSARY if collection == "block-devices" else {}
 
     # A failed probe is retried after this long; success is cached forever.
     # Without the retry a probe racing boot-time pool import pinned
@@ -512,12 +557,18 @@ class Adapter:
     async def _block_items(self) -> list[dict]:
         data = await anyio.to_thread.run_sync(_lsblk)
         items = []
-        for node, parent, depth in _flatten_devices(data.get("blockdevices", [])):
+        for node, parents, depth in _flatten_devices(data.get("blockdevices", [])):
             name = node["name"]
             facts = {
                 "Type": node.get("type"), "Size": node.get("size"),
                 "FsType": node.get("fstype"),
                 "Mountpoints": [m for m in node.get("mountpoints", []) if m],
+                # Every device this one is assembled from or carved out of.
+                # A list because containment is not a tree (see
+                # _flatten_devices): `depth` can only state the first path to
+                # a multi-parent device, so this is where the row says how
+                # many there really are. Empty for a whole disk.
+                "Parents": parents,
                 "Model": node.get("model"), "Serial": node.get("serial"),
                 "Rotational": node.get("rota"), "Removable": node.get("rm"),
                 # Only lsblk reports this for every transport, which makes this
@@ -528,8 +579,6 @@ class Adapter:
             }
             item = env.item_summary(f"block-device:{name}", node.get("type") or "disk", name, facts)
             item["depth"] = depth
-            if parent:
-                item["_parent"] = parent
             items.append(item)
         return items
 
@@ -824,13 +873,6 @@ class Adapter:
     async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:
         items = env.apply_fact_filters(await self.acquire(collection), query)
         page, applied, next_cursor, total = env.paginate(items, limit, cursor)
-        # _parent is plumbing for get_object's member-of edge, not a wire
-        # fact. Stripped on copies, after slicing: single_flight hands the
-        # same item dicts to every caller riding one flight, so the old
-        # in-place pop would race a concurrent get_object out of its parent
-        # relationship.
-        page = [{k: v for k, v in item.items() if k != "_parent"}
-                for item in page]
         return env.collection_page(self.subsystem, collection, self._source_for(collection),
                                    page, applied, next_cursor, requested_limit=limit,
                                    total=total, filters=query or None)
@@ -841,8 +883,11 @@ class Adapter:
         native = match["native_id"]
 
         if collection == "block-devices":
-            if match.get("_parent"):
-                rels.append(env.rel("member-of", "out", f"block-device:{match['_parent']}"))
+            # One edge per parent, from the row's own fact. An md array is
+            # assembled from every mirror member, so naming only the first
+            # would publish a false containment as a typed relationship.
+            for parent in (facts.get("Parents") or []):
+                rels.append(env.rel("member-of", "out", f"block-device:{parent}"))
             for holder in _md_holders(native):
                 rels.append(env.rel("member-of", "out", f"array:{holder}"))
             if os.path.isdir(f"/sys/block/{native}/md"):

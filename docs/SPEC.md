@@ -463,6 +463,21 @@ Field semantics:
   when a reading is explained rather than alarming (reclaimable ARC counted as
   used memory, a PCIe card limited by its slot, an unwired spare link), and it
   earns a neutral mark rather than an attention badge.
+  - **`look`** is the optional other half of `evidence`: evidence cites facts
+    on THIS object, `look` names collection routes elsewhere on the same agent
+    that carry the attribution this object cannot. A host PSI warning states
+    that every non-idle task was waiting on I/O and offers nowhere to go, while
+    `units/units` already carries the same kernel accounting per unit — the
+    condition and its next step were on two screens with nothing joining them.
+    Each entry is `{subsystem, collection, fact?, label}`: the route, the fact
+    that ORDERS the answer there, and the phrase to word the link with. Pure
+    routing data; the agent resolves none of it, and it travels verbatim into
+    `/v1/findings` and the hub roll-up, where the routes stay agent-relative
+    exactly as `evidence_ref` does. Deliberately not a filter — the fact-filter
+    language (§6) is string equality, negation and prefix, so "greater than
+    zero" is inexpressible and a filter that silently kept every row would
+    claim a narrowing it never performed. Ordering asserts no threshold and is
+    therefore the honest primitive.
 - **`evidence_ref`** fetches the raw native payload as `se.evidence/1` —
   formerly the one undeclared surface on the wire, now schema'd like
   every sibling (the discriminator and host are stamped at the route, so
@@ -1005,7 +1020,11 @@ every collection it exposes:
    schemas, which permit members a newer agent might add, and a strict
    profile of them with every declared object closed, which is what stops
    this agent inventing a field (§5.1 rule 8).
-2. Every `opinions[].evidence` path resolves to an existing fact.
+2. Every `opinions[].evidence` path resolves to an existing fact, and every
+   `opinions[].look` entry names a collection an adapter really serves,
+   ordered by a fact that collection really emits. Checked here rather than
+   raised in the builder: a dead link must degrade to a missing link, never
+   to the error envelope a raise inside an adapter would produce.
 3. Every relationship target is a well-formed object reference.
 4. Every `source` has ≥ 1 `reference_command`.
 5. **Adapter lint:** subprocess use is permitted only for allow-listed

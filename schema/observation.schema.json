@@ -111,6 +111,30 @@
           "minItems": 1,
           "items": { "type": "string", "minLength": 1 },
           "description": "Fact paths this opinion derives from. Conformance requires each to resolve within facts."
+        },
+        "look": { "$ref": "#/$defs/look" }
+      }
+    },
+    "look": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Where to look next: collection routes on this same agent that carry the attribution this opinion cannot. A host-wide I/O stall states a condition; units/units ordered by the per-unit stall names the workload responsible. Pure routing data — the agent resolves none of it, and a consumer that ignores this member loses nothing it had before. Deliberately not a filter: the fact-filter language is string equality, negation and prefix, so 'greater than zero' is inexpressible and a filter that silently kept every row would claim a narrowing it never performed.",
+      "items": {
+        "type": "object",
+        "required": ["subsystem", "collection", "label"],
+        "properties": {
+          "subsystem": { "$ref": "#/$defs/subsystemName" },
+          "collection": { "$ref": "#/$defs/subsystemName" },
+          "fact": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The fact that ORDERS the answer at that route — what a consumer sorts and highlights by. Absent when no single fact ranks it and the collection itself is the answer."
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The human phrase the link is worded with, e.g. 'which units are waiting on I/O'."
+          }
         }
       }
     },

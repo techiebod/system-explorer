@@ -22,6 +22,14 @@ HEALTH_ERROR = "error"
 # Queue verdicts the app renders per record; ok is silence.
 QUEUE_ATTENTION = ("warning", "error")
 
+# The health count on the app row is a number; the items are the diagnosis,
+# and they are already a collection of this subsystem. Ordered by Type, the
+# app's own error/warning grade (adapters/servarr.py health_item_facts), which
+# is the same grade this rule mirrored to reach its level.
+LOOK_HEALTH_BY_TYPE = [{"subsystem": "servarr", "collection": "health",
+                        "fact": "Type",
+                        "label": "the health items the app is reporting"}]
+
 
 def app_opinions(facts: dict) -> list[dict]:
     opinions: list[dict] = []
@@ -52,13 +60,13 @@ def app_opinions(facts: dict) -> list[dict]:
             "servarr-health", "critical",
             f"The app reports {errors} health error(s) of its own — each"
             " is a row on the health collection.",
-            ["HealthErrors"]))
+            ["HealthErrors"], look=LOOK_HEALTH_BY_TYPE))
     elif isinstance(warnings, int) and warnings > 0:
         opinions.append(env.opinion(
             "servarr-health", "warn",
             f"The app reports {warnings} health warning(s) of its own —"
             " each is a row on the health collection.",
-            ["HealthWarnings"]))
+            ["HealthWarnings"], look=LOOK_HEALTH_BY_TYPE))
     return opinions
 
 

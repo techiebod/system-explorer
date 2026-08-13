@@ -33,6 +33,33 @@ PSI_MEMORY_FULL_CRITICAL = 20.0
 PSI_CPU_SOME_WARN = 60.0
 PSI_IO_FULL_WARN = 20.0
 
+# Where a host-wide stall gets attributed. /proc/pressure says THIS HOST made
+# no progress and cannot say what stalled it; the kernel keeps the same PSI
+# accounting per cgroup and systemd gives every service, scope and slice one,
+# so units/units carries these exact fact names on every row
+# (adapters/units.py ROW_PRESSURE_FACTS, held by conformance). Ordering by the
+# same fact the threshold judged puts the responsible workload at the top —
+# which is the step "54.55% of the last minute" alone does not offer.
+LOOK_UNITS_BY_IO = [{"subsystem": "units", "collection": "units",
+                     "fact": "PsiIoFullAvg60",
+                     "label": "which units are waiting on I/O"}]
+LOOK_UNITS_BY_MEMORY = [{"subsystem": "units", "collection": "units",
+                         "fact": "PsiMemoryFullAvg60",
+                         "label": "which units are waiting on memory reclaim"}]
+LOOK_UNITS_BY_CPU = [{"subsystem": "units", "collection": "units",
+                      "fact": "PsiCpuSomeAvg60",
+                      "label": "which units are waiting for CPU"}]
+# The failed units the degraded verdict counts. NO ordering fact,
+# deliberately: what this link wants is "the failed ones", which is a
+# filter, and look refuses filters (see envelope.opinion). Ranking by
+# ActiveState instead looks like a substitute and is not one — descending
+# it reads inactive, failed, deactivating, active, so on any real host the
+# dozens of dead oneshots land above the one culprit. An unranked link to
+# the right collection beats a ranked one that sorts the answer under the
+# noise (measured, 2026-08-13).
+LOOK_UNITS_BY_STATE = [{"subsystem": "units", "collection": "units",
+                        "label": "the units this verdict counts"}]
+
 
 def time_opinions(facts: dict) -> list[dict]:
     opinions: list[dict] = []
@@ -83,7 +110,7 @@ def boot_opinions(facts: dict) -> list[dict]:
             "system-state", "info" if degraded else "warn",
             f"systemd reports state {state!r} with "
             f"{facts.get('NFailedUnits')} failed unit(s).",
-            ["SystemState", "NFailedUnits"]))
+            ["SystemState", "NFailedUnits"], look=LOOK_UNITS_BY_STATE))
     current = facts.get("CurrentSystem")
     if current and facts.get("SystemProfile") and current != facts["SystemProfile"]:
         opinions.append(env.opinion(
@@ -145,7 +172,7 @@ def overview_opinions(facts: dict) -> list[dict]:
             f"This host made no progress for {psi_mem}% of the last minute: "
             "every task that had work to do was waiting on memory reclaim "
             "(thrashing). Tasks with nothing to do are not counted.",
-            ["PsiMemoryFullAvg60"]))
+            ["PsiMemoryFullAvg60"], look=LOOK_UNITS_BY_MEMORY))
     psi_cpu = facts.get("PsiCpuSomeAvg60")
     if psi_cpu is not None and psi_cpu >= PSI_CPU_SOME_WARN:
         opinions.append(env.opinion(
@@ -156,13 +183,14 @@ def overview_opinions(facts: dict) -> list[dict]:
             # things is how an operator learns to distrust all of them.
             "psi-cpu", "warn",
             f"At least one task was waiting for CPU {psi_cpu}% of the last "
-            "minute.", ["PsiCpuSomeAvg60"]))
+            "minute.", ["PsiCpuSomeAvg60"], look=LOOK_UNITS_BY_CPU))
     psi_io = facts.get("PsiIoFullAvg60")
     if psi_io is not None and psi_io >= PSI_IO_FULL_WARN:
         opinions.append(env.opinion(
             "psi-io", "warn",
             f"This host made no progress for {psi_io}% of the last minute: "
             "every task that had work to do was waiting on I/O. Tasks with "
-            "nothing to do are not counted.", ["PsiIoFullAvg60"]))
+            "nothing to do are not counted.", ["PsiIoFullAvg60"],
+            look=LOOK_UNITS_BY_IO))
     return opinions
 

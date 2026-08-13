@@ -35,6 +35,22 @@ RESTART_CHURN_THRESHOLD = 3
 UNIT_IO_STALL_WARN = 20.0
 UNIT_MEMORY_STALL_WARN = 10.0
 
+# The member unit a slice's aggregate is actually about. Same collection, same
+# fact: a slice's number is the sum of its children's, so the child whose
+# number stays high is the culprit the aggregate cannot name — which is what
+# the slice-stall wording tells the reader to go and check, and what this
+# turns from advice into a route. Keyed by the fact so the loop below picks
+# the hint that matches the resource it is judging.
+SLICE_STALL_LOOK = {
+    "PsiIoFullAvg60": [{"subsystem": "units", "collection": "units",
+                        "fact": "PsiIoFullAvg60",
+                        "label": "which units are waiting on I/O"}],
+    "PsiMemoryFullAvg60": [{"subsystem": "units", "collection": "units",
+                            "fact": "PsiMemoryFullAvg60",
+                            "label": "which units are waiting on memory "
+                                     "reclaim"}],
+}
+
 
 def unit_opinions(facts: dict) -> list[dict]:
     opinions: list[dict] = []
@@ -100,7 +116,8 @@ def slice_unit_opinions(facts: dict) -> list[dict]:
                 f" {resource} for {stall}% of the last minute — an"
                 " aggregate over every member unit; the member rows carry"
                 " their own numbers, and the one actually stalling is"
-                " where the number stays high.", [fact]))
+                " where the number stays high.", [fact],
+                look=SLICE_STALL_LOOK[fact]))
     return opinions
 
 

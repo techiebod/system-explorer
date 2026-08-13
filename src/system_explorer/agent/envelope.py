@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import functools
+import re
 import socket
 from datetime import datetime, timezone
 from pathlib import Path
@@ -123,7 +124,94 @@ def source(adapter: str, interface: str, reference_commands: list[str],
     return out
 
 
-def opinion(key: str, level: str, message: str, evidence: list[str]) -> dict:
+# A route hint's closed member set. `subsystem` and `collection` address a
+# collection route this agent serves; `fact` names the fact that ORDERS the
+# answer there, so a consumer knows what to sort and highlight by; `label` is
+# the phrase the link is worded with ("which units are waiting on I/O").
+LOOK_MEMBERS = ("subsystem", "collection", "fact", "label")
+
+# The subsystem/collection grammar, the same one observation.schema.json's
+# subsystemName declares. Duplicated rather than imported: the schemas are the
+# published contract and nothing loads them at runtime.
+_ROUTE_NAME = re.compile(r"^[a-z][a-z0-9-]*$")
+
+
+def _look_entry(key: str, entry: object) -> dict:
+    """One validated route hint, normalised and copied.
+
+    Copied because rulebooks declare their hints as module constants and an
+    opinion is handed to consumers that may hold it: sharing one dict across
+    every opinion a rule ever emits makes a consumer's mutation everyone's.
+    """
+    if not isinstance(entry, dict):
+        raise ValueError(
+            f"opinion {key!r} has a look entry of type "
+            f"{type(entry).__name__}; entries are route hints "
+            f"({', '.join(LOOK_MEMBERS)})")
+    unknown = sorted(set(entry) - set(LOOK_MEMBERS))
+    if unknown:
+        raise ValueError(
+            f"opinion {key!r} look entry carries {unknown}; the member set is "
+            f"closed at {LOOK_MEMBERS}")
+    out: dict[str, Any] = {}
+    for member in ("subsystem", "collection"):
+        value = entry.get(member)
+        if not isinstance(value, str) or not _ROUTE_NAME.match(value):
+            raise ValueError(
+                f"opinion {key!r} look entry has {member}={value!r}; a route "
+                "name matches ^[a-z][a-z0-9-]*$")
+        out[member] = value
+    fact = entry.get("fact")
+    if fact is not None:
+        if not isinstance(fact, str) or not fact:
+            raise ValueError(
+                f"opinion {key!r} look entry has fact={fact!r}; a fact name is "
+                "a non-empty string, or absent when no single fact orders the "
+                "answer")
+        out["fact"] = fact
+    label = entry.get("label")
+    if not isinstance(label, str) or not label.strip():
+        raise ValueError(
+            f"opinion {key!r} look entry has label={label!r}; the link needs "
+            "the human phrase a reader clicks")
+    out["label"] = label
+    return out
+
+
+def opinion(key: str, level: str, message: str, evidence: list[str],
+            look: list[dict] | None = None) -> dict:
+    """One opinion. `evidence` cites facts on THIS object; `look` points
+    somewhere else — the next place to look, when one exists.
+
+    `look` closes the gap between a condition and a next step. A host PSI
+    warning states that every non-idle task was waiting on I/O and offers
+    nowhere to go, even though units/units already carries the same kernel
+    accounting per unit. Each entry is {subsystem, collection, fact?, label}:
+    the route, the fact that ORDERS the answer there, and the phrase to word
+    the link with. Pure data — the agent resolves none of it, and a consumer
+    that does not understand `look` renders exactly what it rendered before.
+
+    Deliberately NOT filters. apply_fact_filters speaks string equality,
+    negation and prefix, so the predicate this link actually wants —
+    "PsiIoFullAvg60 greater than zero" — is inexpressible: `!0` compares
+    against the STRINGIFIED fact, and a row carrying 0.0 stringifies to "0.0",
+    which is not equal to "0" and therefore survives the negation. A filter
+    that silently keeps every row is worse than no filter, because the link
+    would claim a narrowing it did not perform. Ordering is the honest
+    primitive here — it puts the answer at the top without asserting a
+    threshold — and a `filters` member belongs on this shape only once the
+    filter language can express a numeric comparison.
+
+    Shape is validated HERE, the way the level enum is: a malformed hint fails
+    at the rule that wrote it. That is safe because hints are literals in the
+    rulebook, never interpolated from fact values, so every one of them is
+    reached by the conformance cases and the raise lands in CI. Whether the
+    route EXISTS is deliberately not checked here — the envelope cannot import
+    the adapter registry, and main.py turns an adapter exception into an error
+    envelope, so raising on a dead link would blank a whole page over a bad
+    link. That check is a conformance test, exactly as rel() leaves proving
+    its target id resolves to one.
+    """
     if not evidence:
         raise ValueError(f"opinion {key!r} must cite evidence (SPEC section 2, rule 3)")
     if level not in OPINION_LEVELS:
@@ -136,7 +224,11 @@ def opinion(key: str, level: str, message: str, evidence: list[str]) -> dict:
             f"opinion {key!r} has level {level!r}; the enum is closed at "
             f"{OPINION_LEVELS} (SPEC section 5.1, rule 6)"
         )
-    return {"key": key, "level": level, "message": message, "evidence": evidence}
+    out: dict[str, Any] = {"key": key, "level": level, "message": message,
+                           "evidence": evidence}
+    if look:
+        out["look"] = [_look_entry(key, entry) for entry in look]
+    return out
 
 
 REDACTED = "«redacted»"
