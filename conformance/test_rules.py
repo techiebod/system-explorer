@@ -19,8 +19,9 @@ import pytest
 from common import AGENT_DIR, UI_DIR, resolve_fact_path
 
 from system_explorer.agent import rules
-from system_explorer.agent.rules import (docker, hardware, logs, network,
-                                         nix, paperless, servarr, storage,
+from system_explorer.agent.rules import (bazarr, docker, downloaders,
+                                         hardware, kea, logs, network, nix,
+                                         paperless, plex, servarr, storage,
                                          system, traefik, units, vms)
 
 RULES_DIR = AGENT_DIR / "rules"
@@ -34,6 +35,90 @@ RULES_DIR = AGENT_DIR / "rules"
 # ---------------------------------------------------------------------------
 
 CASES = [
+    # kea: pool arithmetic that fails silently when it runs out.
+    ("kea-pool-comfortable", kea.subnet_opinions,
+     {"SubnetId": 1, "Subnet": "192.0.2.0/24", "TotalAddresses": 200,
+      "AssignedAddresses": 100, "DeclinedAddresses": 0}, set()),
+    ("kea-pool-tight", kea.subnet_opinions,
+     {"SubnetId": 1, "TotalAddresses": 200, "AssignedAddresses": 181},
+     {("kea-pool-capacity", "warn")}),
+    ("kea-pool-dry", kea.subnet_opinions,
+     {"SubnetId": 1, "TotalAddresses": 200, "AssignedAddresses": 192},
+     {("kea-pool-capacity", "critical")}),
+    ("kea-declined-ground", kea.subnet_opinions,
+     {"SubnetId": 1, "TotalAddresses": 200, "AssignedAddresses": 10,
+      "DeclinedAddresses": 3},
+     {("kea-declined", "warn")}),
+
+    # plex family: activity is not health; only configured-but-dark alarms.
+    ("plex-server-reachable", plex.server_opinions,
+     {"FriendlyName": "example", "Version": "1.41.0"}, set()),
+    ("plex-server-dark", plex.server_opinions,
+     {"StatusUnobservable": "ConnectError: connection refused"},
+     {("plex-unreachable", "critical")}),
+    ("plex-server-tokenless", plex.server_opinions,
+     {"ConfigMissing": ["SE_PLEX_TOKEN"]},
+     {("plex-unconfigured", "warn")}),
+    ("plex-request-pending-is-info", plex.request_opinions,
+     {"Status": "pending", "Type": "movie"},
+     {("request-pending", "info")}),
+    ("plex-request-approved-quiet", plex.request_opinions,
+     {"Status": "approved", "Type": "tv"}, set()),
+
+    # bazarr: an ungraded health list mirrors as one warn carrying it.
+    ("bazarr-clean", bazarr.instance_opinions,
+     {"Version": "1.4.5", "HealthIssues": []}, set()),
+    ("bazarr-issues", bazarr.instance_opinions,
+     {"Version": "1.4.5",
+      "HealthIssues": ["Sonarr is not available", "wanted search failed"]},
+     {("bazarr-health", "warn")}),
+    ("bazarr-dark", bazarr.instance_opinions,
+     {"StatusUnobservable": "ConnectError: connection refused"},
+     {("bazarr-unreachable", "critical")}),
+
+    # units, slices: interior cgroup nodes aggregate their members, so
+    # their stalls mirror as info with aggregate wording — the member's
+    # own warn names the culprit (one condition, one alert).
+    ("slice-io-stall-is-info", units.slice_unit_opinions,
+     {"ActiveState": "active", "PsiIoFullAvg60": 33.43},
+     {("slice-stall", "info")}),
+    ("slice-failed-is-still-critical", units.slice_unit_opinions,
+     {"ActiveState": "failed", "SubState": "failed"},
+     {("unit-health", "critical")}),
+    ("slice-quiet", units.slice_unit_opinions,
+     {"ActiveState": "active", "PsiIoFullAvg60": 0}, set()),
+
+    # downloaders: the transfer tier's own statements, mirrored.
+    ("downloader-client-healthy", downloaders.client_opinions,
+     {"Client": "transmission", "Version": "4.0.6",
+      "DiskFreeBytes": 500_000_000_000}, set()),
+    ("downloader-client-dark", downloaders.client_opinions,
+     {"Client": "transmission",
+      "StatusUnobservable": "ConnectError: connection refused"},
+     {("downloader-unreachable", "critical")}),
+    ("downloader-client-keyless", downloaders.client_opinions,
+     {"Client": "sabnzbd", "ConfigMissing": ["SE_SABNZBD_API_KEY"]},
+     {("downloader-unconfigured", "warn")}),
+    ("downloader-disk-tight", downloaders.client_opinions,
+     {"Client": "sabnzbd", "DiskTotalBytes": 100, "DiskFreeBytes": 8},
+     {("downloader-disk", "warn")}),
+    ("downloader-disk-crammed", downloaders.client_opinions,
+     {"Client": "sabnzbd", "DiskTotalBytes": 100, "DiskFreeBytes": 4},
+     {("downloader-disk", "critical")}),
+    ("downloader-queue-paused", downloaders.client_opinions,
+     {"Client": "sabnzbd", "Paused": True},
+     {("downloader-paused", "warn")}),
+    ("transfer-local-error", downloaders.transfer_opinions,
+     {"Client": "transmission", "Error": 3,
+      "ErrorString": "No data found! Ensure your drives are connected"},
+     {("transfer-error", "critical")}),
+    ("transfer-tracker-warning-and-stalled", downloaders.transfer_opinions,
+     {"Client": "transmission", "Error": 1,
+      "ErrorString": "Tracker gave a warning", "IsStalled": True},
+     {("transfer-error", "warn"), ("transfer-stalled", "warn")}),
+    ("transfer-clean", downloaders.transfer_opinions,
+     {"Client": "sabnzbd", "Status": "Downloading"}, set()),
+
     # servarr: the managers' own self-diagnosis, mirrored.
     ("servarr-app-clean", servarr.app_opinions,
      {"App": "example-manager", "Version": "4.0.0", "HealthErrors": 0,

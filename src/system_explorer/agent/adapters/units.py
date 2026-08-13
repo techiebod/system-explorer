@@ -26,7 +26,8 @@ import re
 import anyio
 
 from .. import envelope as env
-from ..rules.units import mount_unit_opinions, unit_opinions
+from ..rules.units import (mount_unit_opinions, slice_unit_opinions,
+                           unit_opinions)
 from ..sysbus import BUS, PROPERTIES, SYSTEMD, SYSTEMD_MANAGER, SYSTEMD_PATH
 
 UNIT_IFACE = "org.freedesktop.systemd1.Unit"
@@ -355,7 +356,9 @@ class Adapter:
             # (inactive, activating, …) is neutral.
             items_by_name[name] = env.item_summary(
                 f"unit:{name}", _unit_type(name), name, facts,
-                opinions=unit_opinions(facts) + mount_unit_opinions(facts),
+                opinions=(slice_unit_opinions(facts)
+                          if _unit_type(name) == "slice"
+                          else unit_opinions(facts) + mount_unit_opinions(facts)),
                 healthy="ok" if active == "active" else "info",
             )
             paths[name] = path
@@ -463,7 +466,8 @@ class Adapter:
         # Shared verbatim with the summary path, plus the detail-only
         # restart-churn rule (NRestarts is fetched per-unit, never in
         # ListUnits — see agent/rules/units.py).
-        opinions = unit_opinions(facts) + mount_unit_opinions(facts)
+        opinions = (slice_unit_opinions(facts) if unit_type == "slice"
+                    else unit_opinions(facts) + mount_unit_opinions(facts))
 
         relationships = [
             env.rel(rel_type, direction, f"unit:{dep}")

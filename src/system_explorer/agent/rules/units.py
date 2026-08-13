@@ -70,6 +70,40 @@ def unit_opinions(facts: dict) -> list[dict]:
     return opinions
 
 
+def slice_unit_opinions(facts: dict) -> list[dict]:
+    """The evaluator for .slice units — the cgroup tree's INTERIOR nodes,
+    where every number is an aggregate over member units. A slice's PSI
+    stall is real and worth carrying, but it is the SUM of its children's
+    stalls: system.slice going loud repeats whichever member is actually
+    stuck, with wording that read as if every service in it was stalled
+    (operator report, 2026-08-13 — one loaded service, a slice-wide
+    claim, and the same condition alerting twice down the hierarchy). So
+    slices mirror their stalls as info with aggregate-honest wording —
+    visible on the slice's object, absent from the attention surface,
+    where the MEMBER unit's own warn names the actual culprit — and a
+    failed slice keeps its critical, because that is the slice's own
+    state, not an aggregate."""
+    opinions: list[dict] = []
+    if facts.get("ActiveState") == "failed":
+        evidence = ["ActiveState", "SubState"] + (["Result"] if facts.get("Result") else [])
+        opinions.append(env.opinion(
+            "unit-health", "critical",
+            f"Slice has failed ({facts.get('Result') or facts.get('SubState')}).",
+            evidence))
+    for fact, resource in (("PsiIoFullAvg60", "I/O"),
+                           ("PsiMemoryFullAvg60", "memory reclaim")):
+        stall = facts.get(fact)
+        if isinstance(stall, (int, float)) and stall > 0:
+            opinions.append(env.opinion(
+                "slice-stall", "info",
+                f"Tasks across this slice were collectively stalled on"
+                f" {resource} for {stall}% of the last minute — an"
+                " aggregate over every member unit; the member rows carry"
+                " their own numbers, and the one actually stalling is"
+                " where the number stays high.", [fact]))
+    return opinions
+
+
 def mount_unit_opinions(facts: dict) -> list[dict]:
     """Deliberately silent, and the fact it would have judged is worth keeping.
 
