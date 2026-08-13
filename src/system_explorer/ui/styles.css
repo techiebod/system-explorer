@@ -277,6 +277,30 @@ td .dim, .dim { color: var(--text-faint); }
 .chip-n { color: var(--text-faint); font-size: 10px; }
 .chip.on .chip-n { color: var(--accent); opacity: .7; }
 
+/* The hidden-group chips, gathered. Five of them loose in the bar read as a
+   run-on sentence; behind one seam with a lead-in that names the total they
+   read as one instrument — the page's statement of what it is holding back,
+   with a control per part. The seam is a rule rather than a box because this
+   is still the same bar, not a panel: what is on the left narrows the page,
+   what is on the right restores it.
+
+   Its own flex context so the run wraps as a unit at narrow widths instead
+   of the chips scattering across the facets' line breaks. margin-left:auto
+   moves the auto-margin from the first ghost chip up to the run, and the
+   `+ .chip.ghost` rule stops the column picker after it claiming a second
+   share of the free space — the same flexbox trap the rule above documents,
+   met again one level out. */
+.hidden-run {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin-left: auto; padding-left: 10px;
+  border-left: 1px solid var(--border-2);
+}
+.hidden-run + .chip.ghost { margin-left: 0; }
+.hidden-lead {
+  color: var(--text-faint); font: 11px var(--mono);
+  white-space: nowrap; cursor: default;
+}
+
 /* ── inline detail expansion ─────────────────────────────── */
 /* #grid prefix matters: without it this loses specificity to `#grid td`
    above, whose white-space: nowrap then inherits into the whole expansion

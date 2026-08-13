@@ -192,7 +192,38 @@ const FACETS = {
    arithmetic, which is the same defect as not announcing the filter at all.
 
    `key` is what state.revealed holds; keep it stable, it is the identity of
-   a group across renders. */
+   a group across renders.
+
+   ONE GROUP PER KIND, never a shared "mounts & timers" chip. A shared chip
+   would still name what it holds and how much of it, and the arithmetic
+   would still close — it fails on the third property only. A reader chasing
+   a mount would have to take the timers back to see it, and there would be
+   no step smaller than all-or-nothing. That independence is the whole
+   difference between hiding as a presentation choice and hiding as a loss,
+   and a line of bar width is not worth trading for it; the run in
+   renderFacets() is how the width was paid for instead. */
+
+/* A group that hides a whole KIND of unit. Four of the five groups below are
+   of this shape, so the rule they share is stated once here rather than four
+   times: `LoadState === "loaded"` narrows each group to units this host
+   actually has.
+
+   A not-found unit is the opposite statement — something here declares a
+   dependency on a unit that is NOT installed — and no argument about what a
+   kind of unit DOES covers that. systemd reports such a unit inactive, so in
+   practice the inactive group claims it and one chip brings it back; the
+   narrowing is what stops a kind rule swallowing it silently should it ever
+   arrive in some other state, which for `.device` is not hypothetical: that
+   kind's resting state is `activating` forever.
+
+   The key is the type name — already stable, and already what the type facet
+   calls the same rows, which is what makes the ghost chip legible as the way
+   back to a facet chip that hiding removed. */
+const kindGroup = (type, label) => ({
+  key: type, label,
+  match: (item) => item.type === type && item.facts.LoadState === "loaded",
+});
+
 const HIDDEN = {
   "units/units": [
     { key: "inactive", label: "inactive",
@@ -207,13 +238,8 @@ const HIDDEN = {
        hardware subsystem, which observes the devices themselves rather than
        systemd's shadow of them.
 
-       `LoadState === "loaded"` narrows it to exactly that record. A
-       not-found device unit is the opposite statement — something on this
-       host declares a dependency on a device that is NOT here — and this
-       group's justification says nothing about it. systemd reports such a
-       unit inactive, so in practice the group above claims it and one chip
-       brings it back; the narrowing is what stops the kind rule swallowing
-       it silently should it ever arrive in any other state.
+       `LoadState === "loaded"` — the narrowing kindGroup() applies to every
+       group of this shape, argued there — keeps it to exactly that record.
 
        TARGETS ARE DELIBERATELY NOT IN THIS GROUP (~35 rows). The argument
        for including them is real: a target is a synchronisation point, it
@@ -227,11 +253,60 @@ const HIDDEN = {
        unreached ones fall out, the reached ones stay, which is the
        operator's rule applied to them rather than an exemption from it.
        Devices needed a new group precisely because no state rule can reach
-       them. The operator was asked about neither; devices carry a measured
-       argument and targets do not, so targets keep the treatment they have
-       until someone asks for another. */
-    { key: "device", label: "device units",
-      match: (item) => item.type === "device" && item.facts.LoadState === "loaded" },
+       them. The operator has since asked for three more kinds and still not
+       for this one; devices carried a measured argument and targets do not,
+       so targets keep the treatment they have until someone asks. */
+    kindGroup("device", "device units"),
+
+    /* mount, timer, socket — asked for by the operator, whose reason was the
+       page rather than the rows: "whilst they're useful we need the default
+       to be more workable with and it's really long". Mounts and timers were
+       the instruction. Sockets were "I'm tempted to say sockets too", which
+       is a question, not a decision, so it is answered with the measurement
+       below and left one deletable line away from gone.
+
+       These do NOT inherit the device argument and must not be written as if
+       they did. A device unit is hidden because it says nothing AND because
+       another subsystem observes the same things properly. Of the three only
+       `mount` has both halves: its resting state is `active (mounted)`
+       forever, and storage/mounts observes the mount table itself — source,
+       target, fs type, options — which is strictly more than the three
+       columns this row shows. A timer and a socket each genuinely start
+       something, and neither has a second home anywhere in the product:
+       there is no timers collection and no listeners collection. They are
+       hidden for VOLUME, and saying so is the point.
+
+       Volume is a legitimate reason only because of what the mechanism
+       guarantees, so the guarantees ARE the justification: a failed one is
+       never hidden (structurally, in hidingGroup); each kind's count sits on
+       its own chip; the chips sum to the total the run announces and that
+       total closes against the crumb; and one click brings any one kind back
+       without the others. If a later edit breaks one of those, these are the
+       groups to delete — not the invariant to weaken.
+
+       WHAT IT COSTS, measured against the 808-row page (169 service, 80
+       socket, 40 mount, 40 timer, 35 target, 20 scope, 14 slice, 410
+       device): mounts+timers take the default from 260 rows to 190, and
+       sockets take it to 130. The socket-shaped caveat the operator is owed
+       before keeping that last group: a socket-activated service sits
+       `inactive (dead)` between connections, so the inactive group already
+       hides the service half of it; hiding sockets removes the other half,
+       and such a service then has no trace at all on the default page.
+       Timers and the services they trigger have the same shape. The trace
+       comes back with one chip, and it is the true price of the instruction
+       rather than an argument against it.
+
+       Note the ordering consequence, which the chip numbers make visible:
+       the inactive group runs first and claims the quiet ones, so these
+       chips read 40 mounts, 30 timers, 60 sockets rather than 40/40/80. A
+       chip counts what toggling it reveals, which is the property worth
+       keeping; the missing 10 and 20 are on the inactive chip, and no row is
+       counted twice. */
+    kindGroup("mount", "mounts"),
+    kindGroup("timer", "timers"),
+    /* ── to drop the socket group, delete this one line. Nothing else knows
+          about it: chip, count, crumb hover and run total are all derived. */
+    kindGroup("socket", "sockets"),
   ],
   "hardware/scsi": [
     { key: "empty-hosts", label: "empty hosts",
@@ -1654,6 +1729,27 @@ async function loadCollection(deepLinkId = null) {
    the browser had no rendering for any of them, so an operator who landed on an
    empty page could not tell a host with no md arrays from a broken adapter. */
 function emptyMessage() {
+  /* A facet with nothing under it is normally a filter that matched nothing.
+     It can also be a facet whose every row is held back by a hide group —
+     pick `mount`, then hide mounts — and there "nothing matches" would be a
+     lie: the rows are on this page, one chip away. Rare before, easy now
+     that four kinds have groups and the type facet is keyed by kind, so name
+     the group instead. Only when no text filter is also in play: with both,
+     either could be the reason and neither can be shown to be. */
+  if (state.facet && !state.filterText) {
+    const route = `${state.subsystem}/${state.collection}`;
+    const facetOf = FACETS[route];
+    const held = new Map();
+    if (facetOf) for (const item of state.page?.items || []) {
+      if (facetOf(item) !== state.facet) continue;
+      const group = hidingGroup(item, route);
+      if (group && !state.revealed.has(group.key)) held.set(group, (held.get(group) || 0) + 1);
+    }
+    if (held.size)
+      return `No ${state.facet} row is on the page right now: `
+           + [...held].map(([g, n]) => `${n} held back as ${g.label}`).join(", ")
+           + ". Reveal it from the bar above — nothing was dropped.";
+  }
   if (state.filterText || state.facet) return "Nothing matches the filter.";
   const page = state.page;
   const entry = state.status?.subsystems?.[state.subsystem]?.[state.collection];
@@ -2953,8 +3049,40 @@ function renderFacets() {
   /* One chip per group that is holding something back, in HIDDEN's order so
      the bar reads the same on every visit. A group matching nothing shows no
      chip: a control that reveals an empty set is noise, and worse, it implies
-     rows are being withheld when none are. */
-  for (const [group, n] of hiddenCounts(state.page.items, route)) {
+     rows are being withheld when none are.
+
+     Five of them on units/units is more than a bar should carry loose, and
+     the answer is NOT to fold them into a menu: a page that must click to
+     say what it is withholding has stopped saying it. The clutter was never
+     the count, it was that two different kinds of control ran together in
+     one undifferentiated line — facet chips narrow what you see, ghost chips
+     restore what was removed. So the ghosts become one run behind a seam,
+     with a lead-in stating the total currently held back. Every chip keeps
+     its own label, its own number and its own click, and the run's total is
+     the sum of the chips beside it, which puts the closing arithmetic on
+     screen instead of only in the crumb's hover.
+
+     From two groups up, only. A route holding something back under a single
+     group — hardware/scsi has exactly one — has no sum to state that its one
+     chip is not already stating, and a heading that restates its only member
+     is the same noise as a control that reveals an empty set. Such a route
+     renders exactly as it did before the run existed. */
+  const withheld = hiddenCounts(state.page.items, route);
+  const run = withheld.length > 1 ? el("div", "hidden-run") : bar;
+  if (withheld.length > 1) {
+    const held = withheld.filter(([g]) => !state.revealed.has(g.key))
+                         .reduce((sum, [, n]) => sum + n, 0);
+    const lead = el("span", "hidden-lead", held ? `holding back ${held}` : "nothing held back");
+    lead.title = held
+      ? `Of ${state.page.items.length} rows collected, ${base.length} survive`
+        + ` the hide rules and ${held} are held back — the number beside each`
+        + " chip to the right, and they sum to this one. Nothing was dropped;"
+        + " a failed row is never hidden by any of them."
+      : "Every group on this route is revealed: nothing is being held back.";
+    run.appendChild(lead);
+    bar.appendChild(run);
+  }
+  for (const [group, n] of withheld) {
     const on = state.revealed.has(group.key);
     const chip = el("button", "chip ghost" + (on ? " on" : ""));
     chip.append(`${on ? "hide" : "show"} ${group.label}`,
@@ -2971,7 +3099,7 @@ function renderFacets() {
       if (on) state.revealed.delete(group.key); else state.revealed.add(group.key);
       renderFacets(); renderGrid(); renderCrumb();
     };
-    bar.appendChild(chip);
+    run.appendChild(chip);
   }
 
   // Column picker: any fact key can be a column; choices stick per
