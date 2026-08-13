@@ -18,8 +18,12 @@ So there are two halves here, and the second is the one that generalises:
     container published `redacted: ["Config.Cmd"]` while serving its Cmd in
     full. An envelope that claims to have withheld what it served is worse than
     one that stays quiet, because a reader trusts it.
-  * every adapter serving evidence either redacts or is exempt IN WRITING. Ten
-    adapters define get_evidence; the next one is the one this is for.
+  * every evidence-serving path either redacts or is exempt IN WRITING — at
+    the grain of get_evidence's `collection == "<name>"` branches, because a
+    per-adapter rule let one redacting family cover its raw siblings (servarr's
+    history redactor covered raw apps/health/queue evidence, and evicted the
+    written reason for them from the table). Ten-plus adapters define
+    get_evidence; the next one is the one this is for.
 """
 
 import ast
@@ -205,6 +209,100 @@ def _redaction_calls(node: ast.AST) -> list[str]:
     return names
 
 
+def _collection_branches(func: ast.AST) -> dict[str, list[list[ast.stmt]]]:
+    """Each `collection == "<name>"` If/elif branch of get_evidence, name to
+    body — an elif chain nests in orelse and is walked as its own If, and a
+    name compared twice keeps every body. Only the branch's own body counts:
+    its orelse belongs to the next branch or to shared code."""
+    branches: dict[str, list[list[ast.stmt]]] = {}
+    for node in ast.walk(func):
+        if not (isinstance(node, ast.If) and isinstance(node.test, ast.Compare)):
+            continue
+        test = node.test
+        if (isinstance(test.left, ast.Name) and test.left.id == "collection"
+                and len(test.ops) == 1 and isinstance(test.ops[0], ast.Eq)
+                and isinstance(test.comparators[0], ast.Constant)
+                and isinstance(test.comparators[0].value, str)):
+            branches.setdefault(test.comparators[0].value, []).append(node.body)
+    return branches
+
+
+def _calls_in(body: list[ast.stmt]) -> list[str]:
+    names: list[str] = []
+    for stmt in body:
+        names.extend(_redaction_calls(stmt))
+    return names
+
+
+def _binds_payload(target: ast.expr) -> bool:
+    if isinstance(target, ast.Name):
+        return target.id == "payload"
+    if isinstance(target, (ast.Tuple, ast.List)):
+        return any(_binds_payload(elt) for elt in target.elts)
+    return False  # a subscript store augments a payload; it does not bind one
+
+
+def _serves_payload(body: list[ast.stmt]) -> bool:
+    """A branch is payload-serving when it returns from inside itself or
+    binds the `payload` name the shared tail return serves. A branch that
+    only raises, or only augments an already-bound payload (system's time
+    branch adding the timesync interface), is judged by the shared path
+    that actually serves — and redacts — it."""
+    for stmt in body:
+        for node in ast.walk(stmt):
+            if isinstance(node, ast.Return):
+                return True
+            if isinstance(node, ast.Assign) and any(
+                    _binds_payload(target) for target in node.targets):
+                return True
+            if isinstance(node, (ast.AnnAssign, ast.AugAssign)) \
+                    and node.value is not None \
+                    and _binds_payload(node.target):
+                return True
+    return False
+
+
+def _branch_redacts(func: ast.AST, branches: dict[str, list[list[ast.stmt]]],
+                    bodies: list[list[ast.stmt]]) -> bool:
+    """Redaction attributable to THIS branch: a redact call in its own body,
+    or — the chokepoint shape — a redact call in shared code after it, when
+    the branch falls through (no return of its own) to the tail that serves
+    it. A call in a SIBLING branch covers nothing; that blanket rule is the
+    one this lint replaced."""
+    if any(_calls_in(body) for body in bodies):
+        return True
+    if any(isinstance(node, ast.Return)
+           for body in bodies for stmt in body for node in ast.walk(stmt)):
+        return False  # serves from inside itself; only its own body counts
+    spans = [(body[0].lineno, body[-1].end_lineno)
+             for named in branches.values() for body in named]
+    last = max(body[-1].end_lineno for body in bodies)
+    for sub in ast.walk(func):
+        if not isinstance(sub, ast.Call):
+            continue
+        name = (sub.func.attr if isinstance(sub.func, ast.Attribute)
+                else sub.func.id if isinstance(sub.func, ast.Name) else "")
+        if "redact" in name and sub.lineno > last and not any(
+                start <= sub.lineno <= end for start, end in spans):
+            return True
+    return False
+
+
+def _require_reason(subsystem: str, key: str,
+                    fallback: str | None = None) -> None:
+    reason = EVIDENCE_REDACTION_EXEMPTIONS.get(key)
+    if reason is None and fallback is not None and fallback != key:
+        reason = EVIDENCE_REDACTION_EXEMPTIONS.get(fallback)
+    assert reason, (
+        f"adapters/{subsystem}.py serves evidence without redacting it and "
+        f"{key!r} is not in EVIDENCE_REDACTION_EXEMPTIONS. Either redact, or "
+        "add a reason specific enough that a reviewer could prove it wrong."
+    )
+    assert len(reason) > 40 and reason.rstrip().endswith("."), (
+        f"{key}'s exemption reason is too thin to review: {reason!r}"
+    )
+
+
 def test_the_redaction_lint_is_armed():
     """Ten adapters serve evidence today. If discovery finds far fewer, the
     glob broke and every check below passes over an empty list."""
@@ -217,31 +315,57 @@ def test_the_redaction_lint_is_armed():
 
 @pytest.mark.parametrize("subsystem", EVIDENCE_ADAPTERS)
 def test_every_evidence_path_redacts_or_is_exempt_with_a_reason(subsystem):
-    """The generalising half. An adapter serving a raw native payload has
-    either thought about its credential surface or written down why it need
-    not — never neither, and never silently."""
-    if _redaction_calls(_evidence_function(subsystem)):
+    """The generalising half, at branch grain. An adapter serving a raw
+    native payload has either thought about its credential surface or
+    written down why it need not — never neither, and never silently. The
+    old rule was per-adapter — any redact call anywhere covered the whole
+    function — so one redacting family hid every raw sibling: servarr's
+    history redactor silently covered its raw apps/health/queue evidence
+    AND forced the written reason for those three families off the table.
+    Now every `collection == "<name>"` branch that serves a payload must
+    redact — in its own body or on its fall-through path — or carry a
+    "<module>:<collection>" (or bare "<module>") exemption."""
+    func = _evidence_function(subsystem)
+    branches = _collection_branches(func)
+    if not branches:
+        # No collection branches: the whole function is the one path, and
+        # a redact call anywhere in it is that path's redaction.
+        if not _redaction_calls(func):
+            _require_reason(subsystem, subsystem)
         return
-    reason = EVIDENCE_REDACTION_EXEMPTIONS.get(subsystem)
-    assert reason, (
-        f"adapters/{subsystem}.py serves evidence without redacting anything "
-        "and is not in EVIDENCE_REDACTION_EXEMPTIONS. Either redact, or add a "
-        "reason specific enough that a reviewer could prove it wrong."
-    )
-    assert len(reason) > 40 and reason.rstrip().endswith("."), (
-        f"{subsystem}'s exemption reason is too thin to review: {reason!r}"
-    )
+    for name, bodies in sorted(branches.items()):
+        if not any(_serves_payload(body) for body in bodies):
+            continue
+        if _branch_redacts(func, branches, bodies):
+            continue
+        _require_reason(subsystem, f"{subsystem}:{name}", fallback=subsystem)
 
 
-@pytest.mark.parametrize("subsystem", sorted(EVIDENCE_REDACTION_EXEMPTIONS))
-def test_an_exemption_does_not_outlive_the_gap(subsystem):
-    """A debt register, not a dumping ground: once an adapter starts redacting,
-    its exemption has to come off or the table stops meaning what it says."""
-    assert subsystem in EVIDENCE_ADAPTERS, (
-        f"{subsystem} is exempted but serves no evidence at all"
+@pytest.mark.parametrize("key", sorted(EVIDENCE_REDACTION_EXEMPTIONS))
+def test_an_exemption_does_not_outlive_the_gap(key):
+    """A debt register, not a dumping ground: once the code an entry excuses
+    starts redacting, the entry has to come off or the table stops meaning
+    what it says. The ratchet is per-key: a bare "<module>" entry ratchets
+    on the whole function, a "<module>:<collection>" entry only on THAT
+    branch — so an adapter redacting one family can keep the written
+    reasons for its raw siblings on the table."""
+    module, _, coll = key.partition(":")
+    assert module in EVIDENCE_ADAPTERS, (
+        f"{key} is exempted but adapters/{module}.py serves no evidence at all"
     )
-    assert not _redaction_calls(_evidence_function(subsystem)), (
-        f"{subsystem} now redacts — remove it from EVIDENCE_REDACTION_EXEMPTIONS"
+    func = _evidence_function(module)
+    if not coll:
+        assert not _redaction_calls(func), (
+            f"{module} now redacts — remove it from EVIDENCE_REDACTION_EXEMPTIONS"
+        )
+        return
+    branches = _collection_branches(func)
+    assert coll in branches, (
+        f"{key} names a collection branch {module}.get_evidence does not have"
+    )
+    assert not _branch_redacts(func, branches, branches[coll]), (
+        f"{module}'s {coll} branch now redacts — remove {key} from "
+        "EVIDENCE_REDACTION_EXEMPTIONS"
     )
 
 

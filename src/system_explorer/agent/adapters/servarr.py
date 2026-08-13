@@ -2,7 +2,7 @@
 
 Sonarr, radarr, lidarr, readarr and prowlarr all speak the same API
 family, so ONE adapter fronts the fleet and the apps are ROWS, not
-subsystems — the same move that made containers rows under docker. Three
+subsystems — the same move that made containers rows under docker. Four
 collections, the tidy tiers: `apps` (one row per configured instance —
 version, its own health rolled to counts, queue depth), `health` (the
 app's typed self-diagnosis, one row per item, severity MIRRORED never
@@ -12,7 +12,47 @@ is exactly what this surfaces, which is also why every queue fetch asks
 for the include-unknown variants of all four apps: the ORPHANED download
 the app cannot map to a series/movie/artist/author is the stuck one, and
 every app hides it from the queue by default while still counting it in
-totalCount — absence reading as health, adversarial review 2026-08-13).
+totalCount — absence reading as health, adversarial review 2026-08-13),
+and `history` (the acquisition trail — each app's own recent event log,
+one bounded page, newest first).
+
+Answers: `apps` — which managers are configured here and how each one
+stands; `health` — what each app says is wrong with itself; `queue` —
+what is in flight and the app's own verdict on it; `history` — what
+was grabbed and what arrived recently, via which client — the indexer
+is a grab-event member, so an arrival names it only through the grab
+that preceded it, and only while that grab is still inside the bounded
+tail.
+
+`history` is page 1 of each app's own history, date-descending,
+HISTORY_PAGE_SIZE records — deliberately a bounded recent tail, because
+the question it answers is "what arrived lately", not "everything that
+ever did". Events are not current health: rows carry no severity
+(healthy=None, no opinions) and the /v1/status roll-up declines the
+collection the way logs/journal is declined ("the acquisition trail is
+a bounded recent tail; no current health" — main.py's STATUS_DECLINES),
+so the roll-up never reads yesterday's grab as this hour's standing.
+Facts are the members the app states, its vocabulary verbatim. WHO
+asked for a title is the request pipeline's half (the seerr requests
+collection) and is deliberately not restated here; the pipeline view
+joins that side. prowlarr is excluded, by its own appName statement in
+/system/status rather than by its operator-chosen instance name: its
+/api/v1/history is indexer telemetry (releaseGrabbed, indexerQuery,
+indexerRss, indexerAuth, indexerInfo — records carrying no source
+title, quality or download client), a search audit rather than an
+acquisition trail, and the grabs it does file are the same events the
+asking apps' own histories state with the full acquisition members.
+History EVIDENCE serves the page document with every URL a record
+states cut back to scheme and host, withheld and declared — a grab's
+downloadUrl is where indexer credentials live (_redact_history_urls).
+History is the ONE redacted family: apps, health and queue evidence
+still passes through raw, on the reviewed ground the per-collection
+exemption entries carry (servarr:apps, servarr:health, servarr:queue
+in EVIDENCE_REDACTION_EXEMPTIONS) — the API key travels only in the
+request header this adapter sends and appears in none of those three
+document families. The same reason sits at the raw branches in
+get_evidence; a new member carrying a URL there must re-argue it or
+route through the redactor.
 
 Configuration is deployment receipts, plural: SE_SERVARR_INSTANCES names
 the instances (comma-separated, operator-chosen names; a `:v1` suffix
@@ -64,7 +104,10 @@ sequential does not apply within one collection here.
 from __future__ import annotations
 
 import asyncio
+import copy
 import os
+import re
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -75,6 +118,10 @@ REFERENCE = [
     "curl -H 'X-Api-Key: <key>' <url>/api/v3/system/status",
     "curl -H 'X-Api-Key: <key>' <url>/api/v3/health",
     "curl -H 'X-Api-Key: <key>' '<url>/api/v3/queue?page=1&pageSize=250'",
+    "curl -H 'X-Api-Key: <key>' <url>/api/v3/queue/status",
+    "curl -H 'X-Api-Key: <key>' '<url>/api/v3/history?page=1&pageSize=100"
+    "&sortKey=date&sortDirection=descending'",
+    "curl -H 'X-Api-Key: <key>' <url>/api/v3/downloadclient",
 ]
 
 HOST_BLOCK = env.host_block(app="servarr")
@@ -92,6 +139,13 @@ INCLUDE_UNKNOWN = {"includeUnknownSeriesItems": "true",
                    "includeUnknownMovieItems": "true",
                    "includeUnknownArtistItems": "true",
                    "includeUnknownAuthorItems": "true"}
+# The acquisition trail is ONE page per app, deliberately: the newest
+# HISTORY_PAGE_SIZE events, date-descending. Walking the whole table would
+# answer "everything that ever arrived" — a different question — and would
+# pay that walk on every sweep.
+HISTORY_PAGE_SIZE = 100
+HISTORY_PARAMS = {"page": 1, "pageSize": HISTORY_PAGE_SIZE,
+                  "sortKey": "date", "sortDirection": "descending"}
 
 
 def instance_specs() -> list[dict]:
@@ -174,6 +228,117 @@ def queue_record_facts(instance: str, raw: dict) -> dict:
     return facts
 
 
+def history_record_facts(instance: str, raw: dict) -> dict:
+    """One history event's stated members, the app's vocabulary verbatim:
+    eventType rides exactly as the app spells it (grabbed,
+    downloadFolderImported, downloadFailed, trackFileImported and kin) —
+    never translated, because a vocabulary this product invented would be
+    it re-grading events the app already named. An absent member is an
+    absent fact, never a guess (rule 7)."""
+    facts: dict = {"App": instance}
+    data = raw.get("data")
+    if not isinstance(data, dict):
+        data = {}
+    for fact, value in (("EventType", raw.get("eventType")),
+                        ("Title", raw.get("sourceTitle")),
+                        ("Indexer", data.get("indexer")),
+                        ("DownloadClient", data.get("downloadClient")),
+                        ("DownloadId", raw.get("downloadId")),
+                        ("Date", raw.get("date"))):
+        if value:
+            facts[fact] = value
+    quality = raw.get("quality")
+    quality = quality.get("quality") if isinstance(quality, dict) else None
+    if isinstance(quality, dict) and quality.get("name"):
+        facts["Quality"] = quality["name"]
+    return facts
+
+
+def _history_natives(records: list) -> list[tuple[str, dict]]:
+    """Every record's native id, minted ONE way for the whole page: the
+    app's own id where it states one, index-N (the record's position in
+    the page) where it does not. Shared by _history_rows and
+    get_evidence's membership check so the two cannot disagree about what
+    exists — the rows minting index-N while the evidence set was rebuilt
+    from real ids alone was exactly that disagreement: an object the
+    product serves whose own evidence route denied it. Enumerates the
+    full list (non-dict positions still count) and drops non-dicts after,
+    so both sides number identically."""
+    return [((str(raw["id"]) if raw.get("id") is not None
+              else f"index-{index}"), raw)
+            for index, raw in enumerate(records)
+            if isinstance(raw, dict)]
+
+
+# A URL occurrence anywhere inside a string value — not whole values
+# only, because failed events are the real carrier: sabnzbd's URL-fetch
+# failure text embeds the full source URL mid-sentence ("URL Fetching
+# failed; https://indexer/getnzb?…&apikey=…"), and qBittorrent tracker
+# errors embed announce URLs with passkeys. A whole-value gate let every
+# one of those ride out with the credential intact.
+_EMBEDDED_URL = re.compile(r"https?://[^\s\"'<>]+", re.IGNORECASE)
+
+
+def _keep_scheme_host(match: re.Match[str]) -> str:
+    """One matched URL cut back to its diagnostic half. The regex found
+    it, so it announces http(s), and announcing is enough to deny: a
+    value urlsplit refuses ("Invalid IPv6 URL" and kin) is withheld
+    whole — scheme://REDACTED, never skipped, because a refusal is not a
+    clearance and no host can be trusted out of a string the parser
+    rejected. A junk port keeps the host and drops the port. A bare
+    scheme+host with nothing after it (no path beyond /, no query,
+    fragment or userinfo) rides back unchanged: there is nothing to
+    withhold, and declaring a withholding that never happened is the lie
+    the declared-paths contract exists to prevent."""
+    url = match.group(0)
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        scheme = url.partition("://")[0].lower()
+        return f"{scheme}://{env.REDACTED}"
+    if not parts.hostname:
+        return url
+    if (parts.path in ("", "/") and not parts.query
+            and not parts.fragment and "@" not in parts.netloc):
+        return url  # bare scheme+host: nothing after the host to withhold
+    try:
+        port = parts.port
+    except ValueError:
+        port = None  # an uncastable port: keep the host, drop the port
+    host = parts.hostname + (f":{port}" if port else "")
+    return f"{parts.scheme}://{host}/{env.REDACTED}"
+
+
+def _redact_history_urls(page: dict) -> tuple[dict, list[str]]:
+    """The credential half of every URL a history record states, withheld:
+    a grab's downloadUrl is where indexer credentials live — a newznab api
+    key in the query, a private tracker's passkey in the path, and a
+    prowlarr-proxied link carries the very key this process is configured
+    with — on an evidence route that requires no authentication. The
+    scheme and host stay, because "where did it come from" is the
+    diagnostic half; everything after the host is withheld and DECLARED
+    (the traefik/docker contract: a declared path must really differ, so
+    a member is declared only when substitution actually changed it — a
+    bare scheme+host rides untouched and undeclared). Matched on value
+    shape wherever it appears in the string, not a member-name list and
+    not whole values only — deny-by-default applies to every occurrence,
+    and the next app member carrying a URL must not arrive unredacted."""
+    out = copy.deepcopy(page)
+    paths: list[str] = []
+    for index, record in enumerate(out.get("records") or []):
+        data = record.get("data") if isinstance(record, dict) else None
+        if not isinstance(data, dict):
+            continue
+        for member, value in data.items():
+            if not isinstance(value, str):
+                continue
+            replacement = _EMBEDDED_URL.sub(_keep_scheme_host, value)
+            if replacement != value:
+                data[member] = replacement
+                paths.append(f"records.{index}.data.{member}")
+    return out, paths
+
+
 _APP_GLOSSARY = {
     "App": "The instance's operator-chosen name — the filterable handle every row in this subsystem carries.",
     "AppName": "What the app calls itself (Sonarr, Radarr, …), from its own status document.",
@@ -213,6 +378,29 @@ _QUEUE_GLOSSARY = {
     "StatusMessages": "The app's per-item status lines folded to one bounded line.",
 }
 
+_HISTORY_GLOSSARY = {
+    "App": "Which instance recorded this event.",
+    "EventType": "What happened, in the app's own vocabulary — grabbed, "
+                 "downloadFolderImported, downloadFailed, trackFileImported "
+                 "and kin — served verbatim, never translated.",
+    "Title": "The release the event concerns, as the app recorded it "
+             "(their sourceTitle member).",
+    "Indexer": "Which indexer supplied the release, on the events where the "
+               "app states one (a grab does; an import does not — an import "
+               "names its client and download id, and its indexer lives on "
+               "the grab that preceded it, which the bounded tail may no "
+               "longer hold).",
+    "DownloadClient": "Which download client carried the transfer, in the "
+                      "app's own label, on the events that state one.",
+    "DownloadId": "The client's own id for the transfer this event belongs "
+                  "to — the same join key the queue states while the "
+                  "download is still live.",
+    "Quality": "The quality the app assigned the release, in its own "
+               "profile vocabulary.",
+    "Date": "When the app recorded the event — its own timestamp, served "
+            "verbatim.",
+}
+
 
 class Adapter:
     subsystem = "servarr"
@@ -239,7 +427,7 @@ class Adapter:
                     " (contains control or non-ASCII characters)"]
 
     def collections(self) -> list[str]:
-        return ["apps", "health", "queue"]
+        return ["apps", "health", "queue", "history"]
 
     async def capability(self) -> dict:
         if not self.specs:
@@ -252,12 +440,14 @@ class Adapter:
 
     def fact_glossary(self, collection: str) -> dict:
         return {"apps": _APP_GLOSSARY, "health": _HEALTH_GLOSSARY,
-                "queue": _QUEUE_GLOSSARY}.get(collection, {})
+                "queue": _QUEUE_GLOSSARY,
+                "history": _HISTORY_GLOSSARY}.get(collection, {})
 
     def _source(self, collection: str) -> dict:
         method = {"apps": "GET /api/{family}/system/status + /health + /queue/status",
                   "health": "GET /api/{family}/health",
-                  "queue": "GET /api/{family}/queue (paged)"}[collection]
+                  "queue": "GET /api/{family}/queue (paged)",
+                  "history": "GET /api/{family}/history (page 1, newest first)"}[collection]
         return env.source("servarr-api", "Servarr REST API", REFERENCE,
                           method=method)
 
@@ -402,6 +592,36 @@ class Adapter:
                 opinions=queue_opinions(facts), healthy="info"))
         return items
 
+    async def _history_page(self, spec: dict) -> dict | None:
+        """The one page the trail serves — fetched once and shared by rows
+        and evidence, so the two cannot disagree about what exists. None
+        means the instance said it is Prowlarr (appName in /system/status —
+        the app's own statement, never the operator-chosen instance name):
+        excluded, for the shape of its records rather than by fiat (see the
+        module docstring)."""
+        status = await self._get(spec, "/system/status")
+        if isinstance(status, dict) and status.get("appName") == "Prowlarr":
+            return None
+        return await self._get(spec, "/history", HISTORY_PARAMS)
+
+    async def _history_rows(self, spec: dict) -> list[dict]:
+        page = await self._history_page(spec)
+        records = page.get("records") if isinstance(page, dict) else None
+        items: list[dict] = []
+        seen: set[str] = set()
+        for native, raw in _history_natives(records or []):
+            object_id = f"history:{spec['name']}/{native}"
+            if object_id in seen:
+                continue
+            seen.add(object_id)
+            # An event is not current health: no severity claim at all.
+            items.append(env.item_summary(
+                object_id, "servarr-history-event",
+                f"{spec['name']}/{native}",
+                history_record_facts(spec["name"], raw),
+                opinions=[], healthy=None))
+        return items
+
     @env.single_flight
     async def acquire(self, collection: str) -> list[dict]:
         if collection == "apps":
@@ -410,6 +630,8 @@ class Adapter:
             return await self._fanout("health", self._health_rows)
         if collection == "queue":
             return await self._fanout("queue", self._queue_rows)
+        if collection == "history":
+            return await self._fanout("history", self._history_rows)
         raise env.UnknownCollection(collection)
 
     async def collect(self, collection: str, query: dict, limit: int | None,
@@ -524,9 +746,12 @@ class Adapter:
                     facts["DownloadClients"] = names
                 elif why_not:
                     facts["DownloadClientsUnobservable"] = why_not
+        # history mints NO edges: the queue's live `tracks` edge is the flow
+        # surface; history is the trail behind it.
         item = {**item, "facts": facts}
-        opinions = {"apps": app_opinions, "health": health_opinions,
-                    "queue": queue_opinions}[collection](item["facts"])
+        evaluator = {"apps": app_opinions, "health": health_opinions,
+                     "queue": queue_opinions}.get(collection)
+        opinions = evaluator(item["facts"]) if evaluator is not None else None
         return env.observation(
             self.subsystem,
             env.obj_ref(item["id"], item["type"], item["native_id"],
@@ -538,7 +763,8 @@ class Adapter:
             host=HOST_BLOCK)
 
     async def get_evidence(self, collection: str, object_id: str) -> dict:
-        prefixes = {"apps": "app:", "health": "health:", "queue": "queue:"}
+        prefixes = {"apps": "app:", "health": "health:", "queue": "queue:",
+                    "history": "history:"}
         prefix = prefixes.get(collection)
         if prefix is None:
             raise env.UnknownCollection(collection)
@@ -556,6 +782,13 @@ class Adapter:
             raise RuntimeError(
                 "instance has no complete receipts, so there is nothing to"
                 " ask it: " + ", ".join(sorted(spec["missing"])))
+        # apps/health/queue evidence is served RAW, deliberately — the
+        # reason the per-collection EVIDENCE_REDACTION_EXEMPTIONS entries
+        # (servarr:apps, servarr:health, servarr:queue) hold in writing:
+        # the API key travels only in the request header this adapter
+        # sends and appears in none of these three document families. If
+        # an app version adds a URL-bearing member to any of them, route
+        # that branch through _redact_history_urls's walk instead.
         payload: object
         if collection == "apps":
             payload = {"system_status": await self._get(spec, "/system/status"),
@@ -567,7 +800,31 @@ class Adapter:
             if not matching:
                 raise env.UnknownObject(object_id)
             payload = matching[0] if len(matching) == 1 else matching
-        else:
+        elif collection == "history":
+            # The page document IS the evidence — fetched once, membership
+            # checked in that same document (the traefik/downloaders shape),
+            # so a trail that moved between two calls cannot ship 200
+            # evidence that fails to show its object. Served with its URL
+            # tails withheld: see _redact_history_urls.
+            native = rest.partition("/")[2]
+            page = await self._history_page(spec)
+            if not isinstance(page, dict):
+                # A page that is not a document cannot vouch for anything.
+                raise env.UnknownObject(object_id)
+            # Membership through the SAME minting the rows use, so an
+            # index-N row's evidence cannot deny the record its page
+            # plainly contains.
+            known = {native_id for native_id, _ in
+                     _history_natives(page.get("records") or [])}
+            if native not in known:
+                raise env.UnknownObject(object_id)
+            payload, redacted = _redact_history_urls(page)
+            out = {"object_id": object_id, "captured_at": env.utc_now(),
+                   "interface": "Servarr REST API", "payload": payload}
+            if redacted:
+                out["redacted"] = redacted
+            return out
+        elif collection == "queue":
             native = rest.partition("/")[2]
             payload = None
             async for raw in self._queue_pages(spec):
@@ -576,5 +833,7 @@ class Adapter:
                     break
             if payload is None:
                 raise env.UnknownObject(object_id)
+        else:
+            raise env.UnknownCollection(collection)
         return {"object_id": object_id, "captured_at": env.utc_now(),
                 "interface": "Servarr REST API", "payload": payload}

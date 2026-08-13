@@ -238,6 +238,8 @@ async def fact_dictionary() -> dict:
 STATUS_DECLINES: dict[tuple[str, str], str] = {
     ("logs", "journal"): "a bounded log query has no current health",
     ("packages", "packages"): "inventory; no severity semantics",
+    ("servarr", "history"): ("the acquisition trail is a bounded recent"
+                             " tail; no current health"),
 }
 LOOKUPS_DECLINE = "parameterised catalog"
 

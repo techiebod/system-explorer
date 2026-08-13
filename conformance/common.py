@@ -115,6 +115,38 @@ UNLINTABLE_READ_MODULES: dict[str, str] = {
 # The ratchet. Only ever lower this.
 UNVERIFIED_REFERENCE_BUDGET = 0
 
+# Rule 5's API half, the same escape hatch as PATH_REFERENCE_EXEMPTIONS: an
+# HTTP path or control-socket command an adapter calls that a named TOOL
+# reproduces, rather than a curl an administrator would ever type. Keyed
+# "<module>:<surface>" — a path prefix covers its children, a command word
+# is exact. Deliberate reviewed additions, never a broadened pattern, and
+# never a way to make the lint quiet; a reason has to be specific enough to
+# be falsifiable. A reason beginning "TODO" marks a surface with no verified
+# reference command yet, held to UNVERIFIED_API_REFERENCE_BUDGET.
+API_REFERENCE_EXEMPTIONS: dict[str, str] = {
+    "docker:/containers/json": "docker ps -a, already in REFERENCE, is the "
+                               "form an administrator actually types; the "
+                               "engine route is its wire spelling.",
+    "docker:/volumes": "docker volume ls in REFERENCE names the listing; the "
+                       "members the rows state beyond its DRIVER/NAME table "
+                       "(Mountpoint, Labels) are reproduced by docker volume "
+                       "inspect <name>, also in REFERENCE.",
+    "docker:/networks": "docker network ls in REFERENCE names the listing; "
+                        "the members the rows state beyond its "
+                        "ID/NAME/DRIVER/SCOPE table (Internal, Options, "
+                        "Labels) are reproduced by docker network inspect "
+                        "<name>, also in REFERENCE.",
+}
+
+# API-speaking modules whose calls cannot be extracted statically at all,
+# listed so that unresolvability is a reviewed decision rather than a silent
+# pass. Empty because every fetch helper in the tree resolves today; an
+# entry needs the same falsifiable specificity as UNLINTABLE_READ_MODULES.
+UNLINTABLE_API_MODULES: dict[str, str] = {}
+
+# The API ratchet. Only ever lower this.
+UNVERIFIED_API_REFERENCE_BUDGET = 0
+
 # Adapters whose get_evidence serves a payload with no credential surface, so
 # it passes through unredacted. Same review discipline as SUBPROCESS_ALLOWLIST
 # below: entries are deliberate, reviewed additions, and each reason has to be
@@ -141,10 +173,14 @@ EVIDENCE_REDACTION_EXEMPTIONS: dict[str, str] = {
                "The one member worth watching is AuthURL, a single-use login "
                "URL present only while the node is logged out.",
     "kea": "control-socket JSON answers: daemon rows serve the status-get "
-           "and version-get replies (versions, uptime); subnet rows serve "
-           "the statistic-get-all counters plus the config-get document "
-           "that names each CIDR — which on this estate carries no "
-           "secrets (no client-classes with passwords, no TSIG keys).",
+           "and version-get replies (versions, uptime); subnet and "
+           "reservation rows serve the statistic-get-all counters and the "
+           "config-get document — CIDRs, options and host reservations, "
+           "so MAC addresses and hostnames, which are inventory, not "
+           "credentials; lease rows serve the lease4-get-all answer, the "
+           "same MAC/hostname surface with states and times. None of it "
+           "carries secrets on this estate: no client-classes with "
+           "passwords, no TSIG keys.",
     "unbound": "status lines and stats_noreset counters: versions, uptime, "
                "query and cache numbers. The control socket requires no "
                "credential in this posture and the documents carry none.",
@@ -155,16 +191,32 @@ EVIDENCE_REDACTION_EXEMPTIONS: dict[str, str] = {
     "bazarr": "status and health documents: versions and the app's own "
               "issue sentences. The API key travels in a request header "
               "and appears in neither document.",
+    "system:overview": "the verbatim procfs summary files (uptime, loadavg, "
+                       "stat, meminfo, the PSI trio, net/dev, diskstats, "
+                       "ZFS arcstats): kernel counters with no credential "
+                       "surface. The D-Bus branches beside it redact the "
+                       "manager Environment instead of standing here.",
+    "traefik:overview": "the API's overview, version and entrypoints "
+                        "documents: feature counts, release identity and "
+                        "listen addresses. Only the services family carries "
+                        "operator URLs, and that branch redacts userinfo "
+                        "rather than standing here.",
+    "servarr:apps": "system-status documents per instance: versions and "
+                    "runtime identity. The API key travels only in the "
+                    "request header this adapter sends and never appears "
+                    "in the document.",
+    "servarr:health": "the apps' own health items: diagnostic sentences "
+                      "and wiki links, no credential members — the key "
+                      "rides the request header only.",
+    "servarr:queue": "queue records: download titles, client and indexer "
+                     "names, transfer ids and paths; the key rides the "
+                     "request header only. History is the URL-carrying "
+                     "family, and it redacts instead of standing here.",
     "downloaders": "transmission session/stats/torrent documents and "
                    "sabnzbd queue/fullstatus documents: names, states, "
                    "rates, paths and hashes. Neither API echoes its "
                    "credential — sabnzbd's key travels only in the request "
                    "query this adapter sends, and transmission has none.",
-    "servarr": "system status, health items and queue records: versions, "
-               "the apps' own diagnostic messages, download titles, client "
-               "and indexer names, transfer ids and paths. The API key "
-               "travels only in the request header this adapter sends and "
-               "appears in none of the three document families served.",
     "vms": "libvirt domain XML from XMLDesc(0). Flag 0 omits "
            "VIR_DOMAIN_XML_SECURE material such as <graphics passwd=...>, and "
            "a read-only connection cannot request it. That premise is what "
