@@ -48,6 +48,10 @@ SAB_API = "/api"
 
 REFERENCE = [
     "curl -X POST <url>/transmission/rpc -H 'X-Transmission-Session-Id: <id>'"
+    " -d '{\"method\": \"session-get\"}'",
+    "curl -X POST <url>/transmission/rpc -H 'X-Transmission-Session-Id: <id>'"
+    " -d '{\"method\": \"session-stats\"}'",
+    "curl -X POST <url>/transmission/rpc -H 'X-Transmission-Session-Id: <id>'"
     " -d '{\"method\": \"torrent-get\", \"arguments\": {\"fields\":"
     " [\"hashString\", \"name\", \"status\"]}}'",
     "curl '<url>/api?mode=queue&output=json&apikey=<key>'",

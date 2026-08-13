@@ -49,6 +49,8 @@ ROUTERS_PATH = "/api/http/routers"
 SERVICES_PATH = "/api/http/services"
 
 REFERENCE = ["curl <url>/api/overview",
+             "curl <url>/api/version",
+             "curl <url>/api/entrypoints",
              "curl <url>/api/http/routers",
              "curl <url>/api/http/services"]
 

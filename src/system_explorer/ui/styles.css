@@ -108,6 +108,11 @@ body {
   background: var(--accent-bg); border-left-color: var(--accent);
   color: var(--accent); font-weight: 600;
 }
+/* A domain section (media, ingress, …) groups apps by what the operator
+   calls them, below the host-OS subsystems. A breath of air above each one
+   marks the taxonomy shift; the heading itself stays the same .sub-label
+   every section wears — new grouping, no new furniture. */
+.nav-sub.domain { margin-top: 8px; }
 
 /* Per-collection attention badges (/v1/status): warn+critical row counts,
    colored by the worst of the two — the same semantic palette as .dot,
@@ -501,6 +506,9 @@ pre.evidence {
     -webkit-overflow-scrolling: touch;
   }
   .nav-sub { display: flex; align-items: center; margin: 0; flex: none; }
+  /* The domain sections' vertical breathing room has no meaning in a
+     horizontal rail — and would win on specificity if left unsaid. */
+  .nav-sub.domain { margin-top: 0; }
   .nav-sub > .sub-label { padding: 2px 4px; }
   .nav-item {
     padding: 4px 8px; margin: 0 1px; border-left: none; white-space: nowrap;
