@@ -4,6 +4,11 @@ Read-only by construction: this adapter issues only GET requests over the
 unix socket. The compose project label yields the cross-subsystem edge to the
 compose-stack-<project>.service unit that manages the container.
 
+The containers collection folds published port mappings into a Ports fact —
+the /containers/json listing the rows are already built from carries them, so
+no extra call is spent.
+Answers: how do I connect to this container from the network.
+
 Evidence redaction: a container inspect document carries Config.Env, which
 routinely contains decrypted secrets. Evidence keeps the variable
 NAMES (diagnostically useful) and redacts the values, and the envelope
@@ -47,7 +52,15 @@ def _bridge_interface(raw: dict) -> str | None:
     ident = raw.get("Id") or ""
     return f"br-{ident[:12]}" if len(ident) >= 12 else None
 
-REFERENCE = ["docker ps -a", "docker inspect <name>", "docker volume ls", "docker network ls"]
+# Every Engine API endpoint this adapter calls, named (SPEC rule 5): the CLI
+# verbs cover the three list endpoints and the three per-object inspects
+# (`docker inspect` resolves any object type; the volume/network forms are the
+# precise verbs). /_ping has no CLI verb of its own, so the capability probe
+# is named by the curl that reproduces it exactly.
+REFERENCE = ["docker ps -a", "docker inspect <name>",
+             "docker volume ls", "docker volume inspect <name>",
+             "docker network ls", "docker network inspect <name>",
+             "curl --unix-socket /var/run/docker.sock http://localhost/_ping"]
 
 
 # Env values are always secrets-adjacent; Cmd/Entrypoint tokens only when they
@@ -105,8 +118,73 @@ def _go_time(value: object) -> str | None:
     return value
 
 
+def _port_mappings(ports: list | None) -> list[str] | None:
+    """The Ports member of a /containers/json row, rendered as strings an
+    administrator can act on: "0.0.0.0:8080->80/tcp" is host address and
+    port -> container port/protocol. None when the container has no ports
+    at all — the fact is only set when there is something to say.
+
+    Decisions, each stated because it drops or reshapes wire data:
+
+    * Docker lists a dual-stack publish twice (IP "0.0.0.0" and "::"); the
+      pair collapses into the one 0.0.0.0 rendering when host port, container
+      port and protocol all match. When they differ the entries are different
+      claims and both stay.
+    * Exposed-but-unpublished ports (no PublicPort) render as "80/tcp
+      (exposed)" rather than being omitted: the admin asking "why can't I
+      reach this" is told the port exists but was never published — reachable
+      only from other containers, and hiding that would mask the very absence
+      they are chasing.
+    * Specific host addresses render verbatim; IPv6 addresses are bracketed
+      ("[::]:8080->80/tcp") so the string pastes into curl.
+    * Published mappings sort before exposed ones; each group sorts by
+      container port, protocol, host port, then address — the daemon lists in
+      arbitrary order and a stable rendering is what makes rows diffable.
+    """
+    published: dict[tuple[int, str, int], set[str]] = {}
+    exposed: set[tuple[int, str]] = set()
+    for entry in ports or []:
+        private = entry.get("PrivatePort")
+        if private is None:
+            continue
+        proto = entry.get("Type") or "tcp"
+        public = entry.get("PublicPort")
+        if public is None:
+            exposed.add((private, proto))
+        else:
+            published.setdefault((private, proto, public),
+                                 set()).add(entry.get("IP") or "0.0.0.0")
+    out: list[str] = []
+    for (private, proto, public), addresses in sorted(published.items()):
+        if "0.0.0.0" in addresses:
+            addresses.discard("::")  # the dual-stack duplicate
+        for ip in sorted(addresses):
+            host = f"[{ip}]" if ":" in ip else ip
+            out.append(f"{host}:{public}->{private}/{proto}")
+    out.extend(f"{private}/{proto} (exposed)"
+               for private, proto in sorted(exposed))
+    return out or None
+
+
 def _source(method: str) -> dict:
     return env.source("docker-api", "docker-engine-api", REFERENCE, method=f"GET {method}")
+
+
+# One entry so far, deliberately: the facts an opinion already cites are
+# carried in test_fact_dictionary's UNDOCUMENTED_EVIDENCE debt register, and
+# documenting them here is that list's work to retire, not this change's.
+_CONTAINER_GLOSSARY = {
+    "Ports": "How to reach the container from the host network: each entry "
+             "maps a published host address and port to the container port "
+             "behind it, and a port marked (exposed) was never published, so "
+             "it is reachable only from other containers.",
+    "NetworkMode": "The container's network namespace as docker runs it: a "
+                   "bridge or network name means ports reach it only via "
+                   "published mappings, while \"host\" means it shares the "
+                   "host's stack — every port the process binds is open on "
+                   "the host's own addresses, which is why such a row "
+                   "carries no Ports fact.",
+}
 
 
 class Adapter:
@@ -117,6 +195,9 @@ class Adapter:
 
     def collections(self) -> list[str]:
         return ["containers", "volumes", "networks"]
+
+    def fact_glossary(self, collection: str) -> dict:
+        return _CONTAINER_GLOSSARY if collection == "containers" else {}
 
     async def capability(self) -> dict:
         """Socket existence, reachability and permission are different
@@ -162,10 +243,19 @@ class Adapter:
                 "Image": c.get("Image"),
                 "Created": env.usec_to_iso(int(c.get("Created", 0)) * 1_000_000),
                 "ComposeProject": (c.get("Labels") or {}).get(COMPOSE_PROJECT),
+                # Why a row may carry no Ports: "host" means every port the
+                # process binds is open on the host's own addresses, which
+                # must never read the same as nothing-reachable.
+                "NetworkMode": (c.get("HostConfig") or {}).get("NetworkMode"),
                 # The instance identity; the name stays the object id because
                 # compose names outlive recreations while IDs churn.
                 "ContainerID": (c.get("Id") or "")[:12] or None,
             }
+            # Only when at least one mapping exists: a portless container
+            # (host networking, batch jobs) says nothing rather than [] —
+            # NetworkMode above states which portless shape this is.
+            if mappings := _port_mappings(c.get("Ports")):
+                facts["Ports"] = mappings
             # Severity from the shared evaluator (agent/rules/docker.py):
             # running is the only positively-healthy state; created and
             # cleanly-exited containers are neutral rows, not warnings.
@@ -252,6 +342,7 @@ class Adapter:
                 "StartedAt": _go_time(state.get("StartedAt")),
                 "FinishedAt": _go_time(state.get("FinishedAt")),
                 "ComposeProject": project,
+                "NetworkMode": (raw.get("HostConfig") or {}).get("NetworkMode"),
                 "ContainerID": (raw.get("Id") or "")[:12] or None,
             }
             # Opinions from the shared evaluator (agent/rules/docker.py) —
