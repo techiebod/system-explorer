@@ -92,50 +92,232 @@ def _read_pressure(path: str) -> dict:
     return facts
 
 
-def _unit_pressure(name: str) -> dict:
-    """PSI for one unit, without walking the tree — the object path knows the
-    unit it wants, so it only needs to find that unit's cgroup."""
-    if not name.endswith(CGROUP_UNIT_SUFFIXES):
-        return {}
+def _pressure_nodes() -> dict[str, dict]:
+    """{unit name: node} for every unit cgroup in the tree, in one walk.
+
+    A node is {"facts": PSI facts, "parent": enclosing cgroup's name or None,
+    "depth": nesting below the root, "pruned": children left unread at the
+    depth bound}. The parent link is what makes a slice's stall attributable
+    at all: the kernel aggregates PSI over the CGROUP tree, so that tree is
+    the join, and it costs nothing beyond the walk the row facts already need.
+
+    A node is recorded even when it yielded no readings. Presence and
+    readability are different answers — a member whose pressure could not be
+    read must not be counted as a member that is quiet — and only a walk that
+    keeps the empty ones can tell them apart.
+
+    Unit names are NOT unique across the tree: a user manager runs its own
+    init.scope, app.slice and dbus.service inside user@<uid>.service, and
+    those names collide with system units. The shallowest occurrence wins,
+    because the system manager's own units are the rows this collection
+    serves; merging by name let whichever the walk reached last decide, which
+    is a coin toss over whose pressure a row reports.
+    """
+    nodes: dict[str, dict] = {}
     root_depth = CGROUP_ROOT.rstrip("/").count("/")
     for dirpath, dirnames, _files in os.walk(CGROUP_ROOT):
-        if dirpath.count("/") - root_depth >= CGROUP_MAX_DEPTH:
-            dirnames[:] = []
-            continue
-        if os.path.basename(dirpath) != name:
-            continue
-        facts: dict = {}
-        for resource in PRESSURE_RESOURCES:
-            facts.update(_read_pressure(f"{dirpath}/{resource}.pressure"))
-        return facts
-    return {}
-
-
-def _pressure_by_unit() -> dict[str, dict]:
-    """{unit name: PSI facts} for every unit with a cgroup, in one walk."""
-    out: dict[str, dict] = {}
-    root_depth = CGROUP_ROOT.rstrip("/").count("/")
-    for dirpath, dirnames, _files in os.walk(CGROUP_ROOT):
-        if dirpath.count("/") - root_depth >= CGROUP_MAX_DEPTH:
+        depth = dirpath.count("/") - root_depth
+        if depth >= CGROUP_MAX_DEPTH:
             dirnames[:] = []
             continue
         name = os.path.basename(dirpath)
         if not name.endswith(CGROUP_UNIT_SUFFIXES):
             continue
+        if name in nodes and nodes[name]["depth"] <= depth:
+            continue
         facts: dict = {}
         for resource in PRESSURE_RESOURCES:
             facts.update(_read_pressure(f"{dirpath}/{resource}.pressure"))
-        if facts:
-            # A unit name is unique across the tree, so last-writer-wins is
-            # not a real case; merging keeps the deepest read either way.
-            out.setdefault(name, {}).update(facts)
-    return out
+        parent = os.path.basename(os.path.dirname(dirpath))
+        nodes[name] = {
+            "facts": facts,
+            "parent": parent if parent.endswith(CGROUP_UNIT_SUFFIXES) else None,
+            "depth": depth,
+            # The children this walk will refuse to descend into. A slice
+            # whose subtree was cut short cannot be said to have no member
+            # explaining its stall, so the cut has to be recorded where the
+            # attribution can see it.
+            "pruned": depth + 1 >= CGROUP_MAX_DEPTH and bool(dirnames),
+        }
+    return nodes
+
+
+def _pressure_by_unit(nodes: dict[str, dict]) -> dict[str, dict]:
+    """{unit name: PSI facts} — the row-facing half of the walk."""
+    return {name: node["facts"] for name, node in nodes.items() if node["facts"]}
+
+
+def _pressure_and_attribution() -> tuple[dict[str, dict], dict[str, dict]]:
+    """Both halves of one walk: the per-unit readings, and what a slice's
+    reading is explained by. Derived together so the two cannot describe
+    different moments in the tree."""
+    nodes = _pressure_nodes()
+    return _pressure_by_unit(nodes), _stall_attribution(nodes)
+
+
+def _unit_pressure(name: str) -> dict:
+    """PSI for one unit on the object path, plus — for a slice — the
+    attribution of that stall to the unit inside it responsible.
+
+    The whole tree is walked rather than stopped at the wanted unit: a slice's
+    number is a statement about its subtree, so the subtree is what has to be
+    read to say anything about it, and the same walk settles the name
+    collision above for every other type. Units that never get a cgroup —
+    targets, devices, timers, paths — still cost nothing.
+    """
+    if not name.endswith(CGROUP_UNIT_SUFFIXES):
+        return {}
+    nodes = _pressure_nodes()
+    node = nodes.get(name)
+    if node is None:
+        return {}
+    return {**node["facts"], **_stall_attribution(nodes, only=name).get(name, {})}
 
 
 # What a collection row carries. The full set belongs on the object; a row
 # needs exactly the number that answers "is this the unit stalling the host",
 # and it is the one the rule judges.
 ROW_PRESSURE_FACTS = ("PsiIoFullAvg60", "PsiCpuSomeAvg60", "PsiMemoryFullAvg60")
+
+# ── attributing a slice's stall to the unit inside it ────────────────
+#
+# A cgroup's "full" share is the time in which every non-idle task in it AND
+# ITS DESCENDANTS was stalled, so a sibling making progress LOWERS the number
+# above it: a slice cannot normally exceed the member responsible for it, and
+# a slice row is therefore the same condition stated less specifically and
+# smaller. Seen live 2026-08-13 on a host overview — a container's scope at
+# 65.27% listed directly beneath the system.slice containing it at 56.35%,
+# one stall reported twice, the second time with the culprit's name removed.
+#
+# Attribution covers the FULL shares only. "some" is the share of time at
+# least one task was stalled, and that aggregates as a union up the tree: a
+# parent is normally at least its children, so "a member reads at least as
+# high" would be true of almost every slice and would mean nothing.
+# PsiCpuSomeAvg60 is carried on the row and never attributed.
+ATTRIBUTED_PRESSURE_FACTS = {"PsiIoFullAvg60": "I/O",
+                             "PsiMemoryFullAvg60": "memory"}
+
+# The comparison is not exact >=. Both numbers are independently decaying
+# kernel averages, printed to two decimals and read from two files while each
+# cgroup's own averaging tick runs on its own schedule, so a member that
+# genuinely accounts for its slice can print a hair below it. Exact >= would
+# call that slice unexplained and manufacture the interesting case out of
+# rounding. The allowance is the larger of an absolute floor — well above the
+# 0.01 the two roundings can cost between them — and a share of the slice's
+# own number, because tick skew scales with the value.
+ATTRIBUTION_ABSOLUTE_SLACK = 0.05
+ATTRIBUTION_RELATIVE_SLACK = 0.05
+
+
+def _slice_members(name: str, nodes: dict[str, dict],
+                   children: dict[str, list[str]]) -> tuple[list[tuple[str, int]], list[str]]:
+    """(members with their depth below the slice, slices whose subtree was cut).
+
+    Descent stops at anything that is not a slice. A .service or .scope with
+    a cgroup subtree of its own has been DELEGATED that subtree — user@<uid>
+    .service runs a whole second systemd, a container scope runs a container's
+    own hierarchy — and the units in it belong to that manager, not this one.
+    Naming one would be a reference this collection cannot resolve, and worse,
+    those names collide with system units (dbus.service exists in both), so
+    the reference could resolve to the wrong object entirely. The delegating
+    unit's own cgroup already carries their aggregate, and it IS a row here.
+    """
+    found: list[tuple[str, int]] = []
+    cut: list[str] = []
+    queue = [(name, 0)]
+    seen = {name}
+    while queue:
+        parent, depth = queue.pop()
+        if nodes[parent]["pruned"]:
+            cut.append(parent)
+        for child in sorted(children.get(parent, ())):
+            if child in seen:
+                continue
+            seen.add(child)
+            found.append((child, depth + 1))
+            if child.endswith(".slice"):
+                queue.append((child, depth + 1))
+    return found, cut
+
+
+def _stall_attribution(nodes: dict[str, dict],
+                       only: str | None = None) -> dict[str, dict]:
+    """{slice name: attribution facts}, per pressure reading.
+
+    Exactly one of three states is stated for each resource a slice reports a
+    stall on, and each is stated POSITIVELY, because the three are what a
+    reader would otherwise have to infer from an absence:
+
+      StallExplainedBy               a member reads at least as high
+      StallUnexplained               every member was read and none does
+      StallAttributionUnobservable   a member could not be read, so neither
+                                     of the above can be claimed
+
+    The third exists because the alternative is the failure this product is
+    built against: a cgroup whose pressure files could not be read looks
+    exactly like a cgroup that is not stalling, and counting it as quiet
+    would turn "we did not see it" into "nothing inside explains this" — the
+    most interesting finding here, manufactured out of a gap in the reading.
+    """
+    children: dict[str, list[str]] = {}
+    for name, node in nodes.items():
+        if node["parent"]:
+            children.setdefault(node["parent"], []).append(name)
+
+    out: dict[str, dict] = {}
+    for name, node in nodes.items():
+        if not name.endswith(".slice") or (only is not None and name != only):
+            continue
+        members, cut = _slice_members(name, nodes, children)
+        facts: dict = {}
+        for fact, resource in ATTRIBUTED_PRESSURE_FACTS.items():
+            value = node["facts"].get(fact)
+            if not isinstance(value, (int, float)) or value <= 0:
+                continue
+            readings = [(nodes[member]["facts"].get(fact), member, depth)
+                        for member, depth in members]
+            unread = sorted(member for reading, member, _depth in readings
+                            if not isinstance(reading, (int, float)))
+            slack = max(ATTRIBUTION_ABSOLUTE_SLACK,
+                        value * ATTRIBUTION_RELATIVE_SLACK)
+            # Highest first, then deepest, then by name. Highest because the
+            # worst member is the one whose own row already carries the
+            # warning; deepest to break the tie a nested slice creates, since
+            # a slice and its single busy child print the same number and the
+            # child is the specific answer; by name so two identical readings
+            # do not reorder between polls.
+            accounts = sorted(
+                ((reading, depth, member) for reading, member, depth in readings
+                 if isinstance(reading, (int, float)) and reading >= value - slack),
+                key=lambda entry: (-entry[0], -entry[1], entry[2]))
+            if accounts:
+                facts.setdefault("StallExplainedBy", {})[fact] = accounts[0][2]
+            elif cut:
+                facts.setdefault("StallAttributionUnobservable", {})[fact] = (
+                    f"the cgroup tree below {', '.join(sorted(cut))} is deeper "
+                    "than this walk reads, so a member in it could still "
+                    "account for this.")
+            elif unread:
+                facts.setdefault("StallAttributionUnobservable", {})[fact] = (
+                    f"no {resource} pressure reading for {len(unread)} of the "
+                    f"{len(members)} member cgroups under this slice "
+                    f"({', '.join(unread[:3])}"
+                    f"{f' and {len(unread) - 3} more' if len(unread) > 3 else ''}"
+                    "), so a member could still account for this.")
+            elif not members:
+                facts.setdefault("StallAttributionUnobservable", {})[fact] = (
+                    "no member cgroup was found under this slice, so there is "
+                    "nothing here to attribute the stall to or rule out.")
+            else:
+                worst = max(readings)
+                facts.setdefault("StallUnexplained", {})[fact] = (
+                    f"every member cgroup under this slice was read for "
+                    f"{resource} pressure ({len(members)} of them) and the "
+                    f"highest, {worst[1]} at {worst[0]}%, is below this "
+                    f"slice's own {value}%.")
+        if facts:
+            out[name] = facts
+    return out
 
 # ── naming the workload behind a transient scope ─────────────────────
 #
@@ -268,6 +450,29 @@ _UNIT_GLOSSARY = {
         "Common and harmless for container overlay and netns mounts, which "
         "nothing declares; it matters where something does."
     ),
+    "StallExplainedBy": (
+        "Names, for each pressure reading, the unit nested inside this slice "
+        "whose own stall accounts for the slice's. A slice's number is the "
+        "share of the minute in which every non-idle task under it was "
+        "stalled, so a member that is making progress only lowers it and a "
+        "member that caused it reads at least as high: the unit named here "
+        "is the same condition stated specifically, and this slice is the "
+        "vaguer, smaller version of it."
+    ),
+    "StallUnexplained": (
+        "Present for each pressure reading no unit inside this slice accounts "
+        "for, stating how many members were read and how high the worst of "
+        "them got. This is the case worth someone's time — the stall belongs "
+        "to the slice as a whole rather than to one workload in it, which no "
+        "member's own row will ever say."
+    ),
+    "StallAttributionUnobservable": (
+        "Present for each pressure reading that could neither be traced to a "
+        "member of this slice nor ruled out of every one of them, naming what "
+        "could not be read. A member whose pressure is unreadable is not a "
+        "member that is quiet, so this stands in place of a finding rather "
+        "than beside one."
+    ),
 }
 
 
@@ -326,8 +531,9 @@ class Adapter:
         except Exception:  # noqa: BLE001 - older systemd, or a denied call
             have_file = set()
         # Threaded: hundreds of small procfs-style reads must not sit on the
-        # event loop (SPEC async hygiene).
-        pressure = await anyio.to_thread.run_sync(_pressure_by_unit)
+        # event loop (SPEC async hygiene). Attribution is derived in the same
+        # thread call because it reads nothing the walk did not already hold.
+        pressure, attribution = await anyio.to_thread.run_sync(_pressure_and_attribution)
         items_by_name: dict[str, dict] = {}
         paths: dict[str, str] = {}
         for name, description, load, active, sub, _following, path, *_job in sorted(listed[0]):
@@ -350,6 +556,13 @@ class Adapter:
                 value = pressure.get(name, {}).get(key)
                 if value is not None:
                     facts[key] = value
+            # And, for a slice, what its number is explained by — a join
+            # inside this one collection, since the cgroup tree the kernel
+            # aggregates over is the tree the walk above already read. On the
+            # row because that is where the duplicate finding appears: the
+            # rule below reads these to decide whether the slice is restating
+            # a member's stall or reporting one nothing inside it accounts for.
+            facts.update(attribution.get(name) or {})
             # Same evaluator as get_object (agent/rules/units.py) — a failed
             # unit is a critical opinion, so the row derives critical; an
             # active unit with no opinions is positively ok, anything else
@@ -461,6 +674,10 @@ class Adapter:
         # reports, scoped to this unit's cgroup. Every window here (the row
         # carries only the judged one), because on the detail view the shape
         # over 10s/60s/300s is what separates a spike from a sustained stall.
+        # A slice gets its attribution facts from the same call: the rule
+        # below is shared with the row path, and a detail view that omitted
+        # them would leave it judging the same slice on less than the list
+        # did — the two views disagreeing about one unit.
         facts.update(await anyio.to_thread.run_sync(_unit_pressure, name))
 
         # Shared verbatim with the summary path, plus the detail-only

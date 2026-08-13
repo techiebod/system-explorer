@@ -102,6 +102,31 @@ def _redact_env(payload: dict) -> tuple[dict, list[str]]:
     return redacted, paths
 
 
+def _scope_unit(container_id: str) -> str | None:
+    """The systemd scope a container's processes run in, named from its id.
+
+    This is the link from a container to its own resource accounting: the
+    kernel keeps CPU, memory and I/O pressure per cgroup, systemd gives that
+    scope a cgroup, and units/units already reports the numbers per unit. It
+    is also the only handle that turns those rows back into something a
+    reader recognises — a `docker-6abfe5….scope` row carries no name, the
+    scope's Description is dockerd's own "libcontainer container <the same
+    id>", and cgroupfs holds no name at all. Only the daemon knows the name,
+    which is why this half of the join has to be published here.
+
+    ASSUMPTION, stated because it is derived rather than observed: the daemon
+    runs with the systemd cgroup driver, which names the transient scope
+    docker-<full id>.scope — the full id, not the short form the rows carry
+    as ContainerID. Under the cgroupfs driver docker places the container at
+    /sys/fs/cgroup/docker/<id> and creates no scope unit at all, so this name
+    would resolve to nothing: a join that finds no row, rather than one that
+    finds the wrong one. The daemon's /info reports CgroupDriver and would
+    settle it; it is not fetched, because that is a second round trip on
+    every listing to qualify a name whose failure mode is already empty.
+    """
+    return f"docker-{container_id}.scope" if container_id else None
+
+
 def _go_time(value: object) -> str | None:
     """Docker reports Go's zero time (0001-01-01T00:00:00Z) where an event
     never happened — FinishedAt on a never-exited container, StartedAt on a
@@ -178,6 +203,13 @@ _CONTAINER_GLOSSARY = {
              "maps a published host address and port to the container port "
              "behind it, and a port marked (exposed) was never published, so "
              "it is reachable only from other containers.",
+    "ScopeUnit": "The systemd unit the container's processes actually run "
+                 "in, which is where the host keeps their resource "
+                 "accounting: the kernel measures CPU, memory and I/O "
+                 "pressure per cgroup, and this scope is the container's. "
+                 "The name is derived from the container id, so it is also "
+                 "the way back — a host-side row named for a hexadecimal id "
+                 "and nothing else becomes this container.",
     "NetworkMode": "The container's network namespace as docker runs it: a "
                    "bridge or network name means ports reach it only via "
                    "published mappings, while \"host\" means it shares the "
@@ -250,6 +282,7 @@ class Adapter:
                 # The instance identity; the name stays the object id because
                 # compose names outlive recreations while IDs churn.
                 "ContainerID": (c.get("Id") or "")[:12] or None,
+                "ScopeUnit": _scope_unit(c.get("Id") or ""),
             }
             # Only when at least one mapping exists: a portless container
             # (host networking, batch jobs) says nothing rather than [] —
@@ -344,12 +377,26 @@ class Adapter:
                 "ComposeProject": project,
                 "NetworkMode": (raw.get("HostConfig") or {}).get("NetworkMode"),
                 "ContainerID": (raw.get("Id") or "")[:12] or None,
+                "ScopeUnit": _scope_unit(raw.get("Id") or ""),
             }
             # Opinions from the shared evaluator (agent/rules/docker.py) —
             # the same function the collection rows go through, so a
             # restarting container is critical in both views.
             opinions = container_opinions(facts)
             relationships = []
+            # The scope RUNS this container: the same edge units.py emits from
+            # a libvirt scope to its domain, in the only direction that can be
+            # emitted. units.py deliberately does not emit the mirror, because
+            # the edge needs container:<name> and the scope name carries an id
+            # — nothing in cgroupfs or in systemd's properties turns that id
+            # into a name, and the daemon is not that adapter's acquisition
+            # path. So the container side is where this edge exists or it
+            # exists nowhere, and a graph walk from a stalling unit reaches
+            # the workload only through here.
+            if facts["ScopeUnit"]:
+                relationships.append(env.rel("runs", "in",
+                                             f"unit:{facts['ScopeUnit']}",
+                                             subsystem="units"))
             if project:
                 relationships.append(env.rel("member-of", "out",
                                              f"unit:compose-stack-{project}.service",

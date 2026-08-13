@@ -365,7 +365,8 @@ pre.v-json { margin: 0; font: 11px/1.5 var(--mono); color: var(--ident); white-s
    explanation nobody knows is there helps nobody: the reader who asked what
    LinkSpeed meant had no reason to hover a plain word. Underline only — the
    name itself must stay exactly as the envelope spells it. */
-.facts .k[title], .ev-chip[title], #grid-head th[title], .ov-row .lbl[title] {
+.facts .k[title], .ev-chip[title], #grid-head th[title], .ov-row .lbl[title],
+.ov-sub.row-note[title] {
   text-decoration: underline dotted var(--text-faint);
   text-underline-offset: 3px;
   cursor: help;
@@ -734,6 +735,15 @@ a.ov-sub:hover { color: var(--accent); }
                background: var(--border-2); }
 .ov-sub { margin-top: 7px; color: var(--text-faint); font-size: 11px; }
 .ov-sub .k { color: var(--text-dim); }
+/* A remark on the row above it, not a caption for the panel: tighter, and
+   ticked at the left so the eye binds it upwards. The stalling panel uses it
+   for the one row whose meaning differs from every other row in the list —
+   a slice nothing inside accounts for — and that difference has to be legible
+   without opening the unit. */
+.ov-panel .ov-sub.row-note {
+  margin-top: 3px; padding-left: 9px;
+  border-left: 2px solid var(--border-2);
+}
 .ov-foot { margin-top: 14px; color: var(--text-faint); font-size: 12px;
            display: flex; gap: 16px; flex-wrap: wrap; max-width: 1080px; }
 .ov-foot .k { color: var(--text-dim); }

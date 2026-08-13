@@ -1668,6 +1668,130 @@ const OPINION_METER = {
   "psi-cpu": "cpu", "psi-memory": "psi-memory", "psi-io": "psi-io",
 };
 
+/* ── fact names other adapters own, in one block ──
+   The stalling panel below joins across subsystems, and every fact name it
+   needs to do that belongs to an adapter this file does not own. They live
+   here, once: a rename upstream is then a one-line change instead of a panel
+   that quietly stops explaining itself. The ones landed alongside this work
+   are matched by SHAPE rather than by spelling — the wording of a fact that
+   another adapter owns is not this file's to depend on, and a panel that goes
+   silent on a rename is worse than one that never joined at all.
+
+   CONTAINER_ID  — the short container id, emitted under this one name by the
+                   units adapter (read off a docker scope's own name) and by
+                   the docker adapter (read off the container). A shared value
+                   meant to be joined on, so it needs no shape matching.
+   MACHINE_NAME  — the VM domain behind a machine scope, which the units
+                   adapter recovers from the escaped scope name.
+   DOCKER_SCOPE  — on a container row, the systemd scope that runs it. Matched
+                   on the VALUE, because docker's scope name identifies itself
+                   and nothing else on a container row looks like one. A
+                   path-shaped value (a cgroup path) joins on its last segment.
+   STALL_CLAIMS  — a slice row states, per pressure reading, exactly one of
+                   three things: a member accounts for it, nothing inside does,
+                   or it could not be ruled in or out. All three are stated
+                   POSITIVELY by the adapter, so this panel reads a claim and
+                   never infers one from an absence — a row saying none of the
+                   three is a row this panel adds nothing to. Written against
+                   StallExplainedBy / StallUnexplained /
+                   StallAttributionUnobservable, each holding {reading: value};
+                   matched on the verb in the key, so the surrounding words are
+                   free to change.
+   UNIT_NAME     — what an explanation's value has to look like to be read as a
+                   member: this panel drops no row on a value it cannot read as
+                   a unit name.
+   RESOURCE_WORDS — the resources pressure is measured per. Used to refuse a
+                   memory claim as an I/O one; see ioClaim. */
+const CONTAINER_ID = "ContainerID";
+const MACHINE_NAME = "MachineName";
+const DOCKER_SCOPE = /(?:^|\/)(docker-[0-9a-f]{12,}\.scope)$/;
+const STALL_CLAIMS = {
+  explained: (w) => w.some((x) => x.startsWith("explain")),
+  unexplained: (w) => w.some((x) => x.startsWith("unexplain")),
+  unobservable: (w) => w.some((x) => x.startsWith("unobserv")),
+};
+const UNIT_NAME =
+  /\.(service|scope|slice|mount|automount|socket|swap|target|timer|path|device)$/;
+const RESOURCE_WORDS = ["io", "memory", "cpu"];
+
+/* Fact names are camel case; this splits one into words so a verb or a
+   resource can be matched as a whole word. Substring matching finds "io"
+   inside "Attribution" and would read a memory claim as an I/O one — and
+   finds "explain" inside "unexplained", which inverts the meaning outright. */
+function factWords(key) {
+  return String(key)
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+/* What this row claims about its I/O stall under one of the three verbs, or
+   null where it makes no such claim. Two spellings are accepted because the
+   naming is not this file's: one key holding a per-reading map, and one key
+   per reading with the resource in its own name. A key naming another
+   resource is never read as I/O. */
+function ioClaim(item, verb) {
+  for (const [key, value] of Object.entries(item?.facts || {})) {
+    const words = factWords(key);
+    if (!STALL_CLAIMS[verb](words)) continue;
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      for (const [reading, claim] of Object.entries(value))
+        if (factWords(reading).includes("io") && typeof claim === "string") return claim;
+      continue;
+    }
+    if (words.includes("io") || !words.some((w) => RESOURCE_WORDS.includes(w))) {
+      const claim = Array.isArray(value) ? value.find((v) => typeof v === "string") : value;
+      if (typeof claim === "string") return claim;
+    }
+  }
+  return null;
+}
+
+/* The member unit named as accounting for this row's I/O stall. Only a value
+   that reads as a unit name counts: dropping a row is the one irreversible
+   thing this panel does, and it does it on a name it could hand to systemctl,
+   not on any string that happened to sit under the key. */
+function ioExplainedBy(item) {
+  const member = ioClaim(item, "explained");
+  return member && UNIT_NAME.test(member) ? member : null;
+}
+
+/* Container name by every handle a unit row can offer: the scope that runs it
+   (stated on the container row, matched by shape) and the short container id
+   (stated by both adapters under one name, on purpose). Empty when docker is
+   not served, declined, or paged past — and an empty map means every label
+   falls back, never that a label is wrong. */
+function containerNames(page) {
+  const byHandle = new Map();
+  for (const item of page?.items || []) {
+    const name = item.name || item.native_id;
+    if (!name) continue;
+    if (item.facts?.[CONTAINER_ID]) byHandle.set(item.facts[CONTAINER_ID], name);
+    for (const value of Object.values(item.facts || {})) {
+      const scope = typeof value === "string" && DOCKER_SCOPE.exec(value);
+      if (scope) { byHandle.set(scope[1], name); break; }
+    }
+  }
+  return byHandle;
+}
+
+/* The name a unit row leads with — never an invented one. A container's own
+   name where this row is the scope running it, the domain where it is a VM's
+   machine scope (the units adapter already recovers that from the scope name),
+   the row's own `name` where the collection carries one distinct from the
+   native id, and otherwise exactly what printed before: the native id. Every
+   step is something a host stated; a join that cannot be made falls through
+   rather than guessing. */
+function stallingName(item, containers) {
+  const joined = containers.get(item.native_id)
+    || (item.facts?.[CONTAINER_ID] && containers.get(item.facts[CONTAINER_ID]));
+  if (joined) return joined;
+  if (item.facts?.[MACHINE_NAME]) return item.facts[MACHINE_NAME];
+  return item.name || item.native_id;
+}
+
 /* How many samples the sparklines hold. The browser accumulates these across
    its own polls: the agent ships counters and holds no history (SPEC rules
    4/10), and the 15-minute snapshot store is far too coarse to draw with. So
@@ -2084,7 +2208,12 @@ async function loadOverview() {
   if (has("storage", "pools")) asks.pools = api("/v1/storage/pools?limit=100");
   if (has("docker", "containers")) {
     asks.crun = api("/v1/docker/containers?State=running&limit=1");
-    asks.call = api("/v1/docker/containers?limit=1");
+    // The KPI needs only the total, but the stalling panel needs these rows to
+    // put a name on a docker scope — so this asks for the page instead of a
+    // second, near-identical request. Still one ask, still guarded: a host that
+    // serves no docker makes no docker call at all, and the panel then labels
+    // exactly as it did before.
+    asks.call = api("/v1/docker/containers?limit=200");
   }
   if (has("vms", "domains")) {
     asks.vrun = api("/v1/vms/domains?State=running&limit=1");
@@ -2445,23 +2574,57 @@ function renderOverview(obs, got = {}) {
   if (got.stalled?.items?.length) {
     const p = el("div", "ov-panel");
     p.appendChild(el("h3", null, "Stalling most · unit, 60s"));
-    const worst = [...got.stalled.items]
-      .filter(u => (u.facts.PsiIoFullAvg60 ?? 0) > 0)
+    // Names for the scopes that carry an id instead of one. The container rows
+    // are the ones the containers KPI already asked for, so a host that serves
+    // no docker pays nothing here and simply gets no map.
+    const containers = containerNames(got.call);
+    const stalling = got.stalled.items.filter(u => (u.facts.PsiIoFullAvg60 ?? 0) > 0);
+    // A slice cannot out-stall its own worst member: PSI "full" is time in
+    // which EVERY non-idle task in the cgroup was blocked, and a parent's tasks
+    // are its children's — so an explained slice makes the same statement as
+    // the member that explains it, less specifically and with a smaller number,
+    // while costing that member one of five rows. Dropped, but only where the
+    // adapter names the member; the number itself is never the reason.
+    const worst = stalling
+      .filter(u => ioExplainedBy(u) === null)
       .sort((a, b) => (b.facts.PsiIoFullAvg60 ?? 0) - (a.facts.PsiIoFullAvg60 ?? 0))
       .slice(0, 5);
     if (!worst.length) {
-      p.appendChild(el("div", "ov-sub", "no unit reports an I/O stall"));
+      p.appendChild(el("div", "ov-sub", stalling.length
+        ? "every unit reporting an I/O stall is a slice its own members explain"
+        : "no unit reports an I/O stall"));
     } else {
       for (const u of worst) {
         const share = u.facts.PsiIoFullAvg60;
         const row = el("div", "ov-row");
-        const lbl = el("a", "lbl wide", u.native_id);
+        // The name a human chose, where anything states one — a container id
+        // written out in full names nothing, and it is not a truncated name
+        // that a wider column would fix. The native id stays the link target
+        // and the hover, because it is the string systemctl takes and the
+        // container name is not.
+        const named = stallingName(u, containers);
+        const lbl = el("a", "lbl wide", named);
         lbl.href = hashFor("units", "units", u.id);
-        lbl.title = u.native_id;
+        lbl.title = named === u.native_id ? u.native_id : `${named} — ${u.native_id}`;
         row.appendChild(lbl);
         row.appendChild(meter(share, share >= 20 ? "warn" : null));
         row.appendChild(el("span", "val", `${share}%`));
         p.appendChild(row);
+        // Why a slice is still here, in the two cases where the row says. The
+        // marked one is the finding — a stall belonging to the slice as a whole,
+        // which no member's row will ever state — and the other is the reading
+        // that could not settle it, which must not read as the first. The
+        // host's own sentence is a hover away rather than printed, the same
+        // place this panel keeps every other sentence it did not write.
+        const unexplained = ioClaim(u, "unexplained");
+        const unsettled = unexplained ? null : ioClaim(u, "unobservable");
+        if (unexplained || unsettled) {
+          const note = el("div", "ov-sub row-note", unexplained
+            ? "nothing inside this slice accounts for it"
+            : "nothing inside was ruled in or out");
+          note.title = unexplained || unsettled;
+          p.appendChild(note);
+        }
       }
       p.appendChild(el("div", "ov-sub",
         "share of the minute in which every task in the unit that had work to "
@@ -2485,7 +2648,12 @@ function renderOverview(obs, got = {}) {
       // severity; the meter stays a magnitude.
       const lvl = item.worst_opinion_level;
       const row = el("div", "ov-row");
-      const lbl = el("a", "lbl wide", item.native_id);
+      // `name` is the human one where a collection carries both; the native id
+      // is the handle a command line takes, so it keeps the hover. Titled only
+      // where the two differ — a tooltip repeating the label teaches nothing
+      // and this UI dots-underlines anything titled.
+      const lbl = el("a", "lbl wide", item.name || item.native_id);
+      if (item.name && item.name !== item.native_id) lbl.title = item.native_id;
       lbl.href = hashFor("storage", "pools", item.id);
       row.appendChild(lbl);
       if (ATTENTION_LEVELS.includes(lvl)) row.appendChild(el("span", `dot ${lvl}`));
@@ -2510,7 +2678,9 @@ function renderOverview(obs, got = {}) {
       const lvl = ATTENTION_LEVELS.includes(m.worst_opinion_level)
         ? m.worst_opinion_level : null;
       const row = el("div", "ov-row");
-      const lbl = el("a", "lbl wide", m.native_id);
+      const lbl = el("a", "lbl wide", m.name || m.native_id);
+      // The title already carried the native id, which is what makes leading
+      // with a name safe here.
       lbl.title = `${m.native_id} (${m.facts.Source})`;
       lbl.href = hashFor("storage", "mounts", m.id);
       row.appendChild(lbl);

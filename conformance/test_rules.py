@@ -185,17 +185,72 @@ CASES = [
      {"StatusUnobservable": "ConnectError: connection refused"},
      {("bazarr-unreachable", "critical")}),
 
-    # units, slices: interior cgroup nodes aggregate their members, so
-    # their stalls mirror as info with aggregate wording — the member's
-    # own warn names the culprit (one condition, one alert).
-    ("slice-io-stall-is-info", units.slice_unit_opinions,
+    # units, slices: interior cgroup nodes, where the number is an aggregate
+    # over everything nested under them. A slice's "full" share only counts
+    # time in which every non-idle task under it was stalled, so a member
+    # making progress lowers it: the slice is the less specific AND smaller
+    # statement of the same condition, and saying it again is noise. Whether
+    # a member accounts for it is a fact the adapter joins inside its own
+    # collection; these cases fix what the rule does with each answer.
+    ("slice-stall-a-member-accounts-for-says-nothing",
+     units.slice_unit_opinions,
+     {"ActiveState": "active", "PsiIoFullAvg60": 56.35,
+      "StallExplainedBy": {"PsiIoFullAvg60": "docker-4d1f9c02ab77.scope"}},
+     set()),
+    # The case no member row can state, and the reason the slice keeps an
+    # opinion at all.
+    ("slice-stall-no-member-accounts-for", units.slice_unit_opinions,
+     {"ActiveState": "active", "PsiIoFullAvg60": 33.43,
+      "StallUnexplained": {
+          "PsiIoFullAvg60": "every member cgroup under this slice was read "
+                            "for I/O pressure (12 of them) and the highest, "
+                            "example-worker.service at 4.1%, is below this "
+                            "slice's own 33.43%."}},
+     {("slice-stall-unexplained", "info")}),
+    # A member whose pressure could not be read is not a member that is
+    # quiet. Reporting this as "nothing inside explains it" would invent the
+    # interesting finding out of a gap in the reading, so it gets its own key
+    # and its own wording.
+    ("slice-stall-attribution-unobservable", units.slice_unit_opinions,
+     {"ActiveState": "active", "PsiMemoryFullAvg60": 4.1,
+      "StallAttributionUnobservable": {
+          "PsiMemoryFullAvg60": "no memory pressure reading for 2 of the 12 "
+                                "member cgroups under this slice "
+                                "(example-a.service, example-b.scope), so a "
+                                "member could still account for this."}},
+     {("slice-stall-unattributed", "info")}),
+    # Per resource, not per slice: the same minute can be explained for one
+    # reading and unexplained for another, and a single verdict across both
+    # would be false for one of them. Also the case where both route hints
+    # are picked out of SLICE_STALL_LOOK at once.
+    ("slice-stall-explained-for-one-resource-only",
+     units.slice_unit_opinions,
+     {"ActiveState": "active", "PsiIoFullAvg60": 56.35,
+      "PsiMemoryFullAvg60": 11.02,
+      "StallExplainedBy": {"PsiIoFullAvg60": "docker-4d1f9c02ab77.scope"},
+      "StallUnexplained": {
+          "PsiMemoryFullAvg60": "every member cgroup under this slice was "
+                                "read for memory pressure (12 of them) and "
+                                "the highest, example-worker.service at 1.2%, "
+                                "is below this slice's own 11.02%."}},
+     {("slice-stall-unexplained", "info")}),
+    # Facts from something other than this adapter: no attribution either
+    # way, so the aggregate wording stands. Silence here would be the
+    # inference the three branches above exist to stop anyone making.
+    ("slice-stall-without-attribution-keeps-the-aggregate-wording",
+     units.slice_unit_opinions,
      {"ActiveState": "active", "PsiIoFullAvg60": 33.43},
      {("slice-stall", "info")}),
-    # Both resources, because each picks its own route hint out of
-    # SLICE_STALL_LOOK and an unexercised branch is an unexercised link.
-    ("slice-memory-stall-is-info", units.slice_unit_opinions,
-     {"ActiveState": "active", "PsiMemoryFullAvg60": 4.1},
-     {("slice-stall", "info")}),
+    # Under the floor the difference between a slice and its members is
+    # inside the slack two decaying averages carry anyway.
+    ("slice-stall-below-the-floor", units.slice_unit_opinions,
+     {"ActiveState": "active", "PsiIoFullAvg60": 0.42,
+      "StallUnexplained": {"PsiIoFullAvg60": "every member cgroup under this "
+                                             "slice was read for I/O pressure "
+                                             "(12 of them) and the highest, "
+                                             "example.service at 0.0%, is "
+                                             "below this slice's own 0.42%."}},
+     set()),
     ("slice-failed-is-still-critical", units.slice_unit_opinions,
      {"ActiveState": "failed", "SubState": "failed"},
      {("unit-health", "critical")}),

@@ -35,12 +35,17 @@ RESTART_CHURN_THRESHOLD = 3
 UNIT_IO_STALL_WARN = 20.0
 UNIT_MEMORY_STALL_WARN = 10.0
 
-# The member unit a slice's aggregate is actually about. Same collection, same
-# fact: a slice's number is the sum of its children's, so the child whose
-# number stays high is the culprit the aggregate cannot name — which is what
-# the slice-stall wording tells the reader to go and check, and what this
-# turns from advice into a route. Keyed by the fact so the loop below picks
-# the hint that matches the resource it is judging.
+# Below this share of the minute a slice states nothing at all. The gap
+# between a slice and its members at that size is inside the slack the
+# attribution already allows for two independently decaying averages, so a
+# claim either way is a coin toss dressed as a finding — and the number stays
+# on the row for anyone who wants it.
+SLICE_STALL_FLOOR = 1.0
+
+# Where to look when the slice cannot name the unit itself. Same collection,
+# same fact: the member rows carry their own numbers, and the one actually
+# stalling is where the number stays high. Keyed by the fact so the loop below
+# picks the hint that matches the resource it is judging.
 SLICE_STALL_LOOK = {
     "PsiIoFullAvg60": [{"subsystem": "units", "collection": "units",
                         "fact": "PsiIoFullAvg60",
@@ -88,17 +93,30 @@ def unit_opinions(facts: dict) -> list[dict]:
 
 def slice_unit_opinions(facts: dict) -> list[dict]:
     """The evaluator for .slice units — the cgroup tree's INTERIOR nodes,
-    where every number is an aggregate over member units. A slice's PSI
-    stall is real and worth carrying, but it is the SUM of its children's
-    stalls: system.slice going loud repeats whichever member is actually
-    stuck, with wording that read as if every service in it was stalled
-    (operator report, 2026-08-13 — one loaded service, a slice-wide
-    claim, and the same condition alerting twice down the hierarchy). So
-    slices mirror their stalls as info with aggregate-honest wording —
-    visible on the slice's object, absent from the attention surface,
-    where the MEMBER unit's own warn names the actual culprit — and a
-    failed slice keeps its critical, because that is the slice's own
-    state, not an aggregate."""
+    where every number is an aggregate over the units nested under them.
+
+    A slice's "full" share is the time in which every non-idle task under
+    it was stalled, so a member making progress LOWERS it: the slice is
+    both less specific than the member responsible and smaller than it
+    (operator report, 2026-08-13 — a container scope at 65.27% listed
+    directly beneath the slice containing it at 56.35%, one stall reported
+    twice, the second time with the culprit's name removed). So a slice
+    whose stall a member accounts for states nothing at all: the member's
+    own row carries the condition, with the name on it.
+
+    What survives is the case no member row can state — a slice stalling
+    that nothing inside it accounts for — and, separately, the case where
+    that could not be established because a member's pressure could not be
+    read. The two are worded differently on purpose: an unread member is
+    not a quiet one, and reporting it as "nothing explains this" would
+    invent the interesting finding out of a gap in the reading.
+
+    Each resource is judged on its own facts. A slice can be explained for
+    I/O and unexplained for memory in the same minute, and one boolean
+    across both would be false for one of them.
+
+    A failed slice keeps its critical: that is the slice's own state, not
+    an aggregate over anything."""
     opinions: list[dict] = []
     if facts.get("ActiveState") == "failed":
         evidence = ["ActiveState", "SubState"] + (["Result"] if facts.get("Result") else [])
@@ -106,10 +124,46 @@ def slice_unit_opinions(facts: dict) -> list[dict]:
             "unit-health", "critical",
             f"Slice has failed ({facts.get('Result') or facts.get('SubState')}).",
             evidence))
+    explained = facts.get("StallExplainedBy") or {}
+    unobservable = facts.get("StallAttributionUnobservable") or {}
+    unexplained = facts.get("StallUnexplained") or {}
     for fact, resource in (("PsiIoFullAvg60", "I/O"),
                            ("PsiMemoryFullAvg60", "memory reclaim")):
         stall = facts.get(fact)
-        if isinstance(stall, (int, float)) and stall > 0:
+        if not isinstance(stall, (int, float)) or stall < SLICE_STALL_FLOOR:
+            continue
+        if explained.get(fact):
+            continue
+        if unobservable.get(fact):
+            opinions.append(env.opinion(
+                "slice-stall-unattributed", "info",
+                f"Tasks in this slice were stalled on {resource} for {stall}%"
+                " of the last minute, and whether a unit inside it accounts"
+                f" for that could not be established: {unobservable[fact]}"
+                " Pressure that could not be read is not pressure that was"
+                " absent, so this is a gap in the reading rather than a"
+                " finding about the slice.",
+                [fact, f"StallAttributionUnobservable.{fact}"],
+                look=SLICE_STALL_LOOK[fact]))
+        elif unexplained.get(fact):
+            opinions.append(env.opinion(
+                "slice-stall-unexplained", "info",
+                f"Tasks in this slice were stalled on {resource} for {stall}%"
+                " of the last minute and no unit inside it accounts for it:"
+                f" {unexplained[fact]} A member that was the cause would read"
+                " at least as high, because a slice only counts the time in"
+                " which every non-idle task under it was stalled — so this"
+                " belongs to the slice as a whole, and no member row states"
+                " it.",
+                [fact, f"StallUnexplained.{fact}"],
+                look=SLICE_STALL_LOOK[fact]))
+        else:
+            # No attribution facts at all: a consumer evaluating these rules
+            # over facts the units adapter did not build. The aggregate
+            # wording is what can be said without the member readings, and
+            # it claims nothing about them in either direction — silence
+            # here would read as "a member explains it", which is exactly
+            # the inference the branches above exist to stop being guessed.
             opinions.append(env.opinion(
                 "slice-stall", "info",
                 f"Tasks across this slice were collectively stalled on"
