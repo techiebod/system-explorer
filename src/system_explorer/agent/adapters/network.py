@@ -1037,6 +1037,52 @@ def _walk_input_path(document: dict) -> list[tuple[dict, list]]:
     return ordered
 
 
+# Every match term this renderer can render is classified as exactly one of
+# these, and the classification is what the closure below consults. It exists
+# because the ICMP defect was not a parsing failure — the renderer understood
+# `meta l4proto ipv6-icmp` perfectly and printed it — it was a COVERAGE
+# MISMATCH: a term the renderer knew about that the closure silently ignored,
+# so a rule constraining protocol read as a rule constraining nothing.
+#
+#   destination  narrows WHAT is reached (protocol, destination port), and so
+#                decides whether a rule bears on a given socket at all.
+#   source       narrows WHERE FROM, and so is the answer this collection
+#                reports rather than a filter on it.
+#   other        a real constraint that is neither — ct state, marks, rate
+#                limits. Renderable, reported in the text, and NOT modelled.
+#
+# `other` is why this table is the safety property rather than bookkeeping: a
+# term nobody classified must make a rule uncertain, never invisible. Adding a
+# renderable shape without deciding which of the three it is now fails a
+# conformance test instead of quietly widening the certain answer.
+def _classify_match(match: dict) -> str | None:
+    """"destination", "source", "other", or None where the term is not
+    renderable at all (which the residue already accounts for)."""
+    text, understood = _render_match(match)
+    if not understood or not text:
+        return None
+    left = match.get("left")
+    if not isinstance(left, dict) or not left:
+        return None
+    key = next(iter(left))
+    inner = left[key] if isinstance(left[key], dict) else {}
+    if key == "payload":
+        field = inner.get("field")
+        if field in ("dport", "protocol"):
+            return "destination"
+        if field in ("saddr",):
+            return "source"
+        return "other"
+    if key == "meta":
+        meta_key = inner.get("key")
+        if meta_key == "l4proto":
+            return "destination"
+        if meta_key in ("iifname", "iif", "iifgroup", "iifkind"):
+            return "source"
+        return "other"
+    return "other"
+
+
 def _rule_bears_on(rendered: dict, expr: list, protocol: str,
                    port: int) -> tuple[bool, bool]:
     """(certainly bears on this socket, possibly bears on it).
@@ -1055,6 +1101,11 @@ def _rule_bears_on(rendered: dict, expr: list, protocol: str,
         if not isinstance(statement, dict) or "match" not in statement:
             continue
         body = statement["match"]
+        # A renderable constraint this closure does not model cannot leave the
+        # rule certain: it narrows the traffic in a way nothing here accounts
+        # for, so treating it as absent is exactly the inversion.
+        if _classify_match(body) == "other":
+            readable = False
         left, right = body.get("left"), body.get("right")
         if not isinstance(left, dict):
             continue
@@ -1103,11 +1154,10 @@ def _sources_of(expr: list) -> list[str]:
     for statement in expr:
         if not isinstance(statement, dict) or "match" not in statement:
             continue
-        text, understood = _render_match(statement["match"])
-        if not understood or not text:
+        if _classify_match(statement["match"]) != "source":
             continue
-        if text.startswith(("meta iifname", "meta iif", "ip saddr",
-                            "ip6 saddr")):
+        text, _understood = _render_match(statement["match"])
+        if text:
             sources.append(text)
     return sources or ["anywhere"]
 

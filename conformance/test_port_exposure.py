@@ -349,3 +349,70 @@ def test_a_matching_l4proto_still_admits(monkeypatch, tmp_path):
     monkeypatch.setattr(network, "_nft_json", lambda: document)
     [item] = asyncio.run(network.Adapter()._exposure_items())
     assert item["facts"]["AdmittedFromCertain"] == ["anywhere"]
+
+
+# ── the coverage mismatch that produced the ICMP defect ──────────────────
+#
+# That bug was not a parsing failure. The renderer understood
+# `meta l4proto ipv6-icmp` perfectly and printed it; the CLOSURE ignored it,
+# so a rule constraining protocol read as a rule constraining nothing and
+# went into the certain answer. The tests below make that class of mistake
+# fail here rather than on a live host.
+
+RENDERABLE_MATCHES = [
+    ("tcp dport", {"payload": {"protocol": "tcp", "field": "dport"}}, 22),
+    ("ip protocol", {"payload": {"protocol": "ip", "field": "protocol"}}, "icmp"),
+    ("ip saddr", {"payload": {"protocol": "ip", "field": "saddr"}},
+     {"prefix": {"addr": "10.0.0.0", "len": 8}}),
+    ("ip6 saddr", {"payload": {"protocol": "ip6", "field": "saddr"}}, "::1"),
+    ("meta iifname", {"meta": {"key": "iifname"}}, "tailscale0"),
+    ("meta l4proto", {"meta": {"key": "l4proto"}}, "ipv6-icmp"),
+    ("meta mark", {"meta": {"key": "mark"}}, 1),
+    ("tcp sport", {"payload": {"protocol": "tcp", "field": "sport"}}, 1234),
+    ("ct state", {"ct": {"key": "state"}}, "established"),
+]
+
+
+def test_every_renderable_match_is_classified():
+    """The invariant. A term this renderer can print must be sorted into
+    exactly one of destination, source or other — and adding a renderable
+    shape without deciding which now fails here instead of quietly widening
+    the certain answer on a live firewall."""
+    for label, left, right in RENDERABLE_MATCHES:
+        body = {"op": "==", "left": left, "right": right}
+        text, understood = network._render_match(body)
+        assert understood, f"{label} no longer renders; update this table"
+        assert network._classify_match(body) in ("destination", "source", "other"), (
+            f"{label} renders as {text!r} but is classified as nothing")
+
+
+def test_an_unmodelled_but_renderable_constraint_costs_certainty():
+    """`other` is the safety property, not bookkeeping. A rule narrowed by
+    something this closure does not model — a mark, a source port, a ct state
+    — must not reach the certain answer, because treating that constraint as
+    absent is the same inversion in a different coat."""
+    marked = [match({"meta": {"key": "mark"}}, 1), DPORT22, ACCEPT]
+    rendered = network._render_rule(marked)
+    assert rendered["residue"] == [], "the mark renders; this is not a parse gap"
+    sure, maybe = network._rule_bears_on(rendered, marked, "tcp", 22)
+    assert (sure, maybe) == (False, True)
+
+
+def test_a_destination_constraint_for_another_protocol_excludes_the_rule():
+    """The defect itself, as a unit: an ICMP-only rule bears on no TCP
+    socket, whether the protocol was stated through the header or through
+    meta."""
+    for left, value in (({"meta": {"key": "l4proto"}}, "ipv6-icmp"),
+                        ({"payload": {"protocol": "ip", "field": "protocol"}},
+                         "icmp")):
+        expr = [match(left, value), ACCEPT]
+        rendered = network._render_rule(expr)
+        assert network._rule_bears_on(rendered, expr, "tcp", 22) == (False, False)
+
+
+def test_only_source_terms_reach_the_reported_answer():
+    """A destination constraint is a filter, not an answer: reporting
+    `tcp dport 22` as somewhere traffic comes FROM would be nonsense an
+    operator has to unpick."""
+    expr = [match({"meta": {"key": "iifname"}}, "tailscale0"), DPORT22, ACCEPT]
+    assert network._sources_of(expr) == ["meta iifname tailscale0"]
