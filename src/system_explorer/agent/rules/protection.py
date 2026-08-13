@@ -167,6 +167,15 @@ def job_opinions(facts: dict) -> list[dict]:
         elif known:
             message = ("This job has never succeeded since it was registered,"
                        " and its window has passed.")
+        elif facts.get("TargetNotScoped"):
+            # A stated no-subject, not a failed join. The grade is gentler
+            # for the same reason either way — no target's class applies —
+            # but calling this an unjoined row would fault a declaration
+            # that answered the question.
+            message = ("This job has never succeeded since it was registered,"
+                       " and its window has passed. It protects no single"
+                       " target by declaration, so no class of data grades it"
+                       " — the work itself is what has not happened.")
         else:
             # The gentler grade is a consequence of a join that did not
             # happen, so the row says so: unknown is not "replaceable".
@@ -179,7 +188,7 @@ def job_opinions(facts: dict) -> list[dict]:
             "protection-never-succeeded",
             "critical" if irreplaceable else "warn", message,
             _cited(facts, "State", "Basis", "AgeSeconds", "MaxAgeSeconds",
-                   "TargetClass", "TargetClassUnjoined")))
+                   "TargetClass", "TargetClassUnjoined", "TargetNotScoped")))
     elif stale:
         opinions.append(env.opinion(
             "protection-stale", "warn",

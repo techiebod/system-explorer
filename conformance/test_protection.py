@@ -112,10 +112,21 @@ STATUS = {
          "maxAgeSeconds": 172800, "lastResult": "none"},
         # A registered job the declaration names nowhere — a maintenance
         # timer, or a protection job that has lost its join. Which of the
-        # two is exactly what the row may not silently decide.
+        # two is exactly what the row may not silently decide. No `target`
+        # member at all: a checker that predates the field.
         {"job": "housekeeping-scrub", "state": "stale",
          "basis": "registered-never-succeeded", "ageSeconds": 900000,
          "maxAgeSeconds": 691200, "lastResult": "none"},
+        # target STATED, and not equal to the job key: a capture job whose
+        # target's own name is taken by the send that follows it.
+        {"job": "ledgers-capture", "state": "ok", "basis": "last-success",
+         "ageSeconds": 3600, "maxAgeSeconds": 172800,
+         "lastResult": "success", "target": "ledgers"},
+        # target explicitly NULL: pool-scoped work the declaration says has
+        # no single subject. A stated answer, not a failed join.
+        {"job": "pool-scrub-freshness", "state": "stale",
+         "basis": "registered-never-succeeded", "ageSeconds": 900000,
+         "maxAgeSeconds": 691200, "lastResult": "none", "target": None},
     ],
     "unimplemented": [],
     "unimplementedHops": ["photos -> offsite"],
@@ -473,9 +484,37 @@ def test_a_job_the_declaration_names_nowhere_says_so_rather_than_softening(
     unjoined = {row["id"]: row for row in rows("jobs")}["job:housekeeping-scrub"]
     assert "TargetClass" not in unjoined["facts"]
     assert "unknown" in unjoined["facts"]["TargetClassUnjoined"]
+    assert "TargetNotScoped" not in unjoined["facts"]
     assert unjoined["worst_opinion_level"] == "warn"
-    message = unjoined["opinions"][0]["message"]
-    assert "could not be joined" in message
+    assert "could not be joined" in unjoined["opinions"][0]["message"]
+
+
+def test_the_declared_target_is_three_answers_and_never_two(estate):
+    """The checker states `target` per job. A name is the job's own
+    subject and outranks this adapter's inference; an explicit null is the
+    declaration SAYING there is no single subject; the member missing
+    altogether is a checker that predates it. Folding the middle into the
+    last would report a stated answer as a failed join."""
+    by_id = {row["id"]: row for row in rows("jobs")}
+
+    stated = by_id["job:ledgers-capture"]["facts"]
+    assert stated["Target"] == "ledgers"
+    # Declared, so the class arrives without any hop naming this job.
+    assert stated["TargetClass"] == "backup"
+    assert "ImplementsHops" not in stated  # it delivers no hop, and says so
+    assert "TargetClassUnjoined" not in stated
+
+    pool = by_id["job:pool-scrub-freshness"]
+    assert pool["facts"]["TargetNotScoped"] is True
+    assert "TargetClass" not in pool["facts"]
+    # Not a failed join, and the row must not say it was one.
+    assert "TargetClassUnjoined" not in pool["facts"]
+    opened = asyncio.run(
+        mod.Adapter().get_object("jobs", "job:pool-scrub-freshness"))
+    [verdict] = [op for op in opened["opinions"]
+                 if op["key"] == "protection-never-succeeded"]
+    assert "no single target by declaration" in verdict["message"]
+    assert verdict["level"] == "warn"  # no class applies, so not critical
 
 
 def test_without_a_staleness_verdict_only_the_jobs_collection_declines(

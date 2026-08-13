@@ -88,6 +88,11 @@ REFERENCE = [
 # responsible for: a join may sharpen a verdict, never soften one.
 _CLASS_RANK = {"recreate": 0, "replicate": 1, "backup": 2}
 
+# Absent is not null here (see job_facts): a checker that predates the
+# `target` member says nothing, while one that carries it and holds null
+# is stating that the job has no single subject. None cannot mean both.
+_MISSING = object()
+
 _TARGET_GLOSSARY = {
     "Class": "What losing this data would mean, in the estate's own three words: backup is irreplaceable, replicate is replaceable at a cost in time, recreate is rebuilt from the estate's own definitions.",
     "Kind": "How the artifact is produced (a ZFS send, a file mirror, the application's own exporter) — orthogonal to the class, which is about the loss, not the method.",
@@ -126,6 +131,8 @@ _JOB_GLOSSARY = {
     "ReceiptsUnobservable": "Why a receipt this job has already written could not be read, when one exists and will not open — the last run's facts are missing for that reason, and not because no run happened.",
     "TargetClass": "The class of the data this job protects, joined from the declaration — a job that has never succeeded matters differently for irreplaceable data than for derived state.",
     "TargetClassUnjoined": "Why this row carries no class: nothing in the declaration ties this job to a target, neither by name nor as the implementation of any hop on this host, so what losing its artifact would mean is unknown here rather than known to be small.",
+    "Target": "The target this job protects, as the job itself declares it — a job keyed for the hop it delivers rather than the data it moves still knows its own subject, and this is where it says so.",
+    "TargetNotScoped": "The declaration states this job has no single subject — pool-scoped work such as a scrub, which is a stated answer rather than a join that failed, and the reason no class appears beside it.",
     "ImplementsHops": "The declared hops this job is the stated implementation of, target by destination — the join that makes the class above credible, and the reason a job named for its hop rather than its target is not a job about nothing.",
 }
 
@@ -336,8 +343,22 @@ def job_facts(row: dict, receipts: dict, target_class: str | None,
         # Silence here publishes the row of a job that never ran.
         facts["ReceiptsUnobservable"] = "; ".join(
             f"{name}: {why}" for name, why in sorted(receipt_faults.items()))
+    # THREE answers, not two. The checker states `target` per job: a name
+    # is the job's own subject (authoritative — it is declared beside the
+    # job, where the heuristics below are inference); an explicit null is
+    # the declaration SAYING there is no single subject (a scrub is
+    # pool-scoped, and no target's class applies to it); and the member
+    # being absent entirely is a host that predates the field, where the
+    # inference is all there is. Folding the middle case into the last
+    # would report a stated answer as a failed join, which is the same
+    # lie in the other direction.
+    declared_target = row.get("target") if "target" in row else _MISSING
+    if isinstance(declared_target, str) and declared_target:
+        facts["Target"] = declared_target
     if target_class:
         facts["TargetClass"] = target_class
+    elif declared_target is None:
+        facts["TargetNotScoped"] = True
     else:
         # No class is UNJOINED, not "no class": silence here grades the
         # job as if the declaration had called its data replaceable.
@@ -510,14 +531,26 @@ class Adapter:
     def _job_items(self) -> list[dict]:
         status = self._status()
         checked_at = status.get("checkedAt")
-        classes, hops = job_joins(self._manifest(), env.HOST.get("hostname"))
+        manifest = self._manifest()
+        classes, hops = job_joins(manifest, env.HOST.get("hostname"))
+        declared_classes = {name: raw.get("class")
+                            for name, raw in (manifest.get("targets") or {}).items()
+                            if isinstance(raw, dict)}
         items = []
         for row in status.get("jobs") or []:
             if not isinstance(row, dict) or not row.get("job"):
                 continue
             name = str(row["job"])
             documents, faults = self._receipts_for(name)
-            facts = job_facts(row, documents, classes.get(name),
+            # The job's own declared subject outranks the inference: it is
+            # stated beside the job, where job_joins' name-equality and
+            # implementedBy routes are this adapter guessing from the other
+            # end. Only fall back where nothing is declared.
+            declared = row.get("target")
+            joined = (declared_classes.get(declared)
+                      if isinstance(declared, str) and declared
+                      else None) or classes.get(name)
+            facts = job_facts(row, documents, joined,
                               receipt_faults=faults, checked_at=checked_at,
                               hops=hops.get(name))
             items.append(env.item_summary(
