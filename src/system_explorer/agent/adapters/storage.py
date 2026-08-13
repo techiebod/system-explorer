@@ -430,6 +430,8 @@ def _flatten_mounts(nodes: list[dict], depth: int = 0) -> list[tuple[dict, int]]
 # scrub reading as nothing-to-say. One record, three shapes — the sentences
 # carry what the names cannot (the LinkSpeed/LinkWidth lesson).
 _POOL_GLOSSARY = {
+    "Redundancy": "How this pool's data vdevs are laid out, in zpool's own words — a stripe, a mirror, raidz1. A pool is only as redundant as its weakest data vdev, because losing any one of them loses the pool, so a mixed layout is named in full rather than summarised to its best part.",
+    "DeviceFailuresTolerated": "How many whole devices this pool survives losing, read from the layout above; 0 means the next disk to fail takes the pool with it. Stated and graded by nothing here: whether that is a problem depends on what lives on the pool, which the protection inventory knows and this adapter cannot.",
     "ScanFunction": (
         "What kind of scan the pool's single scan record describes — SCRUB "
         "or RESILVER. ZFS keeps only the most recent scan, so a resilver "
@@ -475,6 +477,90 @@ _BLOCK_DEVICE_GLOSSARY = {
         "tree, and the row's depth can only describe the first path to it."
     ),
 }
+
+
+# ── what a pool survives losing ──────────────────────────────────────
+#
+# A FACT, and deliberately no opinion. Whether a pool with no parity is a
+# problem depends entirely on what sits on it: a stripe holding replicas of
+# data that lives elsewhere is a capacity decision, and the same stripe under
+# an irreplaceable dataset with no other copy is a real exposure. This adapter
+# knows the vdev layout and cannot know the second thing — the protection
+# inventory does — so it states the layout and grades nothing. Emitting the
+# fact is what lets something that DOES know decide; a verdict here would be
+# this adapter ranking a pool whose purpose it cannot see.
+#
+# Parity comes from the vdev's NAME, which looks like an oversight and is not.
+# Measured against zpool status -j on two live layouts (2026-08-14): a raidz1
+# vdev reports vdev_type "raidz" with NO nparity key anywhere in the document,
+# and the only place the number 1 appears is the name zpool gave it,
+# "raidz1-0". Reading the type alone yields "raidz" for every parity level,
+# which is precisely the confident half-answer this fact would be worthless
+# for.
+_PARITY_NAME = re.compile(r"^(raidz|draid)(\d)")
+
+
+def _redundancy(vdevs: list[dict]) -> tuple[str | None, int | None]:
+    """(how this pool is laid out, how many whole devices it survives losing).
+
+    Data vdevs only. A cache or log device leaving is not a pool leaving, and
+    counting a spare would report protection that is not attached to anything
+    yet — those carry a Group in the flattened walk and are skipped.
+
+    A pool is only as redundant as its WEAKEST data vdev, because losing any
+    one of them loses the pool. Striping a mirror across a bare disk is a bare
+    disk with extra steps, and reporting "mirror" for that layout is exactly
+    the kind of half-truth that gets acted on.
+    """
+    kinds: list[str] = []
+    tolerance: list[int] = []
+    current: str | None = None
+    members = 0
+
+    def close() -> bool:
+        """Finish the vdev just walked past. False where it cannot be read."""
+        nonlocal current, members
+        if current is None:
+            return True
+        if current == "mirror":
+            # A mirror survives losing all but one member, and the members are
+            # the entries nested under THIS vdev — counted as the walk passes
+            # them rather than globally, or a pool of two mirrors would credit
+            # each with the other's disks.
+            if members < 2:
+                return False
+            kinds.append("mirror")
+            tolerance.append(members - 1)
+        current, members = None, 0
+        return True
+
+    for vdev in vdevs:
+        depth, kind = vdev.get("Depth"), str(vdev.get("Type") or "").lower()
+        if vdev.get("Group"):
+            continue                       # logs, l2cache, spares
+        if depth == 1:
+            if not close():
+                return None, None
+            if kind == "disk":
+                kinds.append("stripe")
+                tolerance.append(0)
+            elif kind == "mirror":
+                current = "mirror"
+            else:
+                parity = _PARITY_NAME.match(str(vdev.get("Name") or ""))
+                if not parity or kind not in ("raidz", "draid"):
+                    # An unrecognised top-level vdev is not a redundant one by
+                    # default: claiming tolerance this walk cannot justify is
+                    # the direction that gets somebody hurt.
+                    return None, None
+                kinds.append(parity.group(0))
+                tolerance.append(int(parity.group(2)))
+        elif depth == 2 and current == "mirror" and kind == "disk":
+            members += 1
+    if not close() or not kinds:
+        return None, None
+    layout = kinds[0] if len(set(kinds)) == 1 else " + ".join(kinds)
+    return layout, min(tolerance)
 
 
 class Adapter:
@@ -686,6 +772,10 @@ class Adapter:
                 "UnhealthyVdevs": unhealthy,
                 "VdevsWithErrors": vdev_errors,
             }
+            layout, tolerated = _redundancy(vdevs)
+            if layout:
+                facts["Redundancy"] = layout
+                facts["DeviceFailuresTolerated"] = tolerated
             items.append(env.item_summary(f"pool:{name}", "pool", name, facts,
                                           opinions=pool_opinions(facts)))
         return items
