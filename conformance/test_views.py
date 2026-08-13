@@ -105,3 +105,24 @@ def test_a_views_host_targeting_is_validated_never_silently_widened():
         == "hosts must be a non-empty list of host names when given"
     assert view_problem({**GOOD, "hosts": "host-a"}) \
         == "hosts must be a non-empty list of host names when given"
+
+
+def test_a_pipeline_panel_is_stages_and_half_joins_are_refused():
+    pipeline = {
+        "name": "flow", "title": "Flow", "panels": [{
+            "key": "media", "title": "Media pipeline", "kind": "pipeline",
+            "stages": [
+                {"key": "queue", "title": "Queued", "subsystem": "servarr",
+                 "collection": "queue",
+                 "join": {"fact": "DownloadId", "targetFact": "native_id"}},
+                {"key": "transfers", "title": "Transferring",
+                 "subsystem": "downloaders", "collection": "transfers"},
+            ]}]}
+    assert view_problem(pipeline) is None
+    lone = {**pipeline, "panels": [{**pipeline["panels"][0],
+                                    "stages": pipeline["panels"][0]["stages"][:1]}]}
+    assert view_problem(lone) == "panels.0: a pipeline needs at least two stages"
+    half = {**pipeline, "panels": [{**pipeline["panels"][0], "stages": [
+        {**pipeline["panels"][0]["stages"][0], "join": {"fact": "DownloadId"}},
+        pipeline["panels"][0]["stages"][1]]}]}
+    assert view_problem(half) == "panels.0.stages.0: join must carry fact and targetFact"

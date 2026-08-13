@@ -427,17 +427,37 @@ def apply_fact_filters(items: list[dict], filters: dict[str, str]) -> list[dict]
         for key in filters:
             if key in carried:
                 continue
-            folded = _fold(key)
+            # Operators belong on the VALUE (?ActiveState=!failed); a key
+            # wearing one is provably not a fact name — no emitted fact
+            # starts with "!" or ends with "*" — so strip them before
+            # folding and the predictable misplacement finds its twin.
+            folded = _fold(key.removeprefix("!").removesuffix("*"))
             twin = next((k for k in sorted(carried) if _fold(k) == folded), None)
             if twin:
                 raise UnknownFilterKey(
                     f"no fact named {key!r} here, but {twin!r} is carried — "
                     "fact names are matched exactly")
 
+    def matches(actual: object, wanted: str) -> bool:
+        # Two operators beyond equality, both from live curation demand
+        # (2026-08-13: a view needed "mounts not under /run" and equality
+        # could not say it): a leading "!" negates, a trailing "*" prefix-
+        # matches, and they compose ("!/run*"). An absent fact matches
+        # only negated filters — absence is not equal to anything, but it
+        # is honestly not-equal to everything.
+        negate = wanted.startswith("!")
+        pattern = wanted[1:] if negate else wanted
+        if actual is None:
+            return negate
+        text_value = str(actual)
+        hit = (text_value.startswith(pattern[:-1]) if pattern.endswith("*")
+               else text_value == pattern)
+        return hit != negate
+
     def keep(item: dict) -> bool:
         for key, wanted in filters.items():
             actual = item["type"] if key == "type" else item["facts"].get(key)
-            if actual is None or str(actual) != wanted:
+            if not matches(actual, wanted):
                 return False
         return True
     return [item for item in items if keep(item)]

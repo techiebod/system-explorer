@@ -770,3 +770,19 @@ a.ov-sub:hover { color: var(--accent); }
 .fnd-meta { color: var(--text-faint); font-size: 11px; margin-top: 2px; }
 .fnd-ack { color: var(--text-faint); font-size: 11px; border: 1px solid var(--border);
   border-radius: 8px; padding: 1px 7px; white-space: nowrap; }
+
+/* ── pipeline panels (views, section 6.2) ───────────────── */
+.pl-flow { display: flex; gap: 14px; overflow-x: auto; padding: 4px 0; }
+.pl-stage { min-width: 200px; flex: 1 1 0; border-left: 1px solid var(--border);
+  padding-left: 12px; }
+.pl-stage:first-child { border-left: none; padding-left: 0; }
+.pl-stage-title { color: var(--text-faint); font-size: 11px;
+  text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+.pl-row { display: flex; align-items: baseline; gap: 7px; padding: 3px 4px;
+  border-radius: 4px; text-decoration: none; color: var(--text);
+  font-size: 12px; }
+.pl-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-row.picked { background: var(--panel-hover, rgba(128,128,128,.14)); }
+.pl-row.linked { background: var(--panel-hover, rgba(128,128,128,.08));
+  outline: 1px solid var(--border); }
+.pl-empty { color: var(--text-faint); font-size: 12px; }

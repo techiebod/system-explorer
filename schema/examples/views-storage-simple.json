@@ -6,7 +6,10 @@
     {
       "name": "storage-simple",
       "title": "Storage health",
-      "hosts": ["host-a", "host-b"],
+      "hosts": [
+        "host-a",
+        "host-b"
+      ],
       "audience": "someone who does not run Linux and wants to know their files are safe",
       "panels": [
         {
@@ -49,6 +52,56 @@
             "SmartTemperatureC"
           ],
           "note": "Every physical drive, which bay it sits in, and whether it says it is healthy."
+        }
+      ]
+    },
+    {
+      "name": "media-pipeline",
+      "title": "Media pipeline",
+      "hosts": [
+        "host-a-apps"
+      ],
+      "audience": "whoever asked where their download went",
+      "panels": [
+        {
+          "key": "flow",
+          "title": "Request to screen",
+          "kind": "pipeline",
+          "note": "Click a row to light what it relates to next door.",
+          "stages": [
+            {
+              "key": "requests",
+              "title": "Requested",
+              "subsystem": "plex",
+              "collection": "requests",
+              "filters": {
+                "Status": "pending"
+              }
+            },
+            {
+              "key": "queue",
+              "title": "In the managers",
+              "subsystem": "servarr",
+              "collection": "queue",
+              "label": "Title",
+              "join": {
+                "fact": "DownloadId",
+                "targetFact": "native_id"
+              }
+            },
+            {
+              "key": "transfers",
+              "title": "Transferring",
+              "subsystem": "downloaders",
+              "collection": "transfers"
+            },
+            {
+              "key": "sessions",
+              "title": "Playing now",
+              "subsystem": "plex",
+              "collection": "sessions"
+            }
+          ]
         }
       ]
     }

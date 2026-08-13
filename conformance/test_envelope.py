@@ -128,6 +128,21 @@ def test_an_underscore_near_miss_is_refused_with_the_real_name():
     assert "'ActiveState'" in str(err.value)
 
 
+def test_a_misplaced_operator_on_the_key_is_still_a_near_miss():
+    # Operators belong on the VALUE (?ActiveState=!failed). The predictable
+    # misplacement onto the key is provably not a fact name — no emitted
+    # fact starts with "!" or ends with "*" — so it must be refused with
+    # the real name, never answered with the healthy-empty page the
+    # refusal exists to prevent.
+    for key in ("!ActiveState", "ActiveState*", "!active_state"):
+        with pytest.raises(env.UnknownFilterKey) as err:
+            env.apply_fact_filters(FILTER_ITEMS, {key: "failed"})
+        assert "'ActiveState'" in str(err.value), key
+    # Stripping the operator must not manufacture refusals for keys that
+    # were never near anything: the open vocabulary keeps its empty page.
+    assert env.apply_fact_filters(FILTER_ITEMS, {"!NoSuchFact": "x"}) == []
+
+
 def test_an_unknown_key_with_no_near_miss_is_the_empty_page():
     # The vocabulary is open: this key may be a fact the collection carries
     # in another host state (RuntimeSynthesised when no mount is synthesised)
@@ -235,3 +250,23 @@ def test_info_opinions_still_set_the_info_level_but_never_ride_along():
                             healthy=None)
     assert item["worst_opinion_level"] == "info"
     assert "opinions" not in item
+
+
+def test_filter_values_negate_and_prefix_match():
+    # "!" negates, "*" prefix-matches, and they compose — the operators a
+    # curated view needed to say "mounts not under /run" (2026-08-13).
+    items = [
+        env.item_summary("mount:/bulk", "mount", "/bulk",
+                         {"Mountpoint": "/bulk"}),
+        env.item_summary("mount:/run/stage", "mount", "/run/stage",
+                         {"Mountpoint": "/run/stage"}),
+        env.item_summary("dataset:unmounted", "filesystem", "unmounted", {}),
+    ]
+    kept = env.apply_fact_filters(items, {"Mountpoint": "!/run*"})
+    # The absent-fact row matches the negation: absence is honestly
+    # not-equal to everything.
+    assert [item["id"] for item in kept] == ["mount:/bulk", "dataset:unmounted"]
+    kept = env.apply_fact_filters(items, {"Mountpoint": "/run*"})
+    assert [item["id"] for item in kept] == ["mount:/run/stage"]
+    kept = env.apply_fact_filters(items, {"Mountpoint": "!/bulk"})
+    assert [item["id"] for item in kept] == ["mount:/run/stage", "dataset:unmounted"]

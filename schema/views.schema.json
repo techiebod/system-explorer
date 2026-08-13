@@ -2,26 +2,49 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "se.views.1.schema.json",
   "title": "System Explorer view documents",
-  "description": "Operator-authored projections of the graph, served by the hub (docs/SPEC.md section 6.2). The envelope carries every document the configured directory holds, plus a per-document error entry for anything malformed — a broken view is an input to report, not a file to silently drop.",
+  "description": "Operator-authored projections of the graph, served by the hub (docs/SPEC.md section 6.2). The envelope carries every document the configured directory holds, plus a per-document error entry for anything malformed \u2014 a broken view is an input to report, not a file to silently drop.",
   "type": "object",
-  "required": ["schema", "observed_at", "views"],
+  "required": [
+    "schema",
+    "observed_at",
+    "views"
+  ],
   "properties": {
-    "schema": {"const": "se.views/1"},
-    "observed_at": {"type": "string", "format": "date-time"},
-    "site": {"type": "string", "minLength": 1},
+    "schema": {
+      "const": "se.views/1"
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "site": {
+      "type": "string",
+      "minLength": 1
+    },
     "views": {
       "type": "array",
-      "items": {"$ref": "#/$defs/view"}
+      "items": {
+        "$ref": "#/$defs/view"
+      }
     },
     "errors": {
       "type": "array",
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["file", "error"],
+        "required": [
+          "file",
+          "error"
+        ],
         "properties": {
-          "file": {"type": "string", "minLength": 1},
-          "error": {"type": "string", "minLength": 1}
+          "file": {
+            "type": "string",
+            "minLength": 1
+          },
+          "error": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       },
       "description": "Documents the directory holds that do not validate, each named with why. Present only when at least one is."
@@ -30,56 +53,157 @@
   "$defs": {
     "view": {
       "type": "object",
-      "required": ["name", "title", "panels"],
+      "required": [
+        "name",
+        "title",
+        "panels"
+      ],
       "properties": {
         "name": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9-]*$",
           "description": "Stable identifier, kebab-case like every other key in the product."
         },
-        "title": {"type": "string", "minLength": 1},
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
         "hosts": {
           "type": "array",
           "minItems": 1,
-          "items": {"type": "string", "minLength": 1},
-          "description": "Hub-registry host names this view was composed FOR; consumers offer it only there. Absent means every host — but a view is a dashboard composed for somewhere, so authored documents should usually name their hosts: the ZFS view rendering against a ZFS-less host as a wall of error strips is the shape this member exists to prevent. On a named host, panel failures still show loudly; targeting narrows where the view appears, never what it admits."
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Hub-registry host names this view was composed FOR; consumers offer it only there. Absent means every host \u2014 but a view is a dashboard composed for somewhere, so authored documents should usually name their hosts: the ZFS view rendering against a ZFS-less host as a wall of error strips is the shape this member exists to prevent. On a named host, panel failures still show loudly; targeting narrows where the view appears, never what it admits."
         },
         "audience": {
           "type": "string",
           "minLength": 1,
-          "description": "Prose: who this projection is for. Documentation for the operator choosing a view, never machine-matched — audiences are people, not roles the product could pretend to enforce."
+          "description": "Prose: who this projection is for. Documentation for the operator choosing a view, never machine-matched \u2014 audiences are people, not roles the product could pretend to enforce."
         },
         "panels": {
           "type": "array",
           "minItems": 1,
-          "items": {"$ref": "#/$defs/panel"}
+          "items": {
+            "$ref": "#/$defs/panel"
+          }
         }
       }
     },
     "panel": {
       "type": "object",
-      "required": ["key", "title", "subsystem", "collection"],
+      "required": [
+        "key",
+        "title"
+      ],
       "properties": {
-        "key": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
-        "title": {"type": "string", "minLength": 1},
-        "subsystem": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
-        "collection": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subsystem": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "Table panels: the collection reference. Pipeline panels carry stages instead; the loader refuses a panel that states neither."
+        },
+        "collection": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
         "filters": {
           "type": "object",
-          "additionalProperties": {"type": "string"},
-          "propertyNames": {"pattern": "^[A-Za-z][A-Za-z0-9_]*$|^type$"},
-          "description": "Fact-equality filters, exactly the collection route's own (section 6): the panel IS a filtered collection, so it cannot express a question the API cannot."
+          "additionalProperties": {
+            "type": "string"
+          },
+          "propertyNames": {
+            "pattern": "^[A-Za-z][A-Za-z0-9_]*$|^type$"
+          },
+          "description": "Fact-equality filters, exactly the collection route's own (section 6): the panel IS a filtered collection, so it cannot express a question the API cannot. Values support the route's two operators: a leading \"!\" negates, a trailing \"*\" prefix-matches, and they compose \u2014 \"!/run*\" keeps rows whose fact does not start with /run."
         },
         "columns": {
           "type": "array",
           "minItems": 1,
-          "items": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]*$|^type$"},
-          "description": "Fact NAMES, native spelling, in display order. Names only — meaning lives in /v1/facts and labels are the client's concern (section 5). A name no row carries renders empty, which is honest: the view said what to show, the host said what exists."
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9]*$|^type$"
+          },
+          "description": "Fact NAMES, native spelling, in display order. Names only \u2014 meaning lives in /v1/facts and labels are the client's concern (section 5). A name no row carries renders empty, which is honest: the view said what to show, the host said what exists."
         },
         "note": {
           "type": "string",
           "minLength": 1,
-          "description": "One optional sentence of operator prose under the panel title — what this panel is FOR, in the audience's words. The one place a view may speak, because it is the operator speaking, not the product."
+          "description": "One optional sentence of operator prose under the panel title \u2014 what this panel is FOR, in the audience's words. The one place a view may speak, because it is the operator speaking, not the product."
+        },
+        "kind": {
+          "enum": [
+            "table",
+            "pipeline"
+          ],
+          "description": "How the panel renders: a table of one collection (the default), or a pipeline of STAGES \u2014 columns left to right, each its own collection reference. The stages are authored; what flows between them is derived from the join facts the rows themselves carry, never drawn by hand."
+        },
+        "stages": {
+          "type": "array",
+          "minItems": 2,
+          "description": "Pipeline panels only: the columns, in flow order. Each stage is a collection reference like a panel, plus an optional join declaring which of its facts equals which fact on the NEXT stage's rows \u2014 the operator names the join key both APIs state; the renderer only follows it.",
+          "items": {
+            "type": "object",
+            "required": [
+              "key",
+              "title",
+              "subsystem",
+              "collection"
+            ],
+            "properties": {
+              "key": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1
+              },
+              "subsystem": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "collection": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "filters": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "label": {
+                "type": "string",
+                "description": "The fact shown as each row's one-line label; the object name when absent."
+              },
+              "join": {
+                "type": "object",
+                "required": [
+                  "fact",
+                  "targetFact"
+                ],
+                "properties": {
+                  "fact": {
+                    "type": "string"
+                  },
+                  "targetFact": {
+                    "type": "string",
+                    "description": "\"native_id\" and \"id\" address the row's identity members; anything else is a fact name."
+                  }
+                },
+                "description": "This stage's rows relate to the next stage's where this fact equals that one (case-insensitive: the estate's join keys cross APIs that disagree on case)."
+              }
+            }
+          }
         }
       }
     }

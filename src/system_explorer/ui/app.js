@@ -177,6 +177,9 @@ const PREFIX_ROUTE = {
   container: ["docker", "containers"],
   volume: ["docker", "volumes"],
   "docker-network": ["docker", "networks"],
+  router: ["traefik", "routers"],
+  client: ["downloaders", "clients"],
+  transfer: ["downloaders", "transfers"],
   identity: ["system", "identity"],
   time: ["system", "time"],
   boot: ["system", "boot"],
@@ -484,6 +487,22 @@ function knownHost(name) {
   return !!state.hub && !!name && Object.hasOwn(state.hub.hosts, name);
 }
 
+/* Agents sharing this host's machine_id — the per-process split (one
+   machine, several agent processes: the host agent plus credential-scoped
+   app instances). One machine should READ as one machine even while the
+   processes stay separate entries: the dropdown nests the mates and the
+   nav cross-links their subsystems, because "the apps you are looking
+   for are one dropdown entry away" was invisible from the host's own
+   page (operator report, 2026-08-13). */
+function machineMates(name) {
+  const mine = state.hub?.hosts?.[name]?.host?.machine_id;
+  if (!mine) return [];
+  return Object.entries(state.hub.hosts)
+    .filter(([other, probe]) => other !== name
+            && probe.host?.machine_id === mine)
+    .map(([other]) => other);
+}
+
 function defaultHost() {
   const names = Object.keys(state.hub.hosts);
   return names.find(n => state.hub.hosts[n].reachable) ?? names[0];
@@ -500,6 +519,7 @@ async function loadHost() {
   state.owners = null;         // and neither does attribution
   state.capabilities = null;   // stale caps must not describe the new host
   state.factDict = null;       // and vocabulary belongs to the host that served it
+  state.mateCaps = null;       // the machine-mates' sections rebuild per host
   renderHostCard();
   /* Started alongside capabilities rather than in front of them, and never
      awaited on the failure path: an agent too old to serve /v1/facts (or a hub
@@ -546,7 +566,35 @@ async function loadHost() {
   } catch (err) {
     banner(`Navigation failed to render: ${err.message}`);
   }
+  // The machine-mates' subsystems arrive AFTER the first paint, on purpose:
+  // this host's own nav must never wait on a sibling process. Guarded on host
+  // identity, NOT the collection epoch: route() bumps the epoch synchronously
+  // after loadHost returns, so an epoch guard would discard every response
+  // before it could land (the refreshStatus arrangement).
+  const mates = machineMates(state.currentHost);
+  const mateHost = state.currentHost;
+  if (mates.length) {
+    Promise.all(mates.map(mate =>
+      fetch(`${hubBaseFor(mate)}/v1/capabilities`)
+        .then(res => res.ok ? res.json() : null)
+        .then(caps => [mate, caps])
+        .catch(() => [mate, null])))
+      .then(pairs => {
+        if (mateHost !== state.currentHost) return;
+        state.mateCaps = Object.fromEntries(
+          pairs.filter(([, caps]) => caps));
+        try { renderNav(); } catch { /* the mates' section is a bonus */ }
+      });
+  }
   return true;
+}
+
+/* hubBase for an arbitrary agent name — the mates' capability fetches
+   need the proxy prefix without switching the current host. */
+function hubBaseFor(name) {
+  const site = state.hub?.hosts?.[name]?.site;
+  return site ? `/sites/${encodeURIComponent(site)}/agents/${name}`
+              : `/agents/${name}`;
 }
 
 function onHostSelect() {
@@ -622,10 +670,35 @@ function renderHostCard() {
       ? `${site} — site unreachable` : site;
     const group = bySite.size > 1 || site ? el("optgroup") : null;
     if (group) group.label = label || "(unnamed site)";
-    for (const [name, probe] of bySite.get(site).sort((a, b) => a[0].localeCompare(b[0]))) {
+    // One machine reads as one machine: entries sharing a machine_id sort
+    // adjacent, the primary first (the one whose name matches its reported
+    // hostname), its process-mates nested under it. The machine_id only
+    // supplies ADJACENCY — the group's position in the list comes from its
+    // primary's name, so five ordinary solo hosts still read alphabetically
+    // rather than shuffled by opaque hex.
+    const entries = bySite.get(site);
+    const primaryNameById = new Map();
+    for (const [name, probe] of entries) {
+      const id = probe.host?.machine_id;
+      if (!id) continue;
+      if (name === (probe.host?.hostname || name)) primaryNameById.set(id, name);
+      else if (!primaryNameById.has(id)) primaryNameById.set(id, name);
+    }
+    const groupKey = ([name, probe]) =>
+      primaryNameById.get(probe.host?.machine_id) ?? name;
+    const primaryFirst = ([name, probe]) =>
+      name === (probe.host?.hostname || name) ? 0 : 1;
+    entries.sort((a, b) =>
+      groupKey(a).localeCompare(groupKey(b))
+      || primaryFirst(a) - primaryFirst(b)
+      || a[0].localeCompare(b[0]));
+    for (const [name, probe] of entries) {
+      const nested = probe.host?.machine_id
+        && name !== (probe.host?.hostname || name);
       // Unreachable hosts stay listed and selectable — picking one shows the
       // error banner rather than silently hiding the host.
-      const opt = el("option", null, probe.reachable ? name : `${name} — unreachable`);
+      const label = probe.reachable ? name : `${name} — unreachable`;
+      const opt = el("option", null, nested ? `\u2003\u21b3 ${label}` : label);
       opt.value = name;
       (group || select).appendChild(opt);
     }
@@ -671,7 +744,10 @@ function navRoutes() {
   const out = [];
   for (const section of navModel()) {
     for (const item of section.items) {
-      if (!hidden.has(item.route)) out.push([item.sub, item.coll]);
+      // Items carrying their own href are cross-host links (the machine
+      // mates): cycling into their [sub, coll] would point the CURRENT
+      // host at a collection it does not serve.
+      if (!hidden.has(item.route) && !item.href) out.push([item.sub, item.coll]);
     }
   }
   return out;
@@ -744,6 +820,23 @@ function navModel() {
                     available: true,
                     items: [{ sub: "view", coll: doc.name, label: doc.title,
                               route: `view/${doc.name}` }] });
+  }
+
+  // The other processes on THIS machine, each with its available
+  // subsystems as cross-links — the credential-isolated apps instance
+  // stops being invisible from the host page it shares a machine with.
+  for (const [mate, caps] of Object.entries(state.mateCaps || {})) {
+    const items = [];
+    for (const [sub, cap] of Object.entries(caps.subsystems || {})) {
+      if (!cap.available || !(cap.collections || []).length) continue;
+      items.push({ sub, coll: cap.collections[0], label: sub,
+                   route: `mate/${mate}/${sub}`,
+                   href: `#/${mate}/${sub}/${cap.collections[0]}` });
+    }
+    if (!items.length) continue;
+    items.sort((a, b) => a.label.localeCompare(b.label));
+    sections.push({ solo: false, heading: `${mate} \u00b7 this machine`,
+                    available: true, items });
   }
 
   // The estate attention surface (SPEC section 6.3): hub mode only,
@@ -831,7 +924,7 @@ function renderNav() {
     for (const item of section.items) {
       const link = el("a", "nav-item" + (item.unavailable ? " unavailable" : ""),
                       item.label);
-      link.href = hashFor(item.sub, item.coll);
+      link.href = item.href || hashFor(item.sub, item.coll);
       link.dataset.route = item.route;
       if (item.unavailable) link.title = item.reason || "unavailable";
       box.appendChild(link);
@@ -1469,8 +1562,104 @@ async function loadView(name) {
       `${bad.file}: ${bad.error} — this document is not being served`));
   }
   for (const panel of doc.panels) {
-    pane.appendChild(renderViewPanel(panel, epoch));
+    pane.appendChild(panel.kind === "pipeline"
+      ? renderPipelinePanel(panel, epoch)
+      : renderViewPanel(panel, epoch));
   }
+}
+
+/* A pipeline panel: authored STAGES rendered as columns in flow order,
+   with the flow itself derived — never drawn — from the join facts the
+   rows carry. Clicking a row lights every row it relates to in the
+   neighbouring stages (the DownloadId a manager states matching the
+   transfer id a client states), because an arrow that cannot say which
+   rows it connects is decoration, and these can. Case-insensitive on
+   the join value: the estate's keys cross APIs that disagree on case. */
+function renderPipelinePanel(panel, epoch) {
+  const card = el("section", "vw-card");
+  card.appendChild(el("h3", "vw-panel-title", panel.title));
+  if (panel.note) card.appendChild(el("div", "vw-note", panel.note));
+  const flow = el("div", "pl-flow", "loading…");
+  card.appendChild(flow);
+  const stages = panel.stages || [];
+  Promise.all(stages.map(stage => {
+    const query = new URLSearchParams(stage.filters || {});
+    query.set("limit", String(PAGE_LIMIT));
+    return api(`/v1/${stage.subsystem}/${stage.collection}?${query}`)
+      .then(page => page.items || [])
+      .catch(err => ({ error: String(err) }));
+  })).then(results => {
+    if (state.epoch !== epoch) return;
+    flow.textContent = "";
+    const rowNodes = stages.map(() => []);
+    const joinValue = (item, fact) =>
+      String(fact === "native_id" ? item.native_id
+             : fact === "id" ? item.id
+             : item.facts?.[fact] ?? "").toLowerCase();
+    const clearLinks = () => rowNodes.forEach(nodes =>
+      nodes.forEach(node => node.classList.remove("linked", "picked")));
+    for (const [at, stage] of stages.entries()) {
+      const column = el("div", "pl-stage");
+      const items = results[at];
+      const count = Array.isArray(items) ? items.length : "—";
+      column.appendChild(el("div", "pl-stage-title",
+                            `${stage.title} (${count})`));
+      if (!Array.isArray(items)) {
+        column.appendChild(el("div", "vw-error", items.error));
+        flow.appendChild(column);
+        continue;
+      }
+      if (!items.length)
+        column.appendChild(el("div", "pl-empty", "nothing here right now"));
+      for (const item of items) {
+        const row = el("a", "pl-row");
+        row.href = hashFor(stage.subsystem, stage.collection, item.id);
+        if (item.worst_opinion_level)
+          row.appendChild(el("span", `dot ${item.worst_opinion_level}`));
+        row.appendChild(el("span", "pl-label",
+          (stage.label && item.facts?.[stage.label])
+            || item.name || item.native_id));
+        row.onclick = (event) => {
+          if (event.metaKey || event.ctrlKey) return; // real navigation
+          event.preventDefault();
+          clearLinks();
+          row.classList.add("picked");
+          // Forward join: this stage declares how it relates to the next.
+          const forward = stage.join;
+          if (forward && at + 1 < stages.length) {
+            const value = joinValue(item, forward.fact);
+            if (value) rowNodes[at + 1].forEach(node => {
+              if (node.dataset.back === value) node.classList.add("linked");
+            });
+          }
+          // Backward join: the previous stage declared how it reaches us.
+          const backward = at > 0 ? stages[at - 1].join : null;
+          if (backward) {
+            const mine = joinValue(item, backward.targetFact);
+            if (mine) rowNodes[at - 1].forEach(node => {
+              // Previous rows carry the TARGET value they forward to us.
+              if (node.dataset.fwd === mine) node.classList.add("linked");
+            });
+          }
+        };
+        // EVERY row registers — clearing and the backward scan must reach
+        // rows in stages nobody joins into (stage 0 included), and several
+        // rows sharing one join value (a season pack's queue records) must
+        // all light, so the values ride as data attributes, never map keys.
+        const backward = at > 0 ? stages[at - 1].join : null;
+        if (backward) {
+          const back = joinValue(item, backward.targetFact);
+          if (back) row.dataset.back = back;
+        }
+        if (stage.join)
+          row.dataset.fwd = joinValue(item, stage.join.fact);
+        rowNodes[at].push(row);
+        column.appendChild(row);
+      }
+      flow.appendChild(column);
+    }
+  });
+  return card;
 }
 
 function renderViewPanel(panel, epoch) {

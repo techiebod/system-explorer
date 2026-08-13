@@ -28,6 +28,7 @@ import json
 from pathlib import Path
 
 REQUIRED_PANEL_MEMBERS = ("key", "title", "subsystem", "collection")
+REQUIRED_STAGE_MEMBERS = ("key", "title", "subsystem", "collection")
 
 
 def load_views(directory: str | None, now: str, site: str | None = None) -> dict:
@@ -94,6 +95,33 @@ def view_problem(doc: object) -> str | None:
     for index, panel in enumerate(panels):
         if not isinstance(panel, dict):
             return f"panels.{index}: not an object"
+        if panel.get("kind") == "pipeline":
+            # A pipeline panel is stages, not a single collection: each
+            # stage is a collection reference of its own, and a join (when
+            # declared) must say both halves — a half-joined stage would
+            # silently relate nothing, which is the dropped-panel shape in
+            # miniature.
+            for member in ("key", "title"):
+                if not isinstance(panel.get(member), str) or not panel[member]:
+                    return f"panels.{index}: missing {member}"
+            stages = panel.get("stages")
+            if not isinstance(stages, list) or len(stages) < 2:
+                return f"panels.{index}: a pipeline needs at least two stages"
+            for at, stage in enumerate(stages):
+                if not isinstance(stage, dict):
+                    return f"panels.{index}.stages.{at}: not an object"
+                for member in REQUIRED_STAGE_MEMBERS:
+                    if not isinstance(stage.get(member), str) or not stage[member]:
+                        return f"panels.{index}.stages.{at}: missing {member}"
+                join = stage.get("join")
+                if join is not None and (
+                        not isinstance(join, dict)
+                        or not isinstance(join.get("fact"), str) or not join["fact"]
+                        or not isinstance(join.get("targetFact"), str)
+                        or not join["targetFact"]):
+                    return (f"panels.{index}.stages.{at}: join must carry"
+                            " fact and targetFact")
+            continue
         for member in REQUIRED_PANEL_MEMBERS:
             if not isinstance(panel.get(member), str) or not panel[member]:
                 return f"panels.{index}: missing {member}"
