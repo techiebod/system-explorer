@@ -316,7 +316,23 @@ routing/firewall), not for coverage symmetry.
 | `storage` | `pools`, `datasets`, `block-devices`, `mounts`, `arrays`, `lookups` | `zpool`/`zfs` JSON output; `lsblk -J`; `findmnt -J` | none (verify `/dev/zfs` mode) | blocks/mounts on any host; ZFS needs a pool |
 | `docker` | `containers`, `volumes`, `networks` | Engine API over unix socket, GET only | `docker` group (caveat §7) | any host running Docker |
 | `vms` | `domains` | libvirt read-only socket (`virConnectOpenReadOnly`) | ro-socket access | any host running libvirt |
-| `network` | `links`, `routes`, `resolver`, `nft-tables`, `tailscale`, `conntrack-summary`, `lookups` | `ip -j` (rtnetlink); resolve1 D-Bus; `nft -j list ruleset`; `tailscale status --json` snapshots via root collector | `CAP_NET_ADMIN` (nft, conntrack) | any systemd host; tailscale needs the snapshot collector |
+| `network` | `links`, `routes`, `resolver`, `listening`, `nft-tables`, `nft-rules`, `port-exposure`, `tailscale`, `conntrack-summary`, `lookups` | `ip -j` (rtnetlink); resolve1 D-Bus; `nft -j list ruleset`; `/proc/net/{tcp,tcp6,udp,udp6}`; `tailscale status --json` snapshots via root collector | `CAP_NET_ADMIN` (nft, conntrack); none for links/routes/listening | any systemd host; tailscale needs the snapshot collector |
+| `resources` | `workloads` | cgroup v2 under `/sys/fs/cgroup`: `cpu.stat`, `memory.current`/`peak`/`events`, `io.stat` and the `{io,cpu,memory}.pressure` files, plus `/proc/stat` for the host total the remainder is measured against | none | any host presenting a unified cgroup v2 hierarchy; declines with a reason on cgroup v1 |
+| `protection` | `targets`, `jobs`, `destinations` | three documents the host already publishes: a rendered declaration under `/etc`, per-job receipts, and an hourly staleness verdict. The repositories those jobs write to are deliberately never opened | none | a host whose configuration renders a protection manifest |
+| `paperless` | `instance` | Paperless-ngx REST API over HTTP | API token (`SE_PAPERLESS_TOKEN`) | a host running paperless |
+| `traefik` | `overview`, `routers`, `services` | Traefik API over HTTP, GET only | API reachable (the estate publishes it loopback-only) | a host running Traefik |
+| `servarr` | `apps`, `health`, `queue`, `history` | Servarr API v3 — one implementation, several instances | per-instance API key | a host running any Servarr application |
+| `downloaders` | `clients`, `transfers` | Transmission RPC and the SABnzbd API | per-client credentials | a host running either |
+| `plex` | `server`, `libraries`, `sessions`, `requests` | Plex, Tautulli and Overseerr HTTP APIs | per-service token | a host running the media tier |
+| `bazarr` | `instance` | Bazarr API over HTTP | API key | a host running bazarr |
+| `kea` | `daemon`, `subnets`, `reservations`, `leases` | Kea control socket (`config-get`, `statistic-get-all`, `lease4-get-all`) | socket group | a host running Kea DHCP |
+| `unbound` | `daemon` | `unbound-control` over its socket | socket group | a host running unbound |
+
+Every subsystem an adapter serves appears above, and every collection it
+declares appears in its row. That is held by conformance rather than by
+review: ten subsystems and three collections had shipped without a row here
+before the check existed, which is the drift this table is supposed to
+prevent in the code and could not prevent in itself.
 
 Notes:
 
