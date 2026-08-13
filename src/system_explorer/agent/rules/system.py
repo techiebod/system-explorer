@@ -36,19 +36,26 @@ PSI_IO_FULL_WARN = 20.0
 # Where a host-wide stall gets attributed. /proc/pressure says THIS HOST made
 # no progress and cannot say what stalled it; the kernel keeps the same PSI
 # accounting per cgroup and systemd gives every service, scope and slice one,
-# so units/units carries these exact fact names on every row
-# (adapters/units.py ROW_PRESSURE_FACTS, held by conformance). Ordering by the
+# so resources/workloads carries these exact fact names on every row
+# (adapters/resources.py ROW_FACTS, held by conformance). Ordering by the
 # same fact the threshold judged puts the responsible workload at the top —
 # which is the step "54.55% of the last minute" alone does not offer.
-LOOK_UNITS_BY_IO = [{"subsystem": "units", "collection": "units",
-                     "fact": "PsiIoFullAvg60",
-                     "label": "which units are waiting on I/O"}]
-LOOK_UNITS_BY_MEMORY = [{"subsystem": "units", "collection": "units",
-                         "fact": "PsiMemoryFullAvg60",
-                         "label": "which units are waiting on memory reclaim"}]
-LOOK_UNITS_BY_CPU = [{"subsystem": "units", "collection": "units",
-                      "fact": "PsiCpuSomeAvg60",
-                      "label": "which units are waiting for CPU"}]
+#
+# And the destination now carries the ROOT slice as a row, which is what
+# makes this link answer rather than merely narrow: where nothing inside the
+# host accounts for the number, -.slice says so positively instead of the
+# operator inferring it from a list whose worst entry is an order of
+# magnitude smaller.
+LOOK_WORKLOADS_BY_IO = [{"subsystem": "resources", "collection": "workloads",
+                         "fact": "PsiIoFullAvg60",
+                         "label": "which workloads are waiting on I/O"}]
+LOOK_WORKLOADS_BY_MEMORY = [{"subsystem": "resources", "collection": "workloads",
+                             "fact": "PsiMemoryFullAvg60",
+                             "label": "which workloads are waiting on memory "
+                                      "reclaim"}]
+LOOK_WORKLOADS_BY_CPU = [{"subsystem": "resources", "collection": "workloads",
+                          "fact": "PsiCpuSomeAvg60",
+                          "label": "which workloads are waiting for CPU"}]
 # The failed units the degraded verdict counts. NO ordering fact,
 # deliberately: what this link wants is "the failed ones", which is a
 # filter, and look refuses filters (see envelope.opinion). Ranking by
@@ -172,7 +179,7 @@ def overview_opinions(facts: dict) -> list[dict]:
             f"This host made no progress for {psi_mem}% of the last minute: "
             "every task that had work to do was waiting on memory reclaim "
             "(thrashing). Tasks with nothing to do are not counted.",
-            ["PsiMemoryFullAvg60"], look=LOOK_UNITS_BY_MEMORY))
+            ["PsiMemoryFullAvg60"], look=LOOK_WORKLOADS_BY_MEMORY))
     psi_cpu = facts.get("PsiCpuSomeAvg60")
     if psi_cpu is not None and psi_cpu >= PSI_CPU_SOME_WARN:
         opinions.append(env.opinion(
@@ -183,7 +190,7 @@ def overview_opinions(facts: dict) -> list[dict]:
             # things is how an operator learns to distrust all of them.
             "psi-cpu", "warn",
             f"At least one task was waiting for CPU {psi_cpu}% of the last "
-            "minute.", ["PsiCpuSomeAvg60"], look=LOOK_UNITS_BY_CPU))
+            "minute.", ["PsiCpuSomeAvg60"], look=LOOK_WORKLOADS_BY_CPU))
     psi_io = facts.get("PsiIoFullAvg60")
     if psi_io is not None and psi_io >= PSI_IO_FULL_WARN:
         opinions.append(env.opinion(
@@ -191,6 +198,6 @@ def overview_opinions(facts: dict) -> list[dict]:
             f"This host made no progress for {psi_io}% of the last minute: "
             "every task that had work to do was waiting on I/O. Tasks with "
             "nothing to do are not counted.", ["PsiIoFullAvg60"],
-            look=LOOK_UNITS_BY_IO))
+            look=LOOK_WORKLOADS_BY_IO))
     return opinions
 

@@ -72,6 +72,14 @@ const state = {
 
 const COLUMNS = {
   "units/units": ["ActiveState", "SubState", "Description"],
+  /* Utilisation and stall side by side, because they answer different
+     questions and disagree in the interesting cases: a workload pegging a
+     core with nothing contended stalls nobody, and one starved by somebody
+     else's I/O stalls while consuming almost nothing. Parent leads so the
+     ladder is readable down the page. */
+  "resources/workloads": ["Parent", "CpuUsageUsec", "MemoryCurrentBytes",
+                          "IoReadBytes", "IoWrittenBytes", "PsiIoFullAvg60",
+                          "PsiCpuSomeAvg60", "PsiMemoryFullAvg60"],
   "logs/journal": ["Timestamp", "Priority", "SyslogIdentifier", "Message"],
   "docker/containers": ["State", "Status", "Image", "ComposeProject"],
   "docker/volumes": ["Driver", "Mountpoint", "ComposeProject"],
@@ -2010,7 +2018,12 @@ function containerNames(page) {
     if (item.facts?.[CONTAINER_ID]) byHandle.set(item.facts[CONTAINER_ID], name);
     for (const value of Object.values(item.facts || {})) {
       const scope = typeof value === "string" && DOCKER_SCOPE.exec(value);
-      if (scope) { byHandle.set(scope[1], name); break; }
+      /* Keyed by BOTH the container id and the scope unit's full name. The
+         id serves a row that carries ContainerID as a join key; the unit name
+         serves one whose native id simply IS the scope, which is every row in
+         resources/workloads. Same map, same source, no fact duplicated to
+         make the join work. */
+      if (scope) { byHandle.set(scope[1], name); byHandle.set(scope[0].replace(/^\//, ""), name); break; }
     }
   }
   return byHandle;
@@ -2459,10 +2472,15 @@ async function loadOverview() {
     asks.vall = api("/v1/vms/domains?limit=1");
   }
   if (has("units", "units")) asks.ufail = api("/v1/units/units?ActiveState=failed&limit=1");
-  // The stalled-unit list beside the pressure meter. Cheap because the PSI
+  // The stalled-workload list beside the pressure meter. Cheap because the PSI
   // numbers already ride on the row (that was the point of putting them there),
-  // so this is one page of units rather than a walk of every object.
-  if (has("units", "units")) asks.stalled = api("/v1/units/units?limit=800");
+  // so this is one page rather than a walk of every object. It reads
+  // resources/workloads rather than units/units because consumption moved
+  // there with the cgroup walk — and the collection now carries the ROOT
+  // slice, which is what lets the panel say a host stall belongs to no
+  // workload at all instead of leaving the meter unreconciled.
+  if (has("resources", "workloads"))
+    asks.stalled = api("/v1/resources/workloads?limit=800");
   if (has("system", "identity") && state.ovIdentity?.host !== state.currentHost)
     asks.identity = api("/v1/system/identity");
   const keys = Object.keys(asks);
@@ -2812,7 +2830,7 @@ function renderOverview(obs, got = {}) {
   // a host pressure meter had to know to go looking for it.
   if (got.stalled?.items?.length) {
     const p = el("div", "ov-panel");
-    p.appendChild(el("h3", null, "Stalling most · unit, 60s"));
+    p.appendChild(el("h3", null, "Stalling most · workload, 60s"));
     // Names for the scopes that carry an id instead of one. The container rows
     // are the ones the containers KPI already asked for, so a host that serves
     // no docker pays nothing here and simply gets no map.
@@ -2830,8 +2848,8 @@ function renderOverview(obs, got = {}) {
       .slice(0, 5);
     if (!worst.length) {
       p.appendChild(el("div", "ov-sub", stalling.length
-        ? "every unit reporting an I/O stall is a slice its own members explain"
-        : "no unit reports an I/O stall"));
+        ? "every workload reporting an I/O stall is a slice its own members explain"
+        : "no workload reports an I/O stall"));
     } else {
       for (const u of worst) {
         const share = u.facts.PsiIoFullAvg60;
@@ -2843,7 +2861,7 @@ function renderOverview(obs, got = {}) {
         // container name is not.
         const named = stallingName(u, containers);
         const lbl = el("a", "lbl wide", named);
-        lbl.href = hashFor("units", "units", u.id);
+        lbl.href = hashFor("resources", "workloads", u.id);
         lbl.title = named === u.native_id ? u.native_id : `${named} — ${u.native_id}`;
         row.appendChild(lbl);
         row.appendChild(meter(share, share >= 20 ? "warn" : null));

@@ -34,8 +34,9 @@ import pytest
 
 from system_explorer.agent import envelope as env
 from system_explorer.agent.adapters import docker as docker_adapter
+from system_explorer.agent.adapters import resources as resources_adapter
 from system_explorer.agent.adapters import units as units_adapter
-from system_explorer.agent.rules import units as units_rules
+from system_explorer.agent.rules import resources as resources_rules
 
 IO = "PsiIoFullAvg60"
 MEMORY = "PsiMemoryFullAvg60"
@@ -68,7 +69,7 @@ def nodes(*spec: tuple[str, str | None, dict]) -> dict[str, dict]:
             chain.append(walk)
             walk = built[walk]["parent"]
         node["depth"] = len(chain) - 1
-        node["path"] = "/".join([units_adapter.CGROUP_ROOT, *reversed(chain)])
+        node["path"] = "/".join([resources_adapter.CGROUP_ROOT, *reversed(chain)])
         # Derived, not asserted: a cgroup is this host's systemd's only where
         # every cgroup above it is a slice, and a fixture that claimed
         # otherwise would prove the delegation rule against a tree systemd
@@ -78,7 +79,7 @@ def nodes(*spec: tuple[str, str | None, dict]) -> dict[str, dict]:
 
 
 def attribution(tree: dict[str, dict], slice_name: str) -> dict:
-    return units_adapter._stall_attribution(tree).get(slice_name, {})
+    return resources_adapter._stall_attribution(tree).get(slice_name, {})
 
 
 # ── explained: the member is the specific, larger statement ──────────────
@@ -166,16 +167,16 @@ def test_the_rule_reports_the_unexplained_slice_and_stays_silent_on_the_rest():
     evaluator both the row and the object view use."""
     explained = {"ActiveState": "active", IO: 56.35,
                  "StallExplainedBy": {IO: "docker-4d1f9c02ab77.scope"}}
-    assert units_rules.slice_unit_opinions(explained) == []
+    assert resources_rules.slice_opinions(explained) == []
 
     tree = nodes(("system.slice", None, {IO: 33.43}),
                  ("example-a.service", "system.slice", {IO: 4.1}))
     facts = {"ActiveState": "active", IO: 33.43,
              **attribution(tree, "system.slice")}
-    [opinion] = units_rules.slice_unit_opinions(facts)
+    [opinion] = resources_rules.slice_opinions(facts)
     assert opinion["key"] == "slice-stall-unexplained"
-    assert "no unit inside it accounts for it" in opinion["message"]
-    assert opinion["look"] == units_rules.SLICE_STALL_LOOK[IO]
+    assert "no workload inside it accounts for it" in opinion["message"]
+    assert opinion["look"] == resources_rules.SLICE_STALL_LOOK[IO]
     # And it claims attention, at the bar a single unit must clear. At info,
     # envelope.attention() strips it and the one condition no member row will
     # ever state reaches neither /v1/findings nor the estate roll-up.
@@ -218,7 +219,7 @@ def test_the_rule_words_an_unattributable_stall_as_a_gap_in_the_reading():
                  ("example-dark.scope", "system.slice", {}))
     facts = {"ActiveState": "active", IO: 33.43,
              **attribution(tree, "system.slice")}
-    [opinion] = units_rules.slice_unit_opinions(facts)
+    [opinion] = resources_rules.slice_opinions(facts)
     assert opinion["key"] == "slice-stall-unattributed"
     assert "could not be established" in opinion["message"]
     assert "no unit inside it accounts" not in opinion["message"]
@@ -245,7 +246,7 @@ def test_the_cpu_share_is_never_attributed():
     tree = nodes(("system.slice", None, {CPU: 71.2}),
                  ("example.service", "system.slice", {CPU: 3.0}))
     assert attribution(tree, "system.slice") == {}
-    assert CPU not in units_adapter.ATTRIBUTED_PRESSURE_FACTS
+    assert CPU not in resources_adapter.ATTRIBUTED_PRESSURE_FACTS
 
 
 def test_a_slice_that_is_not_stalling_is_not_attributed_at_all():
@@ -289,6 +290,22 @@ def test_a_subtree_the_walk_cut_short_cannot_be_ruled_out():
 
 # ── the walk itself, over a real directory tree ──────────────────────────
 
+def opened_object(name):
+    """What the opened object carries for one workload.
+
+    The units collection had a separate single-unit read here and these tests
+    existed partly to keep it agreeing with the list. The resources collection
+    has one acquisition serving both, so the agreement is structural — this
+    reproduces the old shape so the assertions below still say what they said.
+    """
+    found = resources_adapter._nodes()
+    facts = resources_adapter._by_unit(found).get(name)
+    if facts is None:
+        return {}
+    return {**facts,
+            **resources_adapter._stall_attribution(found, only=name).get(name, {})}
+
+
 def write_pressure(directory, io_full: float | None) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     if io_full is not None:
@@ -304,8 +321,8 @@ def walk_tree(monkeypatch, root, spec) -> dict[str, dict]:
     twice, and a directory the walk cannot get into."""
     for relative, io_full in spec:
         write_pressure(root / relative, io_full)
-    monkeypatch.setattr(units_adapter, "CGROUP_ROOT", str(root))
-    return units_adapter._pressure_nodes()
+    monkeypatch.setattr(resources_adapter, "CGROUP_ROOT", str(root))
+    return resources_adapter._nodes()
 
 
 def test_the_walk_records_parentage_readability_and_the_shallower_name(tmp_path, monkeypatch):
@@ -315,7 +332,7 @@ def test_the_walk_records_parentage_readability_and_the_shallower_name(tmp_path,
     manager creates — init.scope exists at the root and again inside
     user@<uid>.service, and merging by name let whichever the walk reached
     last decide whose pressure a row reports."""
-    monkeypatch.setattr(units_adapter, "CGROUP_ROOT", str(tmp_path))
+    monkeypatch.setattr(resources_adapter, "CGROUP_ROOT", str(tmp_path))
     write_pressure(tmp_path / "system.slice", 56.35)
     write_pressure(tmp_path / "system.slice" / "example.service", 65.27)
     write_pressure(tmp_path / "system.slice" / "example-dark.scope", None)
@@ -323,14 +340,21 @@ def test_the_walk_records_parentage_readability_and_the_shallower_name(tmp_path,
     write_pressure(tmp_path / "user.slice" / "user-1000.slice"
                    / "user@1000.service" / "init.scope", 99.0)
 
-    found = units_adapter._pressure_nodes()
+    found = resources_adapter._nodes()
     assert found["example.service"]["parent"] == "system.slice"
-    assert found["system.slice"]["parent"] is None
+    # The root is walked and carries systemd's own name for it, so a top-level
+    # slice hangs from something rather than from nothing. That is the whole
+    # point of including it: the host total is the figure every member below
+    # is a share of, and it had no row to be stated on.
+    assert found["system.slice"]["parent"] == "-.slice"
+    assert found["-.slice"]["parent"] is None
+    assert found["-.slice"]["depth"] == 0
+    assert found["-.slice"]["managed"] is True
     assert found["example-dark.scope"]["facts"] == {}
     assert found["example-dark.scope"]["parent"] == "system.slice"
     assert found["init.scope"]["facts"][IO] == 1.0, "the deeper namesake won"
-    assert units_adapter._pressure_by_unit(found)["example.service"][IO] == 65.27
-    assert "example-dark.scope" not in units_adapter._pressure_by_unit(found)
+    assert resources_adapter._by_unit(found)["example.service"][IO] == 65.27
+    assert "example-dark.scope" not in resources_adapter._by_unit(found)
 
 
 def test_the_walk_marks_the_slice_whose_children_it_refused_to_descend(tmp_path, monkeypatch):
@@ -338,20 +362,20 @@ def test_the_walk_marks_the_slice_whose_children_it_refused_to_descend(tmp_path,
     a filesystem walk; it is lowered here rather than nesting eight real
     directories, because the behaviour under test is the marking, not the
     number."""
-    monkeypatch.setattr(units_adapter, "CGROUP_ROOT", str(tmp_path))
-    monkeypatch.setattr(units_adapter, "CGROUP_MAX_DEPTH", 3)
+    monkeypatch.setattr(resources_adapter, "CGROUP_ROOT", str(tmp_path))
+    monkeypatch.setattr(resources_adapter, "CGROUP_MAX_DEPTH", 3)
     write_pressure(tmp_path / "system.slice", 33.43)
     write_pressure(tmp_path / "system.slice" / "system-deep.slice", 1.0)
     write_pressure(tmp_path / "system.slice" / "system-deep.slice"
                    / "example.service", 99.0)
 
-    found = units_adapter._pressure_nodes()
+    found = resources_adapter._nodes()
     assert "example.service" not in found
     # The flag sits on the cgroup whose children were left unread, which is
     # the only node that can still be seen from above.
     assert found["system-deep.slice"]["pruned"] is True
     assert found["system.slice"]["pruned"] is False
-    facts = units_adapter._stall_attribution(found)["system.slice"]
+    facts = resources_adapter._stall_attribution(found)["system.slice"]
     assert "StallUnexplained" not in facts
     assert IO in facts["StallAttributionUnobservable"]
 
@@ -360,18 +384,18 @@ def test_the_object_path_answers_with_the_same_attribution_as_the_row(tmp_path, 
     """One evaluator serves both views, so a detail page that skipped the
     member readings would judge the same slice on less than the list did and
     the two would disagree about one unit."""
-    monkeypatch.setattr(units_adapter, "CGROUP_ROOT", str(tmp_path))
+    monkeypatch.setattr(resources_adapter, "CGROUP_ROOT", str(tmp_path))
     write_pressure(tmp_path / "system.slice", 56.35)
     write_pressure(tmp_path / "system.slice" / f"docker-{CONTAINER_ID}.scope", 65.27)
 
-    facts = units_adapter._unit_pressure("system.slice")
+    facts = opened_object("system.slice")
     assert facts[IO] == 56.35
     assert facts["StallExplainedBy"] == {IO: f"docker-{CONTAINER_ID}.scope"}
-    assert units_rules.slice_unit_opinions({"ActiveState": "active", **facts}) == []
+    assert resources_rules.slice_opinions({"ActiveState": "active", **facts}) == []
     # The member keeps the finding, with a name on it.
-    member = units_adapter._unit_pressure(f"docker-{CONTAINER_ID}.scope")
-    [opinion] = units_rules.unit_opinions({"ActiveState": "active", **member})
-    assert opinion["key"] == "unit-io-stall"
+    member = opened_object(f"docker-{CONTAINER_ID}.scope")
+    [opinion] = resources_rules.workload_opinions({"ActiveState": "active", **member})
+    assert opinion["key"] == "workload-io-stall"
 
 
 # ── a second systemd inside the first: names that occur twice ────────────
@@ -432,8 +456,8 @@ def test_a_delegated_hierarchy_leaves_the_slice_beside_it_saying_the_same_thing(
     strength of a member reference the collection cannot resolve."""
     alone = walk_tree(monkeypatch, tmp_path / "alone", host)
     nested = walk_tree(monkeypatch, tmp_path / "nested", tuple(host) + tuple(delegated))
-    answer_alone = units_adapter._stall_attribution(alone).get(slice_name, {})
-    answer_nested = units_adapter._stall_attribution(nested).get(slice_name, {})
+    answer_alone = resources_adapter._stall_attribution(alone).get(slice_name, {})
+    answer_nested = resources_adapter._stall_attribution(nested).get(slice_name, {})
     assert answer_nested == answer_alone
 
     if explained_by is None:
@@ -444,7 +468,7 @@ def test_a_delegated_hierarchy_leaves_the_slice_beside_it_saying_the_same_thing(
     # Whatever is named has to be a row in this collection: a member reference
     # that resolves to nothing is a click-through landing nowhere, and one
     # that resolves to a same-named host unit is worse.
-    rows = units_adapter._pressure_by_unit(nested)
+    rows = resources_adapter._by_unit(nested)
     for named in answer_nested.get("StallExplainedBy", {}).values():
         assert named in rows, f"{named} explains a slice but has no row"
 
@@ -463,11 +487,11 @@ def test_a_cgroup_below_a_losing_namesake_is_a_member_of_nothing(tmp_path, monke
     assert found["system.slice"]["facts"][IO] == 56.35
     assert found["postgresql.service"]["parent"] is None
 
-    facts = units_adapter._stall_attribution(found)["system.slice"]
+    facts = resources_adapter._stall_attribution(found)["system.slice"]
     statement = facts["StallUnexplained"][IO]
     assert "(2 of them)" in statement, "dbus.service and sshd.service, no more"
     assert "postgresql.service" not in statement
-    [opinion] = units_rules.slice_unit_opinions(
+    [opinion] = resources_rules.slice_opinions(
         {"ActiveState": "active", IO: 56.35, **facts})
     assert opinion["key"] == "slice-stall-unexplained"
 
@@ -500,15 +524,15 @@ def test_a_guest_unit_does_not_hand_its_readings_to_the_host_row_of_that_name(
     assert found["nginx.service"]["managed"] is False
     assert found["sshd.service"]["managed"] is True
 
-    rows = units_adapter._pressure_by_unit(found)
+    rows = resources_adapter._by_unit(found)
     assert "nginx.service" in found, "the walk saw it; the ROW is what it may not reach"
     assert "nginx.service" not in rows
     # Spelled the way the collection spells it (see acquire): absent, so the
     # row carries no such fact at all. A zero would read as measured calm on a
     # unit that was never measured.
-    for key in units_adapter.ROW_PRESSURE_FACTS:
+    for key in resources_adapter.ROW_FACTS:
         assert rows.get("nginx.service", {}).get(key) is None
-    assert units_adapter._unit_pressure("nginx.service") == {}, "the object view agrees"
+    assert opened_object("nginx.service") == {}, "the object view agrees"
 
     # And nothing was stripped from the units that legitimately have readings.
     assert rows["sshd.service"][IO] == 1.0
@@ -529,11 +553,11 @@ def test_a_guest_slice_does_not_publish_its_members_on_the_host_row_of_that_name
                        (scope, 41.5),
                        (f"{scope}/app-guest.slice", 60.0),
                        (f"{scope}/app-guest.slice/worker.service", 60.5)))
-    assert "app-guest.slice" not in units_adapter._stall_attribution(found)
-    assert units_adapter._unit_pressure("app-guest.slice") == {}
+    assert "app-guest.slice" not in resources_adapter._stall_attribution(found)
+    assert opened_object("app-guest.slice") == {}
     # The host's own slice keeps its answer, and it is the scope: the
     # delegating unit is where the guest's aggregate legitimately lands.
-    assert units_adapter._stall_attribution(found)["system.slice"][
+    assert resources_adapter._stall_attribution(found)["system.slice"][
         "StallExplainedBy"] == {IO: "docker-4d1f9c02ab77.scope"}
 
 
@@ -551,8 +575,8 @@ def test_a_unit_whose_cgroup_is_its_own_keeps_every_reading(
     the delegating units themselves, which own their cgroup however foreign
     the hierarchy below it is."""
     found = walk_tree(monkeypatch, tmp_path, ((path, 33.0),))
-    assert units_adapter._pressure_by_unit(found)[name][IO] == 33.0
-    assert units_adapter._unit_pressure(name)[IO] == 33.0
+    assert resources_adapter._by_unit(found)[name][IO] == 33.0
+    assert opened_object(name)[IO] == 33.0
 
 
 # ── a walk that stopped early must not report a complete tree ────────────
@@ -575,18 +599,18 @@ def test_a_member_directory_that_cannot_be_listed_is_not_a_member_that_is_quiet(
         write_pressure(tmp_path / relative, io_full)
     locked.chmod(0o000)
     try:
-        monkeypatch.setattr(units_adapter, "CGROUP_ROOT", str(tmp_path))
-        found = units_adapter._pressure_nodes()
+        monkeypatch.setattr(resources_adapter, "CGROUP_ROOT", str(tmp_path))
+        found = resources_adapter._nodes()
     finally:
         locked.chmod(0o755)
 
     assert "loud.service" not in found, "unreachable, and known to be"
     assert found["system-locked.slice"]["facts"] == {}
     assert found["system-locked.slice"]["parent"] == "system.slice"
-    facts = units_adapter._stall_attribution(found)["system.slice"]
+    facts = resources_adapter._stall_attribution(found)["system.slice"]
     assert "StallUnexplained" not in facts
     assert "system-locked.slice" in facts["StallAttributionUnobservable"][IO]
-    [opinion] = units_rules.slice_unit_opinions(
+    [opinion] = resources_rules.slice_opinions(
         {"ActiveState": "active", IO: 50.0, **facts})
     assert opinion["key"] == "slice-stall-unattributed"
 
@@ -614,11 +638,11 @@ def test_a_cgroup_removed_between_the_listing_and_the_descent_is_still_a_member(
         return real_scandir(path, *args, **kwargs)
 
     monkeypatch.setattr(os, "scandir", racing_scandir)
-    monkeypatch.setattr(units_adapter, "CGROUP_ROOT", str(tmp_path))
-    found = units_adapter._pressure_nodes()
+    monkeypatch.setattr(resources_adapter, "CGROUP_ROOT", str(tmp_path))
+    found = resources_adapter._nodes()
 
     assert found["example-vanishing.scope"]["facts"] == {}
-    facts = units_adapter._stall_attribution(found)["system.slice"]
+    facts = resources_adapter._stall_attribution(found)["system.slice"]
     assert "StallUnexplained" not in facts
     assert "example-vanishing.scope" in facts["StallAttributionUnobservable"][IO]
 
@@ -637,14 +661,14 @@ def test_a_cgroup_no_systemd_named_is_counted_and_never_named(tmp_path, monkeypa
     pod = str(tmp_path / "system.slice" / "loudpod")
     assert found[pod]["unit"] is False, "keyed by path: it has no name to be"
     assert found[pod]["parent"] == "system.slice"
-    assert pod not in units_adapter._pressure_by_unit(found)
+    assert pod not in resources_adapter._by_unit(found)
 
-    facts = units_adapter._stall_attribution(found)["system.slice"]
+    facts = resources_adapter._stall_attribution(found)["system.slice"]
     assert "StallUnexplained" not in facts
     assert "StallExplainedBy" not in facts, "a cgroup with no row is never the answer"
     statement = facts["StallAttributionUnobservable"][IO]
     assert "not systemd units" in statement and pod in statement
-    [opinion] = units_rules.slice_unit_opinions(
+    [opinion] = resources_rules.slice_opinions(
         {"ActiveState": "active", IO: 50.0, **facts})
     assert opinion["key"] == "slice-stall-unattributed"
 
@@ -660,7 +684,7 @@ def test_a_cut_at_the_depth_bound_is_not_swallowed_by_the_directory_name(
     carries the cut, and the other used to be dropped entirely, taking the cut
     with it and leaving the slice above reporting that every member was read.
     Different sentences, but neither of them is StallUnexplained."""
-    monkeypatch.setattr(units_adapter, "CGROUP_MAX_DEPTH", 6)
+    monkeypatch.setattr(resources_adapter, "CGROUP_MAX_DEPTH", 6)
     deep = f"a.slice/b.slice/c.slice/d.slice/{bottom}"
     found = walk_tree(monkeypatch, tmp_path,
                       (("a.slice", 50.0), ("a.slice/b.slice", 0.5),
@@ -668,7 +692,7 @@ def test_a_cut_at_the_depth_bound_is_not_swallowed_by_the_directory_name(
                        ("a.slice/b.slice/c.slice/d.slice", 0.5),
                        (deep, 0.5), (f"{deep}/loud.service", 99.0)))
     assert "loud.service" not in found, "past the depth bound"
-    facts = units_adapter._stall_attribution(found)["a.slice"]
+    facts = resources_adapter._stall_attribution(found)["a.slice"]
     assert "StallUnexplained" not in facts
     assert expected in facts["StallAttributionUnobservable"][IO]
 
@@ -684,34 +708,33 @@ def test_a_slice_whose_stall_a_member_explains_is_neutral_and_not_healthy():
     mark for a number nobody judged."""
     facts = {"ActiveState": "active", IO: 56.35,
              "StallExplainedBy": {IO: "docker-4d1f9c02ab77.scope"}}
-    assert units_rules.slice_unit_opinions(facts) == []
+    assert resources_rules.slice_opinions(facts) == []
     row = env.item_summary(
         "unit:system.slice", "slice", "system.slice", facts,
-        opinions=units_rules.slice_unit_opinions(facts),
-        healthy=units_adapter._row_health("system.slice", "active", facts))
+        opinions=resources_rules.slice_opinions(facts),
+        healthy=resources_adapter._row_health("system.slice", facts))
     assert row["worst_opinion_level"] == "info"
     assert "opinions" not in row, "nothing was carried, and nothing is claimed"
 
 
-@pytest.mark.parametrize("name,active,facts,expected", [
-    ("system.slice", "active",
+@pytest.mark.parametrize("name,facts,expected", [
+    ("system.slice",
      {IO: 56.35, "StallExplainedBy": {IO: "example.scope"}}, "info"),
     # Under the floor the rule was never going to speak, so nothing was
     # suppressed and nothing is owed.
-    ("system.slice", "active",
+    ("system.slice",
      {IO: 0.42, "StallExplainedBy": {IO: "example.scope"}}, "ok"),
     # The unexplained slice keeps its vouch as the no-opinion value: it has an
     # opinion, which is what the row's severity comes from.
-    ("system.slice", "active", {IO: 33.43, "StallUnexplained": {IO: "…"}}, "ok"),
-    ("system.slice", "active", {IO: 0.0}, "ok"),
-    ("system.slice", "inactive", {}, "info"),
-    # Only slices defer; a service's stall is its own and its row says so.
-    ("example.service", "active",
+    ("system.slice", {IO: 33.43, "StallUnexplained": {IO: "…"}}, "ok"),
+    ("system.slice", {IO: 0.0}, "ok"),
+    # Only slices defer; a workload's stall is its own and its row says so.
+    ("example.service",
      {IO: 56.35, "StallExplainedBy": {IO: "example.scope"}}, "ok"),
 ])
 def test_only_a_deferred_slice_stall_gives_up_the_positive_vouch(
-        name, active, facts, expected):
-    assert units_adapter._row_health(name, active, facts) == expected
+        name, facts, expected):
+    assert resources_adapter._row_health(name, facts) == expected
 
 
 def test_the_slice_knobs_are_keyed_by_the_same_readings():
@@ -719,10 +742,10 @@ def test_the_slice_knobs_are_keyed_by_the_same_readings():
     the route hint, and the attention bar. A fact in one and not another is
     either a KeyError inside the evaluator or a stall it silently never
     judges, and neither shows up as a failing case."""
-    judged = {fact for fact, _resource in units_rules.SLICE_STALL_RESOURCES}
-    assert judged == set(units_rules.SLICE_STALL_LOOK)
-    assert judged == set(units_rules.SLICE_STALL_ATTENTION)
-    assert judged == set(units_adapter.ATTRIBUTED_PRESSURE_FACTS)
+    judged = {fact for fact, _resource in resources_rules.SLICE_STALL_RESOURCES}
+    assert judged == set(resources_rules.SLICE_STALL_LOOK)
+    assert judged == set(resources_rules.SLICE_STALL_ATTENTION)
+    assert judged == set(resources_adapter.ATTRIBUTED_PRESSURE_FACTS)
 
 
 # ── the other direction: turning that scope back into a container ────────

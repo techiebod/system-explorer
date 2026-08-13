@@ -164,6 +164,13 @@ EVIDENCE_REDACTION_EXEMPTIONS: dict[str, str] = {
     "hardware": "sysfs attributes and udev properties — device identity, "
                 "model, firmware, SMART counters. No credential surface.",
     "packages": "names, versions and store paths from the link farm.",
+    "resources": "cgroupfs counter and pressure files, verbatim, plus the "
+                 "first line of /proc/stat: CPU microseconds, byte totals, "
+                 "OOM-kill counts and decaying stall averages. Kernel "
+                 "accounting for a cgroup the walk already named, so the "
+                 "payload carries no argv, no environment and no path outside "
+                 "/sys/fs/cgroup — nothing an operator could not read with "
+                 "the cat commands beside it.",
     "nix": "generation manifests and deployment receipts: store paths, kernel "
            "versions, unit names.",
     "storage": "lsblk/zpool/findmnt documents. ZFS keylocation names WHERE key "

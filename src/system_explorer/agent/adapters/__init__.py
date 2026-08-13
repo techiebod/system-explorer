@@ -26,8 +26,8 @@ empty dict, not an error.
 from __future__ import annotations
 
 from . import (bazarr, docker, downloaders, hardware, kea, logs, network,
-               nix, packages, paperless, plex, protection, servarr, storage,
-               system, traefik, unbound, units, vms)
+               nix, packages, paperless, plex, protection, resources, servarr,
+               storage, system, traefik, unbound, units, vms)
 
 # Subsystems declared in SPEC section 4 with no adapter yet. Absence is a
 # capability statement, not an error — reported with a reason, never faked
@@ -55,6 +55,7 @@ def build_adapters(selected: list[str] | None = None) -> dict:
         packages.Adapter(),
         hardware.Adapter(),
         units.Adapter(),
+        resources.Adapter(),
         logs.Adapter(),
         storage.Adapter(),
         network.Adapter(),

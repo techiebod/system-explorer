@@ -30,7 +30,7 @@ from test_fact_dictionary import ADAPTERS, names_the_adapter_uses
 from test_rules import CASES
 
 from system_explorer.agent import envelope as env
-from system_explorer.agent.adapters import units as units_adapter
+from system_explorer.agent.adapters import resources as resources_adapter
 
 RULES_DIR = AGENT_DIR / "rules"
 
@@ -68,9 +68,9 @@ def test_the_host_stall_warning_offers_the_attribution_it_cannot_state():
     [opinion] = system.overview_opinions({"PsiIoFullAvg60": 54.55})
     assert opinion["key"] == "psi-io"
     [entry] = opinion["look"]
-    assert entry == {"subsystem": "units", "collection": "units",
+    assert entry == {"subsystem": "resources", "collection": "workloads",
                      "fact": "PsiIoFullAvg60",
-                     "label": "which units are waiting on I/O"}
+                     "label": "which workloads are waiting on I/O"}
 
 
 # ── the routes land somewhere ────────────────────────────────────────────
@@ -109,7 +109,7 @@ def test_the_ordering_fact_is_one_the_destination_adapter_emits(module, key, ent
 
 def test_the_fact_scan_would_notice_an_invented_name():
     """The guard above is only worth having if a wrong spelling fails it."""
-    names = names_the_adapter_uses("units")
+    names = names_the_adapter_uses("resources")
     assert "PsiIoFullAvg60" in names
     assert "PsiIoFullAvg60s" not in names
 
@@ -126,7 +126,7 @@ PRESSURE_FILES = {
 }
 
 
-def test_the_units_collection_emits_the_exact_facts_the_psi_links_order_by(tmp_path):
+def test_the_workloads_collection_emits_the_exact_facts_the_psi_links_order_by(tmp_path):
     """The spelling proven end to end rather than eyeballed: the parser is
     run over real pressure-file text, and the names it produces must contain
     every fact the host-stall links sort by AND be the ones the collection
@@ -135,7 +135,7 @@ def test_the_units_collection_emits_the_exact_facts_the_psi_links_order_by(tmp_p
     for name, text in PRESSURE_FILES.items():
         path = tmp_path / name
         path.write_text(text)
-        produced.update(units_adapter._read_pressure(str(path)))
+        produced.update(resources_adapter._read_pressure(str(path)))
     assert produced["PsiIoFullAvg60"] == 54.55
     assert produced["PsiMemoryFullAvg60"] == 6.44
     assert produced["PsiCpuSomeAvg60"] == 71.2
@@ -143,15 +143,15 @@ def test_the_units_collection_emits_the_exact_facts_the_psi_links_order_by(tmp_p
 
     ordered_by = {entry["fact"] for _module, _key, entry in
                   (param.values for param in LOOKS)
-                  if entry["subsystem"] == "units"
-                  and entry["collection"] == "units"
+                  if entry["subsystem"] == "resources"
+                  and entry["collection"] == "workloads"
                   and str(entry.get("fact", "")).startswith("Psi")}
-    assert ordered_by, "no link orders the units collection by a PSI fact"
+    assert ordered_by, "no link orders the workloads collection by a PSI fact"
     assert ordered_by <= set(produced), (
         f"links order by {sorted(ordered_by - set(produced))}, which the "
         "pressure parser never produces")
-    assert ordered_by <= set(units_adapter.ROW_PRESSURE_FACTS), (
-        f"links order by {sorted(ordered_by - set(units_adapter.ROW_PRESSURE_FACTS))}, "
+    assert ordered_by <= set(resources_adapter.ROW_FACTS), (
+        f"links order by {sorted(ordered_by - set(resources_adapter.ROW_FACTS))}, "
         "which the parser produces but the collection row does not carry — a "
         "consumer sorting the list would find the column empty")
 

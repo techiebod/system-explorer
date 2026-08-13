@@ -21,8 +21,9 @@ from common import AGENT_DIR, UI_DIR, resolve_fact_path
 from system_explorer.agent import rules
 from system_explorer.agent.rules import (bazarr, docker, downloaders,
                                          hardware, kea, logs, network, nix,
-                                         paperless, plex, protection, servarr,
-                                         storage, system, traefik, units, vms)
+                                         paperless, plex, protection, resources,
+                                         servarr, storage, system, traefik, units,
+                                         vms)
 
 RULES_DIR = AGENT_DIR / "rules"
 
@@ -206,7 +207,7 @@ CASES = [
     # a member accounts for it is a fact the adapter joins inside its own
     # collection; these cases fix what the rule does with each answer.
     ("slice-stall-a-member-accounts-for-says-nothing",
-     units.slice_unit_opinions,
+     resources.slice_opinions,
      {"ActiveState": "active", "PsiIoFullAvg60": 56.35,
       "StallExplainedBy": {"PsiIoFullAvg60": "docker-4d1f9c02ab77.scope"}},
      set()),
@@ -216,7 +217,7 @@ CASES = [
     # reaches neither /v1/findings nor the estate roll-up nor the row's dot:
     # the vaguer stall a member's own row already warns about would alert,
     # and this one, which nothing else states, would not.
-    ("slice-stall-no-member-accounts-for", units.slice_unit_opinions,
+    ("slice-stall-no-member-accounts-for", resources.slice_opinions,
      {"ActiveState": "active", "PsiIoFullAvg60": 33.43,
       "StallUnexplained": {
           "PsiIoFullAvg60": "every member cgroup under this slice was read "
@@ -228,7 +229,7 @@ CASES = [
     # two the finding is real but too small to be woken for, and the floor's
     # "coin toss dressed as a finding" reasoning stays where it was.
     ("slice-stall-unexplained-under-the-attention-bar",
-     units.slice_unit_opinions,
+     resources.slice_opinions,
      {"ActiveState": "active", "PsiIoFullAvg60": 4.2,
       "StallUnexplained": {
           "PsiIoFullAvg60": "every member cgroup under this slice was read "
@@ -240,7 +241,7 @@ CASES = [
     # quiet. Reporting this as "nothing inside explains it" would invent the
     # interesting finding out of a gap in the reading, so it gets its own key
     # and its own wording.
-    ("slice-stall-attribution-unobservable", units.slice_unit_opinions,
+    ("slice-stall-attribution-unobservable", resources.slice_opinions,
      {"ActiveState": "active", "PsiMemoryFullAvg60": 4.1,
       "StallAttributionUnobservable": {
           "PsiMemoryFullAvg60": "no memory pressure reading for 2 of the 12 "
@@ -253,7 +254,7 @@ CASES = [
     # would be false for one of them. Also the case where both route hints
     # are picked out of SLICE_STALL_LOOK at once.
     ("slice-stall-explained-for-one-resource-only",
-     units.slice_unit_opinions,
+     resources.slice_opinions,
      {"ActiveState": "active", "PsiIoFullAvg60": 56.35,
       "PsiMemoryFullAvg60": 11.02,
       "StallExplainedBy": {"PsiIoFullAvg60": "docker-4d1f9c02ab77.scope"},
@@ -267,12 +268,12 @@ CASES = [
     # way, so the aggregate wording stands. Silence here would be the
     # inference the three branches above exist to stop anyone making.
     ("slice-stall-without-attribution-keeps-the-aggregate-wording",
-     units.slice_unit_opinions,
+     resources.slice_opinions,
      {"ActiveState": "active", "PsiIoFullAvg60": 33.43},
      {("slice-stall", "info")}),
     # Under the floor the difference between a slice and its members is
     # inside the slack two decaying averages carry anyway.
-    ("slice-stall-below-the-floor", units.slice_unit_opinions,
+    ("slice-stall-below-the-floor", resources.slice_opinions,
      {"ActiveState": "active", "PsiIoFullAvg60": 0.42,
       "StallUnexplained": {"PsiIoFullAvg60": "every member cgroup under this "
                                              "slice was read for I/O pressure "
@@ -280,10 +281,12 @@ CASES = [
                                              "example.service at 0.0%, is "
                                              "below this slice's own 0.42%."}},
      set()),
+    # State stayed in rules/units when consumption moved out: a failed slice
+    # is the slice itself, not an aggregate over anything under it.
     ("slice-failed-is-still-critical", units.slice_unit_opinions,
      {"ActiveState": "failed", "SubState": "failed"},
      {("unit-health", "critical")}),
-    ("slice-quiet", units.slice_unit_opinions,
+    ("slice-quiet", resources.slice_opinions,
      {"ActiveState": "active", "PsiIoFullAvg60": 0}, set()),
 
     # downloaders: the transfer tier's own statements, mirrored.
@@ -562,20 +565,19 @@ CASES = [
      set()),
     # Per-unit PSI: attribution for host-level stall. A running unit is not
     # "healthy" if it spends the minute waiting on a saturated device.
-    ("unit-io-stalled", units.unit_opinions,
+    ("workload-io-stalled", resources.workload_opinions,
      {"ActiveState": "active", "SubState": "running",
-      "PsiIoFullAvg60": units.UNIT_IO_STALL_WARN},
-     {("unit-io-stall", "warn")}),
-    ("unit-memory-stalled", units.unit_opinions,
+      "PsiIoFullAvg60": resources.WORKLOAD_IO_STALL_WARN},
+     {("workload-io-stall", "warn")}),
+    ("workload-memory-stalled", resources.workload_opinions,
      {"ActiveState": "active", "SubState": "running",
-      "PsiMemoryFullAvg60": units.UNIT_MEMORY_STALL_WARN},
-     {("unit-memory-stall", "warn")}),
+      "PsiMemoryFullAvg60": resources.WORKLOAD_MEMORY_STALL_WARN},
+     {("workload-memory-stall", "warn")}),
     # Below threshold, and a kernel with PSI reporting genuine calm: the
     # facts are present and the unit stays silent, which is what makes the
     # opinion mean something when it does fire.
-    ("unit-not-stalled", units.unit_opinions,
-     {"ActiveState": "active", "SubState": "running",
-      "PsiIoFullAvg60": 0.0, "PsiCpuSomeAvg60": 0.0, "PsiMemoryFullAvg60": 0.0},
+    ("workload-not-stalled", resources.workload_opinions,
+     {"PsiIoFullAvg60": 0.0, "PsiCpuSomeAvg60": 0.0, "PsiMemoryFullAvg60": 0.0},
      set()),
 
     # units: a unit naming another unit that is not present on this host. One

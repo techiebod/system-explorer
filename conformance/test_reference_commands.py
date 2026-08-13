@@ -55,6 +55,7 @@ from common import (AGENT_DIR, API_REFERENCE_EXEMPTIONS, PATH_REFERENCE_EXEMPTIO
 # paths. Module-local helpers are matched bare; everything else must be dotted.
 FILESYSTEM_READS = {
     "_read", "_listdir", "_sys_read", "_sys_list", "_read_pressure",
+    "_read_text", "_read_or_reason",
     "Path",
     "os.listdir", "os.scandir", "os.walk", "os.readlink",
     "os.path.realpath", "os.path.isdir", "os.path.isfile", "os.path.exists",
@@ -63,6 +64,7 @@ FILESYSTEM_READS = {
 # The bodies of the helpers above: `Path(path)` inside _read is the helper
 # itself, not a read site, and its argument resolves to nothing useful.
 READER_DEFINITIONS = {"_read", "_listdir", "_sys_read", "_sys_list", "_read_pressure",
+                      "_read_text", "_read_or_reason",
                       "read", "read_json", "realpath", "listdir"}
 # Readers that answer with the NAMES INSIDE a directory rather than with the
 # directory. `for ctrl in _listdir(NVME_DEVICES)` binds ctrl to an entry, so it
@@ -487,7 +489,7 @@ def test_the_matcher_rejects_a_path_no_command_names():
 @pytest.mark.parametrize("module,expected", [
     ("hardware", {"/sys/class/nvme", "/sys/class/scsi_host"}),
     ("system", {"/proc/loadavg"}),
-    ("units", {"/sys/fs/cgroup"}),
+    ("resources", {"/sys/fs/cgroup", "/proc/stat"}),
     ("storage", {"/sys/block"}),
 ])
 def test_the_resolver_still_finds_the_paths_we_know_about(module, expected):
