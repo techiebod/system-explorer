@@ -565,6 +565,70 @@ CASES = [
       "PsiIoFullAvg60": 0.0, "PsiCpuSomeAvg60": 0.0, "PsiMemoryFullAvg60": 0.0},
      set()),
 
+    # units: a unit naming another unit that is not present on this host. One
+    # shape, three severities, and the split is the point — systemd's own
+    # documentation makes an unresolvable Requires= fatal to the start job and
+    # an unresolvable Wants= ignored, so a single level would have to be wrong
+    # about one of them.
+    ("absent-reference-requires-blocks-the-start", units.absent_dependency_opinions,
+     {"ActiveState": "inactive", "SubState": "dead",
+      "MissingRequirements": ["message-broker.service (Requires=)"]},
+     {("unit-requires-absent-unit", "warn")}),
+    # Requisite= and BindsTo= share the hard fact because they share the
+    # consequence; the directive that was actually written stays in the value,
+    # so nothing about which word the author used is flattened away.
+    ("absent-reference-requisite-and-bindsto-are-the-same-consequence",
+     units.absent_dependency_opinions,
+     {"ActiveState": "active", "SubState": "running",
+      "MissingRequirements": ["ledger-store.service (BindsTo=)",
+                              "message-broker.service (Requisite=)"]},
+     {("unit-requires-absent-unit", "warn")}),
+    # The common real case: a distribution-agnostic unit file wanting a service
+    # this host does not have. Nothing fails, so nothing is raised — but the
+    # file is asking for something that has never once happened.
+    ("absent-reference-wants-is-a-documented-no-op", units.absent_dependency_opinions,
+     {"ActiveState": "active", "SubState": "running",
+      "MissingWants": ["container-runtime.service (Wants=)"]},
+     {("unit-wants-absent-unit", "info")}),
+    ("absent-reference-upholds-is-the-same-softness", units.absent_dependency_opinions,
+     {"ActiveState": "active", "SubState": "running",
+      "MissingWants": ["watchdog-keeper.service (Upholds=)"]},
+     {("unit-wants-absent-unit", "info")}),
+    # Both directives against the same absent name, which is what a unit file
+    # ordinarily writes. Two opinions at two levels, because the reader has to
+    # be able to tell which half of the sentence is the one that stops it.
+    ("absent-reference-hard-and-soft-together", units.absent_dependency_opinions,
+     {"ActiveState": "inactive", "SubState": "dead",
+      "MissingRequirements": ["message-broker.service (Requires=)"],
+      "MissingWants": ["container-runtime.service (Wants=)"],
+      "MissingOrdering": ["message-broker.service (After=)"]},
+     {("unit-requires-absent-unit", "warn"), ("unit-wants-absent-unit", "info")}),
+    # Ordering alone states the fact and says nothing. After= against a unit
+    # that is not there orders nothing, and on real hosts the population is
+    # dominated by barriers systemd adds implicitly to units with no fragment
+    # anyone could edit — an opinion here would be dozens of permanently red
+    # rows per host with no fix behind any of them.
+    ("absent-reference-ordering-carries-no-opinion", units.absent_dependency_opinions,
+     {"ActiveState": "active", "SubState": "running",
+      "MissingOrdering": ["storage-barrier.target (After=)",
+                          "early-setup.service (Before=)"]},
+     set()),
+    # Rule 7: the probe could not be made. Stated, and standing IN PLACE OF the
+    # reference facts rather than beside them — an unread dependency graph must
+    # never reach a reader as an empty one.
+    ("absent-reference-unobservable", units.absent_dependency_opinions,
+     {"ActiveState": "inactive", "SubState": "dead",
+      "MissingReferenceUnobservable":
+          "the dependency properties of this absent name could not be read "
+          "(org.freedesktop.DBus.Error.UnknownObject), so which units "
+          "reference it is unknown rather than none"},
+     {("unit-absent-references-unobservable", "info")}),
+    # The overwhelmingly common row: a unit that names nothing absent. The
+    # facts are simply not there, and silence here is what makes the opinions
+    # above mean something when they do fire.
+    ("absent-reference-none", units.absent_dependency_opinions,
+     {"ActiveState": "active", "SubState": "running"}, set()),
+
     # hardware: a drive that yielded no reading must not be vouched for. Five
     # raidz1 members read "ok" for days on snapshots holding only an smartctl
     # error, because State == running was treated as positive health.
