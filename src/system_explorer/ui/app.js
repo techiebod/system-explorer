@@ -51,7 +51,9 @@ const state = {
   lookColumn: null,
   filterText: "",
   facet: null,
-  showHidden: false,     // reveal rows a HIDDEN rule suppresses by default
+  // Keys of the HIDDEN groups the reader has revealed on this route. A set,
+  // not a flag: each group is revealed on its own and any number can be on.
+  revealed: new Set(),
   colPicker: false,      // the columns dropdown in the facet bar
   lookupDraft: null,     // in-progress lookup input, preserved across refresh
   lookupCatalog: null,   // launcher entries, fetched once per host
@@ -179,12 +181,115 @@ const FACETS = {
 
 /* Rows hidden by default, systemctl-status style: the default view is what
    is running (plus anything failed — that is never hidden). A toggle chip
-   in the facet bar reveals the rest; the API always returns everything. */
+   in the facet bar reveals the rest; the API always returns everything.
+
+   SEVERAL groups per route, each revealed on its own, because one route's
+   rows can be quiet for unrelated reasons and a reader wants them back one
+   reason at a time. Order is meaningful: a row belongs to the FIRST group
+   that claims it and to no other, so the chip counts partition what is
+   hidden and add up to the difference the crumb states. Two chips whose
+   numbers overlap would be a filtered view that cannot be audited by
+   arithmetic, which is the same defect as not announcing the filter at all.
+
+   `key` is what state.revealed holds; keep it stable, it is the identity of
+   a group across renders. */
 const HIDDEN = {
-  "units/units": { label: "inactive", match: (item) => item.facts.ActiveState === "inactive" },
-  "hardware/scsi": { label: "empty hosts",
-                     match: (item) => item.type === "scsi-host" && !item.facts.Devices },
+  "units/units": [
+    { key: "inactive", label: "inactive",
+      match: (item) => item.facts.ActiveState === "inactive" },
+    /* Half of a busy host's unit list is `.device` — 410 of 808 rows on the
+       busiest host measured, 51% of the page. They are not hidden for being
+       quiet: a device unit's resting state is ActiveState `activating`,
+       SubState `tentative`, forever, so no rule about what is running or
+       should be running will ever catch one. They are hidden for what they
+       ARE. A `.device` unit is systemd's record that a device exists; it
+       starts nothing, and a reader after the device inventory has the whole
+       hardware subsystem, which observes the devices themselves rather than
+       systemd's shadow of them.
+
+       `LoadState === "loaded"` narrows it to exactly that record. A
+       not-found device unit is the opposite statement — something on this
+       host declares a dependency on a device that is NOT here — and this
+       group's justification says nothing about it. systemd reports such a
+       unit inactive, so in practice the group above claims it and one chip
+       brings it back; the narrowing is what stops the kind rule swallowing
+       it silently should it ever arrive in any other state.
+
+       TARGETS ARE DELIBERATELY NOT IN THIS GROUP (~35 rows). The argument
+       for including them is real: a target is a synchronisation point, it
+       runs nothing either, and by the "does it do something" test it fails
+       exactly as a device does. It is refused for two reasons. First, a
+       target's ActiveState is load-bearing where a device's is not —
+       "reached" is what active MEANS for a target, and an unreached
+       multi-user.target or an active emergency.target is a fact about this
+       boot that an admin reads directly. Second, and because of that, the
+       inactive group above ALREADY does the right thing to targets: the
+       unreached ones fall out, the reached ones stay, which is the
+       operator's rule applied to them rather than an exemption from it.
+       Devices needed a new group precisely because no state rule can reach
+       them. The operator was asked about neither; devices carry a measured
+       argument and targets do not, so targets keep the treatment they have
+       until someone asks for another. */
+    { key: "device", label: "device units",
+      match: (item) => item.type === "device" && item.facts.LoadState === "loaded" },
+  ],
+  "hardware/scsi": [
+    { key: "empty-hosts", label: "empty hosts",
+      match: (item) => item.type === "scsi-host" && !item.facts.Devices },
+  ],
 };
+
+/* Which group hides this row, or null if it stays. The one exemption is
+   structural rather than left to each predicate: a row the rulebook called
+   critical is never suppressed, whatever the group matches on. The old
+   single group got that for free — nothing whose ActiveState is `inactive`
+   is a failed unit — but a group that matches on KIND has no such luck, and
+   "the default view never swallows a failure" is the promise the toggle
+   rests on. It cannot be re-derived correctly in every predicate anyone
+   adds later, so it is enforced once, here.
+
+   It reaches the inactive group too, which formerly hid a critical inactive
+   row if one ever existed. Nothing emits that today (unit-health is critical
+   only for ActiveState `failed`), so the widening is unobservable — but the
+   contract was already claiming it, and a promise honoured by coincidence is
+   one waiting to be broken by an unrelated edit to the rulebook.
+
+   Critical only, not warn: the inactive group hides a unit carrying a
+   restart-churn warning today, and widening the exemption to `warn` would
+   quietly change what that group has always meant. That is a separate call
+   for whoever wants it, not a side effect of adding a second group. */
+function hidingGroup(item, route) {
+  if (item.worst_opinion_level === "critical") return null;
+  for (const group of HIDDEN[route] || []) if (group.match(item)) return group;
+  return null;
+}
+
+/* The rows the hide rules leave on the page, before the facet and the text
+   filter narrow it further. What the facet counts describe, and what the
+   crumb calls "shown". */
+function afterHiding(items, route) {
+  if (!HIDDEN[route]) return items;
+  return items.filter(it => {
+    const group = hidingGroup(it, route);
+    return !group || state.revealed.has(group.key);
+  });
+}
+
+/* What each group answers for on this page: [group, n] pairs in HIDDEN's
+   order, groups holding nothing omitted. Counts what hidingGroup() ASSIGNS
+   rather than what match() alone would claim, so a chip's number is exactly
+   the set of rows toggling it reveals — critical rows, and rows an earlier
+   group took, belong to somebody else. Independent of what is revealed: the
+   number beside a chip must not change when the chip is pressed. */
+function hiddenCounts(items, route) {
+  const groups = HIDDEN[route] || [];
+  const n = new Map(groups.map(g => [g.key, 0]));
+  for (const item of items) {
+    const group = hidingGroup(item, route);
+    if (group) n.set(group.key, n.get(group.key) + 1);
+  }
+  return groups.map(g => [g, n.get(g.key)]).filter(([, count]) => count > 0);
+}
 
 const PREFIX_ROUTE = {
   unit: ["units", "units"],
@@ -1262,7 +1367,7 @@ function route() {
     Object.assign(state, { sortKey: null, filterText: "", facet: null,
                            selectedId: null, detailObs: null, evidence: null,
                            suppressAutoOpen: false, page: null, lookupDraft: null,
-                           showHidden: false, colPicker: false, owners: null });
+                           revealed: new Set(), colPicker: false, owners: null });
     $("filter").value = "";
     // The facet bar describes a collection's rows; on a route change the
     // old chips are stale immediately — clear now, not when the new data
@@ -2793,7 +2898,22 @@ function renderCrumb() {
   if (p) {
     const shown = visibleItems().length;
     const total = p.total ?? p.items.length;
-    crumb.appendChild(el("span", "count", shown === total ? `${total}` : `${shown} of ${total}`));
+    const count = el("span", "count", shown === total ? `${total}` : `${shown} of ${total}`);
+    /* "260 of 808" already refuses to pass a subset off as the whole, and
+       that is the load-bearing half. What it cannot say in two numbers is
+       WHO took the other 548 — a hide rule, a facet, or something typed in
+       the filter. The chips name the hide rules beside their counts; this
+       puts the same arithmetic on the number the reader is looking at, so
+       the two can be checked against each other rather than believed. */
+    const withheld = hiddenCounts(p.items, `${state.subsystem}/${state.collection}`)
+      .filter(([group]) => !state.revealed.has(group.key));
+    if (withheld.length) {
+      count.title = `${shown} of ${total} rows shown. Hidden by default: `
+        + withheld.map(([group, n]) => `${n} ${group.label}`).join(", ")
+        + " — reveal from the bar below. Every row the host reported is here;"
+        + " a failed row is never hidden.";
+    }
+    crumb.appendChild(count);
     if (p.next_cursor) crumb.appendChild(el("span", "count", `(first ${p.items.length} loaded; history continues)`));
   }
   $("age").textContent = state.observedAt ? `observed ${ageOf(state.observedAt)}` : "";
@@ -2803,15 +2923,13 @@ function renderFacets() {
   const bar = $("facets");
   const route = `${state.subsystem}/${state.collection}`;
   const facetOf = FACETS[route];
-  const hidden = HIDDEN[route];
   // The overview is a designed panel with no rows to facet; its pseudo-page
   // must not resurrect the bar.
   bar.hidden = !state.page || route === "system/overview";
   bar.textContent = "";
   if (bar.hidden) return;
-  // Facet counts describe what is on screen, so they respect the hide rule.
-  const base = hidden && !state.showHidden
-    ? state.page.items.filter(it => !hidden.match(it)) : state.page.items;
+  // Facet counts describe what is on screen, so they respect the hide rules.
+  const base = afterHiding(state.page.items, route);
   if (facetOf) {
     const counts = new Map();
     for (const item of base) {
@@ -2832,18 +2950,28 @@ function renderFacets() {
       bar.appendChild(chip);
     }
   }
-  if (hidden) {
-    const n = state.page.items.filter(hidden.match).length;
-    if (n) {
-      const chip = el("button", "chip ghost" + (state.showHidden ? " on" : ""));
-      chip.append(`${state.showHidden ? "hide" : "show"} ${hidden.label}`,
-                  el("span", "chip-n", String(n)));
-      chip.onclick = () => {
-        state.showHidden = !state.showHidden;
-        renderFacets(); renderGrid(); renderCrumb();
-      };
-      bar.appendChild(chip);
-    }
+  /* One chip per group that is holding something back, in HIDDEN's order so
+     the bar reads the same on every visit. A group matching nothing shows no
+     chip: a control that reveals an empty set is noise, and worse, it implies
+     rows are being withheld when none are. */
+  for (const [group, n] of hiddenCounts(state.page.items, route)) {
+    const on = state.revealed.has(group.key);
+    const chip = el("button", "chip ghost" + (on ? " on" : ""));
+    chip.append(`${on ? "hide" : "show"} ${group.label}`,
+                el("span", "chip-n", String(n)));
+    // The chip's label says what and how many; the hover says which way the
+    // page is currently leaning, because "show inactive 138" read quickly
+    // does not by itself tell you the 138 are missing right now.
+    chip.title = on
+      ? `Revealed: ${n} ${group.label}. Click to hide them again.`
+      : `Hidden right now: ${n} ${group.label}. Click to reveal them —`
+        + " nothing was dropped, the page holds every row the host reported,"
+        + " and a failed row is never hidden by any rule.";
+    chip.onclick = () => {
+      if (on) state.revealed.delete(group.key); else state.revealed.add(group.key);
+      renderFacets(); renderGrid(); renderCrumb();
+    };
+    bar.appendChild(chip);
   }
 
   // Column picker: any fact key can be a column; choices stick per
@@ -2938,9 +3066,7 @@ function allFactKeys() {
 }
 
 function visibleItems() {
-  let items = state.page?.items ?? [];
-  const hidden = HIDDEN[`${state.subsystem}/${state.collection}`];
-  if (hidden && !state.showHidden) items = items.filter(it => !hidden.match(it));
+  let items = afterHiding(state.page?.items ?? [], `${state.subsystem}/${state.collection}`);
   const facetOf = FACETS[`${state.subsystem}/${state.collection}`];
   if (facetOf && state.facet) items = items.filter(it => facetOf(it) === state.facet);
   const q = state.filterText.toLowerCase();

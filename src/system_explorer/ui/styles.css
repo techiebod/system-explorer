@@ -267,6 +267,13 @@ td .dim, .dim { color: var(--text-faint); }
 .chip:hover { color: var(--text); border-color: var(--text-faint); }
 .chip.on { color: var(--accent); border-color: var(--accent); background: var(--accent-bg); }
 .chip.ghost { margin-left: auto; border-style: dashed; }
+/* Only the FIRST of a run pushes the run to the right. Flexbox shares free
+   space between every auto margin it finds, so with a second hidden-group
+   chip the three ghosts drifted apart into three even gaps and stopped
+   reading as one set of controls. They belong together: the facets on the
+   left narrow the page, the ghosts on the right say what the page is
+   withholding and offer it back. */
+.chip.ghost + .chip.ghost { margin-left: 0; }
 .chip-n { color: var(--text-faint); font-size: 10px; }
 .chip.on .chip-n { color: var(--accent); opacity: .7; }
 
