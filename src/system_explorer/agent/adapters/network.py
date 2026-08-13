@@ -53,7 +53,33 @@ RESOLVER_REFERENCE = ["resolvectl status", "resolvectl dns"]
 # reading it is rule-8 legitimate the way /etc/machine-id is.
 RESOLV_CONF = "/etc/resolv.conf"
 FILE_RESOLVER_REFERENCE = ["cat /etc/resolv.conf", "ls -l /etc/resolv.conf"]
-NFT_REFERENCE = ["nft list ruleset"]
+# What this collection ACTUALLY reports, which is not what it used to name.
+# `nft list ruleset` was cited while the rows carry table and chain inventory
+# with a rule COUNT — so an operator reproducing the cited command saw
+# strictly more than the observation contained, which is rule 5 broken in the
+# direction the lint cannot see: it checks that a command is named, never
+# that its output is used. The ruleset command stays, last, because it is
+# what answers the question these rows raise and cannot settle.
+NFT_REFERENCE = ["nft list tables", "nft list chains", "nft list ruleset"]
+
+# Stated on every nft-tables response, because the shape of these rows
+# invites a conclusion they cannot support. A firewall's rows here say a
+# table exists and how many rules it holds; they do not say what any rule
+# permits, so deleting the single rule that admits sshd on one interface
+# would move RuleCount from 25 to 24 and change nothing else on this page.
+# On a host whose entire posture is its ruleset that is absence rendered as
+# health, and until the rules themselves are objects the honest move is to
+# say so where the rows are read rather than leave the gap to be inferred.
+NFT_NOTES = [
+    "Rules are COUNTED here, never read: these rows carry each table's"
+    " chains and how many rules they hold, and no fact on this page says"
+    " what any rule matches or permits. A ruleset that admits one port from"
+    " one interface and one that admits everything from anywhere are"
+    " indistinguishable in this collection.",
+    "The full ruleset — every match, port, interface and verdict — is in"
+    " this collection's evidence, which is where to look until the rules"
+    " have rows of their own.",
+]
 TAILSCALE_REFERENCE = ["tailscale status --json"]
 
 TAILSCALE_SNAPSHOT = "/run/system-explorer-tailscale/status.json"
@@ -1170,15 +1196,15 @@ class Adapter:
             "links": ("ip-json", "ip -j (rtnetlink)", LINK_REFERENCE),
             "routes": ("ip-json", "ip -j (rtnetlink)", ROUTE_REFERENCE),
             "resolver": ("resolve1-dbus", RESOLVE1, RESOLVER_REFERENCE),
-            "nft-tables": ("nft-json", "nft -j", NFT_REFERENCE),
+            "nft-tables": ("nft-json", "nft -j", NFT_REFERENCE, NFT_NOTES),
             "tailscale": ("tailscale-json",
                           f"tailscale status --json snapshots ({TAILSCALE_SNAPSHOT})",
                           TAILSCALE_REFERENCE),
             "lookups": ("network-lookups", "ip -j route get (rtnetlink) / resolve1",
                         ["ip route get <address>", "resolvectl query <name>"]),
         }
-        adapter, iface, refs = table[collection]
-        return env.source(adapter, iface, refs)
+        adapter, iface, refs, *rest = table[collection]
+        return env.source(adapter, iface, refs, notes=rest[0] if rest else None)
 
     @env.single_flight
     async def acquire(self, collection: str) -> list[dict]:
