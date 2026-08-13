@@ -215,14 +215,63 @@ def test_guest_time_is_not_counted_twice_in_the_host_total(
     tree(monkeypatch, tmp_path)
     proc_stat(monkeypatch, tmp_path, "cpu 100 0 0 0 0 0 0 0 90 5\n")
     per_tick = 1_000_000 // (os.sysconf("SC_CLK_TCK") or 100)
-    assert adapter._host_cpu_busy_usec() == 100 * per_tick
+    assert adapter._host_cpu_totals() == (100 * per_tick, 0)
 
 
 def test_idle_and_iowait_are_not_busy(monkeypatch, tmp_path):
     tree(monkeypatch, tmp_path)
     proc_stat(monkeypatch, tmp_path, "cpu 10 10 10 99999 88888 1 1 1 0 0\n")
     per_tick = 1_000_000 // (os.sysconf("SC_CLK_TCK") or 100)
-    assert adapter._host_cpu_busy_usec() == 33 * per_tick
+    busy, stolen = adapter._host_cpu_totals()
+    assert busy == 32 * per_tick, "the 1 tick of steal is not this host's work"
+    assert stolen == 1 * per_tick
+
+
+# ── stolen time is neither busy nor idle ─────────────────────────────────
+
+def test_stolen_time_is_kept_out_of_the_remainder(monkeypatch, tmp_path):
+    """The defect the estate found and no fixture could. Steal is time the
+    hypervisor gave to somebody else — the vCPU was not running — so it is
+    not work this host did and cannot be work belonging to no workload on it.
+    Counting it as busy inflated the remainder by exactly the stolen time,
+    which is 0 on every bare-metal host and grows with how contended a VM's
+    neighbours are (measured: 18.5 s of a 101 s remainder on the estate's one
+    shared VPS)."""
+    root = tree(monkeypatch, tmp_path)
+    write_cgroup(root, "", cpu__stat="usage_usec 1\n")
+    write_cgroup(root, "system.slice", cpu__stat="usage_usec 1000000\n")
+    # 400 busy ticks, 200 stolen. At 100 Hz that is 4 s of work and 2 s lost.
+    proc_stat(monkeypatch, tmp_path, "cpu 200 100 100 900 0 0 0 200 0 0\n")
+
+    facts = items(monkeypatch, tmp_path)["-.slice"]["facts"]
+    per_tick = 1_000_000 // (os.sysconf("SC_CLK_TCK") or 100)
+    assert facts["HostCpuBusyUsec"] == 400 * per_tick
+    assert facts["HostCpuStolenUsec"] == 200 * per_tick
+    assert facts["UnattributedCpuUsec"] == 400 * per_tick - 1_000_000, (
+        "the remainder is busy-minus-attributed; stolen time is in neither")
+
+
+def test_bare_metal_carries_no_stolen_fact_at_all(monkeypatch, tmp_path):
+    """Absent rather than zero, like every other reading here: a standing
+    zero would report a condition the machine cannot have."""
+    root = tree(monkeypatch, tmp_path)
+    write_cgroup(root, "", cpu__stat="usage_usec 1\n")
+    write_cgroup(root, "system.slice", cpu__stat="usage_usec 5\n")
+    proc_stat(monkeypatch, tmp_path, "cpu 500 0 0 100 0 0 0 0 0 0\n")
+    facts = items(monkeypatch, tmp_path)["-.slice"]["facts"]
+    assert "HostCpuStolenUsec" not in facts
+    assert facts["HostCpuBusyUsec"] == 500 * (1_000_000 // (os.sysconf("SC_CLK_TCK") or 100))
+
+
+def test_the_remainder_names_the_slice_boundary_not_the_cgroup_boundary():
+    """Wording, pinned. Measured across five hosts: on four of them the root
+    cgroup's own cpu.stat equals the host total, so the leftover tasks DO sit
+    in a cgroup — the root. Calling it work in no cgroup at all was wrong
+    about where it lives, and the sentence is what an operator reads."""
+    entry = adapter._GLOSSARY["UnattributedCpuUsec"]
+    assert "no top-level slice" in entry
+    assert "no cgroup at all" not in entry.replace(
+        "deliberately not called work in no cgroup at all", "")
 
 
 def test_the_remainder_cannot_go_negative_because_the_total_is_read_last(

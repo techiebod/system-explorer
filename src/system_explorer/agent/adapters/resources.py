@@ -48,8 +48,11 @@ workload reads 5.14% had nowhere for that answer to live.
 
 THE REMAINDER IS STATED FOR CPU ONLY, and the restraint is the point. CPU has
 an unambiguous host denominator in /proc/stat, and subtracting the top-level
-cgroups leaves work in no cgroup at all: kernel threads, an md resync, a
-scrub. Memory does not — page cache is charged to whoever first touched it
+cgroups leaves work inside no slice: kernel threads, an md resync, a scrub.
+Two corrections the live estate made to that figure, both invisible on the
+machine it was written on — stolen time is not busy and is now its own fact,
+and the leftover sits in the ROOT cgroup rather than in no cgroup at all.
+Memory does not — page cache is charged to whoever first touched it
 and kernel slab is charged to nobody, so "used" is a heuristic, not a total.
 Block I/O does not either: /proc/diskstats counts a partition, its whole
 disk, and the md or dm device stacked over them, so summing it double-counts
@@ -137,8 +140,9 @@ _GLOSSARY = {
     "IoWrittenBytes": "Bytes written to block devices by this workload and everything under it, summed across devices.",
     "IoReadOps": "Read requests issued to block devices by this workload.",
     "IoWriteOps": "Write requests issued to block devices by this workload.",
-    "HostCpuBusyUsec": "Every microsecond of CPU this host has spent not idle, from the kernel's own accounting rather than from any cgroup — the denominator the workloads below are a share of.",
-    "UnattributedCpuUsec": "Host CPU that belongs to no cgroup at all: kernel threads, an md resync, a scrub, writeback. Stated for CPU alone, because it is the one resource whose host total has an unambiguous denominator — memory's is a heuristic and block I/O's double-counts every stacked device — and a remainder nobody can defend is worse than none.",
+    "HostCpuBusyUsec": "Every microsecond of CPU this host actually spent doing work, from the kernel's own accounting rather than from any cgroup — the denominator the workloads below are a share of. Time stolen by a hypervisor is excluded and carried separately: the vCPU was not running, so counting it here would inflate the remainder below by however contended this machine's neighbours are.",
+    "HostCpuStolenUsec": "CPU time a hypervisor gave to somebody else while this machine wanted it — present only on a virtualised host that has lost any, and absent rather than zero on bare metal. It is neither busy nor idle, which is why it is its own fact: it is the work this host did not get to do.",
+    "UnattributedCpuUsec": "Host CPU spent inside no top-level slice, and therefore belonging to no workload row here: kernel threads, an md resync, a scrub, writeback. On most kernels those tasks do sit in a cgroup — the root one — so this is deliberately not called work in no cgroup at all. Stated for CPU alone, because it is the one resource whose host total has an unambiguous denominator: memory's is a heuristic and block I/O's double-counts every stacked device, and a remainder nobody can defend is worse than none.",
     "PsiIoFullAvg10": "The share of the last 10 seconds in which every task in this workload that had work to do was waiting on I/O.",
     "PsiIoFullAvg60": "The share of the last minute in which every task in this workload that had work to do was waiting on I/O. Tasks with nothing to do are not counted, so this is 'made no progress', not 'everything is stuck'.",
     "PsiIoFullAvg300": "The same share over the last five minutes, which is where a brief spike and a standing problem separate.",
@@ -635,12 +639,27 @@ def _stall_attribution(found: dict[str, dict],
     return out
 
 
-def _host_cpu_busy_usec() -> int | None:
-    """Every microsecond this host has spent not idle, from /proc/stat.
+def _host_cpu_totals() -> tuple[int, int] | None:
+    """(busy, stolen) microseconds from /proc/stat, as two separate answers.
 
     guest and guest_nice are deliberately not added: the kernel already
     counts them inside user and nice, so including them would inflate the
     denominator and make the remainder below larger than it is.
+
+    STEAL IS NOT BUSY, and separating it corrects a figure this adapter
+    published. Steal is time the hypervisor gave to somebody else — the vCPU
+    was not running, so it is not work this host did and cannot be work
+    belonging to no workload on it. Counting it as busy inflated the
+    unattributed remainder by exactly the stolen time, which is invisible on
+    bare metal and grows with how contended the host's neighbours are
+    (measured 2026-08-13: 18.5 s of a 101 s remainder on the estate's one
+    shared VPS, against 0.0 s on all four bare-metal hosts). Excluding it
+    also makes the total agree with the root cgroup's own accounting on every
+    host including the virtualised one, which is the check that says the
+    definition is now right.
+
+    Stolen time is returned rather than dropped, because "this VM lost 18.5 s
+    to its neighbours" is a fact about the host that nothing else here says.
     """
     text = _read_text(PROC_STAT)
     if text is None:
@@ -653,19 +672,25 @@ def _host_cpu_busy_usec() -> int | None:
     except ValueError:
         return None
     user, nice, system, _idle, _iowait, irq, softirq, steal = values
-    ticks = user + nice + system + irq + softirq + steal
     per_tick = 1_000_000 // (os.sysconf("SC_CLK_TCK") or 100)
-    return ticks * per_tick
+    return ((user + nice + system + irq + softirq) * per_tick, steal * per_tick)
 
 
 def _unattributed_cpu(found: dict[str, dict]) -> dict:
-    """Host CPU that belongs to no cgroup at all, and the total it came from.
+    """Host CPU inside no top-level slice, and the total it came from.
 
     The subtraction is against the TOP-LEVEL cgroups rather than against the
     root's own cpu.stat, because what the root reports for itself varies by
     kernel version while the depth-1 sum does not: every cgroup on the host
     is inside exactly one of them, so the difference is precisely the work
     that is inside none — kernel threads, an md resync, a scrub, writeback.
+
+    "In no top-level slice" and NOT "in no cgroup at all", which is how this
+    was first worded. Measured across the estate 2026-08-13: on four of five
+    hosts the root cgroup's own cpu.stat equals the host total to within
+    rounding, so those kernel threads do sit in a cgroup — the root one. They
+    sit in no slice below it, which is what makes them belong to no workload
+    row, and that is the claim this fact can actually support.
 
     /proc/stat is read AFTER the walk, deliberately. Both sides are monotonic
     counters, so a total sampled later than its parts can only be larger:
@@ -684,11 +709,18 @@ def _unattributed_cpu(found: dict[str, dict]) -> dict:
             seen = True
     if not seen:
         return {}
-    busy = _host_cpu_busy_usec()
-    if busy is None:
+    totals = _host_cpu_totals()
+    if totals is None:
         return {}
-    return {"HostCpuBusyUsec": busy,
-            "UnattributedCpuUsec": max(0, busy - attributed)}
+    busy, stolen = totals
+    facts = {"HostCpuBusyUsec": busy,
+             "UnattributedCpuUsec": max(0, busy - attributed)}
+    # Only where there is some: a bare-metal host would otherwise carry a
+    # standing zero for a condition it cannot have, and this collection's
+    # whole discipline is that a fact appears when it was measured.
+    if stolen:
+        facts["HostCpuStolenUsec"] = stolen
+    return facts
 
 
 # What a collection row carries. Consumption is the whole point of this
