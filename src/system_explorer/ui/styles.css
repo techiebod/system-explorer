@@ -737,12 +737,32 @@ a.ov-sub:hover { color: var(--accent); }
 .ov-sub .k { color: var(--text-dim); }
 /* A remark on the row above it, not a caption for the panel: tighter, and
    ticked at the left so the eye binds it upwards. The stalling panel uses it
-   for the one row whose meaning differs from every other row in the list —
-   a slice nothing inside accounts for — and that difference has to be legible
-   without opening the unit. */
+   for the two rows whose meaning differs from every other row in the list —
+   and from each other — and both differences have to be legible without
+   opening the unit. */
 .ov-panel .ov-sub.row-note {
   margin-top: 3px; padding-left: 9px;
   border-left: 2px solid var(--border-2);
+}
+/* The two are a result and the absence of one, so they must not be told apart
+   by their wording alone. The finding keeps the solid tick and the upright
+   face of a statement; the reading that could not settle is broken and
+   slanted — a dashed rule is the ordinary mark for a measurement that stops
+   short, and an aside does not carry the weight of a claim about the slice.
+   Neither takes a severity colour: both rules state `info`, and a gap in the
+   reading is not a fault of the thing unread. */
+.ov-panel .ov-sub.row-note.note-unsettled {
+  border-left-style: dashed;
+  font-style: italic;
+}
+/* Redundant against the rule above it, and deliberately so: the finding's
+   form is now load-bearing, and inheriting it by default would mean any later
+   change to the shared .row-note could quietly close the gap between the two
+   again. Both classes also appear here, where a check that every class the UI
+   emits is styled can find them. */
+.ov-panel .ov-sub.row-note.note-finding {
+  border-left-style: solid;
+  font-style: normal;
 }
 .ov-foot { margin-top: 14px; color: var(--text-faint); font-size: 12px;
            display: flex; gap: 16px; flex-wrap: wrap; max-width: 1080px; }

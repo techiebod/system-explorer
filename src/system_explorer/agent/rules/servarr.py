@@ -23,11 +23,13 @@ HEALTH_ERROR = "error"
 QUEUE_ATTENTION = ("warning", "error")
 
 # The health count on the app row is a number; the items are the diagnosis,
-# and they are already a collection of this subsystem. Ordered by Type, the
-# app's own error/warning grade (adapters/servarr.py health_item_facts), which
-# is the same grade this rule mirrored to reach its level.
+# and they are already a collection of this subsystem. NO ordering fact: Type
+# is the app's own grade (ok/notice/warning/error), and that vocabulary sorts
+# by severity in neither direction — descending it reads warning, ok, notice,
+# error, burying the errors this opinion counted underneath a passing check.
+# Same measurement as LOOK_UNITS_BY_STATE in rules/system.py: an unranked link
+# to the right collection beats a ranked one that sorts the answer out of view.
 LOOK_HEALTH_BY_TYPE = [{"subsystem": "servarr", "collection": "health",
-                        "fact": "Type",
                         "label": "the health items the app is reporting"}]
 
 

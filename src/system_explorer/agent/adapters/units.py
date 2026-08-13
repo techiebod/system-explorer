@@ -26,8 +26,8 @@ import re
 import anyio
 
 from .. import envelope as env
-from ..rules.units import (mount_unit_opinions, slice_unit_opinions,
-                           unit_opinions)
+from ..rules.units import (mount_unit_opinions, slice_stall_deferred,
+                           slice_unit_opinions, unit_opinions)
 from ..sysbus import BUS, PROPERTIES, SYSTEMD, SYSTEMD_MANAGER, SYSTEMD_PATH
 
 UNIT_IFACE = "org.freedesktop.systemd1.Unit"
@@ -93,13 +93,15 @@ def _read_pressure(path: str) -> dict:
 
 
 def _pressure_nodes() -> dict[str, dict]:
-    """{unit name: node} for every unit cgroup in the tree, in one walk.
+    """{key: node} for every cgroup in the tree, in one walk.
 
-    A node is {"facts": PSI facts, "parent": enclosing cgroup's name or None,
-    "depth": nesting below the root, "pruned": children left unread at the
-    depth bound}. The parent link is what makes a slice's stall attributable
-    at all: the kernel aggregates PSI over the CGROUP tree, so that tree is
-    the join, and it costs nothing beyond the walk the row facts already need.
+    A node is {"facts": PSI facts, "path": the cgroup directory this node IS,
+    "parent": the enclosing cgroup's key or None, "depth": nesting below the
+    root, "unit": whether its name is a systemd unit's, "pruned": children
+    left unread — the depth bound, or a listing that failed part-way}. The
+    parent link is what makes a slice's stall attributable at all: the kernel
+    aggregates PSI over the CGROUP tree, so that tree is the join, and it
+    costs nothing beyond the walk the row facts already need.
 
     A node is recorded even when it yielded no readings. Presence and
     readability are different answers — a member whose pressure could not be
@@ -112,39 +114,90 @@ def _pressure_nodes() -> dict[str, dict]:
     because the system manager's own units are the rows this collection
     serves; merging by name let whichever the walk reached last decide, which
     is a coin toss over whose pressure a row reports.
+
+    Which is why parentage is resolved by PATH at the end rather than by the
+    enclosing directory's basename. A cgroup that lost that collision is not
+    in this map, so its basename names the WINNER, and its children would
+    attach to that unrelated unit as direct members — the door through which a
+    guest's postgresql.service, inside machine.slice, comes to be named as
+    what explains the HOST's system.slice stall (reviewed 2026-08-13,
+    reproduced under systemd-nspawn, systemd-in-docker and rootless podman).
+
+    A cgroup no systemd named is kept too, keyed by its path because it has no
+    name to be known by: a cgroupfs-driver runtime under --cgroup-parent puts
+    one directly under a slice, and dropping it made its pressure invisible to
+    the member count, so the slice above claimed every member had been read.
     """
     nodes: dict[str, dict] = {}
     root_depth = CGROUP_ROOT.rstrip("/").count("/")
-    for dirpath, dirnames, _files in os.walk(CGROUP_ROOT):
+
+    def place(dirpath: str, depth: int) -> dict | None:
+        """The fresh node for this cgroup, or None where the name is already
+        held at the same depth or shallower. Units are keyed by name — the
+        collision rule above — and everything else by path."""
+        name = os.path.basename(dirpath)
+        unit = name.endswith(CGROUP_UNIT_SUFFIXES)
+        key = name if unit else dirpath
+        held = nodes.get(key)
+        if held is not None and held["depth"] <= depth:
+            return None
+        node: dict = {"facts": {}, "path": dirpath, "parent": None,
+                      "depth": depth, "unit": unit, "pruned": False}
+        nodes[key] = node
+        return node
+
+    def unlistable(error: OSError) -> None:
+        """A cgroup directory the walk could not list — denied, or removed
+        under it, which is the ordinary end of a transient scope. os.walk
+        discards such a subtree without a word by default, and that silence is
+        the failure this module exists to prevent: the member would be neither
+        counted, nor named as unread, nor recorded as a cut, and the slice
+        above it would go on to state positively that every member was read.
+        Recorded as a member that yielded no readings, which is what it is."""
+        path = str(getattr(error, "filename", "") or "").rstrip("/")
+        depth = path.count("/") - root_depth
+        # At or below the bound the cut is already carried by the parent's
+        # `pruned`, and recording it would publish a node the successful path
+        # deliberately omits.
+        if not path or depth <= 0 or depth >= CGROUP_MAX_DEPTH:
+            return
+        if place(path, depth) is None:
+            # os.walk also calls this when a directory it had already yielded
+            # fails part-way through iteration: the node exists, and what is
+            # missing is below it.
+            held = nodes.get(os.path.basename(path)) or nodes.get(path)
+            if held is not None and held["path"] == path:
+                held["pruned"] = True
+
+    for dirpath, dirnames, _files in os.walk(CGROUP_ROOT, onerror=unlistable):
         depth = dirpath.count("/") - root_depth
         if depth >= CGROUP_MAX_DEPTH:
             dirnames[:] = []
             continue
-        name = os.path.basename(dirpath)
-        if not name.endswith(CGROUP_UNIT_SUFFIXES):
+        if depth == 0:
+            continue                    # the root cgroup is inside nothing
+        node = place(dirpath, depth)
+        if node is None:
             continue
-        if name in nodes and nodes[name]["depth"] <= depth:
-            continue
-        facts: dict = {}
         for resource in PRESSURE_RESOURCES:
-            facts.update(_read_pressure(f"{dirpath}/{resource}.pressure"))
-        parent = os.path.basename(os.path.dirname(dirpath))
-        nodes[name] = {
-            "facts": facts,
-            "parent": parent if parent.endswith(CGROUP_UNIT_SUFFIXES) else None,
-            "depth": depth,
-            # The children this walk will refuse to descend into. A slice
-            # whose subtree was cut short cannot be said to have no member
-            # explaining its stall, so the cut has to be recorded where the
-            # attribution can see it.
-            "pruned": depth + 1 >= CGROUP_MAX_DEPTH and bool(dirnames),
-        }
+            node["facts"].update(_read_pressure(f"{dirpath}/{resource}.pressure"))
+        # The children this walk will refuse to descend into. A slice whose
+        # subtree was cut short cannot be said to have no member explaining
+        # its stall, so the cut has to be recorded where the attribution can
+        # see it.
+        node["pruned"] = depth + 1 >= CGROUP_MAX_DEPTH and bool(dirnames)
+
+    by_path = {node["path"]: key for key, node in nodes.items()}
+    for node in nodes.values():
+        node["parent"] = by_path.get(os.path.dirname(node["path"]))
     return nodes
 
 
 def _pressure_by_unit(nodes: dict[str, dict]) -> dict[str, dict]:
-    """{unit name: PSI facts} — the row-facing half of the walk."""
-    return {name: node["facts"] for name, node in nodes.items() if node["facts"]}
+    """{unit name: PSI facts} — the row-facing half of the walk. Rows are
+    units: a cgroup systemd did not name has nothing here to be."""
+    return {name: node["facts"] for name, node in nodes.items()
+            if node["facts"] and node["unit"]}
 
 
 def _pressure_and_attribution() -> tuple[dict[str, dict], dict[str, dict]]:
@@ -213,14 +266,16 @@ def _slice_members(name: str, nodes: dict[str, dict],
                    children: dict[str, list[str]]) -> tuple[list[tuple[str, int]], list[str]]:
     """(members with their depth below the slice, slices whose subtree was cut).
 
-    Descent stops at anything that is not a slice. A .service or .scope with
-    a cgroup subtree of its own has been DELEGATED that subtree — user@<uid>
-    .service runs a whole second systemd, a container scope runs a container's
-    own hierarchy — and the units in it belong to that manager, not this one.
-    Naming one would be a reference this collection cannot resolve, and worse,
-    those names collide with system units (dbus.service exists in both), so
-    the reference could resolve to the wrong object entirely. The delegating
-    unit's own cgroup already carries their aggregate, and it IS a row here.
+    Descent stops at anything that is not a slice UNIT. A .service or .scope
+    with a cgroup subtree of its own has been DELEGATED that subtree —
+    user@<uid>.service runs a whole second systemd, a container scope runs a
+    container's own hierarchy — and the units in it belong to that manager,
+    not this one. Naming one would be a reference this collection cannot
+    resolve, and worse, those names collide with system units (dbus.service
+    exists in both), so the reference could resolve to the wrong object
+    entirely. A cgroup systemd never named is delegated for the same reason
+    and stops descent the same way. The delegating cgroup carries their
+    aggregate, and where it is a unit it IS a row here.
     """
     found: list[tuple[str, int]] = []
     cut: list[str] = []
@@ -235,7 +290,7 @@ def _slice_members(name: str, nodes: dict[str, dict],
                 continue
             seen.add(child)
             found.append((child, depth + 1))
-            if child.endswith(".slice"):
+            if nodes[child]["unit"] and child.endswith(".slice"):
                 queue.append((child, depth + 1))
     return found, cut
 
@@ -248,16 +303,19 @@ def _stall_attribution(nodes: dict[str, dict],
     stall on, and each is stated POSITIVELY, because the three are what a
     reader would otherwise have to infer from an absence:
 
-      StallExplainedBy               a member reads at least as high
+      StallExplainedBy               a member unit reads at least as high
       StallUnexplained               every member was read and none does
-      StallAttributionUnobservable   a member could not be read, so neither
-                                     of the above can be claimed
+      StallAttributionUnobservable   a member could not be read, or could not
+                                     be attributed, so neither of the above
+                                     can be claimed
 
     The third exists because the alternative is the failure this product is
     built against: a cgroup whose pressure files could not be read looks
     exactly like a cgroup that is not stalling, and counting it as quiet
     would turn "we did not see it" into "nothing inside explains this" — the
     most interesting finding here, manufactured out of a gap in the reading.
+    A member cgroup that is not a systemd unit is the same failure by another
+    door: it was read, but it has no row for the reading to belong to.
     """
     children: dict[str, list[str]] = {}
     for name, node in nodes.items():
@@ -266,7 +324,9 @@ def _stall_attribution(nodes: dict[str, dict],
 
     out: dict[str, dict] = {}
     for name, node in nodes.items():
-        if not name.endswith(".slice") or (only is not None and name != only):
+        if not (node["unit"] and name.endswith(".slice")):
+            continue
+        if only is not None and name != only:
             continue
         members, cut = _slice_members(name, nodes, children)
         facts: dict = {}
@@ -278,6 +338,12 @@ def _stall_attribution(nodes: dict[str, dict],
                         for member, depth in members]
             unread = sorted(member for reading, member, _depth in readings
                             if not isinstance(reading, (int, float)))
+            # A cgroup systemd never named has no row in this collection, so
+            # its reading can be counted but never attributed — and it must
+            # never be NAMED as the explanation, which is why it is kept out
+            # of `accounts` below as well.
+            foreign = sorted(member for _reading, member, _depth in readings
+                             if not nodes[member]["unit"])
             slack = max(ATTRIBUTION_ABSOLUTE_SLACK,
                         value * ATTRIBUTION_RELATIVE_SLACK)
             # Highest first, then deepest, then by name. Highest because the
@@ -288,14 +354,18 @@ def _stall_attribution(nodes: dict[str, dict],
             # do not reorder between polls.
             accounts = sorted(
                 ((reading, depth, member) for reading, member, depth in readings
-                 if isinstance(reading, (int, float)) and reading >= value - slack),
+                 if nodes[member]["unit"]
+                 and isinstance(reading, (int, float)) and reading >= value - slack),
                 key=lambda entry: (-entry[0], -entry[1], entry[2]))
             if accounts:
                 facts.setdefault("StallExplainedBy", {})[fact] = accounts[0][2]
             elif cut:
+                # Worded for both reasons a subtree goes unread — the depth
+                # bound and a directory listing that failed — because `pruned`
+                # now carries both and only one of them is about depth.
                 facts.setdefault("StallAttributionUnobservable", {})[fact] = (
-                    f"the cgroup tree below {', '.join(sorted(cut))} is deeper "
-                    "than this walk reads, so a member in it could still "
+                    f"the cgroup tree below {', '.join(sorted(cut))} was not "
+                    "read to the bottom, so a member in it could still "
                     "account for this.")
             elif unread:
                 facts.setdefault("StallAttributionUnobservable", {})[fact] = (
@@ -304,6 +374,14 @@ def _stall_attribution(nodes: dict[str, dict],
                     f"({', '.join(unread[:3])}"
                     f"{f' and {len(unread) - 3} more' if len(unread) > 3 else ''}"
                     "), so a member could still account for this.")
+            elif foreign:
+                facts.setdefault("StallAttributionUnobservable", {})[fact] = (
+                    f"{len(foreign)} of the {len(members)} member cgroups "
+                    "under this slice are not systemd units, so their "
+                    f"{resource} pressure belongs to no row here and can be "
+                    f"neither attributed nor ruled out ({', '.join(foreign[:3])}"
+                    f"{f' and {len(foreign) - 3} more' if len(foreign) > 3 else ''})."
+                )
             elif not members:
                 facts.setdefault("StallAttributionUnobservable", {})[fact] = (
                     "no member cgroup was found under this slice, so there is "
@@ -424,6 +502,21 @@ def _unit_type(name: str) -> str:
     return name.rsplit(".", 1)[-1]
 
 
+def _row_health(name: str, active: str, facts: dict) -> str:
+    """The severity a row takes when its evaluator says nothing.
+
+    "ok" is a VOUCH — envelope's positively-healthy value, painted as a green
+    dot — so it cannot be the answer for a slice whose stall this rulebook
+    deliberately declined to judge (rules/units.py: the member's row carries
+    that condition, with the name on it). A green dot beside a measured 56.35%
+    says the evaluator looked and found nothing wrong; neutral is the honest
+    mark for a number nobody judged.
+    """
+    if _unit_type(name) == "slice" and slice_stall_deferred(facts):
+        return "info"
+    return "ok" if active == "active" else "info"
+
+
 def _slice_parent(name: str) -> str | None:
     """A slice's parent is encoded in its name: system-getty.slice lives in
     system.slice, top-level slices live in -.slice, -.slice is the root.
@@ -470,9 +563,12 @@ _UNIT_GLOSSARY = {
     "StallAttributionUnobservable": (
         "Present for each pressure reading that could neither be traced to a "
         "member of this slice nor ruled out of every one of them, naming what "
-        "could not be read. A member whose pressure is unreadable is not a "
-        "member that is quiet, so this stands in place of a finding rather "
-        "than beside one."
+        "stood in the way: a member whose pressure could not be read, a "
+        "subtree this walk did not reach the bottom of, or a member cgroup "
+        "that is not a systemd unit and so has no row here for its reading to "
+        "belong to. An unreadable member is not a quiet one and an "
+        "unattributable reading is not an absent one, so this stands in place "
+        "of a finding rather than beside one."
     ),
 }
 
@@ -567,13 +663,14 @@ class Adapter:
             # Same evaluator as get_object (agent/rules/units.py) — a failed
             # unit is a critical opinion, so the row derives critical; an
             # active unit with no opinions is positively ok, anything else
-            # (inactive, activating, …) is neutral.
+            # (inactive, activating, …) and any slice whose stall the rulebook
+            # left to a member's row (_row_health) is neutral.
             items_by_name[name] = env.item_summary(
                 f"unit:{name}", _unit_type(name), name, facts,
                 opinions=(slice_unit_opinions(facts)
                           if _unit_type(name) == "slice"
                           else unit_opinions(facts) + mount_unit_opinions(facts)),
-                healthy="ok" if active == "active" else "info",
+                healthy=_row_health(name, active, facts),
             )
             paths[name] = path
 

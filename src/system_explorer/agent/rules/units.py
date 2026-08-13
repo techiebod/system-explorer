@@ -42,6 +42,23 @@ UNIT_MEMORY_STALL_WARN = 10.0
 # on the row for anyone who wants it.
 SLICE_STALL_FLOOR = 1.0
 
+# The share at which a slice's own UNEXPLAINED stall claims attention, per
+# resource: the same bar a single unit must clear. Nothing else in the product
+# states this condition — every member was read and none accounts for it — so
+# at info it is stripped by envelope.attention(), absent from /v1/findings and
+# the estate roll-up, and visible only where it wins one of five
+# magnitude-ranked overview slots against members whose own rows already warn.
+# Between the floor and this bar it stays info, so the floor's reasoning is
+# untouched and no new noise is manufactured.
+SLICE_STALL_ATTENTION = {"PsiIoFullAvg60": UNIT_IO_STALL_WARN,
+                         "PsiMemoryFullAvg60": UNIT_MEMORY_STALL_WARN}
+
+# The readings a slice is judged on, with the wording each takes. One list, so
+# the three tables keyed by these facts cannot come to disagree about which
+# readings a slice states anything about.
+SLICE_STALL_RESOURCES = (("PsiIoFullAvg60", "I/O"),
+                         ("PsiMemoryFullAvg60", "memory reclaim"))
+
 # Where to look when the slice cannot name the unit itself. Same collection,
 # same fact: the member rows carry their own numbers, and the one actually
 # stalling is where the number stays high. Keyed by the fact so the loop below
@@ -55,6 +72,23 @@ SLICE_STALL_LOOK = {
                             "label": "which units are waiting on memory "
                                      "reclaim"}],
 }
+
+
+def slice_stall_deferred(facts: dict) -> bool:
+    """True where this evaluator declined to judge a stall the row CARRIES,
+    because a member accounts for it.
+
+    The finding belongs to the member's row and is not restated here (see
+    slice_unit_opinions). But silence reaches the row as the no-opinion
+    severity, and that value is a positive vouch — so the caller deriving a
+    row's severity has to know the difference between "nothing to say" and
+    "somebody else says it", or a slice stalled 56.35% of the last minute
+    paints the same green dot as an idle one.
+    """
+    explained = facts.get("StallExplainedBy") or {}
+    return any(isinstance(facts.get(fact), (int, float))
+               and facts[fact] >= SLICE_STALL_FLOOR and explained.get(fact)
+               for fact, _resource in SLICE_STALL_RESOURCES)
 
 
 def unit_opinions(facts: dict) -> list[dict]:
@@ -115,6 +149,11 @@ def slice_unit_opinions(facts: dict) -> list[dict]:
     I/O and unexplained for memory in the same minute, and one boolean
     across both would be false for one of them.
 
+    Of the three the unexplained case is the only one that claims attention
+    (SLICE_STALL_ATTENTION), because it is the only one no other row can
+    state: a gap in the reading is not a finding, and a bare aggregate may
+    still turn out to be explained.
+
     A failed slice keeps its critical: that is the slice's own state, not
     an aggregate over anything."""
     opinions: list[dict] = []
@@ -127,8 +166,7 @@ def slice_unit_opinions(facts: dict) -> list[dict]:
     explained = facts.get("StallExplainedBy") or {}
     unobservable = facts.get("StallAttributionUnobservable") or {}
     unexplained = facts.get("StallUnexplained") or {}
-    for fact, resource in (("PsiIoFullAvg60", "I/O"),
-                           ("PsiMemoryFullAvg60", "memory reclaim")):
+    for fact, resource in SLICE_STALL_RESOURCES:
         stall = facts.get(fact)
         if not isinstance(stall, (int, float)) or stall < SLICE_STALL_FLOOR:
             continue
@@ -147,7 +185,8 @@ def slice_unit_opinions(facts: dict) -> list[dict]:
                 look=SLICE_STALL_LOOK[fact]))
         elif unexplained.get(fact):
             opinions.append(env.opinion(
-                "slice-stall-unexplained", "info",
+                "slice-stall-unexplained",
+                "warn" if stall >= SLICE_STALL_ATTENTION[fact] else "info",
                 f"Tasks in this slice were stalled on {resource} for {stall}%"
                 " of the last minute and no unit inside it accounts for it:"
                 f" {unexplained[fact]} A member that was the cause would read"

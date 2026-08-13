@@ -198,7 +198,11 @@ CASES = [
       "StallExplainedBy": {"PsiIoFullAvg60": "docker-4d1f9c02ab77.scope"}},
      set()),
     # The case no member row can state, and the reason the slice keeps an
-    # opinion at all.
+    # opinion at all — so it is also the only one of the three that claims
+    # attention. At info, envelope.attention() strips it and the condition
+    # reaches neither /v1/findings nor the estate roll-up nor the row's dot:
+    # the vaguer stall a member's own row already warns about would alert,
+    # and this one, which nothing else states, would not.
     ("slice-stall-no-member-accounts-for", units.slice_unit_opinions,
      {"ActiveState": "active", "PsiIoFullAvg60": 33.43,
       "StallUnexplained": {
@@ -206,6 +210,18 @@ CASES = [
                             "for I/O pressure (12 of them) and the highest, "
                             "example-worker.service at 4.1%, is below this "
                             "slice's own 33.43%."}},
+     {("slice-stall-unexplained", "warn")}),
+    # The bar is the one a single unit must clear, not the floor: between the
+    # two the finding is real but too small to be woken for, and the floor's
+    # "coin toss dressed as a finding" reasoning stays where it was.
+    ("slice-stall-unexplained-under-the-attention-bar",
+     units.slice_unit_opinions,
+     {"ActiveState": "active", "PsiIoFullAvg60": 4.2,
+      "StallUnexplained": {
+          "PsiIoFullAvg60": "every member cgroup under this slice was read "
+                            "for I/O pressure (12 of them) and the highest, "
+                            "example-worker.service at 0.3%, is below this "
+                            "slice's own 4.2%."}},
      {("slice-stall-unexplained", "info")}),
     # A member whose pressure could not be read is not a member that is
     # quiet. Reporting this as "nothing inside explains it" would invent the
@@ -233,7 +249,7 @@ CASES = [
                                 "read for memory pressure (12 of them) and "
                                 "the highest, example-worker.service at 1.2%, "
                                 "is below this slice's own 11.02%."}},
-     {("slice-stall-unexplained", "info")}),
+     {("slice-stall-unexplained", "warn")}),
     # Facts from something other than this adapter: no attribution either
     # way, so the aggregate wording stands. Silence here would be the
     # inference the three branches above exist to stop anyone making.

@@ -26,6 +26,10 @@ from .. import envelope as env
 from ..rules.docker import container_opinions
 
 SOCKET = "/var/run/docker.sock"
+# The container states that have processes, and therefore a live scope
+# cgroup. `restarting` and `paused` keep theirs; `created`, `exited`,
+# `dead` and `removing` do not. Docker's own vocabulary, not ours.
+_SCOPED_STATES = ("running", "restarting", "paused")
 COMPOSE_PROJECT = "com.docker.compose.project"
 BRIDGE_NAME_OPTION = "com.docker.network.bridge.name"
 
@@ -102,7 +106,7 @@ def _redact_env(payload: dict) -> tuple[dict, list[str]]:
     return redacted, paths
 
 
-def _scope_unit(container_id: str) -> str | None:
+def _scope_unit(container_id: str, state: object = None) -> str | None:
     """The systemd scope a container's processes run in, named from its id.
 
     This is the link from a container to its own resource accounting: the
@@ -124,6 +128,15 @@ def _scope_unit(container_id: str) -> str | None:
     settle it; it is not fetched, because that is a second round trip on
     every listing to qualify a name whose failure mode is already empty.
     """
+    # Only while the container HAS processes, which the same row states.
+    # The scope is transient: systemd deletes it when the last process
+    # exits, and a created-but-never-started container never had one. On
+    # an exited row this would name a unit `systemctl status` answers
+    # "could not be found" for, and hang the runs edge on a target
+    # units/units cannot serve — so it is omitted there, which under
+    # rule 7 reads as "does not apply", not as "unknown".
+    if state is not None and state not in _SCOPED_STATES:
+        return None
     return f"docker-{container_id}.scope" if container_id else None
 
 
@@ -203,13 +216,15 @@ _CONTAINER_GLOSSARY = {
              "maps a published host address and port to the container port "
              "behind it, and a port marked (exposed) was never published, so "
              "it is reachable only from other containers.",
-    "ScopeUnit": "The systemd unit the container's processes actually run "
-                 "in, which is where the host keeps their resource "
+    "ScopeUnit": "The systemd unit the container's processes run in while "
+                 "it has any, which is where the host keeps their resource "
                  "accounting: the kernel measures CPU, memory and I/O "
                  "pressure per cgroup, and this scope is the container's. "
                  "The name is derived from the container id, so it is also "
                  "the way back — a host-side row named for a hexadecimal id "
-                 "and nothing else becomes this container.",
+                 "and nothing else becomes this container. Absent on a "
+                 "stopped container, whose scope systemd deleted with its "
+                 "last process.",
     "NetworkMode": "The container's network namespace as docker runs it: a "
                    "bridge or network name means ports reach it only via "
                    "published mappings, while \"host\" means it shares the "
@@ -282,7 +297,7 @@ class Adapter:
                 # The instance identity; the name stays the object id because
                 # compose names outlive recreations while IDs churn.
                 "ContainerID": (c.get("Id") or "")[:12] or None,
-                "ScopeUnit": _scope_unit(c.get("Id") or ""),
+                "ScopeUnit": _scope_unit(c.get("Id") or "", c.get("State")),
             }
             # Only when at least one mapping exists: a portless container
             # (host networking, batch jobs) says nothing rather than [] —
@@ -377,7 +392,8 @@ class Adapter:
                 "ComposeProject": project,
                 "NetworkMode": (raw.get("HostConfig") or {}).get("NetworkMode"),
                 "ContainerID": (raw.get("Id") or "")[:12] or None,
-                "ScopeUnit": _scope_unit(raw.get("Id") or ""),
+                "ScopeUnit": _scope_unit(raw.get("Id") or "",
+                                         state.get("Status")),
             }
             # Opinions from the shared evaluator (agent/rules/docker.py) —
             # the same function the collection rows go through, so a

@@ -44,8 +44,10 @@ const state = {
   // link's href is the destination collection's own address and must stay
   // copyable as that (see lookLinks).
   lookArrival: null,
-  // {route, fact}: the ordering fact that arrival made visible, for this
-  // visit only. Nothing about it is stored — see columnsFor.
+  // {route, host, fact}: the ordering fact that arrival made visible, for
+  // this visit only. Nothing about it is stored — see columnsFor. The host is
+  // part of the key because the host dropdown keeps the route (see
+  // takeLookArrival); it is null off-hub, where it never differs.
   lookColumn: null,
   filterText: "",
   facet: null,
@@ -664,6 +666,20 @@ async function loadHost() {
       // re-route from the hash, so the collection (and any deep-linked
       // object) loads again — from the right process this time.
       if (state.agentForSubsystem[state.subsystem]) {
+        // This re-route lands on the SAME address, so an arrival already
+        // spent here has to be re-armed: route() clears sortKey on the way
+        // in, while lookColumn survives it, which would leave the destination
+        // wearing the ordering fact as a column with no ordering. Re-armed
+        // rather than restored afterwards, so takeLookArrival still sets the
+        // order BEFORE loadCollection paints — the page arrives sorted
+        // instead of resorting under the reader. Address means host AND
+        // route, tested rather than argued; the arrival itself carries route
+        // and fact only, being host-free by contract, and takeLookArrival
+        // stamps the host again when it lands.
+        const here = `${state.subsystem}/${state.collection}`;
+        if (state.lookColumn?.route === here
+            && state.lookColumn.host === state.currentHost)
+          state.lookArrival = { route: here, fact: state.lookColumn.fact };
         state.subsystem = null;
         state.collection = null;
         route();
@@ -1283,6 +1299,15 @@ async function switchHost(host, rest) {
   if (!ok) {
     // Unreachable host: the banner (set by loadHost) plus an emptied grid;
     // the select still lists it, so recovery is one change event away.
+    // This branch IS a route change and it is the one that never reaches
+    // route(), so takeLookArrival never runs: spend the arrival here by hand
+    // or it stays armed and reorders whatever host the reader picks next —
+    // and this branch keeps the very route it is keyed to, so the next
+    // selection is exactly where it would fire. The transient column goes
+    // with it for the same reason: it belongs to the rows that justified it,
+    // and there are none here.
+    state.lookArrival = null;
+    state.lookColumn = null;
     Object.assign(state, { page: null, selectedId: null, detailObs: null,
                            evidence: null, observedAt: null,
                            subsystem: rest[0] || null,
@@ -1414,18 +1439,31 @@ function armLookArrival(hint) {
    is exactly the fourth-copy failure this file names elsewhere.
 
    lookColumn outlives the intent by one thing: it lasts while the reader
-   stays on the route that asked for it, since opening a row is not leaving.
-   Cleared here, the one place that sees every route change, so no visit can
-   inherit the previous one's extra column. */
+   stays on the route AND the host that asked for it, since opening a row is
+   not leaving but changing machine is. Cleared here, the one place that sees
+   every route change, so no visit can inherit the previous one's extra
+   column. The host has to be part of that test: the dropdown deliberately
+   keeps the route, so without it the column follows the reader onto another
+   machine — where a kernel with no PSI carries the fact on no row, prints a
+   column of dashes that reads as "none here", and offers no tick to untick,
+   because the picker only lists facts the loaded rows actually carry.
+
+   `want` stays host-free on purpose and must not be qualified: a findings
+   link is armed on the host the reader is looking FROM and consumed after
+   switchHost on the host it names. Stamping state.currentHost at the moment
+   the intent is TAKEN is what binds the column to the machine whose rows
+   justified it. */
 function takeLookArrival() {
   const want = state.lookArrival;
   state.lookArrival = null;
   const here = `${state.subsystem}/${state.collection}`;
-  if (state.lookColumn && state.lookColumn.route !== here) state.lookColumn = null;
+  if (state.lookColumn &&
+      (state.lookColumn.route !== here || state.lookColumn.host !== state.currentHost))
+    state.lookColumn = null;
   if (!want || want.route !== here) return false;
   state.sortKey = want.fact;
   state.sortDir = -1;          // descending: worst first is the whole point
-  state.lookColumn = want;
+  state.lookColumn = { ...want, host: state.currentHost };
   return true;
 }
 
@@ -2610,18 +2648,31 @@ function renderOverview(obs, got = {}) {
         row.appendChild(meter(share, share >= 20 ? "warn" : null));
         row.appendChild(el("span", "val", `${share}%`));
         p.appendChild(row);
-        // Why a slice is still here, in the two cases where the row says. The
-        // marked one is the finding — a stall belonging to the slice as a whole,
-        // which no member's row will ever state — and the other is the reading
-        // that could not settle it, which must not read as the first. The
-        // host's own sentence is a hover away rather than printed, the same
-        // place this panel keeps every other sentence it did not write.
+        // Why a slice is still here, in the two cases where the row says: one
+        // is the finding — a stall belonging to the slice as a whole, which no
+        // member's row will ever state — and the other is the reading that
+        // could not settle it, which must not read as the first.
         const unexplained = ioClaim(u, "unexplained");
         const unsettled = unexplained ? null : ioClaim(u, "unobservable");
         if (unexplained || unsettled) {
-          const note = el("div", "ov-sub row-note", unexplained
-            ? "nothing inside this slice accounts for it"
-            : "nothing inside was ruled in or out");
+          // Two notes in one slot, and the difference between them is the
+          // difference between a result and the absence of one — so it must
+          // not rest on the wording, which is all that separated them: both
+          // opened "nothing inside", one class, one weight. A reader taking
+          // the hedge for the finding skips the row no member will ever
+          // state; one taking the finding for the hedge acts on a slice
+          // nobody measured. Each gets a modifier class (styles.css breaks
+          // the unsettled one's rule and slants its face) and a different
+          // SUBJECT: the finding speaks about the slice, the hedge about the
+          // reading. Neither takes a severity — both rules state info, and
+          // a gap in the measurement is not a fault of the slice.
+          const note = el("div",
+            `ov-sub row-note ${unexplained ? "note-finding" : "note-unsettled"}`,
+            unexplained
+              ? "nothing inside this slice accounts for it"
+              : "part of this slice could not be read — neither ruled in nor out");
+          // Which members went unread is the host's sentence to make, and it
+          // stays a hover: this panel prints no sentence it did not write.
           note.title = unexplained || unsettled;
           p.appendChild(note);
         }
@@ -2823,6 +2874,16 @@ function renderFacets() {
           if (!preset.includes(key)) prefs.add = [...(prefs.add || []), key];
         }
         setColPrefs(route, prefs);
+        // Dropping the sorted column drops the sort with it. An order no
+        // header shows and no header click can reproduce explains nothing —
+        // the same rule the arrival's transient column exists to satisfy,
+        // read the other way round. `current.has(key)` scopes this to the
+        // untick branch, and a key comes from the preset or from prefs.add
+        // but never both, so unticking always removes the column. sortDir is
+        // left alone: the header path reads it only as
+        // `state.sortKey === key ? -state.sortDir : 1`, so it is inert
+        // beside a null key.
+        if (current.has(key) && state.sortKey === key) state.sortKey = null;
         renderFacets(); renderGrid();
       };
       menu.appendChild(opt);

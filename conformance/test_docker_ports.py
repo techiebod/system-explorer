@@ -113,3 +113,22 @@ def test_host_networking_states_its_mode_beside_the_absent_ports():
     [item] = asyncio.run(adapter._container_items())
     assert item["facts"]["NetworkMode"] == "host"
     assert "Ports" not in item["facts"]
+
+
+def test_a_stopped_container_claims_no_scope_systemd_deleted():
+    # The scope is transient: systemd drops it with the container's last
+    # process, so naming it on an exited row would state a unit
+    # `systemctl status` cannot find, and hang the runs edge on a target
+    # units/units can never serve (adversarial review, 2026-08-13).
+    from system_explorer.agent.adapters.docker import _scope_unit
+
+    ident = "a" * 64
+    assert _scope_unit(ident, "running") == f"docker-{ident}.scope"
+    assert _scope_unit(ident, "restarting") == f"docker-{ident}.scope"
+    assert _scope_unit(ident, "paused") == f"docker-{ident}.scope"
+    for gone in ("exited", "created", "dead", "removing"):
+        assert _scope_unit(ident, gone) is None, gone
+    # No id, no claim; and an unstated state keeps the derivation rather
+    # than inventing a stop nobody observed.
+    assert _scope_unit("", "running") is None
+    assert _scope_unit(ident) == f"docker-{ident}.scope"
