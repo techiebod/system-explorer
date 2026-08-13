@@ -77,6 +77,23 @@ const COLUMNS = {
      core with nothing contended stalls nobody, and one starved by somebody
      else's I/O stalls while consuming almost nothing. Parent leads so the
      ladder is readable down the page. */
+  "network/listening": ["Protocol", "LocalAddress", "LocalPort", "Scope", "Uid"],
+  /* The rendered rule leads, because it is the thing being read, and
+     Comprehension sits beside it because it says how much of the rule that
+     text actually is. Position is a column rather than a detail: nftables is
+     first-match-wins, so order is meaning. */
+  "network/nft-rules": ["Table", "Chain", "Position", "Rendered",
+                        "Comprehension", "Verdict"],
+  /* The two answers, not the socket's own description. Without a preset the
+     table fell back to the first five facts and showed protocol, address,
+     port, scope and a constant sentence — every column identical or already
+     in the object name, and the closure answers this collection exists to
+     give were off the right-hand edge. PathCoverage is deliberately NOT here:
+     it is the same sentence on every row, which is right for an opened object
+     and for a model reading one, and pure noise as a column. */
+  "network/port-exposure": ["LocalPort", "Protocol", "Scope",
+                            "AdmittedFromCertain", "AdmittedFromPossible",
+                            "ClosureGap"],
   "resources/workloads": ["Parent", "CpuUsageUsec", "MemoryCurrentBytes",
                           "IoReadBytes", "IoWrittenBytes", "PsiIoFullAvg60",
                           "PsiCpuSomeAvg60", "PsiMemoryFullAvg60"],
