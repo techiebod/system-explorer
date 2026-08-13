@@ -158,6 +158,55 @@ in
       default = [ ];
       description = "Extra packages on the agent's PATH (e.g. zfs on ZFS hosts).";
     };
+
+    keaSocket = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "/run/kea/kea4-ctrl-socket";
+      description = ''
+        Kea's DHCPv4 control socket, for the kea explorer (deployment
+        receipt: unset means this host observes no Kea). The channel is a
+        native JSON interface and the adapter is read-only over it; pair
+        with grantKeaAccess so the DynamicUser agent may connect.
+      '';
+    };
+
+    grantKeaAccess = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Join the kea group so the agent can connect to the control socket
+        keaSocket names. Grant idiom: explicit, documented, per
+        deployment — the socket accepts commands, and although this
+        adapter only ever sends reads (version-get, status-get,
+        statistic-get-all, config-get), the group membership is the
+        boundary an auditor should look at.
+      '';
+    };
+
+    unboundSocket = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "/run/unbound.ctl";
+      description = ''
+        Unbound's local control socket (services.unbound.localControlSocketPath),
+        for the unbound explorer. Unset means this host observes no
+        unbound. The adapter speaks the control framing directly and uses
+        stats_noreset deliberately — plain stats zeroes the counters as a
+        side effect of reading them.
+      '';
+    };
+
+    grantUnboundAccess = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Join the unbound group so the agent can connect to the control
+        socket unboundSocket names. Same grant idiom and same caveat as
+        grantKeaAccess: the socket accepts control commands; this adapter
+        sends only status and stats_noreset.
+      '';
+    };
   };
 
   # Named instances (Phase 3 of the estate design): the unit of deployment
@@ -368,6 +417,12 @@ in
         // lib.optionalAttrs (cfg.site != null) { SE_SITE = cfg.site; }
         // lib.optionalAttrs (cfg.deploymentReceipts != null) {
           SE_DEPLOYMENT_RECEIPTS = cfg.deploymentReceipts;
+        }
+        // lib.optionalAttrs (cfg.keaSocket != null) {
+          SE_KEA_SOCKET = cfg.keaSocket;
+        }
+        // lib.optionalAttrs (cfg.unboundSocket != null) {
+          SE_UNBOUND_SOCKET = cfg.unboundSocket;
         };
 
       serviceConfig = {
@@ -379,7 +434,11 @@ in
         # SPEC section 7: unprivileged by construction.
         DynamicUser = true;
         SupplementaryGroups = [ "systemd-journal" ]
-          ++ lib.optional cfg.enableDockerAdapter "docker";
+          ++ lib.optional cfg.enableDockerAdapter "docker"
+          # The socket grants (keaSocket / unboundSocket): group membership
+          # is the whole grant, and the adapters only ever send reads.
+          ++ lib.optional cfg.grantKeaAccess "kea"
+          ++ lib.optional cfg.grantUnboundAccess "unbound";
         CapabilityBoundingSet = if cfg.grantNetAdmin then [ "CAP_NET_ADMIN" ] else [ "" ];
         AmbientCapabilities = lib.mkIf cfg.grantNetAdmin [ "CAP_NET_ADMIN" ];
         NoNewPrivileges = true;

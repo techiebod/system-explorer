@@ -140,6 +140,26 @@ EVIDENCE_REDACTION_EXEMPTIONS: dict[str, str] = {
                "snapshot — which carries node PUBLIC keys and DERP topology. "
                "The one member worth watching is AuthURL, a single-use login "
                "URL present only while the node is logged out.",
+    "kea": "control-socket JSON answers: daemon rows serve the status-get "
+           "and version-get replies (versions, uptime); subnet rows serve "
+           "the statistic-get-all counters plus the config-get document "
+           "that names each CIDR — which on this estate carries no "
+           "secrets (no client-classes with passwords, no TSIG keys).",
+    "unbound": "status lines and stats_noreset counters: versions, uptime, "
+               "query and cache numbers. The control socket requires no "
+               "credential in this posture and the documents carry none.",
+    "plex": "server identity, library sections, session and request "
+            "documents: titles, users, players, timestamps. Neither API "
+            "echoes its credential — both travel in request headers this "
+            "adapter sends and never serves back.",
+    "bazarr": "status and health documents: versions and the app's own "
+              "issue sentences. The API key travels in a request header "
+              "and appears in neither document.",
+    "downloaders": "transmission session/stats/torrent documents and "
+                   "sabnzbd queue/fullstatus documents: names, states, "
+                   "rates, paths and hashes. Neither API echoes its "
+                   "credential — sabnzbd's key travels only in the request "
+                   "query this adapter sends, and transmission has none.",
     "servarr": "system status, health items and queue records: versions, "
                "the apps' own diagnostic messages, download titles, client "
                "and indexer names, transfer ids and paths. The API key "
