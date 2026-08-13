@@ -1056,7 +1056,20 @@ def _rule_bears_on(rendered: dict, expr: list, protocol: str,
             continue
         body = statement["match"]
         left, right = body.get("left"), body.get("right")
-        if not isinstance(left, dict) or "payload" not in left:
+        if not isinstance(left, dict):
+            continue
+        # A protocol can be constrained through meta as well as through the
+        # packet's own header, and reading only the second credited an
+        # ICMP-ONLY accept with admitting tcp/22 from anywhere. Found on a live
+        # host, 2026-08-13: `meta l4proto ipv6-icmp counter accept` inside
+        # nixos-fw-accept, fully rendered, and therefore CERTAIN — the worst
+        # possible place for this to be wrong, because a certain answer is
+        # the one an operator is told they can defend.
+        if "meta" in left and isinstance(left["meta"], dict):
+            if left["meta"].get("key") == "l4proto" and isinstance(right, str):
+                protocols.append(right)
+            continue
+        if "payload" not in left:
             continue
         payload = left["payload"]
         field, proto = payload.get("field"), payload.get("protocol")

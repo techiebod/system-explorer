@@ -299,3 +299,53 @@ def test_a_guarded_accept_does_not_leak_to_an_unrelated_port(
     monkeypatch.setattr(network, "_nft_json", lambda: document)
     [item] = asyncio.run(network.Adapter()._exposure_items())
     assert "AdmittingRules" not in item["facts"]
+
+
+# ── the bug the estate found after this shipped ──────────────────────────
+
+def test_an_icmp_only_accept_does_not_admit_a_tcp_port(monkeypatch, tmp_path):
+    """Found on a live host, and it was CERTAIN — the worst place to be
+    because the certain answer is the one an operator is told they can
+    defend. nixos-fw-accept holds `meta l4proto ipv6-icmp counter accept`,
+    fully rendered and reached under no source constraint, and the closure
+    credited it with admitting tcp/22 from anywhere. A protocol can be
+    constrained through meta as well as through the packet's own header, and
+    reading only the second is the difference between an ICMP hole and an
+    open SSH port."""
+    monkeypatch.setattr(network, "PROC_NET", str(tmp_path))
+    for name in ("tcp", "tcp6", "udp", "udp6"):
+        (tmp_path / name).write_text(
+            TCP_HEADER + (line("00000000:0016") if name == "tcp" else ""))
+    icmp = match({"meta": {"key": "l4proto"}}, "ipv6-icmp")
+    document = {"nftables": [
+        {"chain": {"family": "ip6", "table": "filter", "name": "INPUT",
+                   "hook": "input", "policy": "drop"}},
+        {"rule": {"family": "ip6", "table": "filter", "chain": "INPUT",
+                  "handle": 1, "expr": [icmp, {"jump": {"target": "ok"}}]}},
+        {"rule": {"family": "ip6", "table": "filter", "chain": "ok",
+                  "handle": 2, "expr": [{"counter": {}}, ACCEPT]}},
+    ]}
+    monkeypatch.setattr(network, "_nft_json", lambda: document)
+    [item] = asyncio.run(network.Adapter()._exposure_items())
+    assert "AdmittedFromCertain" not in item["facts"], (
+        "an ICMP-only accept was credited with admitting a TCP port")
+    assert "AdmittingRules" not in item["facts"]
+
+
+def test_a_matching_l4proto_still_admits(monkeypatch, tmp_path):
+    """The other direction: `meta l4proto tcp` does bear on a tcp socket, so
+    the fix must not turn every meta match into a refusal."""
+    monkeypatch.setattr(network, "PROC_NET", str(tmp_path))
+    for name in ("tcp", "tcp6", "udp", "udp6"):
+        (tmp_path / name).write_text(
+            TCP_HEADER + (line("00000000:0016") if name == "tcp" else ""))
+    document = {"nftables": [
+        {"chain": {"family": "ip", "table": "filter", "name": "INPUT",
+                   "hook": "input", "policy": "drop"}},
+        {"rule": {"family": "ip", "table": "filter", "chain": "INPUT",
+                  "handle": 1, "expr": [match({"meta": {"key": "l4proto"}}, "tcp"),
+                                        DPORT22, ACCEPT]}},
+    ]}
+    monkeypatch.setattr(network, "_nft_json", lambda: document)
+    [item] = asyncio.run(network.Adapter()._exposure_items())
+    assert item["facts"]["AdmittedFromCertain"] == ["anywhere"]
