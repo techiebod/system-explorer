@@ -268,9 +268,26 @@ _LISTENING_GLOSSARY = {
     "ProcessUnobservable": "Why no process is named on this row. A socket whose owner could not be established is not a socket nobody owns, and this states which it is.",
 }
 
+_NFT_RULE_GLOSSARY = {
+    "Family": "The address family this rule's table belongs to — ip, ip6, inet, arp, bridge or netdev.",
+    "Table": "The table holding this rule. On a real host the table name is an ownership label: docker, libvirt, firewalld and nixos-fw were each written by something different, and this observer sees all of them at once where a manager's own UI sees only its own.",
+    "Chain": "The chain holding this rule.",
+    "Handle": "The kernel's own identifier for this rule, and the join key to `nft -a list ruleset`. Stable while the rule object lives; a flush-and-restore reassigns handles, so it is not durable across a reload.",
+    "Position": "This rule's ordinal within its chain. Evaluation is ordered and first-match-wins, so position is meaning, not presentation.",
+    "Rendered": "What this rule says, in nft's own vocabulary, with every term present. A term whose meaning could not be expanded appears at its position as a placeholder rather than being dropped — omission would turn a narrow rule into a permissive-looking one.",
+    "Verdict": "How this rule ends — accept, drop, reject, return, continue or queue — or absent where the rule ends in no verdict at all, which is what a pure counter or logging rule does.",
+    "JumpTarget": "The chain this rule transfers control to. A jump is not a decision: what happens is decided by the chain it goes to.",
+    "Comprehension": "How much of this rule the renderer could state: full where every statement was rendered, partial where some were not, opaque where the rule's conditions are absent from the source document entirely. Computed by subtracting what the renderer consumed from the rule's own expression list, never assumed.",
+    "OpaqueReason": "Why a rule's conditions could not be read: xt where it calls an xtables extension whose parameters nft's JSON does not carry, text-fallback where nft emitted a bare string because it had no JSON encoder for the expression.",
+    "Residue": "The expressions in this rule the renderer did not consume, verbatim. This is the measured extent of what the row above does not say.",
+    "CounterPackets": "Packets this rule has matched, where the rule carries a counter. nftables has no implicit per-rule counters, so absence here means the rule was written without one — never that nothing has matched.",
+    "CounterBytes": "Bytes this rule has matched, where the rule carries a counter. Absent means no counter was written, not zero traffic.",
+}
+
 _NETWORK_GLOSSARY = {"links": _LINK_GLOSSARY, "routes": _ROUTE_GLOSSARY,
                      "resolver": _RESOLVER_GLOSSARY,
-                     "listening": _LISTENING_GLOSSARY}
+                     "listening": _LISTENING_GLOSSARY,
+                     "nft-rules": _NFT_RULE_GLOSSARY}
 
 
 def _link_kind(link: dict) -> str | None:
@@ -663,6 +680,206 @@ def _read_proc_net(name: str) -> tuple[list[dict], str | None]:
     return rows, None
 
 
+# ── nftables rules, one row each ─────────────────────────────────────
+#
+# The table-grained collection above counts rules and cannot say what one
+# permits, which on a host whose whole posture is its ruleset means deleting
+# the single rule confining sshd to one interface moves a count and changes
+# nothing else. This collection is the rule itself.
+#
+# THE RENDERING DISCIPLINE, and it is the whole design. nftables' JSON
+# grammar is wide, and it grows: measured against the emitter, the published
+# man page omits flow, last, reset, tproxy, synproxy, secmark, ipsec, tunnel
+# and ip option. A renderer that silently skipped a term it did not know
+# would print `accept tcp dport 22` for a rule whose real text also says
+# `iifname tailscale0` — not a smaller truth but the opposite claim, on the
+# one surface where being confidently wrong is worst. Every shipped nftables
+# exporter surveyed makes exactly that mistake; the two most popular never
+# read `match.op` at all, so `ip saddr != 10.0.0.0/8` exports identically to
+# its inverse.
+#
+# So ignorance is COMPUTED rather than assumed. Coverage is a data structure,
+# not scattered branches: what the renderer consumed is subtracted from the
+# rule's own expr array and whatever is left is the residue, carried on the
+# row. That turns "an expression I did not understand" from an unobservable
+# event into a per-row fact — which nobody in the survey does, and which is
+# the only mechanism that makes this collection's ignorance measurable.
+#
+# And a term that cannot be expanded is rendered AT ITS POSITION rather than
+# dropped, which is nft's own convention (`xt match "conntrack"`). The reader
+# sees a rule of the right shape with an opaque slot in it, which cannot be
+# confused with a rule that never carried that term. Omission inverts; a
+# placeholder is structurally safe.
+
+# Statements this renderer can state the meaning of. Anything outside this
+# set becomes residue — deliberately a literal table rather than a series of
+# isinstance checks, so "what do we cover" is answerable by reading one line.
+RENDERED_STATEMENTS = frozenset({
+    "match", "counter", "accept", "drop", "reject", "return",
+    "jump", "goto", "continue", "log", "limit", "comment",
+})
+# The verdicts a rule can end in. `jump`/`goto` are verdicts too but they
+# transfer control rather than deciding, which is why they are named
+# separately wherever a decision is being claimed.
+TERMINAL_VERDICTS = ("accept", "drop", "reject", "return", "continue", "queue")
+
+# Left-hand sides of a match this renderer can name. Everything else — fib,
+# socket, rt, osf, numgen, and whatever the next kernel adds — is residue.
+RENDERED_MATCH_KEYS = frozenset({"payload", "meta", "ct"})
+
+NFT_RULE_REFERENCE = [
+    "nft -a list ruleset            # the same rules, with '# handle N'",
+    "nft -j list ruleset",
+    "nft list chain <family> <table> <chain>",
+    "iptables-nft -S                # renders the xt rules this cannot",
+]
+
+NFT_RULE_NOTES = [
+    "One row per rule, keyed by the kernel's own handle. A handle is stable"
+    " for the life of the rule object and is the right join key WITHIN a"
+    " snapshot; a flush-and-restore makes new objects with new handles, so it"
+    " is not a durable identity across a ruleset reload.",
+    "Comprehension is computed, not assumed: the statements this renderer"
+    " consumed are subtracted from the rule's own expression list, and"
+    " anything left is carried as Residue. A row marked partial or opaque is"
+    " one whose rendered text is thinner than the rule.",
+    "An xt statement is an xtables extension called through the compat layer."
+    " nft's JSON carries the extension's NAME and none of its parameters, so"
+    " the conditions of such a rule are absent from the document rather than"
+    " merely unparsed. iptables-nft -S renders them.",
+]
+
+
+
+def _render_match(match: dict) -> tuple[str | None, bool]:
+    """(text, understood) for one match statement.
+
+    Negation is rendered INSIDE the text rather than carried beside it as a
+    flag. A separate `negated` boolean is ignorable, and it will be ignored —
+    by a consumer selecting one column, by grep, by a model summarising a
+    table — and the value it modifies reads as its own opposite when it is
+    (osquery renders the same way, and the popular nftables exporters, which
+    never read `match.op` at all, are the counter-example).
+    """
+    left, op, right = match.get("left"), match.get("op", "=="), match.get("right")
+    if not isinstance(left, dict) or len(left) != 1:
+        return None, False
+    key = next(iter(left))
+    if key not in RENDERED_MATCH_KEYS:
+        return None, False
+    inner = left[key]
+    if key == "payload" and isinstance(inner, dict):
+        name = f"{inner.get('protocol')} {inner.get('field')}"
+    elif isinstance(inner, dict):
+        name = f"{key} {inner.get('key')}"
+    else:
+        return None, False
+    if isinstance(right, dict):
+        if "prefix" in right and isinstance(right["prefix"], dict):
+            value = f"{right['prefix'].get('addr')}/{right['prefix'].get('len')}"
+        elif "set" in right and isinstance(right["set"], list):
+            # An ANONYMOUS set carries its elements right here, so rendering
+            # it as "{ ... }" would claim full comprehension while hiding the
+            # membership that decides what the rule matches. A NAMED set
+            # (@ports) is a reference whose membership is a separate object
+            # and arrives as a plain string — the name is then what the rule
+            # genuinely says, and is rendered as itself below.
+            elements = []
+            for element in right["set"]:
+                if isinstance(element, (str, int)):
+                    elements.append(str(element))
+                elif (isinstance(element, dict)
+                      and isinstance(element.get("range"), list)
+                      and len(element["range"]) == 2):
+                    lo, hi = element["range"]
+                    elements.append(f"{lo}-{hi}")
+                else:
+                    return None, False
+            value = "{ " + ", ".join(elements) + " }"
+        else:
+            return None, False
+    elif isinstance(right, (str, int)):
+        value = str(right)
+    else:
+        return None, False
+    return f"{name} {'!= ' if op == '!=' else ''}{value}", True
+
+
+def _render_rule(expr: list) -> dict:
+    """A rule's text, its verdict, and the exact expressions not consumed.
+
+    The residue is the point. Every statement is either rendered or recorded,
+    and the two together account for the whole list — so a row can never be
+    thinner than the rule without saying so.
+    """
+    parts: list[str] = []
+    residue: list = []
+    verdict = None
+    jump_target = None
+    packets = bytes_ = None
+    opaque_reason = None
+    for statement in expr:
+        if not isinstance(statement, dict) or len(statement) != 1:
+            # nft emits a bare string where it has no JSON encoder for an
+            # expression, running its own text printer into a buffer instead.
+            # The type change is the signal, and it is the one construct that
+            # arrives already rendered — so it is kept verbatim and flagged.
+            if isinstance(statement, str):
+                parts.append(statement)
+                opaque_reason = opaque_reason or "text-fallback"
+                residue.append(statement)
+                continue
+            residue.append(statement)
+            continue
+        verb = next(iter(statement))
+        body = statement[verb]
+        if verb == "xt" and isinstance(body, dict):
+            # nft's own convention, kept: the term appears at its position so
+            # the rule keeps its shape, and the reader can see that a
+            # condition exists whose content is not in this document.
+            parts.append(f'xt {body.get("type")} "{body.get("name")}"')
+            opaque_reason = "xt"
+            residue.append(statement)
+            continue
+        if verb not in RENDERED_STATEMENTS:
+            parts.append(f"<unrendered {verb}>")
+            residue.append(statement)
+            continue
+        if verb == "match" and isinstance(body, dict):
+            text, understood = _render_match(body)
+            if understood and text:
+                parts.append(text)
+            else:
+                # AT ITS POSITION, which is the whole discipline. Dropping an
+                # unrendered condition from the text turns `fib oif lo accept`
+                # into `accept` — a narrow rule reading as an unconditional
+                # one, which is the inversion this collection exists to make
+                # impossible. The residue below records it too, but the
+                # placeholder is what a human reading the line sees.
+                left = body.get("left")
+                key = next(iter(left)) if isinstance(left, dict) and left else "expr"
+                parts.append(f"<unrendered {key}>")
+                residue.append(statement)
+            continue
+        if verb == "counter":
+            if isinstance(body, dict):
+                packets, bytes_ = body.get("packets"), body.get("bytes")
+            parts.append("counter")
+            continue
+        if verb in ("jump", "goto"):
+            jump_target = body.get("target") if isinstance(body, dict) else None
+            parts.append(f"{verb} {jump_target}")
+            continue
+        if verb in TERMINAL_VERDICTS:
+            verdict = verb
+            parts.append(verb)
+            continue
+        parts.append(verb)
+    return {"text": " ".join(parts), "residue": residue, "verdict": verdict,
+            "jump_target": jump_target, "packets": packets, "bytes": bytes_,
+            "opaque_reason": opaque_reason}
+
+
 class Adapter:
     subsystem = "network"
 
@@ -678,7 +895,7 @@ class Adapter:
 
     def collections(self) -> list[str]:
         return ["links", "routes", "resolver", "listening", "nft-tables",
-                "tailscale", "lookups"]
+                "nft-rules", "tailscale", "lookups"]
 
     def fact_glossary(self, collection: str) -> dict[str, str]:
         return _NETWORK_GLOSSARY.get(collection, {})
@@ -732,6 +949,7 @@ class Adapter:
         nft_ok, nft_reason = await self._nft_available()
         if not nft_ok:
             unavailable["nft-tables"] = nft_reason
+            unavailable["nft-rules"] = nft_reason
         res_mode, res_reason = await self._resolver_mode()
         if res_mode is None:
             unavailable["resolver"] = res_reason
@@ -1132,6 +1350,63 @@ class Adapter:
                 f"nft-table:{key}", "table", key, facts))
         return items
 
+    # ── nftables rules ───────────────────────────────────────
+    async def _nft_rules(self) -> list[dict]:
+        """One row per rule, in evaluation order within each chain.
+
+        Ordering is preserved because it IS the meaning: nftables evaluates
+        top to bottom and the first match wins, so a rule list re-sorted for
+        display would be a different ruleset.
+        """
+        data = await anyio.to_thread.run_sync(_nft_json)
+        items: list[dict] = []
+        position: dict[tuple, int] = {}
+        for entry in data.get("nftables", []):
+            if "rule" not in entry:
+                continue
+            rule = entry["rule"]
+            family = rule.get("family")
+            table = rule.get("table")
+            chain = rule.get("chain")
+            handle = rule.get("handle")
+            key = (family, table, chain)
+            index = position[key] = position.get(key, -1) + 1
+            rendered = _render_rule(rule.get("expr") or [])
+            facts: dict = {
+                "Family": family, "Table": table, "Chain": chain,
+                "Handle": handle, "Position": index,
+                "Rendered": rendered["text"],
+            }
+            if rendered["verdict"]:
+                facts["Verdict"] = rendered["verdict"]
+            if rendered["jump_target"]:
+                facts["JumpTarget"] = rendered["jump_target"]
+            # Comprehension is derived from the residue rather than set where
+            # a branch happened to notice something: one computation, so a
+            # renderer that grows a case cannot forget to update the claim.
+            if rendered["opaque_reason"]:
+                facts["Comprehension"] = "opaque"
+                facts["OpaqueReason"] = rendered["opaque_reason"]
+            elif rendered["residue"]:
+                facts["Comprehension"] = "partial"
+            else:
+                facts["Comprehension"] = "full"
+            if rendered["residue"]:
+                facts["Residue"] = [env.reason(json.dumps(item), 400)
+                                    for item in rendered["residue"]]
+            # Absent, never zero: nftables has no implicit per-rule counters,
+            # so a rule without one has no traffic history at all and a 0
+            # would report an idle rule that is simply uncounted.
+            if rendered["packets"] is not None:
+                facts["CounterPackets"] = rendered["packets"]
+            if rendered["bytes"] is not None:
+                facts["CounterBytes"] = rendered["bytes"]
+            items.append(env.item_summary(
+                f"nft-rule:{family}/{table}/{chain}/{handle}", "rule",
+                f"{family} {table} {chain} handle {handle}", facts,
+                opinions=[], healthy=None))
+        return items
+
     # ── tailscale ────────────────────────────────────────────
     async def _tailscale_items(self) -> list[dict]:
         snapshot = await anyio.to_thread.run_sync(_tailscale_snapshot)
@@ -1369,6 +1644,8 @@ class Adapter:
             "listening": ("proc-net", "/proc/net", LISTENING_REFERENCE,
                           LISTENING_NOTES),
             "nft-tables": ("nft-json", "nft -j", NFT_REFERENCE, NFT_NOTES),
+            "nft-rules": ("nft-json", "nft -j", NFT_RULE_REFERENCE,
+                          NFT_RULE_NOTES),
             "tailscale": ("tailscale-json",
                           f"tailscale status --json snapshots ({TAILSCALE_SNAPSHOT})",
                           TAILSCALE_REFERENCE),
@@ -1394,6 +1671,8 @@ class Adapter:
             return await anyio.to_thread.run_sync(self._listening_items)
         if collection == "nft-tables":
             return await self._nft_tables()
+        if collection == "nft-rules":
+            return await self._nft_rules()
         if collection == "tailscale":
             return await self._tailscale_items()
         if collection == "lookups":
