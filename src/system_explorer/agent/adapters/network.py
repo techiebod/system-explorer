@@ -284,10 +284,24 @@ _NFT_RULE_GLOSSARY = {
     "CounterBytes": "Bytes this rule has matched, where the rule carries a counter. Absent means no counter was written, not zero traffic.",
 }
 
+_EXPOSURE_GLOSSARY = {
+    "Protocol": "The listening socket's protocol, joined from the listening collection.",
+    "LocalAddress": "The address the socket is bound to; the wildcard means the ruleset alone decides what reaches it.",
+    "LocalPort": "The port this row is about — the number an operator arrives asking after, which is why it is the row rather than a column on a rule.",
+    "Scope": "What the binding says before any rule: a loopback socket is unreachable from off the host whatever the ruleset permits.",
+    "AdmittingRules": "Every rule on the input path that admits this port, in evaluation order, each with its handle and rendered text. Evidence for the two answers below, and the thing to go and read.",
+    "AdmittedFromCertain": "The source constraints of admitting rules that were rendered in full — where traffic can reach this port from, by rules this observer understood completely. A clause it could not read contributes nothing here, so this is a lower bound and can only ever under-claim.",
+    "AdmittedFromPossible": "The same computation with every unreadable clause treated as matching — an upper bound. Where this is wider than the certain answer, the difference is the part of the ruleset this observer cannot interpret rather than a property of the firewall.",
+    "ClosureGap": "Whether the two answers differ. True means the ruleset contains a clause this adapter could not read that bears on this port, and the rules responsible are named beside it.",
+    "ClosureGapRules": "The handles of the rules whose unreadable clauses opened the gap — where to look to close it by hand.",
+    "PathCoverage": "Which packet paths this row accounts for. Input only: a published container port is translated in prerouting and admitted in forward and is not covered, so an empty admitting list is not a statement that nothing can reach the port.",
+}
+
 _NETWORK_GLOSSARY = {"links": _LINK_GLOSSARY, "routes": _ROUTE_GLOSSARY,
                      "resolver": _RESOLVER_GLOSSARY,
                      "listening": _LISTENING_GLOSSARY,
-                     "nft-rules": _NFT_RULE_GLOSSARY}
+                     "nft-rules": _NFT_RULE_GLOSSARY,
+                     "port-exposure": _EXPOSURE_GLOSSARY}
 
 
 def _link_kind(link: dict) -> str | None:
@@ -880,6 +894,184 @@ def _render_rule(expr: list) -> dict:
             "opaque_reason": opaque_reason}
 
 
+# ── port exposure: the socket, and the rules that admit it ───────────
+#
+# The derived collection, and the one that answers the question. Three cloud
+# vendors and one unfashionable CLI converged on this shape independently:
+# ufw's `show listening` puts the socket first with the rules bearing on it
+# beneath, and GCP, Azure and AWS each built a per-interface effective view
+# because a rule list did not answer "what can reach this". The rule list is
+# evidence; the socket is the row.
+#
+# TWO ANSWERS, NOT ONE, and this is what makes it safe. Taken from Diekmann's
+# machine-checked iptables semantics: replace what cannot be decided with
+# Unknown, then compute an under- and an over-approximation. Certain treats
+# every unrendered clause as NON-matching, so a rule this adapter does not
+# fully understand contributes nothing to it; Possible treats the same clause
+# as always matching. If the certain answer names tailscale0, that is a claim
+# this product can defend. If the two differ, the gap is the headline rather
+# than a footnote.
+#
+# The direction of failure is a property of the construction rather than a
+# discipline someone has to remember: an unparsed clause can never STRENGTHEN
+# the certain answer, so the worst case is "certainly admitted from nowhere I
+# can prove, possibly from anywhere" — under-claiming, loudly.
+#
+# WHAT THIS DOES NOT DO, stated here and in the envelope because omitting it
+# would rebuild the exact firewalld/Docker trap this product exists to avoid:
+# it follows the INPUT path only. A container's published port is DNAT'd in
+# prerouting and admitted in forward, so it is not covered. It does not
+# resolve shadowing — an earlier drop that would pre-empt a later accept is
+# listed, not applied — and it does not model conntrack, so the near-universal
+# `ct state established,related accept` at the top of a chain is not treated
+# as the shortcut it is. Consequently nothing here says "reachable". The
+# honest ceiling for a static read is "this rule admits it, and no other rule
+# does", and the next question belongs to `nft monitor trace`, which this
+# product cannot arm because arming a trace is a write.
+INPUT_HOOKS = ("input",)
+# A jump chain can jump onward; the bound stops a cycle turning a page render
+# into a hang, and a chain graph deeper than this is not something a static
+# reader should be claiming to have followed anyway.
+CHAIN_WALK_MAX_DEPTH = 8
+
+EXPOSURE_REFERENCE = [
+    "ss -lntu",
+    "nft -a list ruleset",
+    "nft list chain <family> <table> <chain>",
+    "nft monitor trace   # the live answer this static read cannot give",
+]
+
+EXPOSURE_NOTES = [
+    "INPUT PATH ONLY. A container's published port is translated in"
+    " prerouting and admitted in forward, so it is not covered here — a"
+    " socket that looks unadmitted may still be reachable through a"
+    " published port, and this collection will not say so.",
+    "Shadowing is not resolved: rules are listed in evaluation order, and an"
+    " earlier drop that would pre-empt a later accept is shown rather than"
+    " applied. Connection tracking is not modelled either.",
+    "Nothing here claims reachability. AdmittedFromCertain names the source"
+    " constraints of rules that admit this socket and that were rendered in"
+    " full; AdmittedFromPossible additionally treats every clause this"
+    " adapter could not read as matching. Where they differ, the ruleset"
+    " contains something this observer cannot interpret.",
+]
+
+
+
+def _input_chains(document: dict) -> dict:
+    """{(family, table, chain): policy} for every base chain on the input
+    hook. A rule only decides an inbound packet if control reaches it, and
+    control starts at a base chain — so this is where the walk begins and
+    anything unreachable from here is not on the input path at all."""
+    found = {}
+    for entry in document.get("nftables", []):
+        chain = entry.get("chain") if isinstance(entry, dict) else None
+        if isinstance(chain, dict) and chain.get("hook") in INPUT_HOOKS:
+            found[(chain.get("family"), chain.get("table"),
+                   chain.get("name"))] = chain.get("policy")
+    return found
+
+
+def _rules_by_chain(document: dict) -> dict:
+    out: dict = {}
+    for entry in document.get("nftables", []):
+        rule = entry.get("rule") if isinstance(entry, dict) else None
+        if isinstance(rule, dict):
+            out.setdefault((rule.get("family"), rule.get("table"),
+                            rule.get("chain")), []).append(rule)
+    return out
+
+
+def _walk_input_path(document: dict) -> list[dict]:
+    """Every rule reachable from an input base chain, in evaluation order.
+
+    Jumps are followed because the estate's own firewalls are built out of
+    them — a NixOS host's input chain is a jump to nixos-fw and nothing else,
+    so a walk that stopped at base chains would report that no rule admits
+    anything. Cycles and depth are bounded; a chain already walked is not
+    re-entered, which is conservative in the right direction (it can only
+    shorten the list, and a shorter list can only narrow the certain answer).
+    """
+    by_chain = _rules_by_chain(document)
+    ordered: list[dict] = []
+
+    def walk(key, depth, seen):
+        if depth > CHAIN_WALK_MAX_DEPTH or key in seen:
+            return
+        seen = seen | {key}
+        for rule in by_chain.get(key, []):
+            ordered.append(rule)
+            rendered = _render_rule(rule.get("expr") or [])
+            if rendered["jump_target"]:
+                walk((key[0], key[1], rendered["jump_target"]), depth + 1, seen)
+
+    for key in _input_chains(document):
+        walk(key, 0, frozenset())
+    return ordered
+
+
+def _rule_bears_on(rendered: dict, expr: list, protocol: str,
+                   port: int) -> tuple[bool, bool]:
+    """(certainly bears on this socket, possibly bears on it).
+
+    "Bears on" is about the DESTINATION — does this rule's port and protocol
+    constraint admit traffic to this socket. Source constraints (iifname,
+    saddr) are not consulted here: they are the answer, not the filter.
+
+    A rule with an unreadable clause is possible but never certain, which is
+    the whole of the lower closure: ignorance cannot strengthen a claim.
+    """
+    readable = not rendered["residue"]
+    dports: list[int] = []
+    protocols: list[str] = []
+    for statement in expr:
+        if not isinstance(statement, dict) or "match" not in statement:
+            continue
+        body = statement["match"]
+        left, right = body.get("left"), body.get("right")
+        if not isinstance(left, dict) or "payload" not in left:
+            continue
+        payload = left["payload"]
+        field, proto = payload.get("field"), payload.get("protocol")
+        if field == "dport":
+            if isinstance(right, int):
+                dports.append(right)
+            elif isinstance(right, dict) and isinstance(right.get("set"), list):
+                dports.extend(x for x in right["set"] if isinstance(x, int))
+            else:
+                readable = False          # a dport shape we cannot read
+            if proto in ("tcp", "udp"):
+                protocols.append(proto)
+        elif field == "protocol" and isinstance(right, str):
+            protocols.append(right)
+    wire = protocol.replace("6", "")
+    if protocols and wire not in protocols:
+        return False, False               # a different protocol entirely
+    if dports and port not in dports:
+        return False, False               # a different port entirely
+    # No dport constraint at all means the rule bears on every port, which is
+    # what a blanket `iifname lo accept` does and is exactly the case an
+    # operator most needs to see.
+    return readable, True
+
+
+def _sources_of(expr: list) -> list[str]:
+    """Where a rule admits traffic FROM, in the rule's own words. A rule with
+    no source constraint admits from anywhere, and saying so plainly is the
+    point — an empty list would read as "no sources", the opposite."""
+    sources = []
+    for statement in expr:
+        if not isinstance(statement, dict) or "match" not in statement:
+            continue
+        text, understood = _render_match(statement["match"])
+        if not understood or not text:
+            continue
+        if text.startswith(("meta iifname", "meta iif", "ip saddr",
+                            "ip6 saddr")):
+            sources.append(text)
+    return sources or ["anywhere"]
+
+
 class Adapter:
     subsystem = "network"
 
@@ -895,7 +1087,7 @@ class Adapter:
 
     def collections(self) -> list[str]:
         return ["links", "routes", "resolver", "listening", "nft-tables",
-                "nft-rules", "tailscale", "lookups"]
+                "nft-rules", "port-exposure", "tailscale", "lookups"]
 
     def fact_glossary(self, collection: str) -> dict[str, str]:
         return _NETWORK_GLOSSARY.get(collection, {})
@@ -950,6 +1142,13 @@ class Adapter:
         if not nft_ok:
             unavailable["nft-tables"] = nft_reason
             unavailable["nft-rules"] = nft_reason
+            # The join needs both halves. Declining it by name rather than
+            # serving sockets with an empty admitting list is the difference
+            # between "no rule admits this" and "the ruleset was unreadable".
+            unavailable["port-exposure"] = (
+                f"{nft_reason} — so which rules admit a listening socket"
+                " cannot be computed, and an unadmitted-looking port would be"
+                " an unread ruleset rather than a closed one")
         res_mode, res_reason = await self._resolver_mode()
         if res_mode is None:
             unavailable["resolver"] = res_reason
@@ -1407,6 +1606,70 @@ class Adapter:
                 opinions=[], healthy=None))
         return items
 
+    # ── port exposure ────────────────────────────────────────
+    async def _exposure_items(self) -> list[dict]:
+        """One row per listening socket, with the input-path rules that admit
+        it and the two-closure answer to where from."""
+        document = await anyio.to_thread.run_sync(_nft_json)
+        sockets = await anyio.to_thread.run_sync(self._listening_items)
+        path = _walk_input_path(document)
+        items = []
+        for socket_item in sockets:
+            facts = socket_item["facts"]
+            protocol, port = facts["Protocol"], facts["LocalPort"]
+            admitting: list[str] = []
+            certain: list[str] = []
+            possible: list[str] = []
+            gap_rules: list[str] = []
+            for rule in path:
+                expr = rule.get("expr") or []
+                rendered = _render_rule(expr)
+                if rendered["verdict"] != "accept":
+                    continue
+                sure, maybe = _rule_bears_on(rendered, expr, protocol, port)
+                if not maybe:
+                    continue
+                where = f"{rule.get('family')}/{rule.get('table')}/" \
+                        f"{rule.get('chain')}/{rule.get('handle')}"
+                admitting.append(f"{where}: {rendered['text']}")
+                sources = _sources_of(expr)
+                for source in sources:
+                    if sure and source not in certain:
+                        certain.append(source)
+                    if source not in possible:
+                        possible.append(source)
+                if not sure:
+                    gap_rules.append(where)
+            out = {
+                "Protocol": protocol, "LocalAddress": facts["LocalAddress"],
+                "LocalPort": port, "Scope": facts["Scope"],
+                # Stated on the row, not only in the source block: a consumer
+                # holding one object must be able to see that an empty
+                # admitting list is not a statement that nothing can reach
+                # this port.
+                "PathCoverage": "input path only; a port published through"
+                                " prerouting/forward is not accounted for",
+            }
+            if admitting:
+                out["AdmittingRules"] = admitting
+            # Absent rather than an empty list where nothing was found: the
+            # question "which rules admit this" was asked of the input path
+            # alone, and an empty answer is about that path, never about the
+            # port.
+            if certain:
+                out["AdmittedFromCertain"] = certain
+            if possible:
+                out["AdmittedFromPossible"] = possible
+            if gap_rules:
+                out["ClosureGap"] = True
+                out["ClosureGapRules"] = gap_rules
+            elif possible:
+                out["ClosureGap"] = False
+            items.append(env.item_summary(
+                socket_item["id"], "port-exposure", socket_item["native_id"],
+                out, opinions=[], healthy=None))
+        return items
+
     # ── tailscale ────────────────────────────────────────────
     async def _tailscale_items(self) -> list[dict]:
         snapshot = await anyio.to_thread.run_sync(_tailscale_snapshot)
@@ -1637,7 +1900,7 @@ class Adapter:
 
     # ── protocol ─────────────────────────────────────────────
     def _source_for(self, collection: str) -> dict:
-        table = {
+        table: dict[str, tuple] = {
             "links": ("ip-json", "ip -j (rtnetlink)", LINK_REFERENCE),
             "routes": ("ip-json", "ip -j (rtnetlink)", ROUTE_REFERENCE),
             "resolver": ("resolve1-dbus", RESOLVE1, RESOLVER_REFERENCE),
@@ -1646,14 +1909,19 @@ class Adapter:
             "nft-tables": ("nft-json", "nft -j", NFT_REFERENCE, NFT_NOTES),
             "nft-rules": ("nft-json", "nft -j", NFT_RULE_REFERENCE,
                           NFT_RULE_NOTES),
+            "port-exposure": ("proc-net + nft-json", "/proc/net + nft -j",
+                              EXPOSURE_REFERENCE, EXPOSURE_NOTES),
             "tailscale": ("tailscale-json",
                           f"tailscale status --json snapshots ({TAILSCALE_SNAPSHOT})",
                           TAILSCALE_REFERENCE),
             "lookups": ("network-lookups", "ip -j route get (rtnetlink) / resolve1",
                         ["ip route get <address>", "resolvectl query <name>"]),
         }
-        adapter, iface, refs, *rest = table[collection]
-        return env.source(adapter, iface, refs, notes=rest[0] if rest else None)
+        entry = table[collection]
+        adapter, iface, refs = entry[0], entry[1], entry[2]
+        notes = entry[3] if len(entry) > 3 else None
+        return env.source(adapter, iface, list(refs),
+                          notes=list(notes) if notes else None)
 
     @env.single_flight
     async def acquire(self, collection: str) -> list[dict]:
@@ -1673,6 +1941,8 @@ class Adapter:
             return await self._nft_tables()
         if collection == "nft-rules":
             return await self._nft_rules()
+        if collection == "port-exposure":
+            return await self._exposure_items()
         if collection == "tailscale":
             return await self._tailscale_items()
         if collection == "lookups":
