@@ -1,16 +1,23 @@
 """plex subsystem: the media server tier — plex itself, and the request
 front door (seerr) that feeds the managers.
 
-One subsystem for the family, four collections in the tidy tiers:
-`server` (identity, version, and reachability of the thing every stream
-depends on), `libraries` (each section with its own item count and scan
-times — the "library went empty" shape lives here), `sessions` (what is
-playing right now: activity, not health, so no verdicts), and `requests`
-(seerr's pending/approved queue — a pending request is a person waiting,
-carried as info on the object and never paged). Tautulli deliberately
-has no collection: its value is watch HISTORY and trends, which is
-provider territory — the UI links out; SE does not become a worse
-Tautulli (the anti-sprawl rule).
+One subsystem for the family, four collections, each owning one admin
+question:
+
+- `server` — Answers: is the thing every stream depends on up, and
+  which release answers. Identity, version, reachability.
+- `libraries` — Answers: does each section still hold what it held.
+  Item counts and scan times; the "library went empty" shape lives
+  here.
+- `sessions` — Answers: what is playing right now, by whom, and is it
+  transcoding. Activity, not health, so no verdicts.
+- `requests` — Answers: who is waiting for what. seerr's queue with the
+  WHAT resolved by name (the title memo below), the seasons asked for,
+  and a pending request carried as info — a person waiting.
+
+Tautulli deliberately has no collection: its value is watch HISTORY and
+trends, which is provider territory — the UI links out; SE does not
+become a worse Tautulli (the anti-sprawl rule).
 
 Configuration is deployment receipts per member: SE_PLEX_URL +
 SE_PLEX_TOKEN (X-Plex-Token header; the Accept header asks for JSON
@@ -27,6 +34,7 @@ already satisfiable manager-side).
 
 from __future__ import annotations
 
+import asyncio
 import os
 
 import httpx
@@ -42,7 +50,12 @@ REQUESTS_PATH = "/api/v1/request"
 REFERENCE = [
     "curl -H 'X-Plex-Token: <token>' -H 'Accept: application/json' <url>/",
     "curl -H 'X-Plex-Token: <token>' -H 'Accept: application/json' <url>/status/sessions",
+    "curl -H 'X-Plex-Token: <token>' -H 'Accept: application/json' <url>/library/sections",
+    "curl -H 'X-Plex-Token: <token>' -H 'Accept: application/json'"
+    " '<url>/library/sections/<section>/all?X-Plex-Container-Start=0&X-Plex-Container-Size=0'",
     "curl -H 'X-Api-Key: <key>' '<url>/api/v1/request?take=100'",
+    "curl -H 'X-Api-Key: <key>' <url>/api/v1/movie/<tmdbId>",
+    "curl -H 'X-Api-Key: <key>' <url>/api/v1/tv/<tmdbId>",
 ]
 
 HOST_BLOCK = env.host_block(app="plex")
@@ -57,6 +70,31 @@ SEERR_STATUS = {1: "pending", 2: "approved", 3: "declined",
 # total cannot spin the sweep (trust the rows gathered over the claim).
 REQUEST_PAGE_SIZE = 100
 MAX_REQUEST_PAGES = 20
+
+# The request document states only ids (stock overseerr carries no title
+# member anywhere — live recon against the estate, 2026-08-13), so the
+# WHAT of a request needs seerr's own details endpoints, answered from
+# its local TMDB cache. Titles are identity, not health: the per-process
+# memo below is a deliberate, narrow exception to acquire-fresh — a
+# memoised title cannot go stale into a wrong health claim, and
+# re-asking per sweep would turn the findings cadence into a load test.
+# New lookups are capped per sweep, so a cold start converges over a few
+# sweeps; an unresolved row simply lacks Title that sweep (rule 7 makes
+# that absence a legitimate shape).
+MOVIE_PATH = "/api/v1/movie"
+TV_PATH = "/api/v1/tv"
+TITLE_LOOKUPS_PER_SWEEP = 50
+
+
+def title_key(raw: dict) -> tuple[str, int] | None:
+    """The memo key a request resolves through: its media type and TMDB
+    id. Both endpoints take the TMDB id — the TV one as well (its own
+    documented shape, NOT the tvdbId, which is the predictable trap)."""
+    media_type = raw.get("type")
+    tmdb = (raw.get("media") or {}).get("tmdbId")
+    if media_type in ("movie", "tv") and isinstance(tmdb, int):
+        return (media_type, tmdb)
+    return None
 
 
 def server_facts(raw: dict) -> dict:
@@ -115,6 +153,14 @@ def request_facts(raw: dict) -> dict:
         facts["RequestedBy"] = requester
     if raw.get("createdAt"):
         facts["CreatedAt"] = raw["createdAt"]
+    tmdb = (raw.get("media") or {}).get("tmdbId")
+    if isinstance(tmdb, int):
+        facts["TmdbId"] = tmdb
+    seasons = [season["seasonNumber"] for season in raw.get("seasons") or []
+               if isinstance(season, dict)
+               and isinstance(season.get("seasonNumber"), int)]
+    if seasons:
+        facts["Seasons"] = seasons
     return facts
 
 
@@ -149,6 +195,9 @@ _SESSION_GLOSSARY = {
 _REQUEST_GLOSSARY = {
     "Status": "Where the request sits in seerr's own flow: pending awaits a person, approved awaits the managers, failed means the dispatch to the managers failed — the one fault-shaped state.",
     "Type": "Whether a movie or a series was asked for.",
+    "Title": "What was asked for, by name — resolved through seerr's own details lookup, because the request document itself states only ids.",
+    "Seasons": "Which season numbers were requested, for a series — exactly the ones asked for, with specials as season 0.",
+    "TmdbId": "The TMDB id seerr filed the request under — the key its own details endpoints answer to.",
     "RequestedBy": "Who is waiting, by their display name.",
     "CreatedAt": "When the request was filed, so the wait a pending row represents is readable at a glance.",
 }
@@ -176,6 +225,11 @@ class Adapter:
             timeout=10.0, headers={"X-Api-Key": seerr_key} if seerr_key else {})
         self._plex_token_set = token is not None
         self._seerr_key_set = seerr_key is not None
+        # (type, tmdbId) -> title, for the process's lifetime — the
+        # documented identity memo (see the constants block above). None
+        # records a definitive miss (404 / titleless answer): a dead id
+        # costs one lookup per process, never one per sweep.
+        self._titles: dict[tuple[str, int], str | None] = {}
 
     def collections(self) -> list[str]:
         return ["server", "libraries", "sessions", "requests"]
@@ -220,7 +274,9 @@ class Adapter:
         method = {"server": "GET / + /status/sessions",
                   "libraries": "GET /library/sections (+ per-section size)",
                   "sessions": f"GET {SESSIONS_PATH}",
-                  "requests": f"GET {REQUESTS_PATH}"}[collection]
+                  "requests": (f"GET {REQUESTS_PATH} (+ per-title"
+                               f" {MOVIE_PATH}/<tmdbId> or"
+                               f" {TV_PATH}/<tmdbId>)")}[collection]
         return env.source("plex-api", "Plex + seerr REST APIs", REFERENCE,
                           method=method)
 
@@ -317,17 +373,64 @@ class Adapter:
                 break
         return pages
 
+    async def _title_for(self, media_type: str, tmdb_id: int) -> str | None:
+        # Movies answer .title, series answer .name — seerr's own shapes.
+        if media_type == "movie":
+            response = await self._seerr.get(
+                f"{self.seerr_url}{MOVIE_PATH}/{tmdb_id}")
+        else:
+            response = await self._seerr.get(
+                f"{self.seerr_url}{TV_PATH}/{tmdb_id}")
+        response.raise_for_status()
+        body = response.json()
+        value = body.get("title") or body.get("name")
+        return str(value) if value else None
+
+    async def _resolve_titles(self, records: list[dict]) -> None:
+        """Fill the identity memo for records it does not cover yet,
+        bounded per sweep and concurrent; a failed lookup narrows one
+        row's enrichment, never the sweep."""
+        wanted: list[tuple[str, int]] = []
+        for raw in records:
+            key = title_key(raw)
+            if key and key not in self._titles and key not in wanted:
+                wanted.append(key)
+        batch = wanted[:TITLE_LOOKUPS_PER_SWEEP]
+        if not batch:
+            return
+        results = await asyncio.gather(
+            *(self._title_for(*key) for key in batch),
+            return_exceptions=True)
+        for key, result in zip(batch, results, strict=True):
+            if isinstance(result, str) and result:
+                self._titles[key] = result
+            elif result is None or (
+                    isinstance(result, httpx.HTTPStatusError)
+                    and result.response.status_code == 404):
+                # A definitive miss memoises as None, or a title deleted
+                # from TMDB would re-consume budget every sweep forever
+                # and starve every row queued behind it (adversarial
+                # review probe, 2026-08-13). Transient failures stay
+                # unmemoised and retry next sweep.
+                self._titles[key] = None
+
     async def _request_items(self) -> list[dict]:
+        pages = await self._request_pages()
+        records = [raw for body in pages
+                   for raw in body.get("results") or []
+                   if raw.get("id") is not None]
+        await self._resolve_titles(records)
         items = []
-        for body in await self._request_pages():
-            for raw in body.get("results") or []:
-                ident = raw.get("id")
-                if ident is None:
-                    continue
-                facts = request_facts(raw)
-                items.append(env.item_summary(
-                    f"request:{ident}", "media-request", str(ident), facts,
-                    opinions=request_opinions(facts), healthy=None))
+        for raw in records:
+            facts = request_facts(raw)
+            key = title_key(raw)
+            title = self._titles.get(key) if key else None
+            if title:
+                facts["Title"] = title
+            items.append(env.item_summary(
+                f"request:{raw['id']}", "media-request", str(raw["id"]),
+                facts, name=title,
+                opinions=request_opinions(facts), healthy=None))
         return items
 
     @env.single_flight
