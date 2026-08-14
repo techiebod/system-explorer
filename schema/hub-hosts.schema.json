@@ -75,6 +75,11 @@
             "null"
           ]
         },
+        "agent_site": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The site this HOST states for itself, from its own /health. `site` above is whichever hub fronts the agent and is the proxy route's key \u2014 a routing answer, not a location one. The two differ whenever a host is registered with a hub elsewhere, which is the ordinary arrangement for a cloud host an operator watches from home: it was listed as living at home until this existed. Absent when the agent names no site, which is not a claim that it shares the hub's."
+        },
         "version": {
           "type": "string",
           "minLength": 1

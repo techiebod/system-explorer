@@ -146,6 +146,13 @@ async def health() -> dict:
     out = {"status": "ok", "host": env.HOST, "version": VERSION}
     if REVISION:
         out["revision"] = REVISION
+    # The site this host says it is in. A hub probes /health to build its
+    # listing and had nothing to go on, so it stamped its OWN site onto every
+    # agent it fronts — and a cloud host at a different provider, fronted by
+    # a home hub, read as living at home. Fronting and residing are different
+    # facts and only one of them is the hub's to state.
+    if SITE:
+        out["site"] = SITE
     return out
 
 

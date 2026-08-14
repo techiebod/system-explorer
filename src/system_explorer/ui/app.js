@@ -1089,9 +1089,12 @@ function renderHostCard() {
   select.value = state.currentHost;
   const probe = state.hub.hosts[state.currentHost];
   const machineId = state.capabilities?.host?.machine_id ?? probe?.host?.machine_id;
-  // The host's OWN site, not the hub's — they differ for a sibling's host, and
-  // showing the hub's would misattribute it.
-  const hostSite = probe?.site || state.hub.site;
+  // The host's OWN site. Three answers in preference order, and the first is
+  // the only one the HOST states: agent_site comes from its /health, `site`
+  // is whichever hub fronts it, and the hub's own is the last resort. A
+  // cloud host registered with a home hub read as living at home until the
+  // first of these existed (2026-08-14).
+  const hostSite = probe?.agent_site || probe?.site || state.hub.site;
   // A merged machine names its member processes where the machine is named:
   // "host + apps" says who answers on this page without resurrecting the
   // two-entry split the dropdown gave up. Short labels shed the primary's

@@ -153,6 +153,39 @@ in
       '';
     };
 
+    snapshotIntervalSeconds = lib.mkOption {
+      type = lib.types.numbers.positive;
+      default = 900;
+      example = 3600;
+      description = ''
+        How often the agent walks every adapter and stores a snapshot, which
+        is what /v1/changes answers from. This is the agent's dominant
+        standing cost and it scales with COLLECTION COUNT, not host size:
+        measured across a six-host estate, two identical four-core machines
+        swept by the same hub cost 1.56% and 6.25% of a core, the difference
+        being four extra collections on the second. On a single-core host
+        every percent of a core is a percent of the machine, so the same
+        default that is invisible on a twelve-core server was 8.5% there.
+
+        Longer means a coarser change history and a cheaper agent. The
+        snapshot loop is resumable across restarts, so raising this on a host
+        that reboots often does not lose the cadence.
+      '';
+    };
+
+    snapshotRetentionDays = lib.mkOption {
+      type = lib.types.numbers.positive;
+      default = 30;
+      example = 7;
+      description = ''
+        How long stored snapshots are kept before ageing out. Measured at
+        roughly 75 MiB a day per host at the default interval, converging on
+        about 2.3 GB at 30 days — trivial on a storage host and worth setting
+        down on a small cloud instance, where the same figure is a
+        meaningful share of the disk.
+      '';
+    };
+
     extraPackages = lib.mkOption {
       type = lib.types.listOf lib.types.package;
       default = [ ];
@@ -415,6 +448,10 @@ in
         }
         // lib.optionalAttrs (cfg.hubUrl != null) { SE_HUB_URL = cfg.hubUrl; }
         // lib.optionalAttrs (cfg.site != null) { SE_SITE = cfg.site; }
+        // {
+          SE_SNAPSHOT_INTERVAL_SECONDS = toString cfg.snapshotIntervalSeconds;
+          SE_SNAPSHOT_RETENTION_DAYS = toString cfg.snapshotRetentionDays;
+        }
         // lib.optionalAttrs (cfg.deploymentReceipts != null) {
           SE_DEPLOYMENT_RECEIPTS = cfg.deploymentReceipts;
         }
@@ -477,6 +514,9 @@ in
           SE_ADAPTERS = lib.concatStringsSep "," icfg.adapters;
         } // lib.optionalAttrs (icfg.allowedHosts != [ ]) {
           SE_ALLOWED_HOSTS = lib.concatStringsSep "," icfg.allowedHosts;
+        } // {
+          SE_SNAPSHOT_INTERVAL_SECONDS = toString cfg.snapshotIntervalSeconds;
+          SE_SNAPSHOT_RETENTION_DAYS = toString cfg.snapshotRetentionDays;
         } // lib.optionalAttrs (cfg.hubUrl != null) { SE_HUB_URL = cfg.hubUrl; }
           // lib.optionalAttrs (cfg.site != null) { SE_SITE = cfg.site; };
         serviceConfig = {

@@ -187,7 +187,19 @@ async def _local_hosts() -> dict:
             response = await _client.get(f"{base}/health", timeout=3.0)
             response.raise_for_status()
             body = response.json()
+            # `site` is the site whose hub FRONTS this agent, and it is the
+            # proxy route's own key — /sites/<site>/agents/<name> is how the
+            # browser reaches it, so it answers a routing question and must
+            # keep doing so.
+            #
+            # Which is not where the host IS. Until 2026-08-14 this was the
+            # only site on the entry, so a cloud host at a different provider,
+            # registered with a home hub because that is where its operator
+            # looks, was listed as living at home. `agent_site` is the host's
+            # own statement, present only when it makes one.
             entry = {"reachable": True, "url": base, "site": SITE}
+            if body.get("site"):
+                entry["agent_site"] = body["site"]
             # Identity, version and revision per host — the last two so a
             # mid-rollout estate is visible as such rather than as
             # inexplicably differing behaviour. All three only when the agent
