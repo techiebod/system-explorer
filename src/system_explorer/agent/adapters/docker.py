@@ -257,16 +257,25 @@ def _container_facts(raw: dict) -> dict:
     """
     state = raw.get("State") or {}
     labels = (raw.get("Config") or {}).get("Labels") or {}
+    image = (raw.get("Config") or {}).get("Image")
+    image_id = raw.get("Image")
     facts: dict = {
         "State": state.get("Status"),
         "RestartCount": raw.get("RestartCount"),
-        "Image": (raw.get("Config") or {}).get("Image"),
-        "ImageID": raw.get("Image"),
+        "Image": image,
         "ComposeProject": labels.get(COMPOSE_PROJECT),
         "NetworkMode": (raw.get("HostConfig") or {}).get("NetworkMode"),
         "ContainerID": (raw.get("Id") or "")[:12] or None,
         "ScopeUnit": _scope_unit(raw.get("Id") or "", state.get("Status")),
     }
+    # A digest-pinned reference already ENDS with the image id, so carrying
+    # both put the same 71-character sha256 on the screen twice, under two
+    # names, one line apart. Where the reference is a bare tag it does not,
+    # and then the id is the only thing on the row that says which build is
+    # actually running — so this collapses the duplicate rather than dropping
+    # the fact.
+    if image_id and not (isinstance(image, str) and image.endswith(f"@{image_id}")):
+        facts["ImageID"] = image_id
     started = _go_time(state.get("StartedAt"))
     if started:
         facts["StartedAt"] = started

@@ -3988,6 +3988,24 @@ function alsoAppearsIn(objectId) {
   return box;
 }
 
+/* A fact the head has already said.
+
+   Part of "think of the poor admin here" (reported 2026-08-14, of a page
+   where nearly half the rows repeated something): a protection job opens
+   with `job:media-archive` across the top and then leads its facts with
+   `Job  media-archive`. The name is on screen twice before the reader has
+   learned anything.
+
+   Value equality only, against the two strings the head actually renders —
+   never the fact's NAME, because a fact called Name whose value differs from
+   the object's name is the interesting case and must survive. And never a
+   value the head merely contains: `ContainerID c06407a40a94` is a prefix of
+   the scope in the head and is a different fact about a different thing. */
+function restatesTheHead(value, object) {
+  if (typeof value !== "string" || !value) return false;
+  return value === object?.native_id || value === object?.name;
+}
+
 /* The facts, grouped by WHAT KIND OF CLAIM they make.
 
    One flat table rendered `UsedBytes` — go and check it with zfs list — in
@@ -4114,8 +4132,9 @@ function renderExpansion(colspan) {
   const isGeneration = obs.subsystem === "nix" && obs.object.type === "generation";
   const deltaRows = isGeneration && Array.isArray(obs.facts.DeltaFromPrevious)
     && obs.facts.DeltaFromPrevious.length ? obs.facts.DeltaFromPrevious : null;
-  const shown = Object.entries(obs.facts).filter(([key]) =>
-    !(isPool && key === "Vdevs") && !(deltaRows && key === "DeltaFromPrevious"));
+  const shown = Object.entries(obs.facts).filter(([key, value]) =>
+    !(isPool && key === "Vdevs") && !(deltaRows && key === "DeltaFromPrevious")
+    && !restatesTheHead(value, obs.object));
   const grid = factBlocks(shown, obs.subsystem, obs.collection);
   if (isPool && typeof obs.facts.SizeBytes === "number") {
     const top = el("div", "pool-top");

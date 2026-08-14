@@ -174,7 +174,7 @@ const context = vm.createContext(sandbox);
 // its state and helpers with const, which in a vm script are lexically scoped
 // and never become properties of the sandbox. Only code inside that script can
 // see them.
-const EXPORTS = "\n;globalThis.__ui = { state, renderNav, applyNavBadges, renderBuild, navRoutes, navModel, cellValue, PSEUDO_COLUMNS, linkPanel, scalarText, factHelp, renderOverview, renderGrid, renderResources, factLabel, worstOpinionLevel, OPINION_LEVELS, ATTENTION_LEVELS, routeForId, idHomes, factLeaf, renderGoneExpansion, alsoAppearsIn, factBlocks, factKind };";
+const EXPORTS = "\n;globalThis.__ui = { state, renderNav, applyNavBadges, renderBuild, navRoutes, navModel, cellValue, PSEUDO_COLUMNS, linkPanel, scalarText, factHelp, renderOverview, renderGrid, renderResources, factLabel, worstOpinionLevel, OPINION_LEVELS, ATTENTION_LEVELS, routeForId, idHomes, factLeaf, renderGoneExpansion, alsoAppearsIn, factBlocks, factKind, restatesTheHead };";
 vm.runInContext(readFileSync(APP, "utf8") + EXPORTS, context, { filename: "app.js" });
 const ui = sandbox.__ui;
 
@@ -1130,6 +1130,31 @@ check("every listed collection is reachable exactly once", () => {
     for (const coll of cap.collections)
       if (!routes.includes(`${sub}/${coll}`))
         throw new Error(`${sub}/${coll} is in capabilities and not in the nav`);
+});
+
+check("a fact the head already states is not printed a second time", () => {
+  // `job:media-archive` across the top, then `Job  media-archive` as the
+  // first row: the name is on screen twice before the reader learns anything.
+  const object = { id: "job:media-archive", native_id: "media-archive" };
+  if (!ui.restatesTheHead("media-archive", object))
+    throw new Error("did not spot the repeat");
+  if (ui.restatesTheHead("ok", object)) throw new Error("dropped a real fact");
+});
+
+check("a value the head merely contains is a different fact", () => {
+  // ContainerID is a prefix of the scope unit in the head, and it is a
+  // different fact about a different thing.
+  const object = { id: "container:radarr", native_id: "radarr" };
+  if (ui.restatesTheHead("rad", object)) throw new Error("matched a prefix");
+  if (ui.restatesTheHead("radarr-exportarr", object))
+    throw new Error("matched a superstring");
+});
+
+check("a non-string fact is never mistaken for the head", () => {
+  const object = { id: "unit:x", native_id: "x" };
+  for (const value of [0, false, null, undefined, ["x"], { x: 1 }])
+    if (ui.restatesTheHead(value, object))
+      throw new Error(`dropped ${JSON.stringify(value)}`);
 });
 
 if (failures.length) {

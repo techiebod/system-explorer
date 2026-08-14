@@ -202,3 +202,40 @@ def test_a_container_created_but_never_started_states_neither_end():
                                        StartedAt="0001-01-01T00:00:00Z"))
     assert "StartedAt" not in facts and "FinishedAt" not in facts
     assert facts["State"] == "created"
+
+
+def test_a_digest_pinned_image_is_not_printed_twice():
+    """Reported from the deployed UI: "nearly half the information is
+    duplicated". Config.Image already ENDS with the image id when the
+    reference is digest-pinned — which every compose stack in the estate is —
+    so the row carried the same 71-character sha256 under two names, one line
+    apart."""
+    from system_explorer.agent.adapters.docker import _container_facts
+    facts = _container_facts(RUNNING)
+    assert facts["Image"] == "linuxserver/radarr:latest@sha256:a45b5ab0"
+    assert "ImageID" not in facts, "the digest is already in Image, in full"
+
+
+def test_a_tag_only_reference_keeps_the_id_that_says_which_build():
+    """The collapse is a duplicate check, not a decision that ImageID is
+    uninteresting. Against a bare tag the id is the ONLY thing on the row
+    that says which build is actually running, and dropping it would hide
+    exactly the fact an operator chasing a stale container needs."""
+    from copy import deepcopy
+
+    from system_explorer.agent.adapters.docker import _container_facts
+    raw = deepcopy(RUNNING)
+    raw["Config"]["Image"] = "linuxserver/radarr:latest"
+    facts = _container_facts(raw)
+    assert facts["ImageID"] == "sha256:a45b5ab0"
+
+
+def test_a_partial_digest_match_is_not_treated_as_a_duplicate():
+    """Anchored on the full `@<id>` suffix, not a substring: an image whose
+    NAME happens to contain the id's characters must not lose the id."""
+    from copy import deepcopy
+
+    from system_explorer.agent.adapters.docker import _container_facts
+    raw = deepcopy(RUNNING)
+    raw["Config"]["Image"] = "registry/sha256:a45b5ab0/app:latest"
+    assert _container_facts(raw)["ImageID"] == "sha256:a45b5ab0"
