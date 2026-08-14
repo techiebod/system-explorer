@@ -177,11 +177,28 @@ def test_a_declared_hop_with_no_job_is_named_not_averaged():
 def test_an_implemented_hop_names_the_job_that_builds_it():
     """"Built" with nothing to go and look at is half a fact: the
     declaration says which job on which host, and the estate splits
-    execution by verb, so the answer is routinely another machine."""
+    execution by verb, so the answer is routinely another machine.
+
+    Structured, not "near-zfs -> host-a:documents" as it once was. A reader
+    had to decode two separators to learn three things, and every consumer
+    that wanted the job name — the relationship edges below, MCP, a filter —
+    had to parse a string this adapter had just finished assembling from
+    parts it already held."""
     facts = mod.target_facts("documents", MANIFEST["targets"]["documents"],
                              MANIFEST["destinations"])
-    assert facts["HopImplementedBy"] == ["near-zfs -> host-a:documents",
-                                         "offsite -> host-b:documents-offsite"]
+    assert facts["HopImplementedBy"] == [
+        {"Destination": "near-zfs", "Host": "host-a", "Job": "documents"},
+        {"Destination": "offsite", "Host": "host-b",
+         "Job": "documents-offsite"}]
+
+
+def test_an_unqualified_implementation_names_no_host_rather_than_this_one():
+    """A hop written without a host is unattributed, and must not be read as
+    a host with an empty job name (which drops the hop) nor as this host
+    (which would let one machine claim another's work)."""
+    assert mod._split_ref("host-a:documents") == ("host-a", "documents")
+    assert mod._split_ref("documents") == (None, "documents")
+    assert mod._split_ref("host-a:") == (None, "host-a:")
 
 
 def test_proofs_are_per_rung_because_proving_one_proves_nothing_else():
@@ -473,7 +490,8 @@ def test_a_job_keyed_for_its_hop_still_finds_the_class_it_protects(estate):
     than the LAN hop beside it, on a naming coincidence."""
     offsite = {row["id"]: row for row in rows("jobs")}["job:ledgers-offsite"]
     assert offsite["facts"]["TargetClass"] == "backup"
-    assert offsite["facts"]["ImplementsHops"] == ["ledgers -> offsite"]
+    assert offsite["facts"]["ImplementsHops"] == [
+        {"Target": "ledgers", "Destination": "offsite"}]
     assert offsite["worst_opinion_level"] == "critical"
 
 
@@ -588,3 +606,100 @@ def test_a_cloud_mirrors_kind_reaches_the_verdict_from_the_manifest():
                                 MANIFEST["destinations"])
     assert {op["key"] for op in rules.target_opinions(grounded)} \
         >= {"protection-no-durable-copy"}
+
+
+# ── the chain, as edges ──────────────────────────────────────────────────
+#
+# Every join below was already stated in the facts and in no other form: a
+# target listed its destinations by name, a job listed the hops it carries,
+# and none of it could be clicked. Reported live 2026-08-14 — "under
+# Protection we've lost the clickable relationships" — against a subsystem
+# that had never emitted an edge at all.
+
+
+def edges(collection, object_id, adapter=None):
+    obs = asyncio.run((adapter or mod.Adapter()).get_object(collection, object_id))
+    return {(r["type"], r["direction"], r["target"]["id"])
+            for r in obs.get("relationships") or []}
+
+
+def test_a_target_reaches_every_destination_it_declares(estate):
+    """Including the hop nothing implements. `photos` declares off-site and
+    no job builds it, and that is precisely the destination an operator
+    most needs to open from here — an edge set drawn from ImplementedHops
+    would have dropped it."""
+    assert edges("targets", "target:photos") >= {
+        ("dispatches-to", "out", "destination:near-zfs"),
+        ("dispatches-to", "out", "destination:offsite"),
+    }
+
+
+def test_a_target_reaches_only_the_jobs_that_run_on_this_host(estate):
+    """The manifest qualifies hops as <host>:<job> because execution splits
+    by verb. `documents` is built here and pushed off-site from host-b;
+    emitting job:documents-offsite would point at a local object of that
+    name — a link to the wrong machine's work, which is worse than none."""
+    found = edges("targets", "target:documents")
+    assert ("backs", "in", "job:documents") in found
+    assert not [e for e in found if e[2] == "job:documents-offsite"]
+
+
+def test_a_job_names_the_target_it_backs_and_the_destination_it_feeds(estate):
+    found = edges("jobs", "job:ledgers-offsite")
+    assert ("backs", "out", "target:ledgers") in found
+    assert ("dispatches-to", "out", "destination:offsite") in found
+
+
+def test_a_job_reaches_the_unit_that_runs_it(estate):
+    """The one edge that leaves the subsystem. A protection job IS a systemd
+    unit on this host, and 'when did it last run' and 'why did it fail' live
+    on two different pages with nothing joining them."""
+    assert ("runs", "in", "unit:homelab-backup-documents.service") \
+        in edges("jobs", "job:documents")
+
+
+def test_a_destination_is_reachable_from_both_sides(estate):
+    """A destination's page is where 'what lands here' is asked, and it can
+    only be answered by looking outward — nothing in its own facts names a
+    single target."""
+    found = edges("destinations", "destination:offsite")
+    assert ("dispatches-to", "in", "target:ledgers") in found
+    assert ("dispatches-to", "in", "job:ledgers-offsite") in found
+
+
+def test_a_source_that_is_prose_mints_no_edge(estate):
+    """Only an exact `<prefix>:<name>` with a subsystem behind it is joined.
+    Half the estate's sources are sentences ("homelab git repository + SOPS
+    material") and one is a bare dataset path; guessing either into an id
+    would mint a chip leading to a 404."""
+    entry = dict(MANIFEST["targets"]["documents"], source="a git repo, plus keys")
+    manifest = dict(MANIFEST, targets=dict(MANIFEST["targets"], documents=entry))
+    adapter = mod.Adapter()
+    adapter._manifest = lambda: manifest          # type: ignore[method-assign]
+    assert not [e for e in edges("targets", "target:documents", adapter)
+                if e[0] == "tracks"]
+
+
+def test_a_source_stated_as_an_object_id_is_joined(estate):
+    """`domain:appliance` is a real value on the estate: the declaration names
+    the VM, and this is the join from 'what we promise to keep' to the
+    thing itself."""
+    entry = dict(MANIFEST["targets"]["documents"], source="domain:appliance")
+    manifest = dict(MANIFEST, targets=dict(MANIFEST["targets"], documents=entry))
+    adapter = mod.Adapter()
+    adapter._manifest = lambda: manifest          # type: ignore[method-assign]
+    assert ("tracks", "out", "domain:appliance") in edges(
+        "targets", "target:documents", adapter)
+
+
+def test_a_source_is_joined_only_where_this_host_owns_the_target(estate):
+    """The facts ride on every host that can read the manifest — that is the
+    whole design — so an edge minted from another host's target would point
+    at a local object that merely shares a name."""
+    entry = dict(MANIFEST["targets"]["documents"],
+                 source="domain:appliance", ownerHost="host-b")
+    manifest = dict(MANIFEST, targets=dict(MANIFEST["targets"], documents=entry))
+    adapter = mod.Adapter()
+    adapter._manifest = lambda: manifest          # type: ignore[method-assign]
+    assert not [e for e in edges("targets", "target:documents", adapter)
+                if e[0] == "tracks"]

@@ -289,6 +289,22 @@ Ingress hops need nothing new: a proxy router `routes-via` its service
 (the existing conduit semantics), and a backend `backs` the service that
 balances onto it.
 
+**Protection hops need nothing new either**, and the reuse is the point —
+a chain of promises is the same shape as a chain of work:
+
+| Type | Example |
+|---|---|
+| `dispatches-to` | protection target → each destination it declares, *including the hops nothing implements*; protection job → the destination it delivers to |
+| `backs` | protection job → the target whose hop it is the stated implementation of |
+| `runs` | protection job → the systemd unit it runs as (`in`, as everywhere) |
+| `tracks` | protection target → the object it protects, where the declaration named one as an id rather than as prose |
+
+A cross-host hop emits **no** edge. The manifest qualifies implementations
+as `<host>:<job>` because execution splits by verb, so `job:x` minted from
+another host's reference would address this host's object of that name —
+a link to the wrong machine's work, which is worse than no link. The fact
+still names the host in full.
+
 The refusals: no generic `related-to` (an edge that cannot say what it
 means is decoration); no inferred edges — every flow edge derives from a
 member the SOURCE app's own API states (its configured client, its sync

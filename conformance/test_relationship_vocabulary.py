@@ -85,9 +85,33 @@ def test_the_walker_still_finds_the_known_emissions():
     emitted = _rel_type_args()
     everything = set().union(*emitted.values())
     for known in ("runs", "plumbed-onto", "owns", "member-of", "backs",
-                  "requires", "wants", "after"):
+                  "requires", "wants", "after", "dispatches-to", "tracks"):
         assert known in everything, f"walker no longer sees {known!r}"
-    assert len(emitted) >= 4, "fewer adapter modules emit relationships than known"
+
+
+# Every subsystem whose objects are joined to others BY THE FACTS THEY
+# ALREADY CARRY. The check is one-directional, like the SPEC table's: a
+# module may join more than this, and a module absent from the list is
+# allowed to emit nothing (hardware's leaves genuinely name nobody).
+#
+# protection is the row that put this test here. It shipped three
+# collections whose whole subject is a chain — target to destination, job
+# to both — with the joins stated in prose facts and not one edge emitted,
+# and the vocabulary test above stayed green throughout because it only
+# ever asked whether the types it FOUND were legal. "Reported live
+# 2026-08-14: under Protection we've lost the clickable relationships."
+JOINED = {"protection.py", "storage.py", "docker.py", "units.py",
+          "network.py", "vms.py"}
+
+
+def test_every_subsystem_whose_facts_name_other_objects_emits_edges():
+    emitting = set(_rel_type_args())
+    missing = sorted(JOINED - emitting)
+    assert not missing, (
+        f"{missing} state joins to other objects in their facts and emit no "
+        "relationship for them. A join that exists only as a name in a fact "
+        "is one a reader cannot follow and an agent cannot walk — the fact "
+        "keeps the native word, the edge carries the id, and both are owed.")
 
 
 def test_the_dependency_table_carries_only_published_types():

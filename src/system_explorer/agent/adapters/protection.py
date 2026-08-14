@@ -103,7 +103,7 @@ _TARGET_GLOSSARY = {
     "Destinations": "The logical destinations this target's copies are declared to reach, by name.",
     "IndependentDestinations": "Which of those destinations share no failure domain with this host or either site — the ones that decide whether the data survives losing the site, rather than merely surviving a disk.",
     "ImplementedHops": "Which of those destinations actually have a job behind them, estate-wide — the declaration's own account of what is built.",
-    "HopImplementedBy": "Which job builds each implemented hop, and on which host — execution splits by verb, so the host holding the data is often not the host that pushes its off-site copy, and a hop claimed built with no job named is a claim with nothing to go and look at.",
+    "HopImplementedBy": "Which job builds each implemented hop, and on which host, one row per hop — execution splits by verb, so the host holding the data is often not the host that pushes its off-site copy, and a hop claimed built with no job named is a claim with nothing to go and look at. The host is stated separately from the job because a job name is unique only within a host.",
     "UnimplementedHops": "Destinations this target declares and nothing implements: a promise with no job behind it, which is worse than an admitted gap because the target's other hops can look green while it holds.",
     "ProvenRungs": "The rungs of the recovery ladder a restore has actually been performed from and matched against an independent copy. It may name a rung that is not a destination at all — the source host's own snapshot history is the rung an operator reaches for first — so it is not the complement of UnprovenRungs.",
     "UnprovenRungs": "Declared destinations with no passing restore behind them — an attempt somebody made and could not match leaves its rung unproven too, so FailedProofRungs says which of these were actually tried.",
@@ -133,7 +133,7 @@ _JOB_GLOSSARY = {
     "TargetClassUnjoined": "Why this row carries no class: nothing in the declaration ties this job to a target, neither by name nor as the implementation of any hop on this host, so what losing its artifact would mean is unknown here rather than known to be small.",
     "Target": "The target this job protects, as the job itself declares it — a job keyed for the hop it delivers rather than the data it moves still knows its own subject, and this is where it says so.",
     "TargetNotScoped": "The declaration states this job has no single subject — pool-scoped work such as a scrub, which is a stated answer rather than a join that failed, and the reason no class appears beside it.",
-    "ImplementsHops": "The declared hops this job is the stated implementation of, target by destination — the join that makes the class above credible, and the reason a job named for its hop rather than its target is not a job about nothing.",
+    "ImplementsHops": "The declared hops this job is the stated implementation of, one row per hop naming the target and the destination it carries data between — the join that makes the class above credible, and the reason a job named for its hop rather than its target is not a job about nothing.",
 }
 
 _DESTINATION_GLOSSARY = {
@@ -161,6 +161,50 @@ def _epoch_iso(seconds: float) -> str:
     return datetime.fromtimestamp(seconds, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+# A target's `source` is prose in the general case ("homelab git repository
+# + SOPS material") and an object id in the lucky one ("domain:appliance"). Only
+# the prefixes below are joined, and only as an exact match: guessing that a
+# bare path names a dataset would mint an edge to an object that may not
+# exist, and a relationship chip leading nowhere is worse than a fact that
+# was honest about being prose.
+_SOURCE_SUBSYSTEM = {
+    "domain": "vms",
+    "dataset": "storage",
+    "pool": "storage",
+    "container": "docker",
+}
+
+
+def _deduped(edges: list[dict]) -> list[dict]:
+    """One edge per (type, direction, target). A job implementing two hops
+    for different targets into one destination states that hop twice, and
+    the second chip would say nothing the first did not."""
+    seen = set()
+    out = []
+    for edge in edges:
+        key = (edge["type"], edge["direction"], edge["target"]["id"])
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(edge)
+    return out
+
+
+def _split_ref(ref: object) -> tuple[str | None, str]:
+    """`"<host>:<job>"` as its two parts; an unqualified name as (None, name).
+
+    The manifest qualifies a hop's implementation by host because
+    execution splits by verb — the host holding the data is routinely not
+    the host that pushes its off-site copy. An unqualified reference names
+    no host, which is a different thing from naming this one: it is left
+    unattributed rather than assumed local, because assuming would let one
+    host claim to implement another's hop.
+    """
+    text = str(ref)
+    host, sep, job = text.partition(":")
+    return (host, job) if sep and job else (None, text)
+
+
 def job_joins(manifest: dict, hostname: str | None) -> tuple[dict, dict]:
     """(job key -> class, job key -> the hops it implements).
 
@@ -186,10 +230,11 @@ def job_joins(manifest: dict, hostname: str | None) -> tuple[dict, dict]:
         klass = raw.get("class")
         keys = [name]
         for destination, ref in sorted((raw.get("implementedBy") or {}).items()):
-            host, _sep, job = str(ref).partition(":")
+            host, job = _split_ref(ref)
             if job and host == hostname:
                 keys.append(job)
-                hops.setdefault(job, []).append(f"{name} -> {destination}")
+                hops.setdefault(job, []).append(
+                    {"Target": name, "Destination": destination})
         for key in keys:
             held = classes.get(key)
             if _CLASS_RANK.get(str(klass), -1) > _CLASS_RANK.get(str(held), -1):
@@ -228,7 +273,10 @@ def target_facts(name: str, raw: dict, destinations: dict) -> dict:
         # the key leaves a row asserting a hop is built with nothing to go
         # and look at, and leaves the job's own row unable to say what it
         # is for.
-        facts["HopImplementedBy"] = [f"{d} -> {implemented[d]}" for d in covered]
+        facts["HopImplementedBy"] = [
+            {"Destination": d, **({"Host": host} if host else {}), "Job": job}
+            for d in covered
+            for host, job in [_split_ref(implemented[d])]]
     missing = [d for d in declared if d not in implemented]
     if missing:
         facts["UnimplementedHops"] = missing
@@ -617,8 +665,75 @@ class Adapter:
             env.obj_ref(item["id"], item["type"], item["native_id"]),
             self._source(collection, unjudged), item["facts"],
             opinions=opinions or None,
+            relationships=self._edges(collection, item) or None,
             evidence_ref=env.evidence_ref(self.subsystem, collection,
                                           item["id"]))
+
+    def _edges(self, collection: str, item: dict) -> list[dict]:
+        """The chain, as edges — because a chain drawn only in prose is a
+        chain nobody can walk.
+
+        Every one of these joins was ALREADY stated in the facts and in no
+        other form: a target listed its destinations by name, a job listed
+        the hops it implements, and neither could be clicked. The row said
+        "offsite-critical" and the reader had to know that meant
+        `destination:offsite-critical` and go and find it. Facts keep the
+        manifest's own words (house rule 2 — a declaration says
+        `offsite-critical`, not an id this product minted); the edges carry
+        the ids, which is the division of labour relationships exist for.
+
+        Deliberately NOT emitted: an edge to a job on another host. The
+        manifest qualifies hops as `<host>:<job>` precisely because
+        execution splits by verb, and `job:mirror` here would point at this
+        host's object of that name — a link to the wrong machine's work is
+        worse than no link, and the fact still names the host in full.
+        """
+        facts = item["facts"]
+        hostname = env.HOST.get("hostname")
+        edges: list[dict] = []
+        if collection == "targets":
+            # Declared, not implemented: every destination the target
+            # names, including the hops with nothing behind them, because
+            # a promise with no job is the one an operator most needs to
+            # reach from here.
+            for destination in facts.get("Destinations") or []:
+                edges.append(env.rel("dispatches-to", "out",
+                                     f"destination:{destination}"))
+            for hop in facts.get("HopImplementedBy") or []:
+                if hop.get("Host") == hostname and hop.get("Job"):
+                    edges.append(env.rel("backs", "in", f"job:{hop['Job']}"))
+            # The subject itself, where the declaration named it as an id
+            # rather than as prose. Only on the owning host: a target's
+            # source lives with its owner, so pointing at a local object of
+            # that name from anywhere else would be inventing the join.
+            source = facts.get("Source")
+            if facts.get("OwnerHost") == hostname and isinstance(source, str):
+                prefix, sep, rest = source.partition(":")
+                if sep and rest and prefix in _SOURCE_SUBSYSTEM:
+                    edges.append(env.rel(
+                        "tracks", "out", source,
+                        subsystem=_SOURCE_SUBSYSTEM[prefix]))
+        elif collection == "jobs":
+            for hop in facts.get("ImplementsHops") or []:
+                edges.append(env.rel("backs", "out",
+                                     f"target:{hop['Target']}"))
+                edges.append(env.rel("dispatches-to", "out",
+                                     f"destination:{hop['Destination']}"))
+            unit = facts.get("Unit")
+            if unit:
+                edges.append(env.rel("runs", "in", f"unit:{unit}",
+                                     subsystem="units"))
+        elif collection == "destinations":
+            name = item["native_id"]
+            for target in self._target_items():
+                if name in (target["facts"].get("Destinations") or []):
+                    edges.append(env.rel("dispatches-to", "in",
+                                         target["id"]))
+            for job in self._job_items():
+                if any(hop["Destination"] == name
+                       for hop in job["facts"].get("ImplementsHops") or []):
+                    edges.append(env.rel("dispatches-to", "in", job["id"]))
+        return _deduped(edges)
 
     async def get_evidence(self, collection: str, object_id: str) -> dict:
         """The documents the row was folded from, membership checked in
