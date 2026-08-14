@@ -559,6 +559,25 @@ function factHelp(fact, subsystem = state.subsystem, collection = state.collecti
   return state.factDict?.subsystems?.[subsystem]?.[collection]?.[fact] || null;
 }
 
+/* WHICH KIND OF CLAIM a fact makes — from the same dictionary, for the same
+   reason it lives there rather than here.
+
+   Three kinds and only two are ever written down. `measured` is the default
+   and is stated by omission, because saying it on three hundred entries
+   would bury the forty that matter. So an absent kind means measured, an
+   absent COLLECTION means nobody has classified it yet, and both look
+   identical from here — which is exactly why the ratchet that closes the
+   gap lives in conformance and not in a badge in this file. */
+const KIND_NOTE = {
+  measured: "read from the kernel, systemd or an API — reproducible with this collection's reference commands",
+  derived: "computed by System Explorer from the facts above; no command reproduces it",
+  declared: "asserted by a person in a document this host reads — true because it was written, not because it was checked",
+};
+
+function factKind(fact, subsystem = state.subsystem, collection = state.collection) {
+  return state.factDict?.kinds?.[subsystem]?.[collection]?.[fact] || "measured";
+}
+
 function idPath(objectId) {
   return encodeURIComponent(objectId).replace(/%2F/gi, "/").replace(/%3A/gi, ":");
 }
@@ -3892,6 +3911,65 @@ function alsoAppearsIn(objectId) {
   return box;
 }
 
+/* The facts, grouped by WHAT KIND OF CLAIM they make.
+
+   One flat table rendered `UsedBytes` — go and check it with zfs list — in
+   the same plain cell as `AdmittedFromCertain`, a two-closure computation
+   over a firewall ruleset that was wrong five times in a single review
+   pass. A reader had no way to tell which was which, and a model reading
+   the same table over MCP restates the second with the confidence of the
+   first.
+
+   Blocks, not a badge on every row. Most facts are measured, so per-row
+   marks would be three hundred pieces of noise carrying the same word; the
+   heading says it once, for everything under it. An object whose facts are
+   all measured looks exactly as it always did — one grid, no heading — so
+   the structure appears only where there is something to say.
+
+   Order is measured, derived, declared: what the machine said, then what
+   this product worked out from it, then what a person asserted. Reading
+   down is reading outwards from the ground truth. */
+const FACT_KIND_ORDER = ["measured", "derived", "declared"];
+
+function factBlocks(entries, subsystem, collection) {
+  const byKind = new Map(FACT_KIND_ORDER.map(kind => [kind, []]));
+  for (const entry of entries) {
+    const kind = factKind(entry[0], subsystem, collection);
+    (byKind.get(kind) || byKind.get("measured")).push(entry);
+  }
+  const used = FACT_KIND_ORDER.filter(kind => byKind.get(kind).length);
+  const box = el("div", "facts-box");
+  for (const kind of used) {
+    // A single kind needs no heading: naming the only category present
+    // tells the reader nothing they can act on, and it is furniture on the
+    // great majority of objects in the product.
+    if (used.length > 1) {
+      const head = el("div", `fact-kind ${kind}`);
+      head.appendChild(el("span", "dot"));
+      head.appendChild(el("span", "name", kind));
+      head.appendChild(el("span", "note", KIND_NOTE[kind]));
+      box.appendChild(head);
+    }
+    const grid = el("div", "facts");
+    for (const [key, value] of byKind.get(kind)) {
+      const k = el("div", "k", key);
+      const help = factHelp(key, subsystem, collection);
+      if (help) k.title = help;
+      const v = el("div", `v${value === null || value === undefined ? " null" : ""}`);
+      const unit = scalarText(key, value, true);
+      if (unit !== null) {
+        v.textContent = unit;
+      } else {
+        v.appendChild(renderFactValue(value));
+      }
+      k.dataset.fact = key; v.dataset.fact = key;
+      grid.append(k, v);
+    }
+    box.appendChild(grid);
+  }
+  return box;
+}
+
 function renderExpansion(colspan) {
   const obs = state.detailObs;
   if (obs?.gone) return renderGoneExpansion(obs, colspan);
@@ -3959,23 +4037,9 @@ function renderExpansion(colspan) {
   const isGeneration = obs.subsystem === "nix" && obs.object.type === "generation";
   const deltaRows = isGeneration && Array.isArray(obs.facts.DeltaFromPrevious)
     && obs.facts.DeltaFromPrevious.length ? obs.facts.DeltaFromPrevious : null;
-  const grid = el("div", "facts");
-  for (const [key, value] of Object.entries(obs.facts)) {
-    if (isPool && key === "Vdevs") continue;
-    if (deltaRows && key === "DeltaFromPrevious") continue;
-    const k = el("div", "k", key);
-    const help = factHelp(key);
-    if (help) k.title = help;
-    const v = el("div", `v${value === null || value === undefined ? " null" : ""}`);
-    const unit = scalarText(key, value, true);
-    if (unit !== null) {
-      v.textContent = unit;
-    } else {
-      v.appendChild(renderFactValue(value));
-    }
-    k.dataset.fact = key; v.dataset.fact = key;
-    grid.append(k, v);
-  }
+  const shown = Object.entries(obs.facts).filter(([key]) =>
+    !(isPool && key === "Vdevs") && !(deltaRows && key === "DeltaFromPrevious"));
+  const grid = factBlocks(shown, obs.subsystem, obs.collection);
   if (isPool && typeof obs.facts.SizeBytes === "number") {
     const top = el("div", "pool-top");
     top.appendChild(grid);

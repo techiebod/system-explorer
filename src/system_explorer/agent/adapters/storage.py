@@ -429,6 +429,12 @@ def _flatten_mounts(nodes: list[dict], depth: int = 0) -> list[tuple[dict, int]]
 # mid-scrub pool wore a 1970 scan end, and a resilver record left a stale
 # scrub reading as nothing-to-say. One record, three shapes — the sentences
 # carry what the names cannot (the LinkSpeed/LinkWidth lesson).
+_STORAGE_KINDS = {
+    "pools": {"Redundancy": "derived", "DeviceFailuresTolerated": "derived",
+              "ScanAgeDays": "derived"},
+    "block-devices": {},
+}
+
 _POOL_GLOSSARY = {
     "Redundancy": "How this pool's data vdevs are laid out, in zpool's own words — a stripe, a mirror, raidz1. A pool is only as redundant as its weakest data vdev, because losing any one of them loses the pool, so a mixed layout is named in full rather than summarised to its best part.",
     "DeviceFailuresTolerated": "How many whole devices this pool survives losing, read from the layout above; 0 means the next disk to fail takes the pool with it. Stated and graded by nothing here: whether that is a problem depends on what lives on the pool, which the protection inventory knows and this adapter cannot.",
@@ -570,6 +576,15 @@ class Adapter:
         if collection == "pools":
             return _POOL_GLOSSARY
         return _BLOCK_DEVICE_GLOSSARY if collection == "block-devices" else {}
+
+    def fact_kinds(self, collection: str) -> dict[str, str] | None:
+        """Redundancy is the one that had to be classified. zpool reports
+        vdev_type "raidz" for every parity level and never states the number
+        anywhere in its document — the parity is read out of the NAME zpool
+        assigned the vdev — so both facts are this adapter's reading of a
+        string, not a figure the pool published. A reader treating
+        DeviceFailuresTolerated as measured would be trusting a regex."""
+        return _STORAGE_KINDS.get(collection)
 
     # A failed probe is retried after this long; success is cached forever.
     # Without the retry a probe racing boot-time pool import pinned

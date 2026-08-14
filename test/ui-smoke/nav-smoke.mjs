@@ -174,7 +174,7 @@ const context = vm.createContext(sandbox);
 // its state and helpers with const, which in a vm script are lexically scoped
 // and never become properties of the sandbox. Only code inside that script can
 // see them.
-const EXPORTS = "\n;globalThis.__ui = { state, renderNav, applyNavBadges, renderBuild, navRoutes, navModel, cellValue, PSEUDO_COLUMNS, linkPanel, scalarText, factHelp, renderOverview, renderGrid, renderResources, factLabel, worstOpinionLevel, OPINION_LEVELS, ATTENTION_LEVELS, routeForId, idHomes, factLeaf, renderGoneExpansion, alsoAppearsIn };";
+const EXPORTS = "\n;globalThis.__ui = { state, renderNav, applyNavBadges, renderBuild, navRoutes, navModel, cellValue, PSEUDO_COLUMNS, linkPanel, scalarText, factHelp, renderOverview, renderGrid, renderResources, factLabel, worstOpinionLevel, OPINION_LEVELS, ATTENTION_LEVELS, routeForId, idHomes, factLeaf, renderGoneExpansion, alsoAppearsIn, factBlocks, factKind };";
 vm.runInContext(readFileSync(APP, "utf8") + EXPORTS, context, { filename: "app.js" });
 const ui = sandbox.__ui;
 
@@ -961,6 +961,54 @@ check("the strip is absent when the agent serves no map", () => {
   ui.state.subsystem = "units";
   if (ui.alsoAppearsIn("unit:sshd.service") !== null)
     throw new Error("invented a second home");
+});
+
+/* ── measured, derived, declared ──────────────────────────────────────── */
+
+const DICT = {
+  subsystems: { network: { "port-exposure": { LocalPort: "The port." } } },
+  kinds: { network: { "port-exposure": { AdmittedFromCertain: "derived" } },
+           protection: { destinations: { Immutability: "declared" } } },
+};
+
+check("a fact with no kind is measured, and an unclassified one too", () => {
+  ui.state.factDict = DICT;
+  if (ui.factKind("LocalPort", "network", "port-exposure") !== "measured")
+    throw new Error("a documented port stopped being measured");
+  if (ui.factKind("Anything", "storage", "mounts") !== "measured")
+    throw new Error("an unreviewed collection did not default to measured");
+  ui.state.factDict = null;
+  if (ui.factKind("AdmittedFromCertain", "network", "port-exposure") !== "measured")
+    throw new Error("no dictionary should cost the distinction, not the page");
+});
+
+check("an object mixing kinds gets a heading for each", () => {
+  ui.state.factDict = DICT;
+  const box = ui.factBlocks(
+    [["LocalPort", 22], ["AdmittedFromCertain", ["10.0.0.0/8"]]],
+    "network", "port-exposure");
+  const text = flatten(box);
+  if (!/measured/.test(text) || !/derived/.test(text))
+    throw new Error(`did not label both kinds: ${text}`);
+  if (!text.includes("no command reproduces it"))
+    throw new Error("the derived heading lost its explanation");
+});
+
+check("an object that is all measurement grows no headings at all", () => {
+  // The great majority of objects in the product. Naming the only category
+  // present tells the reader nothing and is furniture on every page.
+  ui.state.factDict = DICT;
+  const text = flatten(ui.factBlocks([["LocalPort", 22]], "network", "port-exposure"));
+  if (/measured/.test(text)) throw new Error(`labelled a single kind: ${text}`);
+  if (!text.includes("LocalPort")) throw new Error("lost the fact itself");
+});
+
+check("every fact survives the grouping, whatever its kind", () => {
+  ui.state.factDict = DICT;
+  const entries = [["A", 1], ["AdmittedFromCertain", 2], ["B", 3]];
+  const text = flatten(ui.factBlocks(entries, "network", "port-exposure"));
+  for (const [key] of entries)
+    if (!text.includes(key)) throw new Error(`grouping dropped ${key}`);
 });
 
 if (failures.length) {

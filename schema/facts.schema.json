@@ -2,35 +2,77 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "se/facts.v1",
   "title": "System Explorer fact dictionary",
-  "description": "What each fact MEANS: one sentence per native property name, grouped by subsystem and collection, owned by the adapter that emits the fact. Facts carry native property names (SPEC section 5) and native names are not self-explanatory — a reader looking at LinkSpeed beside LinkWidth cannot tell from the screen that one is a per-lane rate and the other a lane count. Served from its own endpoint rather than riding on every envelope, because a consumer paging a collection should not pay for the same prose on every row, and rather than living in the UI, because a second copy of this knowledge in the browser is a second rulebook. Descriptions, never labels: presentation belongs to clients (SPEC section 5), so the fact name itself is never restated here. Coverage is partial by design — an undocumented fact is absent from this document, which is a statement that no sentence has been written yet, not an error. Shared $defs are duplicated from observation.schema.json deliberately so each schema file is standalone.",
+  "description": "What each fact MEANS: one sentence per native property name, grouped by subsystem and collection, owned by the adapter that emits the fact. Facts carry native property names (SPEC section 5) and native names are not self-explanatory \u2014 a reader looking at LinkSpeed beside LinkWidth cannot tell from the screen that one is a per-lane rate and the other a lane count. Served from its own endpoint rather than riding on every envelope, because a consumer paging a collection should not pay for the same prose on every row, and rather than living in the UI, because a second copy of this knowledge in the browser is a second rulebook. Descriptions, never labels: presentation belongs to clients (SPEC section 5), so the fact name itself is never restated here. Coverage is partial by design \u2014 an undocumented fact is absent from this document, which is a statement that no sentence has been written yet, not an error. Shared $defs are duplicated from observation.schema.json deliberately so each schema file is standalone.",
   "type": "object",
-  "required": ["schema", "host", "observed_at", "subsystems"],
+  "required": [
+    "schema",
+    "host",
+    "observed_at",
+    "subsystems"
+  ],
   "properties": {
-    "schema": { "const": "se.facts/1" },
-    "host": { "$ref": "#/$defs/host" },
-    "observed_at": { "$ref": "#/$defs/utcTimestamp" },
+    "schema": {
+      "const": "se.facts/1"
+    },
+    "host": {
+      "$ref": "#/$defs/host"
+    },
+    "observed_at": {
+      "$ref": "#/$defs/utcTimestamp"
+    },
     "version": {
       "type": "string",
       "minLength": 1,
       "description": "Agent version, so a consumer caching this document can tell when the vocabulary it holds is older than the host it is talking to."
     },
-    "revision": { "type": "string", "minLength": 1 },
+    "revision": {
+      "type": "string",
+      "minLength": 1
+    },
     "subsystems": {
       "type": "object",
       "description": "Subsystem name -> collection name -> fact name -> one sentence. A subsystem or collection with nothing documented is omitted rather than present and empty.",
-      "propertyNames": { "$ref": "#/$defs/subsystemName" },
+      "propertyNames": {
+        "$ref": "#/$defs/subsystemName"
+      },
       "additionalProperties": {
         "type": "object",
         "minProperties": 1,
-        "propertyNames": { "$ref": "#/$defs/subsystemName" },
+        "propertyNames": {
+          "$ref": "#/$defs/subsystemName"
+        },
         "additionalProperties": {
           "type": "object",
           "minProperties": 1,
-          "propertyNames": { "$ref": "#/$defs/factName" },
+          "propertyNames": {
+            "$ref": "#/$defs/factName"
+          },
           "additionalProperties": {
             "type": "string",
             "minLength": 1,
-            "description": "What the fact means, in prose a reader who does not already know the subsystem can use. Says the concept, not the label — the fact name is already on screen beside it."
+            "description": "What the fact means, in prose a reader who does not already know the subsystem can use. Says the concept, not the label \u2014 the fact name is already on screen beside it."
+          }
+        }
+      }
+    },
+    "kinds": {
+      "type": "object",
+      "description": "Subsystem -> collection -> fact name -> which KIND of claim the fact makes, for the facts that are not measured. `measured` is the default and is never written down: a fact absent from this document was read from the kernel, systemd or an API and is reproducible with the reference command published beside it. `derived` is arithmetic or inference this product performs, which no command reproduces. `declared` is asserted by a person in a document the host reads \u2014 true because somebody said so, and stale the moment reality moves. It exists because the three rendered identically: a capacity anyone can check with zfs list sat in the same table as a firewall closure this product computes, and a model restates the second with the confidence of the first. Coverage is partial by design; a collection absent here has not been reviewed, which is not a claim that all of its facts are measured.",
+      "propertyNames": {
+        "$ref": "#/$defs/subsystemName"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "propertyNames": {
+          "$ref": "#/$defs/subsystemName"
+        },
+        "additionalProperties": {
+          "type": "object",
+          "additionalProperties": {
+            "enum": [
+              "derived",
+              "declared"
+            ]
           }
         }
       }
@@ -39,12 +81,27 @@
   "$defs": {
     "host": {
       "type": "object",
-      "required": ["machine_id", "hostname"],
+      "required": [
+        "machine_id",
+        "hostname"
+      ],
       "properties": {
-        "machine_id": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
-        "hostname": { "type": "string", "minLength": 1 },
-        "container": { "type": "string", "minLength": 1 },
-        "app": { "type": "string", "minLength": 1 }
+        "machine_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "hostname": {
+          "type": "string",
+          "minLength": 1
+        },
+        "container": {
+          "type": "string",
+          "minLength": 1
+        },
+        "app": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "subsystemName": {

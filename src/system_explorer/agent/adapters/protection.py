@@ -93,6 +93,39 @@ _CLASS_RANK = {"recreate": 0, "replicate": 1, "backup": 2}
 # is stating that the job has no single subject. None cannot mean both.
 _MISSING = object()
 
+# Which protection facts are not measured. See Adapter.fact_kinds for why
+# this subsystem is mostly declaration: nothing here opens a repository.
+_PROTECTION_KINDS = {
+    "targets": {
+        # Straight out of the manifest, unchanged.
+        "Class": "declared", "Kind": "declared", "OwnerHost": "declared",
+        "Source": "declared", "Retention": "declared", "Cadence": "declared",
+        "Destinations": "declared", "ProvenRungs": "declared",
+        "LastProvenAt": "declared", "LastFailedProofAt": "declared",
+        "FailedProofRungs": "declared", "ProofRecord": "declared",
+        "ProofScope": "declared", "ProofComparedAgainst": "declared",
+        # The manifest's own members, crossed with each other here.
+        "IndependentDestinations": "derived", "ImplementedHops": "derived",
+        "HopImplementedBy": "derived", "UnimplementedHops": "derived",
+        "UnprovenRungs": "derived",
+    },
+    "jobs": {
+        # A threshold and an association a person set; the rest of a job's
+        # row is what the receipts and the checker actually recorded.
+        "MaxAgeSeconds": "declared", "Target": "declared",
+        # The checker's verdict, not a reading: no command reproduces
+        # "stale", because it is an age compared against that threshold.
+        "State": "derived", "Basis": "derived", "AgeSeconds": "derived",
+        "TargetClass": "derived", "TargetClassUnjoined": "derived",
+        "TargetNotScoped": "derived", "ImplementsHops": "derived",
+        "CheckedAgeSeconds": "derived",
+    },
+    "destinations": {
+        "Kind": "declared", "Independent": "declared",
+        "PruneAuthority": "declared", "Immutability": "declared",
+    },
+}
+
 _TARGET_GLOSSARY = {
     "Class": "What losing this data would mean, in the estate's own three words: backup is irreplaceable, replicate is replaceable at a cost in time, recreate is rebuilt from the estate's own definitions.",
     "Kind": "How the artifact is produced (a ZFS send, a file mirror, the application's own exporter) — orthogonal to the class, which is about the loss, not the method.",
@@ -489,6 +522,28 @@ class Adapter:
     def fact_glossary(self, collection: str) -> dict:
         return {"targets": _TARGET_GLOSSARY, "jobs": _JOB_GLOSSARY,
                 "destinations": _DESTINATION_GLOSSARY}.get(collection, {})
+
+    def fact_kinds(self, collection: str) -> dict[str, str] | None:
+        """Almost none of this subsystem is measured, and that is its nature.
+
+        A target is a PROMISE. Nothing here reads a repository or counts a
+        byte — the module docstring says why, at length — so its class,
+        kind, retention and cadence are true because a person wrote them in
+        a manifest and stay true exactly as long as reality agrees. The
+        Immutability sentence on a destination is the sharpest case: it is
+        security prose carried verbatim, and rendering it beside a measured
+        capacity invited the reading that somebody had checked.
+
+        The middle band is what the DECLARATION says about itself once this
+        adapter has done arithmetic on it — which hops have a job behind
+        them, which do not, which rungs remain unproven. Those are computed
+        here and no command reproduces them.
+
+        Measured, and it is a short list: what the receipts and the staleness
+        verdict actually record. A run happened, at a time, with an exit
+        status. That is the only part of a protection chain this host can
+        observe rather than be told."""
+        return _PROTECTION_KINDS.get(collection)
 
     def _source(self, collection: str, unjudged_owner: str | None = None) -> dict:
         method = {"targets": f"read {MANIFEST}",

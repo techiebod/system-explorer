@@ -21,6 +21,31 @@ Optionally an adapter also exposes fact_glossary(collection) -> {fact name:
 one sentence}, served from /v1/facts. Optional because a subsystem whose facts
 are undocumented should say nothing rather than block on prose; absent is an
 empty dict, not an error.
+
+And, beside it, fact_kinds(collection) -> {fact name: "derived" | "declared"}
+or None. This says which facts on a collection are NOT measured, and it
+exists because they were indistinguishable: `UsedBytes` (go and check it with
+zfs list) and `AdmittedFromCertain` (this product's own arithmetic, wrong
+five times in one review pass) rendered identically, and a model reading them
+over MCP restates the second with the confidence of the first.
+
+Three kinds, and only two are ever written down:
+
+  measured  read from the kernel, systemd, or an API — reproducible with the
+            reference command already published beside it. The DEFAULT, and
+            never stated, because saying it 300 times would bury the 40 that
+            matter.
+  derived   arithmetic or inference this product performs. No command
+            reproduces it.
+  declared  asserted by a person in a document this host reads. True because
+            somebody said so, and stale the moment reality moves.
+
+RETURNING None IS DIFFERENT FROM RETURNING {}. None means nobody has been
+through this collection yet, so its facts default to measured because that is
+the safest available guess and not because anyone checked. {} means somebody
+looked and every fact really is measured. Conformance counts the first and
+lets the number only go down; without the distinction the backlog would be
+invisible and the lint would look enforced while enforcing nothing.
 """
 
 from __future__ import annotations

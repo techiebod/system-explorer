@@ -312,3 +312,16 @@ def assert_stable_ids(collect: Callable[[], dict], rounds: int = 2) -> None:
                 f"object id {object_id!r} changed native identity between "
                 f"collections: {mappings[0][object_id]!r} -> {later[object_id]!r}"
             )
+
+
+# Collections whose facts nobody has been through and sorted into measured,
+# derived and declared. The ratchet: only ever lower this.
+#
+# It counts COLLECTIONS, not facts, because `measured` is the default and
+# writing it out per fact would bury the forty exceptions under three
+# hundred restatements. So an adapter's fact_kinds() returning None means
+# "unreviewed" and returning {} means "reviewed, and every fact really is
+# measured" — and only the first is counted here. Without that distinction
+# the backlog is invisible and the lint looks enforced while enforcing
+# nothing, which is the failure mode a suppression file always has.
+UNCLASSIFIED_COLLECTION_BUDGET = 41

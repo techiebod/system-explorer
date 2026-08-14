@@ -359,6 +359,28 @@ td .dim, .dim { color: var(--text-faint); }
   text-transform: uppercase; letter-spacing: .07em; color: var(--text-dim);
 }
 
+/* Facts grouped by what kind of claim they make. The heading appears only
+   where an object carries more than one kind, so a page of pure measurement
+   looks exactly as it always did. */
+.facts-box { display: flex; flex-direction: column; gap: 0; }
+.facts-box > .facts + .fact-kind { margin-top: 12px; }
+.fact-kind {
+  display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap;
+  margin-bottom: 5px; font-family: var(--mono); font-size: 10.5px;
+  letter-spacing: .08em; text-transform: uppercase;
+}
+.fact-kind .dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; }
+.fact-kind .note {
+  text-transform: none; letter-spacing: 0; font-family: inherit;
+  font-size: 11px; color: var(--text-faint); flex: 1 1 220px; min-width: 0;
+}
+.fact-kind.measured { color: var(--text-dim); }
+.fact-kind.measured .dot { background: var(--text-dim); }
+.fact-kind.derived { color: var(--warn); }
+.fact-kind.derived .dot { background: var(--warn); }
+.fact-kind.declared { color: var(--accent); }
+.fact-kind.declared .dot { background: var(--accent); }
+
 .facts { display: grid; grid-template-columns: minmax(110px,22%) 1fr; gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .facts > div { padding: 6px 10px; border-bottom: 1px solid var(--border); font-size: 12px; }
 .facts > div:nth-last-child(-n+2) { border-bottom: none; }

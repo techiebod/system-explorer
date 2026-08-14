@@ -258,6 +258,53 @@ _RESOLVER_GLOSSARY = {
     ),
 }
 
+# Which network facts are not measured. The exposure row is why this exists
+# at all: AdmittedFromCertain is a two-closure computation over a ruleset,
+# it was WRONG FIVE TIMES in one review pass — a dport range inside a set
+# dropped, `match.op` never read, guards unioned instead of intersected, the
+# address family never consulted, an unreadable verdict dropped from both
+# closures — and it rendered in the same plain table cell as a port number
+# read straight out of /proc/net.
+_NETWORK_KINDS = {
+    "links": {
+        # The kernel names a driver; what the device IS comes from reading
+        # several of its attributes together.
+        "Kind": "derived",
+    },
+    "listening": {
+        # What the binding implies about reach, before any rule is read.
+        "Scope": "derived",
+    },
+    "nft-chains": {
+        # Nothing in nft's document says what calls a chain; this is every
+        # rule in every table, read.
+        "JumpedFrom": "derived", "Unreferenced": "derived",
+        "BaseChain": "derived",
+    },
+    "nft-rules": {
+        # The rendered line is this product's rendering of nft's JSON, and
+        # the comprehension figures are what it could not render, computed
+        # by subtraction.
+        "Rendered": "derived", "Comprehension": "derived",
+        "OpaqueReason": "derived", "Residue": "derived",
+        "Position": "derived",
+    },
+    "port-exposure": {
+        "AdmittingRules": "derived", "AdmittedFromCertain": "derived",
+        "AdmittedFromPossible": "derived", "ClosureGap": "derived",
+        "ClosureGapRules": "derived", "PathCoverage": "derived",
+        "Scope": "derived",
+    },
+    "resolver": {},
+    "routes": {},
+    "tailscale": {},
+    "lookups": {},
+    # nft-tables documents none of its facts yet, so there is nothing here
+    # to classify — an empty dict says somebody looked, which is the whole
+    # point of it being distinct from None.
+    "nft-tables": {},
+}
+
 _LISTENING_GLOSSARY = {
     "Protocol": "Which /proc/net table this socket came from — tcp, tcp6, udp or udp6. A host that binds both stacks appears twice, deliberately: they are two sockets and a ruleset can admit one and not the other.",
     "LocalAddress": "The address this socket is bound to. The wildcard (0.0.0.0 or ::) means every interface the host has now or gains later, which is the binding the firewall question actually hangs off.",
@@ -1337,6 +1384,9 @@ class Adapter:
 
     def fact_glossary(self, collection: str) -> dict[str, str]:
         return _NETWORK_GLOSSARY.get(collection, {})
+
+    def fact_kinds(self, collection: str) -> dict[str, str] | None:
+        return _NETWORK_KINDS.get(collection)
 
     async def _nft_available(self) -> tuple[bool, str]:
         stale = (self._nft_state is not None and not self._nft_state[0]

@@ -122,6 +122,15 @@ REFERENCE = [
     "cat /proc/stat",
 ]
 
+_KINDS = {
+    "Parent": "derived", "Depth": "derived", "Delegated": "derived",
+    "UnattributedCpuUsec": "derived",
+    # Which of a slice's own members account for its stall — a walk over the
+    # tree, not a reading.
+    "StallExplainedBy": "derived", "StallUnexplained": "derived",
+    "StallAttributionUnobservable": "derived",
+}
+
 _GLOSSARY = {
     "Parent": "The cgroup this one sits directly inside, by systemd's name for it — the rung above on the ladder, and what makes a total decomposable rather than merely large.",
     "Depth": "How far below the root cgroup this workload sits; the root itself is 0.",
@@ -782,6 +791,14 @@ class Adapter:
 
     def fact_glossary(self, collection: str) -> dict:
         return _GLOSSARY if collection == "workloads" else {}
+
+    def fact_kinds(self, collection: str) -> dict[str, str] | None:
+        """Every counter here is read from cgroupfs; every ATTRIBUTION is
+        arithmetic on top of it. The remainder in particular — host busy
+        time minus the sum of the top-level slices — is a subtraction across
+        two files read moments apart, and it is the figure most likely to be
+        quoted as though the kernel had stated it."""
+        return _KINDS if collection == "workloads" else None
 
     def _source(self) -> dict:
         return env.source(

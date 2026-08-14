@@ -218,6 +218,7 @@ async def fact_dictionary() -> dict:
     and equally available to an LLM as to the UI — one contract, two consumers.
     """
     subsystems: dict = {}
+    kinds: dict = {}
     for name, adapter in ADAPTERS.items():
         glossary = getattr(adapter, "fact_glossary", None)
         if glossary is None:
@@ -227,6 +228,17 @@ async def fact_dictionary() -> dict:
                       if (entries := glossary(collection))}
         if documented:
             subsystems[name] = documented
+        # Which of those facts are NOT measured. Only the exceptions are
+        # carried: `measured` is the default and stating it on every entry
+        # would bury the forty that matter under three hundred that do not.
+        classify = getattr(adapter, "fact_kinds", None)
+        if classify is None:
+            continue
+        classified = {collection: entries
+                      for collection in adapter.collections()
+                      if (entries := classify(collection))}
+        if classified:
+            kinds[name] = classified
     out = {
         "schema": "se.facts/1",
         "host": env.HOST,
@@ -234,6 +246,8 @@ async def fact_dictionary() -> dict:
         "version": VERSION,
         "subsystems": subsystems,
     }
+    if kinds:
+        out["kinds"] = kinds
     if REVISION:
         out["revision"] = REVISION
     return out
