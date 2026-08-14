@@ -443,6 +443,24 @@ async def hub_hosts(local: int = 0) -> dict:
         "observed_at": _utc_now(),
         "hosts": hosts,
         "sites": sites,
+        # What this list IS, said in the list. A registry is configuration,
+        # not discovery: a host that exists and was never registered is
+        # indistinguishable here from a host that does not exist, and the
+        # honest place to say so is beside the answer rather than in a tool
+        # description a consumer may never have read.
+        #
+        # Not hypothetical. Asked "are all hosts up to date", this registry
+        # answered yes while the estate's only internet-facing host sat five
+        # revisions behind, registered with no hub and absent from every
+        # listing (2026-08-14). The scope was the whole defect: every host it
+        # knew about WAS up to date.
+        "scope": (
+            f"the {len(AGENTS)} agent(s) this hub is configured with"
+            + (f", plus {len(hosts) - len(AGENTS)} learned from siblings"
+               if len(hosts) > len(AGENTS) else "")
+            + ". This is a registry, not a discovery: a host nobody"
+            " registered does not appear here, and its absence is"
+            " indistinguishable from it not existing."),
     }
 
 

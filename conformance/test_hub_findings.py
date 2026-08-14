@@ -353,3 +353,40 @@ def test_one_narrowed_sibling_cannot_freeze_what_the_other_observed(tmp_path):
                     registry.rows(), registry.transitions())
     [finding] = view["findings"]
     assert finding["observable"] is False and "current" not in finding
+
+
+# ── the registry says what it covers ─────────────────────────────────────
+
+def test_the_host_listing_states_that_it_is_a_registry_not_a_discovery():
+    """Asked "are all hosts up to date", this listing answered yes while the
+    estate's only internet-facing host sat five revisions behind, registered
+    with no hub and absent from every listing. The scope WAS the whole
+    defect: every host it knew about was up to date.
+
+    A registry is configuration, and the honest place to say so is beside the
+    answer rather than in a tool description a consumer may never have read —
+    an LLM reading `hosts` as the set of hosts that exist is the case this
+    sentence is for.
+    """
+    import asyncio
+    from system_explorer.hub import server
+
+    async def no_agents_reachable():
+        return {name: {"reachable": False, "error": "not probed in this test"}
+                for name in server.AGENTS}
+
+    original = (server.AGENTS, server.SIBLINGS, server._local_hosts)
+    server.AGENTS = {"one": "http://one", "two": "http://two"}
+    server.SIBLINGS = {}
+    server._local_hosts = no_agents_reachable
+    try:
+        body = asyncio.run(server.hub_hosts())
+    finally:
+        server.AGENTS, server.SIBLINGS, server._local_hosts = original
+
+    assert "2 agent(s) this hub is configured with" in body["scope"]
+    assert "registry, not a discovery" in body["scope"]
+    assert "indistinguishable from it not existing" in body["scope"], (
+        "the sentence must name the ambiguity, not merely hedge: absent and "
+        "non-existent are the two answers a consumer has to tell apart"
+    )

@@ -5,7 +5,10 @@
   "hosts": {
     "host-a": {
       "reachable": true,
-      "host": { "machine_id": "0123456789abcdef0123456789abcdef", "hostname": "host-a" },
+      "host": {
+        "machine_id": "0123456789abcdef0123456789abcdef",
+        "hostname": "host-a"
+      },
       "url": "http://localhost:8091",
       "site": "site-a",
       "version": "0.4.0",
@@ -13,7 +16,10 @@
     },
     "host-b": {
       "reachable": true,
-      "host": { "machine_id": "fedcba9876543210fedcba9876543210", "hostname": "host-b" },
+      "host": {
+        "machine_id": "fedcba9876543210fedcba9876543210",
+        "hostname": "host-b"
+      },
       "url": "http://host-b.private:8091",
       "site": "site-a",
       "version": "0.4.0",
@@ -26,19 +32,33 @@
     },
     "host-d": {
       "reachable": true,
-      "host": { "machine_id": "00112233445566778899aabbccddeeff", "hostname": "host-d" },
+      "host": {
+        "machine_id": "00112233445566778899aabbccddeeff",
+        "hostname": "host-d"
+      },
       "url": "http://localhost:8091",
       "site": "site-b",
       "version": "0.4.0"
     }
   },
+  "scope": "the 2 agent(s) this hub is configured with, plus 1 learned from siblings. This is a registry, not a discovery: a host nobody registered does not appear here, and its absence is indistinguishable from it not existing.",
   "sites": {
-    "site-a": { "reachable": true, "local": true, "hosts": ["host-a", "host-b", "host-c"] },
+    "site-a": {
+      "reachable": true,
+      "local": true,
+      "hosts": [
+        "host-a",
+        "host-b",
+        "host-c"
+      ]
+    },
     "site-b": {
       "reachable": true,
       "local": false,
       "url": "http://hub-b.example:8090",
-      "hosts": ["host-d"]
+      "hosts": [
+        "host-d"
+      ]
     },
     "site-c": {
       "reachable": false,
