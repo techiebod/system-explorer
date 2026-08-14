@@ -132,3 +132,73 @@ def test_a_stopped_container_claims_no_scope_systemd_deleted():
     # than inventing a stop nobody observed.
     assert _scope_unit("", "running") is None
     assert _scope_unit(ident) == f"docker-{ident}.scope"
+
+
+# ── facts that do not apply are omitted, not defaulted ───────────────────
+
+RUNNING = {
+    "Id": "c06407a40a9409ad9c956bd718c2bfa3ca4f441df8d9a7612c1e4eec7b30e9e5",
+    "RestartCount": 0, "Image": "sha256:a45b5ab0",
+    "Config": {"Image": "linuxserver/radarr:latest@sha256:a45b5ab0",
+               "Labels": {"com.docker.compose.project": "arr"}},
+    "HostConfig": {"NetworkMode": "proxy"},
+    "State": {"Status": "running", "ExitCode": 0, "Error": "", "OOMKilled": False,
+              "Health": None, "StartedAt": "2026-08-13T20:36:02.844883089Z",
+              "FinishedAt": "0001-01-01T00:00:00Z"},
+}
+
+
+def container(**state):
+    from copy import deepcopy
+    raw = deepcopy(RUNNING)
+    raw["State"].update(state)
+    return raw
+
+
+def test_a_running_container_makes_no_claim_about_a_run_that_has_not_ended():
+    """Reported from the deployed UI: five of fourteen rows said nothing.
+    `ExitCode: 0` beside `State: running` is worse than noise — it positively
+    asserts a clean exit for a process that never exited, and a model over
+    MCP has to reconcile the two."""
+    from system_explorer.agent.adapters.docker import _container_facts
+    facts = _container_facts(RUNNING)
+    for absent in ("ExitCode", "FinishedAt", "OOMKilled", "Error", "Health"):
+        assert absent not in facts, f"{absent} was manufactured for a running container"
+    assert facts["State"] == "running"
+    assert facts["StartedAt"], "what DID happen is still stated"
+
+
+def test_an_ended_run_carries_its_outcome():
+    from system_explorer.agent.adapters.docker import _container_facts
+    facts = _container_facts(container(Status="exited", ExitCode=137,
+                                       FinishedAt="2026-08-14T01:00:00Z"))
+    assert facts["ExitCode"] == 137
+    assert facts["FinishedAt"]
+
+
+def test_oomkilled_appears_only_when_true():
+    """False is dockerd's default for every container that was not OOM-killed,
+    and carrying it puts the word on the screen of every healthy container in
+    the estate."""
+    from system_explorer.agent.adapters.docker import _container_facts
+    ended = container(Status="exited", ExitCode=0, FinishedAt="2026-08-14T01:00:00Z")
+    assert "OOMKilled" not in _container_facts(ended)
+    ended["State"]["OOMKilled"] = True
+    assert _container_facts(ended)["OOMKilled"] is True
+
+
+def test_health_is_absent_where_the_image_declares_no_healthcheck():
+    """Absent is not unhealthy and not unknown — three different answers that
+    a null would collapse into one."""
+    from system_explorer.agent.adapters.docker import _container_facts
+    assert "Health" not in _container_facts(RUNNING)
+    assert _container_facts(
+        container(Health={"Status": "healthy"}))["Health"] == "healthy"
+
+
+def test_a_container_created_but_never_started_states_neither_end():
+    from system_explorer.agent.adapters.docker import _container_facts
+    facts = _container_facts(container(Status="created",
+                                       StartedAt="0001-01-01T00:00:00Z"))
+    assert "StartedAt" not in facts and "FinishedAt" not in facts
+    assert facts["State"] == "created"

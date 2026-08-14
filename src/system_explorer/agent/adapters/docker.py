@@ -234,6 +234,64 @@ _CONTAINER_GLOSSARY = {
 }
 
 
+def _container_facts(raw: dict) -> dict:
+    """One container's facts, with the ones that do not apply OMITTED.
+
+    A running container was being given the whole of dockerd's State
+    document: ExitCode 0, OOMKilled false, Error null, FinishedAt null,
+    Health null. Those are not measurements — they are the defaults of a run
+    that has not happened, and `ExitCode: 0` positively asserts a clean exit
+    for a process that never exited. An operator reading it saw five of
+    fourteen rows say nothing, and a model over MCP read a successful exit
+    code beside `State: running` and had to reconcile them.
+
+    So the last-run block appears only where a run has actually ENDED, and
+    dockerd's own FinishedAt is the discriminator rather than a state name
+    this adapter would have to keep a list of. Health appears only where the
+    image declares a healthcheck; a container with none has no health, which
+    is different from unhealthy and from unknown.
+
+    Pure, so conformance can fixture it per state — the same reason the rules
+    modules are pure. Applicability is semantics, and semantics belong to the
+    side that has the document.
+    """
+    state = raw.get("State") or {}
+    labels = (raw.get("Config") or {}).get("Labels") or {}
+    facts: dict = {
+        "State": state.get("Status"),
+        "RestartCount": raw.get("RestartCount"),
+        "Image": (raw.get("Config") or {}).get("Image"),
+        "ImageID": raw.get("Image"),
+        "ComposeProject": labels.get(COMPOSE_PROJECT),
+        "NetworkMode": (raw.get("HostConfig") or {}).get("NetworkMode"),
+        "ContainerID": (raw.get("Id") or "")[:12] or None,
+        "ScopeUnit": _scope_unit(raw.get("Id") or "", state.get("Status")),
+    }
+    started = _go_time(state.get("StartedAt"))
+    if started:
+        facts["StartedAt"] = started
+    # THE DISCRIMINATOR IS DOCKER'S OWN RECORD OF AN ENDING, not a list of
+    # state names kept here: a container that has never stopped carries the
+    # zero time, which _go_time already reads as absent.
+    finished = _go_time(state.get("FinishedAt"))
+    if finished:
+        facts["FinishedAt"] = finished
+        facts["ExitCode"] = state.get("ExitCode")
+        if state.get("OOMKilled"):
+            # False is dockerd's default for every container that was not
+            # OOM-killed, and carrying it puts the word OOMKilled on the
+            # screen of every healthy container in the estate.
+            facts["OOMKilled"] = True
+    if state.get("Error"):
+        facts["Error"] = state["Error"]
+    health = (state.get("Health") or {}).get("Status")
+    if health:
+        # Absent where the image declares no healthcheck — which is not the
+        # same as unhealthy, and not the same as unknown.
+        facts["Health"] = health
+    return facts
+
+
 class Adapter:
     subsystem = "docker"
 
@@ -375,26 +433,8 @@ class Adapter:
 
         if collection == "containers":
             name = raw["Name"].lstrip("/")
-            state = raw.get("State") or {}
-            labels = (raw.get("Config") or {}).get("Labels") or {}
-            project = labels.get(COMPOSE_PROJECT)
-            facts = {
-                "State": state.get("Status"),
-                "ExitCode": state.get("ExitCode"),
-                "Error": state.get("Error") or None,
-                "OOMKilled": state.get("OOMKilled"),
-                "Health": (state.get("Health") or {}).get("Status"),
-                "RestartCount": raw.get("RestartCount"),
-                "Image": (raw.get("Config") or {}).get("Image"),
-                "ImageID": raw.get("Image"),
-                "StartedAt": _go_time(state.get("StartedAt")),
-                "FinishedAt": _go_time(state.get("FinishedAt")),
-                "ComposeProject": project,
-                "NetworkMode": (raw.get("HostConfig") or {}).get("NetworkMode"),
-                "ContainerID": (raw.get("Id") or "")[:12] or None,
-                "ScopeUnit": _scope_unit(raw.get("Id") or "",
-                                         state.get("Status")),
-            }
+            facts = _container_facts(raw)
+            project = facts.get("ComposeProject")
             # Opinions from the shared evaluator (agent/rules/docker.py) —
             # the same function the collection rows go through, so a
             # restarting container is critical in both views.
