@@ -169,8 +169,8 @@ def test_a_profiled_sweep_still_answers_the_same_question(client):
 def test_the_agent_reports_what_it_held_before_it_served_anything(client):
     """"Why is the observer the largest process on my small host" had no
     answer inside the product. Absolute RSS mostly measures Python — 62 MiB
-    before a single request on a development machine, 26 of it FastAPI's
-    imports alone — so the baseline is what turns one unanswerable number
+    before a single request on a development machine, 26 of it the web
+    framework — only about 13 of which is FastAPI above Starlette — so the baseline is what turns one unanswerable number
     into two answerable ones."""
     facts = client.get("/v1/system/self").json()["items"][0]["facts"]
     assert facts["RssAtStartBytes"] > 0

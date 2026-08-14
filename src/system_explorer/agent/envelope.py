@@ -750,8 +750,9 @@ def _cpu_seconds() -> tuple[float, float]:
 # is the largest process on a one-core cloud host at ~88 MB, and the first
 # thing anyone needs to know is how much of that is Python having been
 # started at all. Measured on a developer machine: 62 MiB before a single
-# request, 26 MiB of it FastAPI's import graph alone and ~16 MiB this
-# product's own modules. Without the baseline the answer is a shell session;
+# request. About 26 MiB of that is the web framework, of which only ~13 is
+# FastAPI ABOVE Starlette — the rest Starlette itself, which stays whichever
+# framework is chosen. ~16 MiB is this product's own modules. Without the baseline the answer is a shell session;
 # with it the row says "grown 26 MB since start" and the question is over.
 START_RSS: dict[str, int] = {}
 # Set by main.py once the registry is built — envelope cannot import
