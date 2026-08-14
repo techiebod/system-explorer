@@ -2,41 +2,118 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "se/status.v1",
   "title": "System Explorer status roll-up",
-  "description": "Per-collection severity roll-up for one host (ROADMAP slice 1): the worst row level and level counts for every collection the host exposes, so a degraded object is visible without knowing which collection to open. The roll-up is nullable by design — a collection may decline with a reason (a bounded log query has no current health) or fail with an error, degrading the envelope to partial rather than failing it. Shared $defs are duplicated from observation.schema.json deliberately so each schema file is standalone.",
+  "description": "Per-collection severity roll-up for one host (ROADMAP slice 1): the worst row level and level counts for every collection the host exposes, so a degraded object is visible without knowing which collection to open. The roll-up is nullable by design \u2014 a collection may decline with a reason (a bounded log query has no current health) or fail with an error, degrading the envelope to partial rather than failing it. Shared $defs are duplicated from observation.schema.json deliberately so each schema file is standalone.",
   "type": "object",
-  "required": ["schema", "host", "observed_at", "status", "subsystems"],
+  "required": [
+    "schema",
+    "host",
+    "observed_at",
+    "status",
+    "subsystems"
+  ],
   "properties": {
-    "schema": { "const": "se.status/1" },
-    "host": { "$ref": "#/$defs/host" },
-    "observed_at": { "$ref": "#/$defs/utcTimestamp" },
+    "schema": {
+      "const": "se.status/1"
+    },
+    "host": {
+      "$ref": "#/$defs/host"
+    },
+    "observed_at": {
+      "$ref": "#/$defs/utcTimestamp"
+    },
     "status": {
-      "enum": ["ok", "partial"],
-      "description": "partial when at least one collection's acquisition failed; errors lists each failure. Never error — a failed collection degrades one entry, not the envelope (SPEC section 2, rule 7)."
+      "enum": [
+        "ok",
+        "partial"
+      ],
+      "description": "partial when at least one collection's acquisition failed; errors lists each failure. Never error \u2014 a failed collection degrades one entry, not the envelope (SPEC section 2, rule 7)."
     },
     "errors": {
       "type": "array",
-      "items": { "type": "string", "minLength": 1 }
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     },
     "subsystems": {
       "type": "object",
       "description": "Subsystem name -> collection name -> roll-up entry.",
-      "propertyNames": { "$ref": "#/$defs/subsystemName" },
+      "propertyNames": {
+        "$ref": "#/$defs/subsystemName"
+      },
       "additionalProperties": {
         "type": "object",
-        "propertyNames": { "$ref": "#/$defs/subsystemName" },
-        "additionalProperties": { "$ref": "#/$defs/collectionStatus" }
+        "propertyNames": {
+          "$ref": "#/$defs/subsystemName"
+        },
+        "additionalProperties": {
+          "$ref": "#/$defs/collectionStatus"
+        }
+      }
+    },
+    "timing": {
+      "type": "object",
+      "description": "What producing this answer cost the host that answered \u2014 added 0.6, after the estate measured the agent from OUTSIDE and found one findings sweep burning 2.4 s of CPU on a single-core host, three quarters of that agent's standing bill, with nothing in the product able to say so. wall_ms is elapsed; cpu_ms is THIS process's user+system time across the span; child_cpu_ms is its reaped children's, which is where most of an adapter's cost lives (zpool, nft and lsblk burn their own, charged to the cgroup and absent from this process's own figure) \u2014 the split says whether a slow answer is arithmetic here or somebody else's program. Absent from an agent predating the field; never stored, because history snapshots items rather than envelopes and a figure that differs every request would otherwise churn /v1/changes into noise. On a SWEEP the per-subsystem figures are WALL ONLY and they overlap: subsystems run concurrently in one process, so they sum to more than the sweep took and process CPU across the sweep belongs to the sweep and cannot be split between them. A per-adapter CPU column would be a number nobody can produce. rss_bytes and peak_rss_bytes are the agent's own memory, deliberately not broken down by adapter \u2014 Python offers the runtime no per-object ownership to attribute, and a plausible split would be invention.",
+      "properties": {
+        "wall_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "cpu_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "child_cpu_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "subsystems": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "wall_ms": {
+                "type": "number",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "rss_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "peak_rss_bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
       }
     }
   },
   "$defs": {
     "host": {
       "type": "object",
-      "required": ["machine_id", "hostname"],
+      "required": [
+        "machine_id",
+        "hostname"
+      ],
       "properties": {
-        "machine_id": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
-        "hostname": { "type": "string", "minLength": 1 },
-        "container": { "type": "string", "minLength": 1 },
-        "app": { "type": "string", "minLength": 1 }
+        "machine_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "hostname": {
+          "type": "string",
+          "minLength": 1
+        },
+        "container": {
+          "type": "string",
+          "minLength": 1
+        },
+        "app": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "subsystemName": {
@@ -47,10 +124,21 @@
       "anyOf": [
         {
           "type": "object",
-          "required": ["worst", "counts", "total", "observed_at"],
+          "required": [
+            "worst",
+            "counts",
+            "total",
+            "observed_at"
+          ],
           "properties": {
             "worst": {
-              "enum": ["ok", "info", "warn", "critical", null],
+              "enum": [
+                "ok",
+                "info",
+                "warn",
+                "critical",
+                null
+              ],
               "description": "critical > warn > ok when any row is positively healthy > info when rows exist but none is vouched for > null for an empty collection."
             },
             "counts": {
@@ -58,22 +146,47 @@
               "additionalProperties": false,
               "description": "Rows per worst_opinion_level; only nonzero levels appear. none counts rows that carry no severity field.",
               "properties": {
-                "critical": { "type": "integer", "minimum": 1 },
-                "warn": { "type": "integer", "minimum": 1 },
-                "info": { "type": "integer", "minimum": 1 },
-                "ok": { "type": "integer", "minimum": 1 },
-                "none": { "type": "integer", "minimum": 1 }
+                "critical": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "warn": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "info": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "ok": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "none": {
+                  "type": "integer",
+                  "minimum": 1
+                }
               }
             },
-            "total": { "type": "integer", "minimum": 0 },
-            "observed_at": { "$ref": "#/$defs/utcTimestamp" }
+            "total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "observed_at": {
+              "$ref": "#/$defs/utcTimestamp"
+            }
           }
         },
         {
           "type": "object",
-          "required": ["worst", "reason"],
+          "required": [
+            "worst",
+            "reason"
+          ],
           "properties": {
-            "worst": { "const": null },
+            "worst": {
+              "const": null
+            },
             "reason": {
               "type": "string",
               "minLength": 1,
@@ -83,9 +196,14 @@
         },
         {
           "type": "object",
-          "required": ["worst", "error"],
+          "required": [
+            "worst",
+            "error"
+          ],
           "properties": {
-            "worst": { "const": null },
+            "worst": {
+              "const": null
+            },
             "error": {
               "type": "string",
               "minLength": 1,

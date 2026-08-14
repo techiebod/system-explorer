@@ -15,8 +15,12 @@ from __future__ import annotations
 import asyncio
 import copy
 import functools
+import os
 import re
+import resource
 import socket
+import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -673,3 +677,98 @@ def paginate(items: list[dict], requested_limit: int | None, cursor: str | None,
     page = items[offset:offset + applied]
     next_cursor = str(offset + applied) if offset + applied < len(items) else None
     return page, applied, next_cursor, len(items)
+
+
+# ── what this product costs the host it observes ─────────────────────────
+#
+# Added 0.6, after the estate measured the agent from OUTSIDE and found that
+# answering one /v1/findings sweep cost 2.4 seconds of CPU on a one-core
+# host — three quarters of that agent's entire standing bill. The number was
+# correct and nothing in the product could have produced it: an observer of
+# Linux that could not observe itself, which is exactly the gap it exists to
+# close everywhere else.
+#
+# WHAT CAN HONESTLY BE ATTRIBUTED, and it is not the same in both cases:
+#
+#   A single-collection request runs one adapter and nothing else, so the
+#   process CPU burned across it IS that collection's cost. Exact.
+#
+#   A sweep runs every subsystem CONCURRENTLY. Process CPU across it is the
+#   whole sweep's and cannot be split; per-subsystem wall times overlap and
+#   sum to more than the sweep took. So the sweep reports one CPU figure for
+#   itself and wall per subsystem, said in those words — a per-adapter CPU
+#   column would be a number nobody can produce, which is worse than none.
+#
+# Child CPU is separate because most of what an adapter costs is not this
+# process at all: `zpool status -j`, `nft -j` and `lsblk` burn their own,
+# charged to the cgroup and invisible in this process's rusage. Splitting
+# them says whether a slow collection is our arithmetic or somebody else's
+# program, which is the first question anyone asks.
+#
+# The overhead is two perf_counter reads and two getrusage syscalls per
+# request — microseconds against acquisitions measured in seconds. It is
+# never sampled, never aggregated in memory, and holds no state: each
+# response reports its own cost and nothing else's.
+
+class Stopwatch:
+    """Wall, this process's CPU, and its children's, across one span."""
+
+    __slots__ = ("_wall", "_cpu", "_child", "elapsed")
+
+    def __enter__(self) -> Stopwatch:
+        self._wall = time.perf_counter()
+        self._cpu, self._child = _cpu_seconds()
+        self.elapsed: dict[str, float] = {}
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        wall = time.perf_counter() - self._wall
+        cpu, child = _cpu_seconds()
+        self.elapsed = {
+            "wall_ms": round(wall * 1000, 1),
+            "cpu_ms": round((cpu - self._cpu) * 1000, 1),
+            "child_cpu_ms": round((child - self._child) * 1000, 1),
+        }
+
+
+def _cpu_seconds() -> tuple[float, float]:
+    """(this process's CPU, its reaped children's), both user+system.
+
+    getrusage counts a child only once it has been REAPED, which is exactly
+    when subprocess.run returns — so an adapter's external commands are all
+    accounted for by the time its span closes. A command still running would
+    be missed, and nothing here starts one it does not wait for.
+    """
+    me = resource.getrusage(resource.RUSAGE_SELF)
+    kids = resource.getrusage(resource.RUSAGE_CHILDREN)
+    return (me.ru_utime + me.ru_stime, kids.ru_utime + kids.ru_stime)
+
+
+def self_memory() -> dict:
+    """This process's own memory, as the kernel reports it.
+
+    Current resident size is read from /proc/self/statm because getrusage
+    offers only the PEAK, and a peak from an hour ago answers a different
+    question from "what is it holding now" — the one an operator watching a
+    small host actually asks. Where there is no procfs the peak is still
+    stated, under its own name, rather than being passed off as current.
+
+    Deliberately NOT broken down by adapter. Python has no per-object
+    ownership the runtime can attribute, and a plausible-looking split would
+    be invention — the honest per-adapter answer is the cost figures above,
+    which are measured.
+    """
+    out: dict[str, int] = {}
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    if peak:
+        # Linux reports kibibytes, macOS bytes. The platform this runs on in
+        # production is the one that needs scaling; the other is a developer
+        # machine and being 1024x wrong there would still be noticed.
+        out["peak_rss_bytes"] = peak * 1024 if sys.platform.startswith("linux") else peak
+    try:
+        with open("/proc/self/statm", encoding="utf-8") as handle:
+            resident = int(handle.read().split()[1])
+        out["rss_bytes"] = resident * os.sysconf("SC_PAGE_SIZE")
+    except (OSError, IndexError, ValueError):
+        pass
+    return out

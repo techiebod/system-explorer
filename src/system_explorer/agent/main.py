@@ -11,6 +11,7 @@ import asyncio
 import contextlib
 import os
 import sys
+import time
 from pathlib import Path
 
 import anyio
@@ -317,6 +318,22 @@ async def _status_rollup(adapter, collection: str) -> dict:
     return {"worst": worst, "counts": counts, "total": len(items), "observed_at": observed_at}
 
 
+async def _timed(name: str, coro):
+    """(name, result, wall ms) for one subsystem's share of a sweep.
+
+    WALL, not CPU, and that is the honest limit rather than an omission.
+    A sweep runs every subsystem concurrently in one process, so process CPU
+    across it belongs to the sweep and cannot be split; these numbers overlap
+    and sum to more than the sweep took. They are still the useful signal,
+    because most of what an adapter costs is waiting on somebody else's
+    program — and the sweep's own cpu_ms and child_cpu_ms say how much of the
+    total was arithmetic here versus work done elsewhere.
+    """
+    started = time.perf_counter()
+    result = await coro
+    return name, result, round((time.perf_counter() - started) * 1000, 1)
+
+
 async def _subsystem_status(name: str, adapter) -> tuple[dict, list[str]]:
     """One subsystem's per-collection entries plus its errors[] lines.
     Collections run sequentially — adapters share one socket or bus."""
@@ -360,8 +377,11 @@ async def status() -> dict:
     collections within one sequentially. A failed collection degrades to an
     error entry and status "partial", never a 500 (rule 7).
     """
-    results = await asyncio.gather(
-        *(_subsystem_status(name, adapter) for name, adapter in ADAPTERS.items()))
+    with env.Stopwatch() as cost:
+        timed = await asyncio.gather(
+            *(_timed(name, _subsystem_status(name, adapter))
+              for name, adapter in ADAPTERS.items()))
+    results = [result for _n, result, _ms in timed]
     errors = [line for _, lines in results for line in lines]
     out: dict = {
         "schema": "se.status/1",
@@ -372,6 +392,12 @@ async def status() -> dict:
     if errors:
         out["errors"] = errors
     out["subsystems"] = {name: entries for name, (entries, _) in zip(ADAPTERS, results, strict=True)}
+    # What this sweep cost the host answering it. The sweep's own CPU is
+    # exact; the per-subsystem figures are wall and overlap, which is said in
+    # the schema rather than left for a reader to discover by summing them.
+    out["timing"] = {**cost.elapsed,
+                     "subsystems": {name: {"wall_ms": ms} for name, _r, ms in timed},
+                     **env.self_memory()}
     return out
 
 
@@ -443,14 +469,17 @@ async def findings() -> dict:
     concurrent — but keeping the opinions the rows carry instead of
     reducing them to counts, so the estate's attention roll-up is one
     request per host rather than one per collection."""
-    results = await asyncio.gather(
-        *(_subsystem_findings(name, adapter) for name, adapter in ADAPTERS.items()))
+    with env.Stopwatch() as cost:
+        timed = await asyncio.gather(
+            *(_timed(name, _subsystem_findings(name, adapter))
+              for name, adapter in ADAPTERS.items()))
+    results = [result for _n, result, _ms in timed]
     locators: list[dict] = [env.HOST]
     for adapter in ADAPTERS.values():
         block = getattr(adapter, "host_block", None)
         if block is not None and block not in locators:
             locators.append(block)
-    return findings_envelope(
+    envelope = findings_envelope(
         env.utc_now(),
         [record for found, _, _ in results for record in found],
         [entry for _, unobserved, _ in results for entry in unobserved]
@@ -458,6 +487,17 @@ async def findings() -> dict:
         errors=[line for _, _, lines in results for line in lines] or None,
         locators=locators,
     )
+    # THE ROUTE THAT COSTS THE MOST, and until 0.6 nothing in the product
+    # could say so. A hub sweeps this every 60s by default and each sweep
+    # re-acquires every collection on the host; measured from outside, one
+    # sweep burned 2.4 s of CPU on a single-core host — three quarters of
+    # that agent's entire standing bill, invisible from the inside. It is
+    # the figure a cadence should be set from, so it rides on the answer.
+    envelope["timing"] = {**cost.elapsed,
+                          "subsystems": {name: {"wall_ms": ms}
+                                         for name, _r, ms in timed},
+                          **env.self_memory()}
+    return envelope
 
 
 # What the snapshot task stores: every collection EXCEPT the bounded journal
@@ -732,8 +772,38 @@ async def evidence(subsystem: str, collection: str, object_id: str) -> dict:
         }, host=locator)
 
 
+def _costed(envelope: dict, cost: env.Stopwatch) -> dict:
+    """Stamp an envelope with what producing it cost.
+
+    A single-collection request runs ONE adapter and nothing else, so the
+    process CPU across this span is that collection's cost exactly —
+    attribution the concurrent sweeps cannot honestly claim, and the reason
+    this is worth stamping per route rather than only on the sweep.
+
+    Additive and optional (SPEC section 5.1): a consumer that has never heard
+    of `timing` is unaffected, and it is stamped at the ROUTE rather than
+    inside each adapter so no adapter can forget to and none has to remember.
+
+    Not stored: history snapshots items, never envelopes, so a figure that
+    differs on every request cannot churn /v1/changes into noise.
+    """
+    if isinstance(envelope, dict):
+        envelope["timing"] = cost.elapsed
+    return envelope
+
+
 @app.get("/v1/{subsystem}/{collection}/{object_id:path}")
 async def get_object(subsystem: str, collection: str, object_id: str) -> dict:
+    # Around the WHOLE route, capability probe included. A collection that
+    # declines still costs something to decline — the probe may shell out —
+    # and a cost that only appears on the successful path hides exactly the
+    # surprise an operator is looking for.
+    with env.Stopwatch() as cost:
+        answer = await _get_object(subsystem, collection, object_id)
+    return _costed(answer, cost)
+
+
+async def _get_object(subsystem: str, collection: str, object_id: str) -> dict:
     adapter = _adapter(subsystem)
     reason = await _collection_state(adapter, collection)
     if reason is UNKNOWN_COLLECTION:
@@ -766,6 +836,12 @@ async def get_object(subsystem: str, collection: str, object_id: str) -> dict:
 
 @app.get("/v1/{subsystem}/{collection}")
 async def get_collection(subsystem: str, collection: str, request: Request) -> dict:
+    with env.Stopwatch() as cost:
+        answer = await _get_collection(subsystem, collection, request)
+    return _costed(answer, cost)
+
+
+async def _get_collection(subsystem: str, collection: str, request: Request) -> dict:
     adapter = _adapter(subsystem)
     reason = await _collection_state(adapter, collection)
     if reason is UNKNOWN_COLLECTION:

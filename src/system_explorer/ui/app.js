@@ -64,6 +64,7 @@ const state = {
   ovHistory: [],         // sparkline ring: derived cpu/mem samples, this session
   ovHistoryHost: null,   // which host that ring belongs to
   observedAt: null,
+  cost: null,
   refreshTimer: null,
   suppressAutoOpen: false,
   epoch: 0,
@@ -764,7 +765,10 @@ async function boot() {
   const ok = await loadHost();
   window.addEventListener("hashchange", route);
   if (ok) route();
-  setInterval(() => { $("age").textContent = state.observedAt ? `observed ${ageOf(state.observedAt)}` : ""; }, 5000);
+  setInterval(() => {
+    $("age").textContent = state.observedAt
+      ? `observed ${ageOf(state.observedAt)}${costChip(state.cost)}` : "";
+  }, 5000);
   // The status poll keeps its own, slower clock: every tick re-collects
   // every collection server-side (statelessness's deliberate cost), so 60s
   // against the collection view's 15s, and only while visible.
@@ -1656,7 +1660,7 @@ async function switchHost(host, rest) {
     state.lookArrival = null;
     state.lookColumn = null;
     Object.assign(state, { page: null, selectedId: null, detailObs: null,
-                           evidence: null, observedAt: null,
+                           evidence: null, observedAt: null, cost: null,
                            subsystem: rest[0] || null,
                            collection: rest[1] || null });
     $("grid-head").textContent = ""; $("grid-body").textContent = "";
@@ -2096,6 +2100,7 @@ async function loadCollection(deepLinkId = null) {
 
   state.page = page;
   state.observedAt = page.observed_at;
+  state.cost = page.timing || null;
   banner(page.status !== "ok" ? (page.errors || []).join("; ") : null);
   renderCrumb();
   renderFacets();
@@ -2892,6 +2897,7 @@ async function loadOverview() {
   state.page = { items: [], total: 1, observed_at: obs.observed_at,
                  status: obs.status, next_cursor: null };
   state.observedAt = obs.observed_at;
+  state.cost = obs.timing || null;
   banner(obs.status !== "ok" ? (obs.errors || []).join("; ") : null);
   renderCrumb();
   $("facets").hidden = true;
@@ -3424,6 +3430,31 @@ function renderCrumb() {
     if (p.next_cursor) crumb.appendChild(el("span", "count", `(first ${p.items.length} loaded; history continues)`));
   }
   $("age").textContent = state.observedAt ? `observed ${ageOf(state.observedAt)}` : "";
+}
+
+/* What this answer cost the host that produced it — beside its age, in the
+   same faint chip, and absent entirely on an agent that does not report it.
+
+   Deliberately quiet. The number matters on perhaps one page in twenty and
+   the operator is not here to watch the observer; but when a collection
+   takes two seconds, "why" should not require a stopwatch and an ssh
+   session. That is how the estate's dearest route was found — measured from
+   outside, because nothing inside could say.
+
+   The subprocess share is what makes it diagnostic rather than decorative:
+   an answer that spent 90% of its time in `zpool status` is somebody else's
+   program being slow, and one that spent it here is ours. */
+function costChip(timing) {
+  if (!timing || typeof timing.wall_ms !== "number") return "";
+  const wall = timing.wall_ms >= 1000
+    ? `${(timing.wall_ms / 1000).toFixed(1)}s` : `${Math.round(timing.wall_ms)}ms`;
+  const child = timing.child_cpu_ms;
+  // Only where it is a real share — a rounding artefact reading "0% in
+  // commands" is noise on every page that never runs one.
+  const share = typeof child === "number" && child >= 1 && timing.wall_ms >= 1
+    ? Math.round((child / timing.wall_ms) * 100) : null;
+  return share !== null && share >= 5
+    ? ` · ${wall} (${share}% in commands)` : ` · ${wall}`;
 }
 
 function renderFacets() {

@@ -4,63 +4,159 @@
   "title": "System Explorer collection page",
   "description": "One page of object summaries from a collection. Pagination is explicit: the server never silently truncates, the client never infers truncation. Shared $defs are duplicated from observation.schema.json deliberately so each schema file is standalone.",
   "type": "object",
-  "required": ["schema", "host", "subsystem", "collection", "observed_at", "status", "source", "applied_limit", "next_cursor", "items"],
+  "required": [
+    "schema",
+    "host",
+    "subsystem",
+    "collection",
+    "observed_at",
+    "status",
+    "source",
+    "applied_limit",
+    "next_cursor",
+    "items"
+  ],
   "properties": {
-    "schema": { "const": "se.collection/1" },
-    "host": { "$ref": "#/$defs/host" },
-    "subsystem": { "$ref": "#/$defs/subsystemName" },
-    "collection": { "$ref": "#/$defs/subsystemName" },
-    "observed_at": { "$ref": "#/$defs/utcTimestamp" },
-    "status": { "enum": ["ok", "partial", "error"] },
+    "schema": {
+      "const": "se.collection/1"
+    },
+    "host": {
+      "$ref": "#/$defs/host"
+    },
+    "subsystem": {
+      "$ref": "#/$defs/subsystemName"
+    },
+    "collection": {
+      "$ref": "#/$defs/subsystemName"
+    },
+    "observed_at": {
+      "$ref": "#/$defs/utcTimestamp"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "partial",
+        "error"
+      ]
+    },
     "errors": {
       "type": "array",
-      "items": { "type": "string", "minLength": 1 }
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     },
     "source": {
       "type": "object",
-      "required": ["adapter", "interface", "reference_commands"],
+      "required": [
+        "adapter",
+        "interface",
+        "reference_commands"
+      ],
       "properties": {
-        "adapter": { "type": "string", "minLength": 1 },
-        "interface": { "type": "string", "minLength": 1 },
-        "method": { "type": "string" },
+        "adapter": {
+          "type": "string",
+          "minLength": 1
+        },
+        "interface": {
+          "type": "string",
+          "minLength": 1
+        },
+        "method": {
+          "type": "string"
+        },
         "reference_commands": {
           "type": "array",
           "minItems": 1,
-          "items": { "type": "string", "minLength": 1 }
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
-        "notes": { "type": "array", "items": { "type": "string" } }
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       }
     },
     "filters": {
       "type": "object",
       "description": "The fact-equality filters that were applied, echoed back.",
-      "additionalProperties": { "type": "string" }
+      "additionalProperties": {
+        "type": "string"
+      }
     },
-    "requested_limit": { "type": "integer", "minimum": 1 },
-    "applied_limit": { "type": "integer", "minimum": 1 },
+    "requested_limit": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "applied_limit": {
+      "type": "integer",
+      "minimum": 1
+    },
     "total": {
       "type": "integer",
       "minimum": 0,
       "description": "Total matching objects, when cheaply known."
     },
     "next_cursor": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "Opaque cursor for the next page; null when this page is the end."
     },
     "items": {
       "type": "array",
-      "items": { "$ref": "#/$defs/objectSummary" }
+      "items": {
+        "$ref": "#/$defs/objectSummary"
+      }
+    },
+    "timing": {
+      "type": "object",
+      "description": "What producing this answer cost the host that answered \u2014 added 0.6, after the estate measured the agent from OUTSIDE and found one findings sweep burning 2.4 s of CPU on a single-core host, three quarters of that agent's standing bill, with nothing in the product able to say so. wall_ms is elapsed; cpu_ms is THIS process's user+system time across the span; child_cpu_ms is its reaped children's, which is where most of an adapter's cost lives (zpool, nft and lsblk burn their own, charged to the cgroup and absent from this process's own figure) \u2014 the split says whether a slow answer is arithmetic here or somebody else's program. Absent from an agent predating the field; never stored, because history snapshots items rather than envelopes and a figure that differs every request would otherwise churn /v1/changes into noise.",
+      "properties": {
+        "wall_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "cpu_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "child_cpu_ms": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
     }
   },
   "$defs": {
     "host": {
       "type": "object",
-      "required": ["machine_id", "hostname"],
+      "required": [
+        "machine_id",
+        "hostname"
+      ],
       "properties": {
-        "machine_id": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
-        "hostname": { "type": "string", "minLength": 1 },
-        "container": { "type": "string", "minLength": 1 },
-        "app": { "type": "string", "minLength": 1 }
+        "machine_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "hostname": {
+          "type": "string",
+          "minLength": 1
+        },
+        "container": {
+          "type": "string",
+          "minLength": 1
+        },
+        "app": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "subsystemName": {
@@ -73,37 +169,78 @@
     },
     "objectSummary": {
       "type": "object",
-      "required": ["id", "type", "native_id", "facts"],
+      "required": [
+        "id",
+        "type",
+        "native_id",
+        "facts"
+      ],
       "properties": {
-        "id": { "$ref": "#/$defs/objectId" },
-        "type": { "type": "string", "minLength": 1 },
-        "native_id": { "type": "string", "minLength": 1 },
-        "name": { "type": "string" },
+        "id": {
+          "$ref": "#/$defs/objectId"
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "native_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string"
+        },
         "facts": {
           "type": "object",
           "description": "Summary subset of the object's facts, chosen per collection for list rendering and agent triage."
         },
         "worst_opinion_level": {
-          "enum": ["ok", "info", "warn", "critical"],
-          "description": "Triage level for lists: ok = positively healthy, info = neutral/no opinion, warn/critical mirror the worst opinion derivable from this summary's own facts via the shared rule evaluator (src/system_explorer/agent/rules/). A rule needing a fact the summary does not carry evaluates on the full object only — a documented acquisition-cost decision per rule, never divergent thresholds."
+          "enum": [
+            "ok",
+            "info",
+            "warn",
+            "critical"
+          ],
+          "description": "Triage level for lists: ok = positively healthy, info = neutral/no opinion, warn/critical mirror the worst opinion derivable from this summary's own facts via the shared rule evaluator (src/system_explorer/agent/rules/). A rule needing a fact the summary does not carry evaluates on the full object only \u2014 a documented acquisition-cost decision per rule, never divergent thresholds."
         },
         "opinions": {
           "type": "array",
           "minItems": 1,
-          "description": "The warn/critical subset of the opinions worst_opinion_level was derived from — the same evaluated list, carried so a red row explains itself and /v1/findings can sweep rows without a per-object round trip. Deliberately never info: commentary stays on the opened object, and the enum below is the contract, not a summary of current behaviour.",
+          "description": "The warn/critical subset of the opinions worst_opinion_level was derived from \u2014 the same evaluated list, carried so a red row explains itself and /v1/findings can sweep rows without a per-object round trip. Deliberately never info: commentary stays on the opened object, and the enum below is the contract, not a summary of current behaviour.",
           "items": {
             "type": "object",
-            "required": ["key", "level", "message", "evidence"],
+            "required": [
+              "key",
+              "level",
+              "message",
+              "evidence"
+            ],
             "properties": {
-              "key": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
-              "level": { "enum": ["warn", "critical"] },
-              "message": { "type": "string", "minLength": 1 },
+              "key": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "level": {
+                "enum": [
+                  "warn",
+                  "critical"
+                ]
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1
+              },
               "evidence": {
                 "type": "array",
                 "minItems": 1,
-                "items": { "type": "string", "minLength": 1 }
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
               },
-              "look": { "$ref": "#/$defs/look" }
+              "look": {
+                "$ref": "#/$defs/look"
+              }
             }
           }
         },
@@ -117,17 +254,25 @@
     "look": {
       "type": "array",
       "minItems": 1,
-      "description": "Where to look next: collection routes on this same agent that carry the attribution this opinion cannot. Pure routing data — the agent resolves none of it. See observation.schema.json for why this is not a filter.",
+      "description": "Where to look next: collection routes on this same agent that carry the attribution this opinion cannot. Pure routing data \u2014 the agent resolves none of it. See observation.schema.json for why this is not a filter.",
       "items": {
         "type": "object",
-        "required": ["subsystem", "collection", "label"],
+        "required": [
+          "subsystem",
+          "collection",
+          "label"
+        ],
         "properties": {
-          "subsystem": { "$ref": "#/$defs/subsystemName" },
-          "collection": { "$ref": "#/$defs/subsystemName" },
+          "subsystem": {
+            "$ref": "#/$defs/subsystemName"
+          },
+          "collection": {
+            "$ref": "#/$defs/subsystemName"
+          },
           "fact": {
             "type": "string",
             "minLength": 1,
-            "description": "The fact that ORDERS the answer at that route — what a consumer sorts and highlights by. Absent when no single fact ranks it."
+            "description": "The fact that ORDERS the answer at that route \u2014 what a consumer sorts and highlights by. Absent when no single fact ranks it."
           },
           "label": {
             "type": "string",

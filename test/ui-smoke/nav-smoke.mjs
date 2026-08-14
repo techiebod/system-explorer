@@ -174,7 +174,7 @@ const context = vm.createContext(sandbox);
 // its state and helpers with const, which in a vm script are lexically scoped
 // and never become properties of the sandbox. Only code inside that script can
 // see them.
-const EXPORTS = "\n;globalThis.__ui = { state, renderNav, applyNavBadges, renderBuild, navRoutes, navModel, cellValue, PSEUDO_COLUMNS, linkPanel, scalarText, factHelp, renderOverview, renderGrid, renderResources, factLabel, worstOpinionLevel, OPINION_LEVELS, ATTENTION_LEVELS, routeForId, idHomes, factLeaf, renderGoneExpansion, alsoAppearsIn, factBlocks, factKind, restatesTheHead };";
+const EXPORTS = "\n;globalThis.__ui = { state, renderNav, applyNavBadges, renderBuild, navRoutes, navModel, cellValue, PSEUDO_COLUMNS, linkPanel, scalarText, factHelp, renderOverview, renderGrid, renderResources, factLabel, worstOpinionLevel, OPINION_LEVELS, ATTENTION_LEVELS, routeForId, idHomes, factLeaf, renderGoneExpansion, alsoAppearsIn, factBlocks, factKind, restatesTheHead, costChip };";
 vm.runInContext(readFileSync(APP, "utf8") + EXPORTS, context, { filename: "app.js" });
 const ui = sandbox.__ui;
 
@@ -1155,6 +1155,36 @@ check("a non-string fact is never mistaken for the head", () => {
   for (const value of [0, false, null, undefined, ["x"], { x: 1 }])
     if (ui.restatesTheHead(value, object))
       throw new Error(`dropped ${JSON.stringify(value)}`);
+});
+
+/* ── what an answer cost the host that produced it ────────────────────── */
+
+check("a cost chip states wall time, and scales its unit", () => {
+  if (ui.costChip({ wall_ms: 240 }) !== " · 240ms")
+    throw new Error(ui.costChip({ wall_ms: 240 }));
+  if (ui.costChip({ wall_ms: 2360 }) !== " · 2.4s")
+    throw new Error(ui.costChip({ wall_ms: 2360 }));
+});
+
+check("a subprocess-dominated answer says so, so the blame lands right", () => {
+  // The diagnostic half: 90% in `zpool status` is somebody else's program
+  // being slow, and the same wall spent here is ours.
+  const chip = ui.costChip({ wall_ms: 2000, child_cpu_ms: 1800 });
+  if (!chip.includes("90% in commands")) throw new Error(chip);
+});
+
+check("a negligible subprocess share is not printed", () => {
+  // Otherwise every page that never runs a command carries "0% in commands".
+  if (ui.costChip({ wall_ms: 500, child_cpu_ms: 0 }).includes("commands"))
+    throw new Error("printed a share of nothing");
+  if (ui.costChip({ wall_ms: 500, child_cpu_ms: 2 }).includes("commands"))
+    throw new Error("printed a rounding artefact");
+});
+
+check("an agent that reports no cost costs the chip, not the page", () => {
+  for (const timing of [null, undefined, {}, { cpu_ms: 5 }])
+    if (ui.costChip(timing) !== "")
+      throw new Error(`invented a cost from ${JSON.stringify(timing)}`);
 });
 
 if (failures.length) {

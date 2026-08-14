@@ -200,9 +200,16 @@ def _class_defined_names(node: ast.ClassDef) -> set[str]:
                    else [sub.target] if isinstance(sub, (ast.AnnAssign, ast.AugAssign))
                    else [])
         for target in targets:
-            if (isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name)
-                    and target.value.id == "self"):
-                names.add(target.attr)
+            # Unpacked too: `self.a, self.b = f()` puts a Tuple in targets and
+            # the attributes one level down. Without this the walk reported
+            # both halves as undefined — a false positive that would fire on
+            # any adapter assigning a pair, and did (2026-08-14).
+            for node_ in ([target] if not isinstance(target, (ast.Tuple, ast.List))
+                          else target.elts):
+                if (isinstance(node_, ast.Attribute)
+                        and isinstance(node_.value, ast.Name)
+                        and node_.value.id == "self"):
+                    names.add(node_.attr)
     return names
 
 
@@ -373,3 +380,20 @@ def test_adapter_selection_is_exact_or_refused():
     with pytest.raises(ValueError) as err:
         build_adapters(["network", "sytem"])
     assert "sytem" in str(err.value) and "known" in str(err.value)
+
+
+def test_the_self_attribute_walk_sees_an_unpacked_pair():
+    """Anti-vacuity for the fix above, because the failure was a FALSE
+    POSITIVE and those are invisible once the code is rearranged to avoid
+    them. `self.a, self.b = f()` is ordinary Python; a walk that cannot see
+    it makes the lint a reason to write worse code."""
+    tree = ast.parse(
+        "class C:\n"
+        "    def load(self):\n"
+        "        self.a, self.b = 1, 2\n"
+        "        [self.c] = [3]\n"
+        "    def use(self):\n"
+        "        return self.a + self.b + self.c\n")
+    klass = next(n for n in ast.walk(tree) if isinstance(n, ast.ClassDef))
+    defined = _class_defined_names(klass)
+    assert {"a", "b", "c"} <= defined, sorted(defined)
