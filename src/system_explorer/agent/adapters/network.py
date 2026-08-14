@@ -1237,8 +1237,8 @@ def _rule_bears_on(rendered: dict, expr: list, protocol: str,
     for allowed in protocol_sets:
         if wire not in allowed:
             return False, False           # a different protocol entirely
-    for allowed in port_sets:
-        if port not in allowed:
+    for allowed_ports in port_sets:
+        if port not in allowed_ports:
             return False, False           # a different port entirely
     # No dport constraint at all means the rule bears on every port, which is
     # what a blanket `iifname lo accept` does and is exactly the case an
