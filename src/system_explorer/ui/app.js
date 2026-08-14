@@ -580,7 +580,19 @@ async function api(path) {
   // the path that hub would have to ask every sibling who owns the host on
   // every single request. The browser already knows, from /hub/hosts.
   const res = await fetch(state.hub ? `${hubBaseFor(agentFor(path))}${path}` : path);
-  if (!res.ok) throw new Error(`${res.status} ${await res.text().then(t => t.slice(0, 140))}`);
+  if (!res.ok) {
+    const body = await res.text().then(t => t.slice(0, 140));
+    // The status rides on the error because ONE of these is not a failure.
+    // A 404 from an object route means the agent looked and the object is
+    // not there — an answer, and on a resolved finding usually the right
+    // one. Callers that can say something better than "request failed"
+    // need to be able to tell it apart, and parsing it back out of the
+    // message string is how that goes wrong later.
+    const err = new Error(`${res.status} ${body}`);
+    err.status = res.status;
+    err.body = body;
+    throw err;
+  }
   return res.json();
 }
 
@@ -3737,10 +3749,21 @@ async function openDetail(objectId, { quiet = false } = {}) {
   try {
     obs = await api(`/v1/${subsystem}/${collection}/${idPath(objectId)}`);
   } catch (err) {
-    if (epoch === state.epoch && state.selectedId === objectId) {
-      const owner = state.agentForSubsystem[subsystem];
-      banner(`Failed to load ${objectId}${owner ? ` (agent ${owner})` : ""}: ${err.message}`);
+    if (epoch !== state.epoch || state.selectedId !== objectId) return;
+    // A 404 is an ANSWER, not a failure, and rendering it as one was the
+    // reported bug: 16 of 63 findings opened onto a red "Failed to load"
+    // banner, every one of them a resolved finding whose object had gone.
+    // The condition cleared because the container was removed, the unit
+    // stopped being generated, the disk was pulled — which is exactly what
+    // the reader wanted to know and precisely what the banner hid.
+    if (err.status === 404) {
+      state.detailObs = { gone: true, id: objectId, subsystem, collection,
+                          checked_at: new Date().toISOString() };
+      renderGrid();
+      return;
     }
+    const owner = state.agentForSubsystem[subsystem];
+    banner(`Failed to load ${objectId}${owner ? ` (agent ${owner})` : ""}: ${err.message}`);
     return;
   }
   // Discard if the user navigated elsewhere while this was in flight.
@@ -3756,6 +3779,56 @@ async function openDetail(objectId, { quiet = false } = {}) {
   }
 }
 
+/* An object the agent looked for and did not find.
+
+   Stated as an observation, because that is what it is: this host was asked
+   just now and this object is not among the things it has. The old
+   behaviour — a red "Failed to load" banner — reported the product as
+   broken when the product had worked, and reported nothing about the one
+   thing the reader had come to find out.
+
+   Reached almost entirely from a resolved finding. The condition cleared
+   BECAUSE the object went, so the 404 is very often the answer to "what
+   happened here" rather than an obstacle in front of it. The wording says
+   that without asserting it: this host, right now, does not have it. */
+function renderGoneExpansion(obs, colspan) {
+  const tr = el("tr", "expand");
+  const td = el("td");
+  td.colSpan = colspan;
+  const box = el("div", "d-box");
+
+  const head = el("div", "d-head");
+  head.appendChild(el("span", "d-id", obs.id));
+  head.appendChild(el("span", "d-sub", `not present · checked ${ageOf(obs.checked_at)}`));
+  const close = el("button", "d-close", "✕");
+  close.title = "Collapse (Esc)";
+  close.onclick = (e) => { e.stopPropagation(); collapseDetail(); stripObjectFromHash(); };
+  head.appendChild(close);
+  box.appendChild(head);
+
+  const host = state.currentHost || "this host";
+  const note = el("div", "opinion info");
+  note.appendChild(el("div", "msg",
+    `${host} has no ${obs.subsystem}/${obs.collection} object with this id. `
+    + "It was there when the observation that named it was made, and it is "
+    + "not there now — which is usually why a finding about it resolved."));
+  box.appendChild(note);
+
+  // The one onward move that is certainly here: what the collection holds
+  // NOW. No link to a changes view, because this UI has no changes route —
+  // offering one would be the same class of mistake as the banner.
+  const onward = el("div", "look");
+  const link = el("a", "look-link", `what ${obs.subsystem}/${obs.collection} holds now`);
+  link.href = hashFor(obs.subsystem, obs.collection);
+  link.onclick = (e) => { e.stopPropagation(); collapseDetail(); };
+  onward.appendChild(link);
+  box.appendChild(onward);
+
+  td.appendChild(box);
+  tr.appendChild(td);
+  return tr;
+}
+
 function collapseDetail() {
   state.selectedId = null;
   state.detailObs = null;
@@ -3765,8 +3838,42 @@ function collapseDetail() {
   renderGrid();
 }
 
+/* The same object, seen by another collection.
+
+   One real thing routinely has more than one row in this product, and until
+   now nothing said so. A running container is `container:radarr` under
+   docker, `unit:docker-<id>.scope` under units, THE SAME `unit:` id again
+   under resources/workloads, and a row in port-exposure if it publishes a
+   port. The ids genuinely join — resources publishes the identical ids units
+   does, and port-exposure reuses the listening socket's — but a reader
+   clicking between them had no way to know they were looking at one thing
+   twice, which is the substance of "the taxonomy needs a rethink".
+
+   Drawn from the agent's own prefix map, so there is nothing here to keep in
+   step: a collection that stops sharing ids stops appearing, and one that
+   starts appears without an edit. The current page is excluded, because
+   telling a reader they are where they are is furniture. */
+function alsoAppearsIn(objectId) {
+  const others = idHomes(objectId).filter(
+    h => !(h.subsystem === state.subsystem && h.collection === state.collection));
+  if (!others.length) return null;
+  const box = el("div", "d-also");
+  box.appendChild(el("span", "d-also-label", "also seen as"));
+  for (const home of others) {
+    const link = el("a", "d-also-link", `${home.subsystem}/${home.collection}`);
+    link.href = hashFor(home.subsystem, home.collection, objectId);
+    link.title = `the same object, ${home.collection === "workloads"
+      ? "as resource accounting sees it"
+      : `as ${home.subsystem}/${home.collection} sees it`}`;
+    link.onclick = (e) => e.stopPropagation();
+    box.appendChild(link);
+  }
+  return box;
+}
+
 function renderExpansion(colspan) {
   const obs = state.detailObs;
+  if (obs?.gone) return renderGoneExpansion(obs, colspan);
   const tr = el("tr", "expand");
   const td = el("td");
   td.colSpan = colspan;
@@ -3782,6 +3889,9 @@ function renderExpansion(colspan) {
   close.onclick = (e) => { e.stopPropagation(); collapseDetail(); stripObjectFromHash(); };
   head.appendChild(close);
   box.appendChild(head);
+
+  const elsewhere = alsoAppearsIn(obs.object.id);
+  if (elsewhere) box.appendChild(elsewhere);
 
   if (obs.object.type === "lookup") box.appendChild(renderLookupForm(obs));
 

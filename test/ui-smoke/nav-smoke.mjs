@@ -174,7 +174,7 @@ const context = vm.createContext(sandbox);
 // its state and helpers with const, which in a vm script are lexically scoped
 // and never become properties of the sandbox. Only code inside that script can
 // see them.
-const EXPORTS = "\n;globalThis.__ui = { state, renderNav, applyNavBadges, renderBuild, navRoutes, navModel, cellValue, PSEUDO_COLUMNS, linkPanel, scalarText, factHelp, renderOverview, renderGrid, renderResources, factLabel, worstOpinionLevel, OPINION_LEVELS, ATTENTION_LEVELS, routeForId, idHomes, factLeaf };";
+const EXPORTS = "\n;globalThis.__ui = { state, renderNav, applyNavBadges, renderBuild, navRoutes, navModel, cellValue, PSEUDO_COLUMNS, linkPanel, scalarText, factHelp, renderOverview, renderGrid, renderResources, factLabel, worstOpinionLevel, OPINION_LEVELS, ATTENTION_LEVELS, routeForId, idHomes, factLeaf, renderGoneExpansion, alsoAppearsIn };";
 vm.runInContext(readFileSync(APP, "utf8") + EXPORTS, context, { filename: "app.js" });
 const ui = sandbox.__ui;
 
@@ -855,9 +855,10 @@ const PREFIXES = {
            { subsystem: "network", collection: "port-exposure" }],
 };
 
-const withPrefixes = (subsystem) => {
+const withPrefixes = (subsystem, collection = subsystem) => {
   ui.state.capabilities = { ...CAPABILITIES, object_prefixes: PREFIXES };
   ui.state.subsystem = subsystem;
+  ui.state.collection = collection;
 };
 
 check("an id opens at its canonical home when nothing else is known", () => {
@@ -913,6 +914,53 @@ check("a fact value naming an object becomes a link through the same map", () =>
   const node = ui.factLeaf("pool:tank");
   if (!node || !String(node.href).includes("storage/pools"))
     throw new Error(`fact value did not link: ${node && node.href}`);
+});
+
+/* ── an object that is not there ──────────────────────────────────────── */
+
+check("a missing object is an observation, not a failed request", () => {
+  // 16 of 63 findings opened onto a red "Failed to load ... 404" banner,
+  // every one a resolved finding whose object had gone — which is usually
+  // WHY it resolved, and precisely what the banner hid.
+  ui.state.currentHost = "a-host";
+  ui.state.hub = null;
+  const tr = ui.renderGoneExpansion({
+    gone: true, id: "container:removed", subsystem: "docker",
+    collection: "containers", checked_at: new Date().toISOString(),
+  }, 4);
+  const text = flatten(tr);
+  if (/failed|error/i.test(text)) throw new Error(`still reads as a fault: ${text}`);
+  if (!text.includes("container:removed")) throw new Error("lost the id");
+  if (!text.includes("docker/containers"))
+    throw new Error("did not say where it was expected");
+  if (!text.includes("a-host")) throw new Error("did not say which host looked");
+});
+
+check("one object seen by two collections says so, once", () => {
+  // A running container is four rows in this product and nothing said they
+  // were one thing. resources/workloads publishes the SAME `unit:` ids
+  // units does; the strip is where that stops being a coincidence only the
+  // implementer knows about.
+  withPrefixes("units", "units");
+  const strip = ui.alsoAppearsIn("unit:docker-abc.scope");
+  const text = flatten(strip);
+  if (!text.includes("resources/workloads"))
+    throw new Error(`did not offer the other view: ${text}`);
+  if (text.includes("units/units"))
+    throw new Error("told the reader they are where they are");
+});
+
+check("an object with one home grows no strip at all", () => {
+  withPrefixes("storage", "pools");
+  if (ui.alsoAppearsIn("pool:tank") !== null)
+    throw new Error("drew a strip with nowhere to go");
+});
+
+check("the strip is absent when the agent serves no map", () => {
+  ui.state.capabilities = CAPABILITIES;
+  ui.state.subsystem = "units";
+  if (ui.alsoAppearsIn("unit:sshd.service") !== null)
+    throw new Error("invented a second home");
 });
 
 if (failures.length) {

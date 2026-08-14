@@ -334,6 +334,16 @@ td .dim, .dim { color: var(--text-faint); }
 .d-close:hover { color: var(--text); }
 .d-sub { color: var(--text-faint); font-size: 11.5px; font-family: var(--mono); }
 
+/* "also seen as" — the same object through another collection's eyes. Sits
+   under the head as context, not as a control: most objects have exactly one
+   home and the strip is absent entirely for them. */
+.d-also { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+          margin: -4px 0 10px; font-size: 11.5px; }
+.d-also-label { color: var(--text-faint); font-family: var(--mono); }
+.d-also-link { font-family: var(--mono); color: var(--accent); text-decoration: none; }
+.d-also-link::before { content: "\2194 "; color: var(--text-faint); }
+.d-also-link:hover { text-decoration: underline; }
+
 .d-section { margin-top: 18px; }
 .d-section > h3 {
   margin: 0 0 8px; font-size: 10.5px; font-weight: 650;
