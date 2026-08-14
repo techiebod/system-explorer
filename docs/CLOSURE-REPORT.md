@@ -13,7 +13,7 @@ before it — packages added, removed and upgraded, and `/etc` entries that
 moved. Computing that means walking the `sw` and `etc` closure trees of both
 generations and diffing them.
 
-Measured on the estate: that walk is **3,661 ms of CPU on silo, 83.9% of the
+Measured on the estate: that walk is **3,661 ms of CPU on a storage host, 83.9% of the
 cost of all thirty-five collections combined**, and on another host 6,524 ms of
 a 6,525 ms sweep. It runs on every sweep, and its inputs have not changed since
 the last deploy.
@@ -85,9 +85,9 @@ agent runs under `DynamicUser` and has no group to grant it.
 {
   "schema": 1,
   "generation": 86,
-  "storePath": "/nix/store/xxxx-nixos-system-silo-25.11",
+  "storePath": "/nix/store/xxxx-nixos-system-host-25.11",
   "comparedWith": 85,
-  "comparedWithStorePath": "/nix/store/yyyy-nixos-system-silo-25.11",
+  "comparedWithStorePath": "/nix/store/yyyy-nixos-system-host-25.11",
   "writtenAt": "2026-08-14T15:04:11Z",
   "counts": { "package": 42, "etc": 7 },
   "rows": [
