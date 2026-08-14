@@ -13,6 +13,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import anyio
 from fastapi import FastAPI, HTTPException, Request
@@ -75,6 +76,13 @@ _SELECTED = [name.strip()
              for name in os.environ.get("SE_ADAPTERS", "").split(",")
              if name.strip()] or None
 ADAPTERS = build_adapters(_SELECTED)
+env.ADAPTER_COUNT = len(ADAPTERS)
+# The resident baseline, taken once imports are done and before a
+# single request is served. Without it, 'why is the observer the
+# largest process on this host' has no answer that is not a shell
+# session; with it, system/self states how much is the interpreter
+# and how much this process has since accumulated.
+env.record_start_memory()
 
 # DNS-rebinding defence. The API is unauthenticated inside its network trust
 # boundary (SPEC section 7), but a browser is not bound by that boundary: a
@@ -318,6 +326,29 @@ async def _status_rollup(adapter, collection: str) -> dict:
     return {"worst": worst, "counts": counts, "total": len(items), "observed_at": observed_at}
 
 
+async def _profile_subsystems(builder) -> list[tuple[str, Any, dict]]:
+    """Every subsystem in turn, with CPU attributed exactly.
+
+    SEQUENTIAL, and that is the whole mechanism. Concurrency is why a normal
+    sweep can only report wall per subsystem: several adapters share one
+    process, so the CPU burned across any one of their spans includes the
+    others'. Run them one at a time and the ambiguity is gone — this span's
+    process CPU is this adapter's arithmetic, and its child CPU is the
+    commands it ran.
+
+    Slower than the concurrent path by roughly the sum of the waits, which is
+    why it is asked for rather than always on. Nobody polls this; it is what
+    an operator runs once when the question is "what is actually expensive
+    here", which until 0.6 could only be answered from outside the host.
+    """
+    out = []
+    for name, adapter in ADAPTERS.items():
+        with env.Stopwatch() as cost:
+            result = await builder(name, adapter)
+        out.append((name, result, cost.elapsed))
+    return out
+
+
 async def _timed(name: str, coro):
     """(name, result, wall ms) for one subsystem's share of a sweep.
 
@@ -367,7 +398,7 @@ async def _subsystem_status(name: str, adapter) -> tuple[dict, list[str]]:
 
 
 @app.get("/v1/status")
-async def status() -> dict:
+async def status(profile: int = 0) -> dict:
     """Per-collection severity roll-up: the attention surface (ROADMAP slice 1).
 
     Polled by the UI (~60s). Every request re-collects every available
@@ -378,9 +409,14 @@ async def status() -> dict:
     error entry and status "partial", never a 500 (rule 7).
     """
     with env.Stopwatch() as cost:
-        timed = await asyncio.gather(
-            *(_timed(name, _subsystem_status(name, adapter))
-              for name, adapter in ADAPTERS.items()))
+        if profile:
+            measured = await _profile_subsystems(_subsystem_status)
+            timed = [(n, r, e["wall_ms"]) for n, r, e in measured]
+        else:
+            measured = []
+            timed = await asyncio.gather(
+                *(_timed(name, _subsystem_status(name, adapter))
+                  for name, adapter in ADAPTERS.items()))
     results = [result for _n, result, _ms in timed]
     errors = [line for _, lines in results for line in lines]
     out: dict = {
@@ -395,9 +431,17 @@ async def status() -> dict:
     # What this sweep cost the host answering it. The sweep's own CPU is
     # exact; the per-subsystem figures are wall and overlap, which is said in
     # the schema rather than left for a reader to discover by summing them.
-    out["timing"] = {**cost.elapsed,
-                     "subsystems": {name: {"wall_ms": ms} for name, _r, ms in timed},
-                     **env.self_memory()}
+    # Under ?profile=1 the per-subsystem entries carry cpu_ms and
+    # child_cpu_ms too, because sequential execution makes them attributable
+    # — the concurrent path states wall alone rather than a number nobody
+    # can produce.
+    out["timing"] = {
+        **cost.elapsed,
+        "attribution": "exact" if profile else "wall-only",
+        "subsystems": ({name: dict(elapsed) for name, _r, elapsed in measured}
+                       if profile
+                       else {name: {"wall_ms": ms} for name, _r, ms in timed}),
+        **env.self_memory()}
     return out
 
 
@@ -462,7 +506,7 @@ async def _subsystem_findings(name: str, adapter) -> tuple[list, list, list[str]
 
 
 @app.get("/v1/findings")
-async def findings() -> dict:
+async def findings(profile: int = 0) -> dict:
     """Every warn/critical opinion this host derives right now, with the
     rule-15 identity the hub's registry keys on (SPEC section 6.3). The
     same sweep /v1/status makes — single-flighted acquisitions, subsystems
@@ -470,9 +514,14 @@ async def findings() -> dict:
     reducing them to counts, so the estate's attention roll-up is one
     request per host rather than one per collection."""
     with env.Stopwatch() as cost:
-        timed = await asyncio.gather(
-            *(_timed(name, _subsystem_findings(name, adapter))
-              for name, adapter in ADAPTERS.items()))
+        if profile:
+            measured = await _profile_subsystems(_subsystem_findings)
+            timed = [(n, r, e["wall_ms"]) for n, r, e in measured]
+        else:
+            measured = []
+            timed = await asyncio.gather(
+                *(_timed(name, _subsystem_findings(name, adapter))
+                  for name, adapter in ADAPTERS.items()))
     results = [result for _n, result, _ms in timed]
     locators: list[dict] = [env.HOST]
     for adapter in ADAPTERS.values():
@@ -493,10 +542,13 @@ async def findings() -> dict:
     # sweep burned 2.4 s of CPU on a single-core host — three quarters of
     # that agent's entire standing bill, invisible from the inside. It is
     # the figure a cadence should be set from, so it rides on the answer.
-    envelope["timing"] = {**cost.elapsed,
-                          "subsystems": {name: {"wall_ms": ms}
-                                         for name, _r, ms in timed},
-                          **env.self_memory()}
+    envelope["timing"] = {
+        **cost.elapsed,
+        "attribution": "exact" if profile else "wall-only",
+        "subsystems": ({name: dict(elapsed) for name, _r, elapsed in measured}
+                       if profile
+                       else {name: {"wall_ms": ms} for name, _r, ms in timed}),
+        **env.self_memory()}
     return envelope
 
 

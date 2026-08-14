@@ -79,7 +79,7 @@
     },
     "timing": {
       "type": "object",
-      "description": "What producing this answer cost the host that answered \u2014 added 0.6, after the estate measured the agent from OUTSIDE and found one findings sweep burning 2.4 s of CPU on a single-core host, three quarters of that agent's standing bill, with nothing in the product able to say so. wall_ms is elapsed; cpu_ms is THIS process's user+system time across the span; child_cpu_ms is its reaped children's, which is where most of an adapter's cost lives (zpool, nft and lsblk burn their own, charged to the cgroup and absent from this process's own figure) \u2014 the split says whether a slow answer is arithmetic here or somebody else's program. Absent from an agent predating the field; never stored, because history snapshots items rather than envelopes and a figure that differs every request would otherwise churn /v1/changes into noise. On a SWEEP the per-subsystem figures are WALL ONLY and they overlap: subsystems run concurrently in one process, so they sum to more than the sweep took and process CPU across the sweep belongs to the sweep and cannot be split between them. A per-adapter CPU column would be a number nobody can produce. rss_bytes and peak_rss_bytes are the agent's own memory, deliberately not broken down by adapter \u2014 Python offers the runtime no per-object ownership to attribute, and a plausible split would be invention.",
+      "description": "What producing this answer cost the host that answered \u2014 added 0.6, after the estate measured the agent from OUTSIDE and found one findings sweep burning 2.4 s of CPU on a single-core host, three quarters of that agent's standing bill, with nothing in the product able to say so. wall_ms is elapsed; cpu_ms is THIS process's user+system time across the span; child_cpu_ms is its reaped children's, which is where most of an adapter's cost lives (zpool, nft and lsblk burn their own, charged to the cgroup and absent from this process's own figure) \u2014 the split says whether a slow answer is arithmetic here or somebody else's program. Absent from an agent predating the field; never stored, because history snapshots items rather than envelopes and a figure that differs every request would otherwise churn /v1/changes into noise. On a SWEEP the per-subsystem figures are WALL ONLY and they overlap: subsystems run concurrently in one process, so they sum to more than the sweep took and process CPU across the sweep belongs to the sweep and cannot be split between them. A per-adapter CPU column would then be a number nobody can produce \u2014 so `?profile=1` runs the subsystems SEQUENTIALLY instead, which makes cpu_ms and child_cpu_ms per subsystem exact at the cost of wall time. `attribution` says which mode produced the entries: \"wall-only\" for the concurrent default, \"exact\" for the profiled run. rss_bytes and peak_rss_bytes are the agent's own memory, deliberately not broken down by adapter \u2014 Python offers the runtime no per-object ownership to attribute, and a plausible split would be invention.",
       "properties": {
         "wall_ms": {
           "type": "number",
@@ -101,6 +101,14 @@
               "wall_ms": {
                 "type": "number",
                 "minimum": 0
+              },
+              "cpu_ms": {
+                "type": "number",
+                "minimum": 0
+              },
+              "child_cpu_ms": {
+                "type": "number",
+                "minimum": 0
               }
             }
           }
@@ -112,6 +120,12 @@
         "peak_rss_bytes": {
           "type": "integer",
           "minimum": 0
+        },
+        "attribution": {
+          "enum": [
+            "wall-only",
+            "exact"
+          ]
         }
       }
     }

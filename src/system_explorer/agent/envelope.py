@@ -206,6 +206,7 @@ OBJECT_PREFIXES: dict[str, list[tuple[str, str]]] = {
     "route": [("network", "routes")],
     "router": [("traefik", "routers")],
     "scsi": [("hardware", "scsi")],
+    "self": [("system", "self")],
     "server": [("plex", "server")],
     "service": [("traefik", "services")],
     "session": [("plex", "sessions")],
@@ -742,6 +743,27 @@ def _cpu_seconds() -> tuple[float, float]:
     me = resource.getrusage(resource.RUSAGE_SELF)
     kids = resource.getrusage(resource.RUSAGE_CHILDREN)
     return (me.ru_utime + me.ru_stime, kids.ru_utime + kids.ru_stime)
+
+
+# RSS the moment the process finished importing and before it served
+# anything — the baseline that makes the question answerable. Beacon's agent
+# is the largest process on a one-core cloud host at ~88 MB, and the first
+# thing anyone needs to know is how much of that is Python having been
+# started at all. Measured on a developer machine: 62 MiB before a single
+# request, 26 MiB of it FastAPI's import graph alone and ~16 MiB this
+# product's own modules. Without the baseline the answer is a shell session;
+# with it the row says "grown 26 MB since start" and the question is over.
+START_RSS: dict[str, int] = {}
+# Set by main.py once the registry is built — envelope cannot import
+# adapters without a cycle, and the count predicts the agent's cost
+# better than any property of the host does.
+ADAPTER_COUNT = 0
+START_MONOTONIC = time.monotonic()
+
+
+def record_start_memory() -> None:
+    """Called once the imports are done and before the first request."""
+    START_RSS.update(self_memory())
 
 
 def self_memory() -> dict:

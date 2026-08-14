@@ -336,8 +336,19 @@ def assemble(now: str, site: str | None, writes_enabled: bool,
         if not envelope:
             hosts[name] = {"swept": False,
                            "error": sweep.get("error") or "unswept"}
+            if sweep.get("swept_at"):
+                hosts[name]["swept_at"] = sweep["swept_at"]
             continue
         sweep_entry: dict = {"swept": True}
+        # WHEN THIS HOST was last asked, which is not necessarily when the
+        # envelope was assembled. Agents can be on different cadences (a
+        # budget sizes each from its own measured cost), so one stamp across
+        # the whole document would report a host swept ten minutes ago as
+        # current — the precise failure "last-known-good belongs with
+        # findings" exists to prevent. Absent where the sweep entry carries
+        # none, rather than inheriting the assembly's.
+        if sweep.get("swept_at"):
+            sweep_entry["swept_at"] = sweep["swept_at"]
         # Only the members the envelope actually carried: a null host or
         # status would fail the hub's own published schema, and omission is
         # the honest shape for an envelope that named neither.

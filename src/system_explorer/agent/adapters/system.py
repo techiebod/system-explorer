@@ -18,12 +18,15 @@ from __future__ import annotations
 
 import os
 import re
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
 import anyio
 
+from ... import __revision__ as REVISION
+from ... import __version__ as VERSION
 from .. import envelope as env
 from .. import nixos as nx
 from ..rules.system import (boot_opinions,
@@ -362,6 +365,43 @@ def _efi_facts() -> dict:
     return facts
 
 
+SELF_REFERENCE = [
+    "systemctl status system-explorer.service",
+    "cat /proc/$(pidof -s .system-explorer-wrapped || echo self)/status",
+    "systemd-cgtop -m /system.slice/system-explorer.service",
+]
+
+SELF_NOTES = [
+    "Absolute resident memory mostly measures Python, not this product: the"
+    " interpreter plus the import graph accounts for the great majority of it"
+    " before a single request is served. RssGrowthBytes is the figure that"
+    " means something over time, and the one a leak would move.",
+    "CPU is split between this process and the commands it runs because the"
+    " two lead to different levers: a high self share means optimising this"
+    " codebase would pay, a low one means the cost is which external commands"
+    " run and how often.",
+    "No profiler and no sampling. Every figure is read from the process's own"
+    " kernel interfaces on request, so observing the observer costs a handful"
+    " of syscalls and leaves nothing running.",
+]
+
+_SELF_GLOSSARY = {
+    "Version": "The agent build answering this request.",
+    "Revision": "The source revision that build came from, where the build recorded one.",
+    "UptimeSeconds": "How long this agent process has been running. The denominator for the cumulative CPU figures below — a large total on a process running for a week is a different fact from the same total in an hour.",
+    "RssBytes": "Resident memory this process is holding now, from /proc/self/statm.",
+    "RssAtStartBytes": "Resident memory the moment imports finished and before a single request was served. This is the question 'why is the observer the largest process on my small host' made answerable: most of it is the interpreter and the import graph, not anything this product accumulated. Measured on a development machine, 62 MiB before serving anything — 26 MiB of that FastAPI's imports alone.",
+    "RssGrowthBytes": "Resident memory acquired since startup: current minus the baseline. THIS is the number that means something over time, and the one a leak would move. The absolute figure mostly measures Python.",
+    "PeakRssBytes": "The high-water mark the kernel has recorded for this process. A peak from an hour ago answers a different question from what it holds now, which is why both are stated.",
+    "CpuSelfSeconds": "User plus system CPU this process has burned since it started — the product's OWN compute, arithmetic and parsing and envelope building, with no external command included.",
+    "CpuChildrenSeconds": "User plus system CPU burned by commands this process ran and reaped — zpool, nft, lsblk and the rest. Separated from the figure above because they answer different questions: together they are what the agent costs the host, and the split says how much of that is code written here versus somebody else's program being run.",
+    "CpuSelfShare": "What fraction of the agent's total CPU has been its own rather than its children's, as a percentage. A high number means optimising this codebase would pay; a low one means the cost is in the commands and the lever is which of them are run, and how often.",
+    "Threads": "OS threads in this process. Blocking work runs in a worker pool, so this rises with concurrent acquisition and is not itself a fault.",
+    "ModulesLoaded": "Python modules imported. The rough shape of the import graph the resident baseline above is mostly made of.",
+    "GcTrackedObjects": "Objects the garbage collector is tracking. Growth here across a stable workload is what a reference leak looks like from the outside; a single reading says little.",
+    "AdaptersLoaded": "How many subsystem adapters this process runs. Cost scales with collection count rather than host size, so this is the figure that predicts what the agent will cost on a given machine.",
+}
+
 class Adapter:
     subsystem = "system"
 
@@ -378,7 +418,17 @@ class Adapter:
         self._observed: dict[str, dict] = {}
 
     def collections(self) -> list[str]:
-        return ["identity", "time", "boot", "overview"]
+        return ["identity", "time", "boot", "overview", "self"]
+
+    def fact_glossary(self, collection: str) -> dict[str, str]:
+        return _SELF_GLOSSARY if collection == "self" else {}
+
+    def fact_kinds(self, collection: str) -> dict[str, str] | None:
+        """Everything here is read from the process's own kernel interfaces
+        except two figures this adapter works out from them."""
+        if collection != "self":
+            return None
+        return {"RssGrowthBytes": "derived", "CpuSelfShare": "derived"}
 
     async def capability(self) -> dict:
         # Everything here is universal now that generations and packages have
@@ -535,10 +585,73 @@ class Adapter:
 
     async def _single(self, collection: str) -> dict:
         builder = {"identity": self._identity, "time": self._time, "boot": self._boot,
-                   "overview": self._overview}.get(collection)
+                   "overview": self._overview,
+                   "self": self._self}.get(collection)
         if builder is None:
             raise env.UnknownCollection(collection)
         return await builder()
+
+    async def _self(self) -> dict:
+        """The agent, observing itself.
+
+        Added 0.6 after an operator asked why the observer was the largest
+        process on a one-core cloud host and nothing in the product could
+        answer. Every figure here is read from the process's own kernel
+        interfaces — no sampling, no profiler, no instrumentation left
+        running — and the whole acquisition is a handful of syscalls.
+
+        THE BASELINE IS THE POINT. Absolute RSS mostly measures Python: 62
+        MiB before serving a single request on a development machine, 26 of
+        it FastAPI's import graph alone. Stating what the process held at
+        startup beside what it holds now turns an unanswerable number into
+        two answerable ones — how much is the interpreter, and how much has
+        this accumulated since.
+
+        Likewise CPU: our own and our children's are separated because they
+        lead to different levers. A high self share means optimising this
+        codebase would pay; a low one means the cost is which external
+        commands run and how often, and no amount of Python tuning touches
+        it.
+        """
+        import gc
+        import sys as _sys
+        import threading
+
+        facts: dict = {"Version": VERSION}
+        if REVISION:
+            facts["Revision"] = REVISION
+        facts["UptimeSeconds"] = round(time.monotonic() - env.START_MONOTONIC, 1)
+        memory = env.self_memory()
+        if "rss_bytes" in memory:
+            facts["RssBytes"] = memory["rss_bytes"]
+        if "peak_rss_bytes" in memory:
+            facts["PeakRssBytes"] = memory["peak_rss_bytes"]
+        # Absent, never zero: an agent that recorded no baseline (started
+        # before the field existed, or on a platform with no reading) must
+        # not report growth of nothing from nothing.
+        start = env.START_RSS.get("rss_bytes") or env.START_RSS.get("peak_rss_bytes")
+        current = memory.get("rss_bytes") or memory.get("peak_rss_bytes")
+        if start:
+            facts["RssAtStartBytes"] = start
+            if current:
+                facts["RssGrowthBytes"] = current - start
+        self_cpu, child_cpu = env._cpu_seconds()
+        facts["CpuSelfSeconds"] = round(self_cpu, 2)
+        facts["CpuChildrenSeconds"] = round(child_cpu, 2)
+        total = self_cpu + child_cpu
+        if total > 0:
+            facts["CpuSelfShare"] = round(self_cpu / total * 100, 1)
+        facts["Threads"] = threading.active_count()
+        facts["ModulesLoaded"] = len(_sys.modules)
+        facts["GcTrackedObjects"] = len(gc.get_objects())
+        facts["AdaptersLoaded"] = env.ADAPTER_COUNT
+        return env.observation(
+            self.subsystem,
+            env.obj_ref("self:agent", "agent", "agent"),
+            env.source("self", "procfs + getrusage", SELF_REFERENCE,
+                       method="read /proc/self/statm + getrusage(2)",
+                       notes=SELF_NOTES),
+            facts)
 
     @env.single_flight
     async def acquire(self, collection: str) -> list[dict]:

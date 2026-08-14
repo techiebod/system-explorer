@@ -140,6 +140,44 @@ in
       '';
     };
 
+    sweepBudgetPercent = lib.mkOption {
+      type = lib.types.numbers.nonnegative;
+      default = 0;
+      example = 1;
+      description = ''
+        Sweep each agent as often as holding this share of ONE CORE allows,
+        instead of on a fixed interval. Zero (the default) keeps the fixed
+        cadence exactly as it is.
+
+        An interval in seconds is a blunt instrument for something whose cost
+        varies fivefold across an estate: one number has to serve a
+        twelve-core storage server and a one-core cloud host, and choosing it
+        means guessing at a figure nobody had measured. Measured, the guess
+        was poor — a sweep costing 2.4 s of CPU every 60 s was roughly three
+        quarters of the smallest host's entire standing bill. "One percent of
+        a core" is a number with a meaning; "sixty seconds" is one you would
+        have to have measured to justify.
+
+        The hub derives each agent's interval from what that agent's own last
+        sweep reports it cost (`timing.cpu_ms`, agent 0.6+). Three properties
+        make it safe to turn on: it can only ever SLOW a sweep, because
+        findingsSweepSeconds stays the floor; it is per agent with no
+        per-agent configuration, so the expensive host slows and the cheap
+        one does not; and an agent that reports no cost keeps the fixed
+        interval rather than having one guessed for it.
+      '';
+    };
+
+    sweepBudgetMaxSeconds = lib.mkOption {
+      type = lib.types.numbers.positive;
+      default = 900;
+      description = ''
+        The longest interval sweepBudgetPercent may stretch to. A host that
+        is expensive out of all proportion still gets looked at: an attention
+        surface that quietly stops attending is worse than an expensive one.
+      '';
+    };
+
     findingsRetentionDays = lib.mkOption {
       type = lib.types.numbers.positive;
       default = 90;
@@ -179,6 +217,8 @@ in
           (lib.mapAttrsToList (name: url: "${name}=${url}") cfg.agents);
         SE_HUB_FINDINGS_RETENTION_DAYS = toString cfg.findingsRetentionDays;
         SE_HUB_FINDINGS_SWEEP_SECONDS = toString cfg.findingsSweepSeconds;
+        SE_HUB_FINDINGS_SWEEP_BUDGET = toString cfg.sweepBudgetPercent;
+        SE_HUB_FINDINGS_SWEEP_MAX_SECONDS = toString cfg.sweepBudgetMaxSeconds;
       } // lib.optionalAttrs cfg.findingsWrites {
         SE_HUB_FINDINGS_WRITES = "1";
       } // lib.optionalAttrs (cfg.site != null) {

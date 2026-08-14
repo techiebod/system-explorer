@@ -323,7 +323,7 @@ routing/firewall), not for coverage symmetry.
 
 | Subsystem | Collections | Acquisition | Privilege needed | First validated on |
 |---|---|---|---|---|
-| `system` | `identity`, `time`, `boot`, `overview` | hostname1 / timedate1 / timesync1 D-Bus; `/etc/machine-id`; procfs (uptime, loadavg, meminfo, pressure, ZFS arcstats) | none | any systemd host |
+| `system` | `identity`, `time`, `boot`, `overview`, `self` | hostname1 / timedate1 / timesync1 D-Bus; `/etc/machine-id`; procfs (uptime, loadavg, meminfo, pressure, ZFS arcstats) | none | any systemd host |
 | `nix` | `generations` | `/nix/var/nix/profiles` + the metadata files every system closure carries, plus optional deployment provenance (§4.1); pure filesystem reads, no subprocess | none | NixOS only — declines as a whole subsystem with one reason elsewhere |
 | `packages` | `packages` | whichever manager can answer: the `/run/current-system/sw` link farm on NixOS, else `dpkg-query -W -f` or `rpm -qa --qf` with a format string this agent supplies | none | any host with one of the three; declines with a reason where none is present |
 | `hardware` | `platform`, `pci`, `usb`, `scsi`, `nvme` | sysfs (DMI, pci/usb/nvme, scsi/sas/enclosure classes); udev hwdb via `udevadm --json=short`; `lscpu -J`; udisks2 D-Bus for SMART | none | any systemd host; scsi depth needs SAS/enclosure hardware |

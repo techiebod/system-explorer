@@ -125,6 +125,70 @@ def test_a_sweep_reports_the_agents_memory(client):
 
 # ── and it stays out of the record ───────────────────────────────────────
 
+# ── the mode that CAN attribute ──────────────────────────────────────────
+
+@pytest.mark.parametrize("path", ["/v1/status", "/v1/findings"])
+def test_profiling_runs_sequentially_and_attributes_cpu_per_subsystem(client, path):
+    """The answer to "you are measuring the external commands, not the code
+    we have written". Sequential execution removes the ambiguity concurrency
+    creates: this span's process CPU is this adapter's own arithmetic, and
+    its child CPU is the commands it ran."""
+    timing = client.get(f"{path}?profile=1").json()["timing"]
+    assert timing["attribution"] == "exact"
+    entries = timing["subsystems"]
+    assert entries, "a profiled sweep with no breakdown"
+    for name, entry in entries.items():
+        assert {"wall_ms", "cpu_ms", "child_cpu_ms"} <= set(entry), name
+    # Our own compute is stated, not merely implied by subtracting commands
+    # from wall — which is what "you are measuring the commands" meant.
+    assert any(entry["cpu_ms"] > 0 for entry in entries.values())
+
+
+@pytest.mark.parametrize("path", ["/v1/status", "/v1/findings"])
+def test_the_default_says_it_is_wall_only_rather_than_leaving_it_to_be_guessed(
+        client, path):
+    """A consumer reading per-subsystem numbers must be able to tell an
+    overlapping wall figure from an attributable one WITHOUT knowing how the
+    request was made — a model summarising the table certainly cannot."""
+    timing = client.get(path).json()["timing"]
+    assert timing["attribution"] == "wall-only"
+
+
+def test_a_profiled_sweep_still_answers_the_same_question(client):
+    """Profiling changes the timing, never the findings: it is the same
+    sweep, run in a different order."""
+    plain = client.get("/v1/findings").json()
+    profiled = client.get("/v1/findings?profile=1").json()
+    assert plain["schema"] == profiled["schema"]
+    assert ({f["object"]["id"] for f in plain.get("findings") or []}
+            == {f["object"]["id"] for f in profiled.get("findings") or []})
+
+
+# ── the agent as an observable object ────────────────────────────────────
+
+def test_the_agent_reports_what_it_held_before_it_served_anything(client):
+    """"Why is the observer the largest process on my small host" had no
+    answer inside the product. Absolute RSS mostly measures Python — 62 MiB
+    before a single request on a development machine, 26 of it FastAPI's
+    imports alone — so the baseline is what turns one unanswerable number
+    into two answerable ones."""
+    facts = client.get("/v1/system/self").json()["items"][0]["facts"]
+    assert facts["RssAtStartBytes"] > 0
+    assert "RssGrowthBytes" in facts
+    assert facts["RssGrowthBytes"] == (
+        facts.get("RssBytes", facts["PeakRssBytes"]) - facts["RssAtStartBytes"])
+
+
+def test_the_agent_separates_its_own_cpu_from_the_commands_it_runs(client):
+    """The two lead to different levers: a high self share means optimising
+    this codebase would pay, a low one means the cost is which external
+    commands run and how often, and no Python tuning touches it."""
+    facts = client.get("/v1/system/self").json()["items"][0]["facts"]
+    assert facts["CpuSelfSeconds"] >= 0 and facts["CpuChildrenSeconds"] >= 0
+    assert 0 <= facts["CpuSelfShare"] <= 100
+    assert facts["AdaptersLoaded"] > 0
+
+
 def test_cost_rides_on_envelopes_and_never_on_items(client):
     """History snapshots ITEMS, not envelopes. A figure that differs on every
     request would otherwise churn /v1/changes into a permanent diff — the

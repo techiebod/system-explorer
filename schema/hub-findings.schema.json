@@ -2,13 +2,29 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "se/hub-findings.v1",
   "title": "System Explorer estate findings roll-up",
-  "description": "The hub's findings registry, whole: one list holding CURRENT findings, FROZEN ones (nobody could look), and RESOLVED HISTORY within retention, together by design — reappearance within retention is the same finding recurring, and history that vanished would be suppression. A consumer reading this cold must band on two members before anything else: observable=false means frozen (no `current` claim exists, because nobody can currently say), observable=true splits on current true/false — and current:false rows are deliberate history, not a registry leak (misread exactly that way by a careful consumer on day one, 2026-08-13). Acknowledged findings stay in this list, marked: suppression is the one power the design refuses to create. Shared $defs are duplicated from findings.schema.json deliberately so each schema file is standalone.",
+  "description": "The hub's findings registry, whole: one list holding CURRENT findings, FROZEN ones (nobody could look), and RESOLVED HISTORY within retention, together by design \u2014 reappearance within retention is the same finding recurring, and history that vanished would be suppression. A consumer reading this cold must band on two members before anything else: observable=false means frozen (no `current` claim exists, because nobody can currently say), observable=true splits on current true/false \u2014 and current:false rows are deliberate history, not a registry leak (misread exactly that way by a careful consumer on day one, 2026-08-13). Acknowledged findings stay in this list, marked: suppression is the one power the design refuses to create. Shared $defs are duplicated from findings.schema.json deliberately so each schema file is standalone.",
   "type": "object",
-  "required": ["schema", "site", "observed_at", "writes_enabled", "hosts", "findings"],
+  "required": [
+    "schema",
+    "site",
+    "observed_at",
+    "writes_enabled",
+    "hosts",
+    "findings"
+  ],
   "properties": {
-    "schema": { "const": "se.hub-findings/1" },
-    "site": { "type": ["string", "null"] },
-    "observed_at": { "$ref": "#/$defs/utcTimestamp" },
+    "schema": {
+      "const": "se.hub-findings/1"
+    },
+    "site": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "observed_at": {
+      "$ref": "#/$defs/utcTimestamp"
+    },
     "swept_at": {
       "$ref": "#/$defs/utcTimestamp",
       "description": "When the sweep behind this answer completed. The read serves the latest completed sweep instantly (the hub sweeps on its own cadence); this stamp is the staleness, stated rather than hidden."
@@ -19,27 +35,49 @@
     },
     "errors": {
       "type": "array",
-      "items": { "type": "string", "minLength": 1 }
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     },
     "hosts": {
       "type": "object",
-      "additionalProperties": { "$ref": "#/$defs/hostSweep" }
+      "additionalProperties": {
+        "$ref": "#/$defs/hostSweep"
+      }
     },
     "findings": {
       "type": "array",
       "description": "Sorted attention-first: current findings (critical before warn), then frozen, then resolved history. Band on observable and current before reading anything else.",
-      "items": { "$ref": "#/$defs/hubFinding" }
+      "items": {
+        "$ref": "#/$defs/hubFinding"
+      }
     }
   },
   "$defs": {
     "host": {
       "type": "object",
-      "required": ["machine_id", "hostname"],
+      "required": [
+        "machine_id",
+        "hostname"
+      ],
       "properties": {
-        "machine_id": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
-        "hostname": { "type": "string", "minLength": 1 },
-        "container": { "type": "string", "minLength": 1 },
-        "app": { "type": "string", "minLength": 1 }
+        "machine_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "hostname": {
+          "type": "string",
+          "minLength": 1
+        },
+        "container": {
+          "type": "string",
+          "minLength": 1
+        },
+        "app": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "subsystemName": {
@@ -52,64 +90,147 @@
     },
     "hostSweep": {
       "type": "object",
-      "required": ["swept"],
+      "required": [
+        "swept"
+      ],
       "properties": {
         "swept": {
           "type": "boolean",
-          "description": "Whether this agent's /v1/findings answered. False covers a dark host and an agent predating the surface alike — the error text distinguishes them, and either way its registry findings freeze rather than resolve."
+          "description": "Whether this agent's /v1/findings answered. False covers a dark host and an agent predating the surface alike \u2014 the error text distinguishes them, and either way its registry findings freeze rather than resolve."
         },
-        "host": { "$ref": "#/$defs/host" },
-        "status": { "enum": ["ok", "partial"] },
+        "swept_at": {
+          "type": "string",
+          "description": "When THIS host was last asked, which is not necessarily when the envelope was assembled. Agents can be on different cadences \u2014 a sweep budget sizes each host's interval from its own measured cost \u2014 so one stamp across the document would report a host swept ten minutes ago as current, the precise failure 'last-known-good belongs with findings' exists to prevent. Absent on a hub predating the field, and then the envelope's own swept_at is the only answer."
+        },
+        "host": {
+          "$ref": "#/$defs/host"
+        },
+        "status": {
+          "enum": [
+            "ok",
+            "partial"
+          ]
+        },
         "unobserved": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["subsystem", "collection", "reason"],
+            "required": [
+              "subsystem",
+              "collection",
+              "reason"
+            ],
             "properties": {
-              "subsystem": { "$ref": "#/$defs/subsystemName" },
-              "collection": { "$ref": "#/$defs/subsystemName" },
-              "reason": { "type": "string", "minLength": 1 }
+              "subsystem": {
+                "$ref": "#/$defs/subsystemName"
+              },
+              "collection": {
+                "$ref": "#/$defs/subsystemName"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           }
         },
         "errors": {
           "type": "array",
-          "items": { "type": "string", "minLength": 1 }
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
-        "error": { "type": "string", "minLength": 1 }
+        "error": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "hubFinding": {
       "type": "object",
-      "required": ["agent", "host", "subsystem", "collection", "object", "opinion", "evidence_ref", "observable"],
+      "required": [
+        "agent",
+        "host",
+        "subsystem",
+        "collection",
+        "object",
+        "opinion",
+        "evidence_ref",
+        "observable"
+      ],
       "properties": {
-        "agent": { "type": "string", "minLength": 1 },
-        "host": { "$ref": "#/$defs/host" },
-        "subsystem": { "$ref": "#/$defs/subsystemName" },
-        "collection": { "$ref": "#/$defs/subsystemName" },
+        "agent": {
+          "type": "string",
+          "minLength": 1
+        },
+        "host": {
+          "$ref": "#/$defs/host"
+        },
+        "subsystem": {
+          "$ref": "#/$defs/subsystemName"
+        },
+        "collection": {
+          "$ref": "#/$defs/subsystemName"
+        },
         "object": {
           "type": "object",
-          "required": ["id", "type", "native_id"],
+          "required": [
+            "id",
+            "type",
+            "native_id"
+          ],
           "properties": {
-            "id": { "$ref": "#/$defs/objectId" },
-            "type": { "type": "string", "minLength": 1 },
-            "native_id": { "type": "string", "minLength": 1 },
-            "name": { "type": "string" }
+            "id": {
+              "$ref": "#/$defs/objectId"
+            },
+            "type": {
+              "type": "string",
+              "minLength": 1
+            },
+            "native_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string"
+            }
           }
         },
         "opinion": {
           "type": "object",
-          "required": ["key", "level", "message", "evidence"],
+          "required": [
+            "key",
+            "level",
+            "message",
+            "evidence"
+          ],
           "properties": {
-            "key": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
-            "level": { "enum": ["warn", "critical"] },
-            "message": { "type": "string", "minLength": 1 },
+            "key": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]*$"
+            },
+            "level": {
+              "enum": [
+                "warn",
+                "critical"
+              ]
+            },
+            "message": {
+              "type": "string",
+              "minLength": 1
+            },
             "evidence": {
               "type": "array",
               "minItems": 1,
-              "items": { "type": "string", "minLength": 1 }
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
             },
-            "look": { "$ref": "#/$defs/look" }
+            "look": {
+              "$ref": "#/$defs/look"
+            }
           }
         },
         "evidence_ref": {
@@ -125,8 +246,12 @@
           "type": "boolean",
           "description": "Derived this sweep (true) or observed absent by an agent that could look (false). Never present when observable is false."
         },
-        "first_seen": { "$ref": "#/$defs/utcTimestamp" },
-        "last_seen": { "$ref": "#/$defs/utcTimestamp" },
+        "first_seen": {
+          "$ref": "#/$defs/utcTimestamp"
+        },
+        "last_seen": {
+          "$ref": "#/$defs/utcTimestamp"
+        },
         "acknowledged": {
           "type": "boolean",
           "description": "The latest appended transition is an acknowledgement. Styling hint only: an acknowledged finding is never removed from this list or any projection."
@@ -136,12 +261,28 @@
           "minItems": 1,
           "items": {
             "type": "object",
-            "required": ["transition", "by", "at"],
+            "required": [
+              "transition",
+              "by",
+              "at"
+            ],
             "properties": {
-              "transition": { "enum": ["acknowledged", "unacknowledged"] },
-              "by": { "type": "string", "minLength": 1 },
-              "note": { "type": "string" },
-              "at": { "$ref": "#/$defs/utcTimestamp" }
+              "transition": {
+                "enum": [
+                  "acknowledged",
+                  "unacknowledged"
+                ]
+              },
+              "by": {
+                "type": "string",
+                "minLength": 1
+              },
+              "note": {
+                "type": "string"
+              },
+              "at": {
+                "$ref": "#/$defs/utcTimestamp"
+              }
             }
           }
         }
@@ -153,10 +294,18 @@
       "description": "Where to look next, carried verbatim from the agent's opinion. The routes address the AGENT that raised the finding, not the hub: a consumer reaches them through /agents/{agent} exactly as it reaches evidence_ref. See observation.schema.json for why this is not a filter.",
       "items": {
         "type": "object",
-        "required": ["subsystem", "collection", "label"],
+        "required": [
+          "subsystem",
+          "collection",
+          "label"
+        ],
         "properties": {
-          "subsystem": { "$ref": "#/$defs/subsystemName" },
-          "collection": { "$ref": "#/$defs/subsystemName" },
+          "subsystem": {
+            "$ref": "#/$defs/subsystemName"
+          },
+          "collection": {
+            "$ref": "#/$defs/subsystemName"
+          },
           "fact": {
             "type": "string",
             "minLength": 1,

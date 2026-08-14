@@ -42,6 +42,7 @@ import contextlib
 import os
 import re
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -109,6 +110,53 @@ FINDINGS_WRITES = os.environ.get("SE_HUB_FINDINGS_WRITES", "").lower() in ("1", 
 # one place staleness is honest, because every one carries its stamps, and
 # the envelope's swept_at says exactly how old the sweep behind it is.
 FINDINGS_SWEEP_SECONDS = float(os.environ.get("SE_HUB_FINDINGS_SWEEP_SECONDS", "60"))
+
+# ── the budget, which is a number an operator can reason about ───────────
+#
+# An interval in seconds is a blunt instrument for something whose cost
+# varies fivefold across an estate: one number has to serve a twelve-core
+# storage server and a one-core cloud host, and picking it means guessing at
+# a figure nobody had ever measured. Measured, the guess was poor — a sweep
+# that cost 2.4 s of CPU every 60 s was three quarters of the smallest host's
+# entire standing bill.
+#
+# So the cadence can be declared as a SHARE OF A CORE instead, and the hub
+# derives each agent's interval from what that agent's own last sweep says it
+# cost (`timing.cpu_ms`, 0.6). "One percent of a core" is a number with a
+# meaning; "sixty seconds" is a number you have to have measured to justify.
+#
+# THREE PROPERTIES THAT MAKE IT SAFE TO TURN ON:
+#
+#   It can only ever SLOW a sweep down. FINDINGS_SWEEP_SECONDS stays the
+#   floor, so enabling a budget cannot make any host more expensive than it
+#   is today, and a host already inside its budget is swept exactly as often
+#   as before.
+#   It is per agent without per-agent configuration. The expensive host slows
+#   and the cheap one does not, from one declared number.
+#   An agent that reports no cost keeps the fixed interval. Older agents
+#   predate `timing`, and guessing a cost for them would be the invention
+#   this product refuses everywhere else.
+FINDINGS_SWEEP_BUDGET = float(os.environ.get("SE_HUB_FINDINGS_SWEEP_BUDGET", "0"))
+FINDINGS_SWEEP_MAX_SECONDS = float(
+    os.environ.get("SE_HUB_FINDINGS_SWEEP_MAX_SECONDS", "900"))
+
+
+def sweep_interval(cpu_ms: float | None) -> float:
+    """How long to wait before sweeping this agent again.
+
+    No budget, or no cost reported, means the configured interval — the
+    behaviour every deployment has today. With both, the interval is what
+    holds the declared share of one core, clamped to [configured, max]: it
+    may slow a sweep and may never hurry one.
+    """
+    if FINDINGS_SWEEP_BUDGET <= 0 or not cpu_ms or cpu_ms <= 0:
+        return FINDINGS_SWEEP_SECONDS
+    wanted = (cpu_ms / 1000.0) / (FINDINGS_SWEEP_BUDGET / 100.0)
+    # The FLOOR is applied last, because it is the promise. Clamping the
+    # other way round means a ceiling misconfigured below the configured
+    # interval sweeps faster than that interval — a budget making a host more
+    # expensive, which is the one thing this must never do.
+    return max(min(wanted, FINDINGS_SWEEP_MAX_SECONDS), FINDINGS_SWEEP_SECONDS)
 
 _MACHINE_ID = re.compile(r"^[0-9a-f]{32}$")
 
@@ -224,11 +272,27 @@ async def hub_views() -> dict:
     return load_views(VIEWS_DIR, _utc_now(), SITE)
 
 
+# Per-agent sweep state: the last result and when it was taken, so an agent
+# on a slower cadence contributes its own last-known-good with its OWN stamp
+# rather than being absent (which reads as unswept) or being re-served under
+# somebody else's fresher one. The registry already works this way — it is
+# the sanctioned last-known-good of SPEC section 6.1 rule 4 — and per-agent
+# stamps make that MORE honest rather than less: staleness lives on the
+# record that carries its own timestamp.
+_AGENT_SWEEPS: dict[str, dict] = {}
+_AGENT_DUE: dict[str, float] = {}
+
+
 async def _sweep_findings() -> list[dict]:
     """Every configured agent's /v1/findings, fanned out concurrently. An
     agent that cannot be swept — dark, or predating the findings surface —
     is an entry saying so, and assemble() freezes its registry rows rather
-    than resolving them (hub/findings.py)."""
+    than resolving them (hub/findings.py).
+
+    With a budget configured, only the agents DUE are asked; the rest carry
+    forward their last result and its stamp. Without one, every agent is due
+    on every tick and this behaves exactly as it always has.
+    """
     async def fetch(name: str, base: str) -> dict:
         try:
             response = await _client.get(f"{base}/v1/findings")
@@ -246,7 +310,24 @@ async def _sweep_findings() -> list[dict]:
             return {"agent": name,
                     "error": one_line(f"malformed findings envelope: {problem}")}
         return {"agent": name, "envelope": body}
-    return list(await asyncio.gather(*(fetch(n, b) for n, b in AGENTS.items())))
+
+    now = time.monotonic()
+    due = [(n, b) for n, b in AGENTS.items() if _AGENT_DUE.get(n, 0.0) <= now]
+    fresh = await asyncio.gather(*(fetch(n, b) for n, b in due))
+    at = _utc_now()
+    for entry in fresh:
+        name = entry["agent"]
+        entry["swept_at"] = at
+        _AGENT_SWEEPS[name] = entry
+        # The agent's OWN measurement of what answering cost it, which is the
+        # only figure that can size its cadence. Absent on an agent predating
+        # /v1/findings timing, and then the configured interval stands.
+        cpu = ((entry.get("envelope") or {}).get("timing") or {}).get("cpu_ms")
+        _AGENT_DUE[name] = now + sweep_interval(cpu)
+    # Carried forward, in the registry's declared order, so a slower host is
+    # present with its own age rather than reading as one that could not be
+    # swept — those are different statements and only one is a problem.
+    return [_AGENT_SWEEPS[name] for name in AGENTS if name in _AGENT_SWEEPS]
 
 
 # The latest completed sweep: {"sweeps": [...], "at": iso}. Swapped whole,
@@ -280,6 +361,9 @@ async def _findings_sweep_loop() -> None:
         except Exception as exc:  # noqa: BLE001 - log-and-continue
             print(f"findings: sweep failed: {type(exc).__name__}: {exc}",
                   file=sys.stderr)
+        # Ticks at the FLOOR. Which agents are actually asked on a tick is
+        # decided per agent by _AGENT_DUE, so a budget slows hosts without
+        # slowing the loop that notices a dark one.
         await asyncio.sleep(FINDINGS_SWEEP_SECONDS)
 
 
