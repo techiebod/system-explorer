@@ -1011,6 +1011,127 @@ check("every fact survives the grouping, whatever its kind", () => {
     if (!text.includes(key)) throw new Error(`grouping dropped ${key}`);
 });
 
+/* ── the reviewed taxonomy ────────────────────────────────────────────── */
+//
+// The nav is browsed by question, not by which adapter served the route.
+// These pin the order (an argument, not an alphabet), the rule the table is
+// built on (a heading needing `subsystem ·` labels has merged too much), and
+// the redundancy it retires.
+
+const FULL_CAPS = {
+  subsystems: {
+    units: { available: true, collections: ["units"] },
+    docker: { available: true, collections: ["containers", "networks", "volumes"] },
+    vms: { available: true, collections: ["domains"] },
+    resources: { available: true, collections: ["workloads"] },
+    storage: { available: true, collections: ["pools", "datasets"] },
+    hardware: { available: true, collections: ["platform", "pci", "usb", "scsi", "nvme"] },
+    network: { available: true, collections: ["links", "routes", "listening",
+                                              "port-exposure", "nft-rules"] },
+    system: { available: true, collections: ["identity", "time", "boot", "overview"] },
+    nix: { available: true, collections: ["generations"] },
+    packages: { available: true, collections: ["packages"] },
+    logs: { available: true, collections: ["journal"] },
+  },
+};
+
+const navWith = (caps) => {
+  ui.state.capabilities = caps;
+  ui.state.views = null;
+  ui.state.hub = null;
+  return ui.navModel();
+};
+const headings = (model) => model.map(s => s.heading).filter(Boolean);
+const itemsUnder = (model, heading) =>
+  (model.find(s => s.heading === heading)?.items || []).map(i => i.label);
+
+check("the nav reads in the declared order, not the adapter registry's", () => {
+  const order = headings(navWith(FULL_CAPS));
+  const want = ["running", "docker", "storage", "disks", "network",
+                "exposure", "hardware", "os", "logs"];
+  const seen = want.filter(h => order.includes(h));
+  if (seen.join(",") !== want.join(","))
+    throw new Error(`order came out ${order.join(" ")}`);
+});
+
+check("no heading needs a subsystem prefix to be readable", () => {
+  // The rule the whole table is built on: a prefix means the heading merged
+  // things whose names did not survive the merge.
+  const model = navWith(FULL_CAPS);
+  for (const section of model)
+    for (const item of section.items)
+      if (item.label.includes(" · "))
+        throw new Error(`${section.heading} needs a prefix: ${item.label}`);
+});
+
+check("units is units, not units under units", () => {
+  const model = navWith(FULL_CAPS);
+  if (!itemsUnder(model, "running").includes("units"))
+    throw new Error("units left the running heading");
+  if (headings(model).includes("units"))
+    throw new Error("units kept a heading of its own as well");
+});
+
+check("a one-collection subsystem is labelled by whichever name informs", () => {
+  const running = itemsUnder(navWith(FULL_CAPS), "running");
+  if (!running.includes("vms")) throw new Error(`vms/domains: ${running}`);
+  if (!running.includes("workloads")) throw new Error(`resources: ${running}`);
+  if (running.includes("domains")) throw new Error("libvirt jargon reached the nav");
+  const os = itemsUnder(navWith(FULL_CAPS), "os");
+  if (!os.includes("generations") || !os.includes("packages"))
+    throw new Error(`os: ${os}`);
+});
+
+check("docker's networks and volumes stay with docker, not with running", () => {
+  const model = navWith(FULL_CAPS);
+  if (itemsUnder(model, "running").includes("networks"))
+    throw new Error("a docker network is not a thing that runs");
+  if (itemsUnder(model, "docker").join(",") !== "networks,volumes")
+    throw new Error(`docker holds ${itemsUnder(model, "docker")}`);
+});
+
+check("the firewall sits with the sockets it bears on, not with the routes", () => {
+  const model = navWith(FULL_CAPS);
+  const exposure = itemsUnder(model, "exposure");
+  for (const want of ["listening", "port-exposure", "nft-rules"])
+    if (!exposure.includes(want)) throw new Error(`exposure lost ${want}`);
+  const network = itemsUnder(model, "network");
+  if (network.includes("listening")) throw new Error("addressing kept exposure");
+});
+
+check("a heading with nothing on this host renders not at all", () => {
+  const model = navWith({ subsystems: {
+    units: { available: true, collections: ["units"] },
+    storage: { available: true, collections: ["pools"] },
+  } });
+  const order = headings(model);
+  for (const absent of ["docker", "exposure", "hardware", "os", "disks"])
+    if (order.includes(absent)) throw new Error(`${absent} rendered empty`);
+  if (!itemsUnder(model, "running").includes("units"))
+    throw new Error("running lost its only member");
+});
+
+check("a subsystem the table does not name keeps its own heading", () => {
+  // A future adapter is never hidden, merely ungrouped until someone files
+  // it — the property that makes this table safe to be incomplete.
+  const model = navWith({ subsystems: {
+    protection: { available: true, collections: ["targets", "jobs"] },
+  } });
+  if (!headings(model).includes("protection"))
+    throw new Error("an ungrouped subsystem vanished");
+});
+
+check("every listed collection is reachable exactly once", () => {
+  const model = navWith(FULL_CAPS);
+  const routes = model.flatMap(s => s.items.map(i => i.route));
+  const dupes = routes.filter((r, i) => routes.indexOf(r) !== i);
+  if (dupes.length) throw new Error(`reachable twice: ${dupes}`);
+  for (const [sub, cap] of Object.entries(FULL_CAPS.subsystems))
+    for (const coll of cap.collections)
+      if (!routes.includes(`${sub}/${coll}`))
+        throw new Error(`${sub}/${coll} is in capabilities and not in the nav`);
+});
+
 if (failures.length) {
   console.log(`\n${failures.length} failed: ${failures.join(", ")}`);
   process.exit(1);

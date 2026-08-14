@@ -1152,42 +1152,98 @@ function navRoutes() {
    system/overview — this is presentation, not a contract change. */
 const STANDALONE = [["system", "overview", "overview"]];
 
-/* Nav headings that group collections regardless of which subsystem owns them.
-   Presentation only — routes, object ids, opinions and stored history are all
-   untouched, which is what makes this the cheap answer to a question that looked
-   expensive.
+/* THE nav taxonomy: headings, their order, and what goes under each.
 
-   "disks" exists because hardware is organised by TRANSPORT and an operator is
-   not: `scsi` holds SAS, SATA and USB drives (Linux routes all three through the
-   SCSI subsystem) while NVMe has its own, so "where are my disks" had no single
-   place to look and the answer depended on knowing kernel taxonomy. Renaming
-   `scsi` would have been a worse lie — it also holds hosts, expanders and
-   enclosures — and making `disks` a real collection would have meant a second
-   object identity per drive, double-counted SMART verdicts, and rehoming nine
-   opinion keys before findings even exist. A heading costs none of that. */
+   Presentation only, and that is what makes it cheap. Routes, object ids,
+   status keys, opinion keys and stored history all keep their subsystem
+   names; nothing here reaches the wire. What it changes is the ONE thing
+   the wire cannot: which question a reader is browsing by.
+
+   `subsystem` is an ACQUISITION boundary. It answers "which interface did we
+   read this from" — D-Bus, the engine API, cgroupfs, nft -j — which is the
+   right way to organise adapters and no way at all to look for anything. The
+   nav had already conceded this twice, in two tables that did the same job
+   for different halves of the surface: `disks` pulled hardware/scsi and
+   hardware/nvme together because hardware is organised by TRANSPORT and an
+   operator is not (scsi holds SAS, SATA and USB drives; NVMe has its own),
+   and `media`/`ingress`/`documents` grouped the app subsystems after
+   "bazarr is one of the *arr apps, why is it not in with them?".
+
+   Between those two fixes sat twelve host-OS subsystems in whatever order
+   Object.entries happened to yield. Reviewed 2026-08-14, and the ordering
+   is an argument rather than an alphabet: what is running, then where its
+   data is, then how that data is protected, then how it is reached, then
+   what the box underneath is, then what happened.
+
+   THE RULE THIS TABLE IS BUILT ON, and it is worth stating because it
+   settled two disagreements: IF A HEADING NEEDS `subsystem · collection`
+   LABELS TO BE READABLE, IT HAS MERGED THINGS WHOSE NAMES DO NOT SURVIVE
+   THE MERGE. The prefix is the smell, not the price. A draft with one
+   `machine` heading held eight items, six of them prefixed; split into
+   `hardware` and `os` it needs none, and reads better as two questions than
+   it did as one — what this box is made of and what it is running as an
+   operating system are not the same question. The same rule moved docker's
+   networks and volumes out of `running`, where they were both prefixed and
+   wrong: a network and a volume are not things that run, and a bare
+   `networks` would have collided with the `network` heading below.
+
+   `label` overrides a member's name where the collection's own is not the
+   informative half. It is declared per member rather than derived, because
+   `vms` beats `domains` while `workloads` beats `resources` and no rule
+   picks correctly for both. The subsystem-name fallback for a one-collection
+   subsystem is the same behaviour the app domains already had — which is why
+   bazarr/instance has always rendered as `bazarr` and not as a second
+   `instance` — now applied to the host-OS half, where it retires
+   `units › units`, `packages › packages` and `nix › generations`.
+
+   A subsystem this table does not name keeps its own heading, so a future
+   adapter is never hidden, merely ungrouped until someone files it. One tree,
+   stable across machines: a heading with nothing on this host renders not at
+   all (the honest-empty rule, again). */
 const GROUPS = [
+  // Leads the content, which is why it carries `lead` rather than an
+  // `after`: there is no section above it to name, and anchoring it to
+  // whatever happens to be first would make the top of the nav depend on
+  // whether the hub serves views today.
+  { heading: "running", lead: true, members: [
+      ["units", "units", "units"],
+      ["docker", "containers", "containers"],
+      ["vms", "domains", "vms"],
+      ["resources", "workloads", "workloads"],
+  ] },
+  { heading: "docker", after: "running", members: [
+      ["docker", "networks"], ["docker", "volumes"],
+  ] },
   // Placed after storage rather than at the top: physical disks are the
   // substrate the filesystems, arrays and pools above them are built on, so
-  // reading downward goes from what is mounted to what it sits on. `after` names
-  // the section it follows so position is declared here with the grouping,
-  // instead of falling out of the order the loops happen to run in.
+  // reading downward goes from what is mounted to what it sits on. `after`
+  // names the section it follows, so position is declared here with the
+  // grouping instead of falling out of the order the loops happen to run in.
   { heading: "disks", after: "storage",
     members: [["hardware", "scsi"], ["hardware", "nvme"]] },
+  // network's nine collections split along a seam that already existed:
+  // addressing on one side, what can reach in on the other. The firewall
+  // collections belong with the sockets they bear on, not with the routes.
+  { heading: "exposure", after: "network", members: [
+      ["network", "listening"], ["network", "port-exposure"],
+      ["network", "nft-tables"], ["network", "nft-chains"],
+      ["network", "nft-rules"],
+  ] },
+  { heading: "hardware", after: "exposure", members: [
+      ["hardware", "platform"], ["hardware", "pci"], ["hardware", "usb"],
+  ] },
+  { heading: "os", after: "hardware", members: [
+      ["system", "identity"], ["system", "time"], ["system", "boot"],
+      ["nix", "generations", "generations"],
+      ["packages", "packages", "packages"],
+  ] },
 ];
 
-/* Nav headings that group whole SUBSYSTEMS by operator domain — the taxonomy
-   a person browses by, not the API family that happens to serve each piece.
-   Ordered in the same review that merged the machine page: "bazarr is one of
-   the *arr apps, why is it not in with them?" — the nav was organised by
-   which adapter owns a route, which is invisible and irrelevant from a
-   chair. Presentation only, exactly like GROUPS above: routes, object ids,
-   status keys and stored history all keep their subsystem names.
-
-   Host-OS subsystems are deliberately absent — units is units on every
-   machine — and a subsystem this table does not name keeps its own heading,
-   so a future app is never hidden, merely ungrouped until someone files it.
-   One tree, stable across machines: a host without a domain's subsystems
-   simply never shows that heading (the honest-empty rule, again). */
+/* Whole SUBSYSTEMS grouped by operator domain — the app tier, where the
+   subsystem IS the app and grouping it collection by collection would say
+   nothing. Kept separate from GROUPS above because the membership unit
+   differs: these claim everything a subsystem serves, present and future, so
+   an app that grows a collection appears under its domain without an edit. */
 const DOMAINS = [
   { heading: "media", members: ["servarr", "bazarr", "downloaders", "plex"] },
   { heading: "ingress", members: ["traefik"] },
@@ -1269,6 +1325,12 @@ function navModel() {
                               label: "findings", route: "estate/findings" }] });
   }
 
+  // Where the chrome ends and the host's own surface begins. A leading group
+  // splices HERE rather than at index 0, so it sits under the overview,
+  // views and estate without having to name whichever of them happens to
+  // exist on this host today.
+  const contentAt = sections.length;
+
   // Group membership is claimed BEFORE the subsystem sections are built, so a
   // grouped collection cannot also appear under its own subsystem — the same
   // collection reachable twice is what the smoke test guards.
@@ -1276,12 +1338,18 @@ function navModel() {
   for (const group of GROUPS) {
     const items = group.members
       .filter(([sub, coll]) => listed(sub, coll) && !claimed.has(`${sub}/${coll}`))
-      .map(([sub, coll]) => ({ sub, coll, label: coll, route: `${sub}/${coll}` }));
+      // The third element overrides the label where the collection's own
+      // name is not the informative half — `vms` for vms/domains, and the
+      // end of `units › units`, which is what a reader clicking through a
+      // container's scope had been landing in.
+      .map(([sub, coll, label]) => ({ sub, coll, label: label || coll,
+                                      route: `${sub}/${coll}` }));
     // An empty group is not a heading, it is a lie about what is here.
     if (!items.length) continue;
     items.forEach(item => claimed.add(item.route));
     groups.push({ solo: false, heading: group.heading, available: true,
-                  grouped: true, after: group.after ?? null, items });
+                  grouped: true, after: group.after ?? null,
+                  lead: !!group.lead, items });
   }
 
   const domainOf = {};
@@ -1321,10 +1389,16 @@ function navModel() {
     sections.push({ solo: false, heading: name, available: true, items });
   }
 
-  // Splice each group in after the section it names. An unplaceable group goes
-  // last rather than vanishing: its collections must stay reachable even if the
-  // subsystem it wanted to follow is absent from this host.
+  /* Splice each group in after the section it names, IN TABLE ORDER — a
+     group may anchor to another group, so `os` after `hardware` after
+     `exposure` only resolves if each is placed before the next looks for it.
+
+     An unplaceable group goes last rather than vanishing: its collections
+     must stay reachable even where the subsystem it wanted to follow is
+     absent from this host — which is the ordinary case on a machine with no
+     ZFS, and on every guest in the VM lab. */
   for (const group of groups) {
+    if (group.lead) { sections.splice(contentAt, 0, group); continue; }
     const at = group.after
       ? sections.findIndex(section => section.heading === group.after)
       : -1;
