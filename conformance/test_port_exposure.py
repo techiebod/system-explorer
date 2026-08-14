@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 from system_explorer.agent.adapters import network
 
 ACCEPT = {"accept": None}
@@ -416,3 +418,123 @@ def test_only_source_terms_reach_the_reported_answer():
     operator has to unpick."""
     expr = [match({"meta": {"key": "iifname"}}, "tailscale0"), DPORT22, ACCEPT]
     assert network._sources_of(expr) == ["meta iifname tailscale0"]
+
+
+# ── soundness holes an adversarial review found, each pinned ─────────────
+#
+# Five of these existed at once in a computation whose whole promise is that
+# it can only ever under-claim, and every one made the CERTAIN answer wrong.
+# Inspection had already caught two others. The lesson recorded here is that
+# this closure needs adversarial cases, not more reading.
+
+def bears(expr, protocol="tcp", port=22):
+    return network._rule_bears_on(network._render_rule(expr), expr, protocol, port)
+
+
+def dport(value, op="=="):
+    return match({"payload": {"protocol": "tcp", "field": "dport"}}, value, op)
+
+
+def test_a_port_range_inside_a_set_is_a_port_constraint():
+    """The renderer understands `{ 8000-8100 }` and prints it with no residue.
+    A closure that extracted only the integers dropped the whole constraint,
+    and an empty port set reads as "no port constraint" — so ONE range rule
+    made every port on the host certainly admitted from anywhere."""
+    rule = [dport({"set": [{"range": [8000, 8100]}]}), ACCEPT]
+    assert bears(rule, port=22) == (False, False)
+    assert bears(rule, port=8050) == (True, True)
+
+
+def test_a_set_mixing_ports_and_ranges_admits_both():
+    rule = [dport({"set": [22, {"range": [8000, 8100]}]}), ACCEPT]
+    assert bears(rule, port=22) == (True, True)
+    assert bears(rule, port=8080) == (True, True)
+    assert bears(rule, port=443) == (False, False)
+
+
+def test_a_malformed_range_is_unreadable_rather_than_unbounded():
+    rule = [dport({"set": [{"range": [70000, 1]}]}), ACCEPT]
+    sure, maybe = bears(rule)
+    assert sure is False, "an unreadable port shape must not stay certain"
+
+
+def test_a_negated_port_is_not_read_as_the_positive_match():
+    """`tcp dport != 22` admits everything BUT ssh. Reading it as `== 22`
+    inverts the rule — and the module header names this as the mistake every
+    shipped exporter makes, which did not stop it being made here."""
+    rule = [dport(22, "!="), ACCEPT]
+    sure, maybe = bears(rule, port=22)
+    assert sure is False, "an exclusion was read as an inclusion"
+    assert maybe is True, "and it is still possible, because it was not modelled"
+
+
+def test_a_negated_protocol_costs_certainty_too():
+    rule = [match({"meta": {"key": "l4proto"}}, "tcp", "!="), ACCEPT]
+    assert bears(rule)[0] is False
+
+
+def test_guard_and_rule_constraints_intersect_rather_than_union():
+    """`tcp dport 22 jump svc` guarding `tcp dport 443 accept` admits NEITHER
+    port. Pooling both into one list said it admits both — a dispatch jump
+    turning two narrow rules into one wide one."""
+    assert bears([dport(22), dport(443), ACCEPT], port=22) == (False, False)
+    assert bears([dport(22), dport(443), ACCEPT], port=443) == (False, False)
+    assert bears([dport(22), dport(22), ACCEPT], port=22) == (True, True)
+
+
+@pytest.mark.parametrize("family,protocol,applies", [
+    ("ip", "tcp", True), ("ip", "tcp6", False),
+    ("ip6", "tcp6", True), ("ip6", "tcp", False),
+    ("inet", "tcp", True), ("inet", "tcp6", True),
+    ("bridge", "tcp", False), ("arp", "tcp", False),
+])
+def test_a_rules_address_family_must_match_the_socket(family, protocol, applies):
+    """A whole table's worth of rules landing on the wrong sockets: an
+    ip6-only accept was certainly admitting IPv4 sockets."""
+    assert network._family_bears_on(family, protocol) is applies
+
+
+def test_an_ip6_only_accept_does_not_admit_an_ipv4_socket(monkeypatch, tmp_path):
+    monkeypatch.setattr(network, "PROC_NET", str(tmp_path))
+    for name in ("tcp", "tcp6", "udp", "udp6"):
+        (tmp_path / name).write_text(
+            TCP_HEADER + (line("00000000:0016") if name == "tcp" else ""))
+    document = {"nftables": [
+        {"chain": {"family": "ip6", "table": "filter", "name": "INPUT",
+                   "hook": "input", "policy": "drop"}},
+        {"rule": {"family": "ip6", "table": "filter", "chain": "INPUT",
+                  "handle": 1, "expr": [DPORT22, ACCEPT]}},
+    ]}
+    monkeypatch.setattr(network, "_nft_json", lambda: document)
+    [item] = asyncio.run(network.Adapter()._exposure_items())
+    assert "AdmittedFromCertain" not in item["facts"]
+    assert "AdmittingRules" not in item["facts"]
+
+
+def test_a_rule_whose_verdict_cannot_be_read_raises_the_gap(monkeypatch, tmp_path):
+    """A verdict map, or a statement nft could only emit as text, might be an
+    accept. Skipping it dropped the rule from BOTH closures, so the row
+    reported no admitting rule and no gap either — silence where the honest
+    answer is "something here might admit this and I cannot tell"."""
+    monkeypatch.setattr(network, "PROC_NET", str(tmp_path))
+    for name in ("tcp", "tcp6", "udp", "udp6"):
+        (tmp_path / name).write_text(
+            TCP_HEADER + (line("00000000:0016") if name == "tcp" else ""))
+    document = {"nftables": [
+        {"chain": {"family": "ip", "table": "filter", "name": "INPUT",
+                   "hook": "input", "policy": "drop"}},
+        {"rule": {"family": "ip", "table": "filter", "chain": "INPUT",
+                  "handle": 1, "expr": [DPORT22, {"vmap": {"key": "x"}}]}},
+    ]}
+    monkeypatch.setattr(network, "_nft_json", lambda: document)
+    [item] = asyncio.run(network.Adapter()._exposure_items())
+    facts = item["facts"]
+    assert facts["ClosureGap"] is True
+    assert "AdmittedFromCertain" not in facts
+    assert facts["AdmittedFromPossible"] == ["anywhere"]
+
+
+def test_the_notes_state_both_deliberate_under_claims():
+    notes = " ".join(network.Adapter()._source_for("port-exposure")["notes"])
+    assert "IPv4-mapped" in notes
+    assert "costs the rule its place in the certain answer" in notes

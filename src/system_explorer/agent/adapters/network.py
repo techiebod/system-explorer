@@ -949,6 +949,12 @@ EXPOSURE_NOTES = [
     "Shadowing is not resolved: rules are listed in evaluation order, and an"
     " earlier drop that would pre-empt a later accept is shown rather than"
     " applied. Connection tracking is not modelled either.",
+    "Two deliberate under-claims. A rule's address family must match the"
+    " socket's, so an ip-family rule is not credited to a tcp6 socket even"
+    " though a dual-stack socket bound to :: does receive IPv4-mapped"
+    " traffic; and a match this adapter can read but not model — a negated"
+    " port, a mark, a ct state — costs the rule its place in the certain"
+    " answer rather than being treated as absent.",
     "Nothing here claims reachability. AdmittedFromCertain names the source"
     " constraints of rules that admit this socket and that were rendered in"
     " full; AdmittedFromPossible additionally treats every clause this"
@@ -1083,6 +1089,62 @@ def _classify_match(match: dict) -> str | None:
     return "other"
 
 
+# Which address families can carry a socket's traffic. A rule in an `ip`
+# table decides nothing about an IPv6 packet and vice versa, and crediting one
+# with the other is a whole table's worth of rules landing on the wrong
+# sockets — measured as ip6-only accepts certainly admitting IPv4 sockets.
+# arp, bridge and netdev carry no IP traffic on the input path at all.
+_SOCKET_FAMILIES = {"tcp": ("ip", "inet"), "udp": ("ip", "inet"),
+                    "tcp6": ("ip6", "inet"), "udp6": ("ip6", "inet")}
+
+
+def _family_bears_on(family: object, protocol: str) -> bool:
+    """Whether a rule in this table's family can decide this socket at all.
+
+    A dual-stack socket bound to :: does also receive IPv4-mapped traffic,
+    which this does NOT model — an ip-family rule is not credited to a tcp6
+    socket. That under-claims rather than over-claims, which is the only
+    direction this collection is allowed to be wrong in, and it is stated in
+    the collection's notes rather than left for a reader to discover.
+    """
+    return str(family) in _SOCKET_FAMILIES.get(protocol, ())
+
+
+def _port_values(right: object) -> set[int] | None:
+    """The ports a dport match admits, or None where the shape is unreadable.
+
+    Ranges are the case that mattered. The RENDERER understands a range inside
+    an anonymous set and prints `tcp dport { 8000-8100 }` with no residue, so
+    a closure that extracted only the integers silently dropped the whole
+    constraint — and an empty port set reads as "no port constraint", which
+    made one range rule admit every port on the host, certainly, from
+    anywhere. Discarding a reading the renderer got right is precisely the
+    coverage mismatch _classify_match was introduced to stop.
+    """
+    if isinstance(right, int):
+        return {right}
+    if isinstance(right, dict) and isinstance(right.get("set"), list):
+        ports: set[int] = set()
+        for element in right["set"]:
+            if isinstance(element, int):
+                ports.add(element)
+            elif (isinstance(element, dict)
+                  and isinstance(element.get("range"), list)
+                  and len(element["range"]) == 2
+                  and all(isinstance(x, int) for x in element["range"])):
+                low, high = element["range"]
+                # Bounded: a rule may legitimately admit 1-65535, and
+                # materialising that is fine, but a malformed pair must not
+                # turn a page render into an allocation.
+                if not 0 <= low <= high <= 65535:
+                    return None
+                ports.update(range(low, high + 1))
+            else:
+                return None
+        return ports
+    return None
+
+
 def _rule_bears_on(rendered: dict, expr: list, protocol: str,
                    port: int) -> tuple[bool, bool]:
     """(certainly bears on this socket, possibly bears on it).
@@ -1095,8 +1157,13 @@ def _rule_bears_on(rendered: dict, expr: list, protocol: str,
     the whole of the lower closure: ignorance cannot strengthen a claim.
     """
     readable = not rendered["residue"]
-    dports: list[int] = []
-    protocols: list[str] = []
+    # Constraints are INTERSECTED, and the accumulator is per-term rather than
+    # one flat list, because a rule reached through a jump carries two sets of
+    # them: the guard's and its own. Pooling those unions what should narrow —
+    # `tcp dport 22 jump svc` guarding `tcp dport 443 accept` admits neither
+    # port, and a single dports list containing both said it admits both.
+    port_sets: list[set[int]] = []
+    protocol_sets: list[set[str]] = []
     for statement in expr:
         if not isinstance(statement, dict) or "match" not in statement:
             continue
@@ -1109,6 +1176,16 @@ def _rule_bears_on(rendered: dict, expr: list, protocol: str,
         left, right = body.get("left"), body.get("right")
         if not isinstance(left, dict):
             continue
+        # NEGATION IS AN EXCLUSION, and this closure models inclusions. Reading
+        # `tcp dport != 22` as though it said `== 22` turns a rule that admits
+        # everything BUT ssh into one that admits only ssh — and the module
+        # header calls this out as the mistake every shipped exporter makes,
+        # which did not stop it being made here. Rather than model exclusion
+        # sets, an inequality costs the rule its certainty: correct, and
+        # conservative in the direction that cannot hurt.
+        if body.get("op", "==") != "==":
+            readable = False
+            continue
         # A protocol can be constrained through meta as well as through the
         # packet's own header, and reading only the second credited an
         # ICMP-ONLY accept with admitting tcp/22 from anywhere. Found on a live
@@ -1118,28 +1195,29 @@ def _rule_bears_on(rendered: dict, expr: list, protocol: str,
         # the one an operator is told they can defend.
         if "meta" in left and isinstance(left["meta"], dict):
             if left["meta"].get("key") == "l4proto" and isinstance(right, str):
-                protocols.append(right)
+                protocol_sets.append({right})
             continue
         if "payload" not in left:
             continue
         payload = left["payload"]
         field, proto = payload.get("field"), payload.get("protocol")
         if field == "dport":
-            if isinstance(right, int):
-                dports.append(right)
-            elif isinstance(right, dict) and isinstance(right.get("set"), list):
-                dports.extend(x for x in right["set"] if isinstance(x, int))
-            else:
+            ports = _port_values(right)
+            if ports is None:
                 readable = False          # a dport shape we cannot read
+            else:
+                port_sets.append(ports)
             if proto in ("tcp", "udp"):
-                protocols.append(proto)
+                protocol_sets.append({proto})
         elif field == "protocol" and isinstance(right, str):
-            protocols.append(right)
+            protocol_sets.append({right})
     wire = protocol.replace("6", "")
-    if protocols and wire not in protocols:
-        return False, False               # a different protocol entirely
-    if dports and port not in dports:
-        return False, False               # a different port entirely
+    for allowed in protocol_sets:
+        if wire not in allowed:
+            return False, False           # a different protocol entirely
+    for allowed in port_sets:
+        if port not in allowed:
+            return False, False           # a different port entirely
     # No dport constraint at all means the rule bears on every port, which is
     # what a blanket `iifname lo accept` does and is exactly the case an
     # operator most needs to see.
@@ -1712,14 +1790,27 @@ class Adapter:
             possible: list[str] = []
             gap_rules: list[str] = []
             for rule, guards in path:
+                if not _family_bears_on(rule.get("family"), protocol):
+                    continue
                 # The guards first: a rule inside a jumped-to chain is
                 # reached only under the jumping rule's conditions, and they
                 # constrain what it admits exactly as its own do.
                 expr = guards + (rule.get("expr") or [])
                 rendered = _render_rule(expr)
-                if rendered["verdict"] != "accept":
+                # A rule whose VERDICT could not be read might be an accept —
+                # a verdict map, or a statement nft could only emit as text.
+                # Skipping it dropped it from BOTH closures, so the row
+                # reported no admitting rule and no gap either: silence where
+                # the honest answer is "something here might admit this and I
+                # cannot tell".
+                unreadable_verdict = (rendered["verdict"] is None
+                                      and not rendered["jump_target"]
+                                      and bool(rendered["residue"]))
+                if rendered["verdict"] != "accept" and not unreadable_verdict:
                     continue
                 sure, maybe = _rule_bears_on(rendered, expr, protocol, port)
+                if unreadable_verdict:
+                    sure = False
                 if not maybe:
                     continue
                 where = f"{rule.get('family')}/{rule.get('table')}/" \
