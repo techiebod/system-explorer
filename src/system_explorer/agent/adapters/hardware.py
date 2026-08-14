@@ -158,6 +158,9 @@ SCSI_REFERENCE = ["lsscsi -v",
 NVME_REFERENCE = ["nvme list",
                   "smartctl -H -A /dev/<ctrl>",
                   "cat /sys/class/nvme/<ctrl>/{firmware_rev,model,serial,state,transport}",
+                  # The wwid is the NAMESPACE's, not the controller's — the
+                  # same read scsi does, one directory along.
+                  "cat /sys/block/<ctrl>n1/wwid",
                   # PCIe link, and the bridge above it whose capability is what
                   # distinguishes a narrow slot from a degraded link
                   "cat /sys/class/nvme/<ctrl>/device/{current,max}_link_{speed,width}",
@@ -253,6 +256,13 @@ _DEVICE_GLOSSARY = {
     "Block": "The block device this hardware backs, if the kernel created one.",
     "Namespaces": "The NVMe namespaces this controller exposes — the block "
                   "devices a filesystem can actually sit on.",
+    "WWN": "The device's world-wide name — the kernel's wwid, read from the "
+           "SCSI device or, on NVMe, from its namespace. A kernel name "
+           "renumbers when enumeration order shifts and this does not, so it "
+           "is what a join survives a reboot on.",
+    "WWNUnobservable": "Why this controller states no world-wide name: a wwid "
+                       "belongs to a namespace, and a controller exposing "
+                       "several has no single one of its own.",
     "State": "The kernel's own device state. It records that the device was "
              "enumerated and is reachable, which is not a measurement of health.",
     "Devices": "How many devices are attached below this host.",
@@ -422,6 +432,43 @@ def _scsi_link_facts(scsi_id: str) -> dict:
                 "LinkSpeedMax": _sysfs_value(_read(f"{phy}/maximum_linkrate")),
             }.items() if value}
     return {}
+
+
+def _nvme_wwn(namespaces: list[str]) -> dict:
+    """The device's world-wide name, which on NVMe belongs to the NAMESPACE.
+
+    hardware/scsi has carried WWN since it shipped and hardware/nvme never
+    did — the same identity fact treated two ways inside one subsystem, which
+    matters more than an ordinary omission because identity is what every
+    join is made of. A kernel name renumbers: `nvme0n1` can come back as
+    `nvme1n1` when enumeration order shifts, which on a four-drive host is
+    not hypothetical. The wwid does not.
+
+    NOT taken from udisks2, which is where it looks like it should come from.
+    Measured on the estate: `org.freedesktop.UDisks2.Drive.WWN` is the empty
+    string on every NVMe drive here, so reading it would publish "" — a fact
+    that asserts an identity and carries none, which is worse than the gap it
+    would appear to close. The kernel's own per-namespace wwid is the same
+    read SCSI already does, one directory along.
+
+    A controller with SEVERAL namespaces has several wwids and no single one
+    of its own, so it says that rather than picking the first — the shape
+    this adapter already uses for a SMART reading it cannot take.
+    """
+    if not namespaces:
+        return {}
+    values = {ns: _read(f"/sys/block/{ns}/wwid") for ns in namespaces}
+    present = {ns: v for ns, v in values.items() if v}
+    if len(namespaces) == 1:
+        return {"WWN": present.get(namespaces[0])}
+    distinct = set(present.values())
+    if len(distinct) == 1:
+        return {"WWN": next(iter(distinct))}
+    return {"WWNUnobservable":
+            f"This controller exposes {len(namespaces)} namespaces and a wwid"
+            f" belongs to a namespace, not a controller, so no single"
+            f" world-wide name identifies it. The per-namespace names are on"
+            f" the block devices themselves."}
 
 
 def _nvme_link_facts(controller: str) -> dict:
@@ -1043,6 +1090,7 @@ class Adapter:
                 "Transport": _read(f"{base}/transport"),
                 "PCIAddress": _pci_addr_of(f"{base}/device"),
                 "Namespaces": namespaces,
+                **_nvme_wwn(namespaces),
             }
             items.append(env.item_summary(f"nvme:{ctrl}", "nvme-controller",
                                           ctrl, facts))
