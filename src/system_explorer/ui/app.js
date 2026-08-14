@@ -82,8 +82,20 @@ const COLUMNS = {
      Comprehension sits beside it because it says how much of the rule that
      text actually is. Position is a column rather than a detail: nftables is
      first-match-wins, so order is meaning. */
-  "network/nft-rules": ["Table", "Chain", "Position", "Rendered",
-                        "Comprehension", "Verdict"],
+  /* Family leads, because the same chain name in ip and ip6 is two chains
+     and a rule admitting a port in one says nothing about the other — a
+     column the estate needed the moment a host ran both stacks. Verdict
+     sits beside Rendered rather than at the end: what a rule DOES is the
+     second question after what it matches, and burying it behind
+     Comprehension put the answer off the right-hand edge. */
+  "network/nft-rules": ["Family", "Table", "Chain", "Position", "Rendered",
+                        "Verdict", "JumpTarget", "Comprehension"],
+  /* The shape of the ruleset, answers first: whether the kernel enters here
+     at all, then where in the path, then what it falls back to. RuleCount
+     last, because it is the one number on the row that says nothing about
+     what any rule permits. */
+  "network/nft-chains": ["Family", "Table", "Name", "BaseChain", "Hook",
+                         "Priority", "Policy", "JumpedFrom", "RuleCount"],
   /* The two answers, not the socket's own description. Without a preset the
      table fell back to the first five facts and showed protocol, address,
      port, scope and a constant sentence — every column identical or already
@@ -3668,8 +3680,17 @@ function renderGrid() {
   }
 }
 
+/* Facts whose value IS a sentence in another language, and which a reader
+   has to read every word of. Everywhere else an ellipsis costs a detail; a
+   truncated firewall rule costs the CONDITION — `meta iifname tailscale0 tcp
+   dport 22 counter accept` clipped at the column edge reads as a rule
+   admitting sshd from anywhere, which is the same inversion the renderer
+   goes to such lengths to prevent, reintroduced by CSS. */
+const WRAPPING_FACTS = new Set(["Rendered", "Residue", "AdmittingRules"]);
+
 function renderCell(key, value, item) {
   const td = el("td");
+  if (WRAPPING_FACTS.has(key)) td.className = "wrap";
   if (value === null || value === undefined || value === "" ||
       (Array.isArray(value) && value.length === 0)) {
     td.appendChild(el("span", "dim", "—"));

@@ -234,3 +234,30 @@ def test_rules_carry_no_severity(monkeypatch):
     monkeypatch.setattr(network, "_nft_json", lambda: payload)
     [item] = asyncio.run(network.Adapter()._nft_rules())
     assert "worst_opinion_level" not in item
+
+
+# ── masked comparisons: a condition, not a decoration ────────────────────
+
+def test_a_masked_match_keeps_its_mask():
+    """nft writes `meta mark & 0xff0000 == 0x40000` and nests the masked
+    expression under "&". Declining it left every Tailscale forward rule on
+    every host in the estate reading `<unrendered &> counter accept` — a mark
+    test rendered as an unconditional accept, which is the inversion this
+    renderer exists to prevent, in the direction that matters."""
+    rendered = render(
+        match({"&": [{"meta": {"key": "mark"}}, 16711680]}, 262144), ACCEPT)
+    assert rendered["text"] == "meta mark & 0xff0000 262144 accept"
+    assert rendered["residue"] == []
+
+
+def test_a_mask_over_something_unrenderable_is_still_unrenderable():
+    """The mask does not launder the left-hand side: `fib` under a mask is
+    still a term this renderer cannot state, and must keep its placeholder."""
+    rendered = render(match({"&": [{"fib": {"result": "oif"}}, 255]}, 1), ACCEPT)
+    assert "<unrendered" in rendered["text"]
+    assert len(rendered["residue"]) == 1
+
+
+def test_a_non_integer_mask_is_not_guessed_at():
+    rendered = render(match({"&": [{"meta": {"key": "mark"}}, "0xff"]}, 1), ACCEPT)
+    assert "<unrendered" in rendered["text"]

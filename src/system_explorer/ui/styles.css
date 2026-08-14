@@ -200,6 +200,15 @@ kbd {
   max-width: min(380px, 55vw);   /* narrow screens still see >1 column */
   vertical-align: middle;
 }
+/* A rendered firewall rule is read word by word, so it wraps rather than
+   losing its tail to an ellipsis — a clipped rule reads as a permissive one.
+   Wider too, because the whole point is to see the line. */
+#grid td.wrap {
+  white-space: normal; overflow: visible; text-overflow: clip;
+  max-width: min(560px, 60vw); font-family: var(--mono); font-size: 11.5px;
+  line-height: 1.45;
+}
+
 #grid tbody tr { cursor: pointer; }
 #grid tbody tr:hover { background: var(--panel-2); }
 #grid tbody tr.selected { background: var(--sel); box-shadow: inset 2px 0 var(--accent); }

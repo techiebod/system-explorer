@@ -187,6 +187,7 @@ OBJECT_PREFIXES: dict[str, list[tuple[str, str]]] = {
     "link": [("network", "links")],
     "lookup": [("network", "lookups"), ("storage", "lookups")],
     "mount": [("storage", "mounts")],
+    "nft-chain": [("network", "nft-chains")],
     "nft-rule": [("network", "nft-rules")],
     "nft-table": [("network", "nft-tables")],
     "nvme": [("hardware", "nvme")],

@@ -284,6 +284,21 @@ _NFT_RULE_GLOSSARY = {
     "CounterBytes": "Bytes this rule has matched, where the rule carries a counter. Absent means no counter was written, not zero traffic.",
 }
 
+_NFT_CHAIN_GLOSSARY = {
+    "Family": "The address family this chain's table belongs to — ip, ip6, inet, arp, bridge or netdev. The same chain name in ip and ip6 is two chains, and a rule admitting a port in one says nothing about the other.",
+    "Table": "The table holding this chain. On a real host the table name is an ownership label: docker, libvirt, firewalld and nixos-fw were each written by something different.",
+    "Name": "The chain's name, as its author wrote it.",
+    "Handle": "The kernel's own identifier for this chain object.",
+    "BaseChain": "Whether the kernel calls this chain directly. A base chain is registered against a hook and every packet on that path enters it; a regular chain runs only when something jumps to it, which is why the two need telling apart before any rule in either is read.",
+    "Hook": "The netfilter hook this base chain is registered against — prerouting, input, forward, output or postrouting. It is WHERE in the packet's journey this chain runs, and absent on a regular chain because nothing calls it directly.",
+    "Type": "What the kernel lets this base chain do: filter chains decide, nat chains translate, route chains can re-run the routing decision. Absent on a regular chain.",
+    "Priority": "The order this base chain runs in relative to others on the same hook, lowest first. Two chains on one hook are both traversed; this says which sees the packet first, and a negative number is normal.",
+    "Policy": "What happens to a packet that reaches the end of this base chain matching nothing — accept or drop. It is the verdict the whole chain falls back to, so a chain of narrow accepts under an accept policy admits everything the rules did not mention. Absent on a regular chain, which returns to its caller instead.",
+    "RuleCount": "How many rules this chain holds. Counted, never read: this says nothing about what any of them permits.",
+    "JumpedFrom": "Every chain that transfers control here, by jump or goto — how a packet reaches this chain at all. Derived by reading every rule's target across the whole ruleset, so it is the answer to 'what runs this' that no single chain's own document contains.",
+    "Unreferenced": "Stated only when true, and only for a regular chain: nothing in this ruleset jumps or gotos here and the kernel does not call it, so no packet can reach any rule in it. Usually a leftover; occasionally a rule that was meant to be reachable and is not.",
+}
+
 _EXPOSURE_GLOSSARY = {
     "Protocol": "The listening socket's protocol, joined from the listening collection.",
     "LocalAddress": "The address the socket is bound to; the wildcard means the ruleset alone decides what reaches it.",
@@ -300,6 +315,7 @@ _EXPOSURE_GLOSSARY = {
 _NETWORK_GLOSSARY = {"links": _LINK_GLOSSARY, "routes": _ROUTE_GLOSSARY,
                      "resolver": _RESOLVER_GLOSSARY,
                      "listening": _LISTENING_GLOSSARY,
+                     "nft-chains": _NFT_CHAIN_GLOSSARY,
                      "nft-rules": _NFT_RULE_GLOSSARY,
                      "port-exposure": _EXPOSURE_GLOSSARY}
 
@@ -763,6 +779,26 @@ TERMINAL_VERDICTS = ("accept", "drop", "reject", "return", "continue", "queue")
 # socket, rt, osf, numgen, and whatever the next kernel adds — is residue.
 RENDERED_MATCH_KEYS = frozenset({"payload", "meta", "ct"})
 
+NFT_CHAIN_REFERENCE = [
+    "nft list chains",
+    "nft -a list ruleset            # chain handles and hooks",
+    "nft list chain <family> <table> <chain>",
+]
+
+NFT_CHAIN_NOTES = [
+    "A base chain is registered against a netfilter hook and every packet on"
+    " that path enters it; a regular chain runs only when something jumps or"
+    " gotos to it. The distinction decides whether any rule inside is reached"
+    " at all, so it is the first thing on the row rather than a detail.",
+    "JumpedFrom is derived by reading every rule in every table, not from the"
+    " chain's own document — nft's JSON does not say what calls a chain, and"
+    " it is the fact that makes a large ruleset navigable.",
+    "Rules are COUNTED here, never read. A chain of narrow accepts and a"
+    " chain that admits everything are indistinguishable in this collection;"
+    " nft-rules holds what each rule says, and port-exposure answers what"
+    " actually reaches a listening port.",
+]
+
 NFT_RULE_REFERENCE = [
     "nft -a list ruleset            # the same rules, with '# handle N'",
     "nft -j list ruleset",
@@ -801,6 +837,19 @@ def _render_match(match: dict) -> tuple[str | None, bool]:
     if not isinstance(left, dict) or len(left) != 1:
         return None, False
     key = next(iter(left))
+    # A masked comparison — nft writes `meta mark & 0xff0000 == 0x40000` and
+    # its JSON nests the masked expression under "&". Tailscale writes every
+    # one of its forward rules this way, so declining it left two rules per
+    # host reading `<unrendered &> counter accept`: a mark test rendered as
+    # an unconditional accept, which is the inversion this renderer exists to
+    # prevent. The mask is part of the condition and is kept.
+    mask = None
+    if key == "&" and isinstance(left[key], list) and len(left[key]) == 2:
+        inner_expr, mask = left[key]
+        if not isinstance(inner_expr, dict) or len(inner_expr) != 1:
+            return None, False
+        left = inner_expr
+        key = next(iter(left))
     if key not in RENDERED_MATCH_KEYS:
         return None, False
     inner = left[key]
@@ -810,6 +859,12 @@ def _render_match(match: dict) -> tuple[str | None, bool]:
         name = f"{key} {inner.get('key')}"
     else:
         return None, False
+    if mask is not None:
+        if not isinstance(mask, int):
+            return None, False
+        # Hex, because that is how a mask is written and read — 0xff0000 is
+        # recognisable as the third byte where 16711680 is arithmetic.
+        name = f"{name} & {hex(mask)}"
     if isinstance(right, dict):
         if "prefix" in right and isinstance(right["prefix"], dict):
             value = f"{right['prefix'].get('addr')}/{right['prefix'].get('len')}"
@@ -1277,7 +1332,8 @@ class Adapter:
 
     def collections(self) -> list[str]:
         return ["links", "routes", "resolver", "listening", "nft-tables",
-                "nft-rules", "port-exposure", "tailscale", "lookups"]
+                "nft-chains", "nft-rules", "port-exposure", "tailscale",
+                "lookups"]
 
     def fact_glossary(self, collection: str) -> dict[str, str]:
         return _NETWORK_GLOSSARY.get(collection, {})
@@ -1331,6 +1387,7 @@ class Adapter:
         nft_ok, nft_reason = await self._nft_available()
         if not nft_ok:
             unavailable["nft-tables"] = nft_reason
+            unavailable["nft-chains"] = nft_reason
             unavailable["nft-rules"] = nft_reason
         res_mode, res_reason = await self._resolver_mode()
         if res_mode is None:
@@ -1781,6 +1838,82 @@ class Adapter:
                 f"nft-table:{key}", "table", key, facts))
         return items
 
+    # ── nftables chains ──────────────────────────────────────
+    async def _nft_chains(self) -> list[dict]:
+        """The ruleset's shape: where the kernel enters it, and what runs what.
+
+        This collection exists because the rule list was unreadable at estate
+        scale and the reason was structural, not cosmetic — 222 rules on one
+        host, 43 of them in a single chain, presented as a flat list with
+        nothing saying which of them a packet ever reaches. Reported as "the
+        firewall table isn't very human parsable" (2026-08-14).
+
+        A ruleset is a graph and nft's own JSON has always carried it: the
+        chain objects sit in the same document as the rules and were being
+        skipped. Two facts here are not in that document and are the ones
+        that make it navigable — JumpedFrom, which needs every rule in every
+        table read to answer "what runs this chain", and Unreferenced, which
+        falls out of it.
+
+        No opinions, for the reason nft-rules has none: whether a policy or a
+        stray chain is a problem depends on what the rules inside admit, and
+        that question belongs to port-exposure, where it is answered with two
+        closures rather than a dot.
+        """
+        data = await anyio.to_thread.run_sync(_nft_json)
+        chains: dict[tuple, dict] = {}
+        rule_counts: dict[tuple, int] = {}
+        jumped: dict[tuple, set[str]] = {}
+        for entry in data.get("nftables", []):
+            if "chain" in entry:
+                c = entry["chain"]
+                chains[(c.get("family"), c.get("table"), c.get("name"))] = c
+            elif "rule" in entry:
+                r = entry["rule"]
+                key = (r.get("family"), r.get("table"), r.get("chain"))
+                rule_counts[key] = rule_counts.get(key, 0) + 1
+                # Both verbs, because both reach the chain. goto differs from
+                # jump in where it returns to, not in whether it arrives —
+                # counting only jumps would report a goto-only chain as
+                # unreachable, which is the one fact here somebody would act
+                # on.
+                for statement in r.get("expr") or []:
+                    if not isinstance(statement, dict):
+                        continue
+                    for verb in ("jump", "goto"):
+                        body = statement.get(verb)
+                        if isinstance(body, dict) and body.get("target"):
+                            jumped.setdefault(
+                                (r.get("family"), r.get("table"), body["target"]),
+                                set()).add(r.get("chain"))
+        items = []
+        for (family, table, name), chain in chains.items():
+            key = (family, table, name)
+            # A base chain is one the kernel calls, and `hook` is what says
+            # so. Absent members are omitted rather than nulled: a regular
+            # chain has no policy, and a null one reads as "no policy set",
+            # which is a different and much more alarming claim.
+            base = bool(chain.get("hook"))
+            facts: dict = {"Family": family, "Table": table, "Name": name,
+                           "BaseChain": base}
+            if chain.get("handle") is not None:
+                facts["Handle"] = chain["handle"]
+            for fact, member in (("Hook", "hook"), ("Type", "type"),
+                                 ("Priority", "prio"), ("Policy", "policy")):
+                if chain.get(member) is not None:
+                    facts[fact] = chain[member]
+            facts["RuleCount"] = rule_counts.get(key, 0)
+            callers = sorted(jumped.get(key, ()))
+            if callers:
+                facts["JumpedFrom"] = callers
+            elif not base:
+                facts["Unreferenced"] = True
+            items.append(env.item_summary(
+                f"nft-chain:{family}/{table}/{name}", "chain",
+                f"{family} {table} {name}", facts,
+                opinions=[], healthy=None))
+        return items
+
     # ── nftables rules ───────────────────────────────────────
     async def _nft_rules(self) -> list[dict]:
         """One row per rule, in evaluation order within each chain.
@@ -2155,6 +2288,8 @@ class Adapter:
             "listening": ("proc-net", "/proc/net", LISTENING_REFERENCE,
                           LISTENING_NOTES),
             "nft-tables": ("nft-json", "nft -j", NFT_REFERENCE, NFT_NOTES),
+            "nft-chains": ("nft-json", "nft -j", NFT_CHAIN_REFERENCE,
+                           NFT_CHAIN_NOTES),
             "nft-rules": ("nft-json", "nft -j", NFT_RULE_REFERENCE,
                           NFT_RULE_NOTES),
             "port-exposure": ("proc-net + nft-json", "/proc/net + nft -j",
@@ -2187,6 +2322,8 @@ class Adapter:
             return await anyio.to_thread.run_sync(self._listening_items)
         if collection == "nft-tables":
             return await self._nft_tables()
+        if collection == "nft-chains":
+            return await self._nft_chains()
         if collection == "nft-rules":
             return await self._nft_rules()
         if collection == "port-exposure":
@@ -2237,6 +2374,36 @@ class Adapter:
         rule = self._RULES.get(collection)
         return rule(match["facts"]) if rule else []
 
+    @staticmethod
+    def _nft_edges(collection: str, facts: dict) -> list[dict]:
+        """The ruleset as a graph, from whichever object was opened.
+
+        A jump is the whole of how a ruleset composes, and reading one used
+        to mean copying a chain name out of a rendered rule and going to find
+        it by hand — across 222 rules on one host. The edges are all drawn
+        from facts already on the row; nothing new is acquired to state them.
+        """
+        family, table = facts.get("Family"), facts.get("Table")
+        if not family or not table:
+            return []
+        chain = f"nft-chain:{family}/{table}"
+        edges = []
+        if collection == "nft-rules":
+            edges.append(env.rel("member-of", "out", f"{chain}/{facts['Chain']}"))
+            if facts.get("JumpTarget"):
+                edges.append(env.rel("dispatches-to", "out",
+                                     f"{chain}/{facts['JumpTarget']}"))
+        elif collection == "nft-chains":
+            edges.append(env.rel("member-of", "out",
+                                 f"nft-table:{family}/{table}"))
+            # Inbound, from the derived fact: the chains that transfer control
+            # here. This is the edge a reader follows BACKWARDS to answer "how
+            # does a packet ever get to this rule", which no chain's own
+            # document can say.
+            for caller in facts.get("JumpedFrom") or []:
+                edges.append(env.rel("dispatches-to", "in", f"{chain}/{caller}"))
+        return edges
+
     async def get_object(self, collection: str, object_id: str) -> dict:
         if collection == "lookups":
             return await self._lookup_observation(object_id)
@@ -2258,6 +2425,7 @@ class Adapter:
         if collection == "routes" and match["facts"].get("Device"):
             relationships.append(env.rel("routes-via", "out",
                                          f"link:{match['facts']['Device']}"))
+        relationships += self._nft_edges(collection, match["facts"])
 
         return env.observation(
             self.subsystem,
