@@ -243,6 +243,8 @@ def test_an_unreadable_ruleset_declines_the_collection_by_name():
     adapter = network.Adapter()
     adapter._nft_state = (False, "nft not on PATH")
     adapter._nft_probed_at = float("inf")
+    # /proc/net is readable on the machine running the suite; the point here
+    # is the RULESET half, and the socket half now declines separately.
     caps = aio.run(adapter.capability())
     reason = caps["unavailable_collections"]["port-exposure"]
     assert "unread ruleset rather than a closed one" in reason

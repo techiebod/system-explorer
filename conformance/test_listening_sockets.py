@@ -191,3 +191,58 @@ def test_the_collection_is_served_and_paged(monkeypatch, tmp_path):
     assert page["subsystem"] == "network"
     assert page["items"][0]["native_id"] == "tcp 0.0.0.0:22"
     assert page["source"]["adapter"] == "proc-net"
+
+
+# ── an unreadable /proc/net is not a quiet host ──────────────────────────
+
+def test_the_collection_declines_when_no_table_can_be_read(monkeypatch, tmp_path):
+    """A host whose /proc/net cannot be read has not stopped listening.
+    Serving an empty collection there reports a machine accepting no traffic
+    at all, which is the most confident possible way to be wrong about
+    exposure — and the collection could not say otherwise, because the fact
+    that names an unreadable table rides on rows and there were none."""
+    monkeypatch.setattr(network, "PROC_NET", str(tmp_path / "gone"))
+    caps = asyncio.run(network.Adapter().capability())
+    reason = caps["unavailable_collections"]["listening"]
+    assert "unobservable rather than nothing" in reason
+    assert "listening" not in caps["collections"]
+
+
+def test_the_join_names_every_half_that_failed(monkeypatch, tmp_path):
+    """A host missing both halves would otherwise be told about whichever
+    check ran last and left to find the other."""
+    monkeypatch.setattr(network, "PROC_NET", str(tmp_path / "gone"))
+    adapter = network.Adapter()
+    adapter._nft_state = (False, "nft not on PATH")
+    adapter._nft_probed_at = float("inf")
+    reason = asyncio.run(adapter.capability())["unavailable_collections"]["port-exposure"]
+    assert "unread ruleset rather than a closed one" in reason
+    assert "nothing to attribute a rule to" in reason
+
+
+def test_one_readable_table_is_enough_to_serve(monkeypatch, tmp_path):
+    """Partial readability is a row-level fact (TablesUnreadable), not a
+    reason to withhold the whole collection — the sockets that WERE read are
+    real and an operator needs them."""
+    proc_net(monkeypatch, tmp_path, tcp=line("00000000:0016", "0A"))
+    caps = asyncio.run(network.Adapter().capability())
+    assert "listening" not in caps.get("unavailable_collections", {})
+
+
+def test_evidence_shows_the_tables_the_rows_were_read_from(monkeypatch, tmp_path):
+    """The collection advertised an evidence route that 404'd — a promise in
+    the envelope with nothing behind it."""
+    proc_net(monkeypatch, tmp_path, tcp=line("00000000:0016", "0A"),
+             tcp6="", udp="", udp6="")
+    evidence = asyncio.run(network.Adapter().get_evidence(
+        "listening", "socket:tcp/0.0.0.0/22"))
+    payload = evidence["payload"]
+    assert any(k.endswith("/tcp") for k in payload)
+    assert any("could not be read" in str(v) for v in payload.values()) is False
+
+
+def test_evidence_shows_an_unreadable_table_as_the_reason(monkeypatch, tmp_path):
+    proc_net(monkeypatch, tmp_path, tcp=line("00000000:0016", "0A"))
+    payload = asyncio.run(network.Adapter().get_evidence(
+        "listening", "socket:tcp/0.0.0.0/22"))["payload"]
+    assert "could not be read" in payload[f"{tmp_path}/udp6"]

@@ -657,6 +657,14 @@ def _hex_addr(raw: str) -> str | None:
     return None
 
 
+def _proc_net_readable() -> bool:
+    """Whether ANY of the four tables opens. All four failing is a different
+    condition from all four being empty, and only one of them means this host
+    is not listening for anything."""
+    return any(_read_text(f"{PROC_NET}/{name}") is not None
+               for name in ("tcp", "tcp6", "udp", "udp6"))
+
+
 def _listening_scope(address: str) -> str:
     """What an address binding says about reach, in the words an operator
     would use. This is the fact the firewall question hangs off: a socket on
@@ -1310,18 +1318,42 @@ class Adapter:
         if not nft_ok:
             unavailable["nft-tables"] = nft_reason
             unavailable["nft-rules"] = nft_reason
-            # The join needs both halves. Declining it by name rather than
-            # serving sockets with an empty admitting list is the difference
-            # between "no rule admits this" and "the ruleset was unreadable".
-            unavailable["port-exposure"] = (
-                f"{nft_reason} — so which rules admit a listening socket"
-                " cannot be computed, and an unadmitted-looking port would be"
-                " an unread ruleset rather than a closed one")
         res_mode, res_reason = await self._resolver_mode()
         if res_mode is None:
             unavailable["resolver"] = res_reason
         if await anyio.to_thread.run_sync(_tailscale_snapshot) is None:
             unavailable["tailscale"] = TAILSCALE_UNAVAILABLE
+        # A host whose /proc/net cannot be read has not stopped listening.
+        # Serving an empty collection there reports a machine accepting no
+        # traffic at all, which is the most confident possible way to be
+        # wrong about exposure — and the collection had no way to say so,
+        # because the fact that names an unreadable table rides on rows and
+        # there were none.
+        sockets_ok = await anyio.to_thread.run_sync(_proc_net_readable)
+        if not sockets_ok:
+            unavailable["listening"] = (
+                f"none of {PROC_NET}/{{tcp,tcp6,udp,udp6}} could be read, so"
+                " what this host is listening on is unobservable rather than"
+                " nothing — an empty list here would report a machine"
+                " accepting no traffic")
+        # The join needs BOTH halves, and it names every half that failed
+        # rather than whichever check ran last: a host missing both would
+        # otherwise be told about one problem and left to find the other.
+        # Declining by name is the difference between "no rule admits this"
+        # and "the ruleset was unreadable".
+        if not nft_ok or not sockets_ok:
+            missing = []
+            if not nft_ok:
+                missing.append(
+                    f"the ruleset could not be read ({nft_reason}), so an"
+                    " unadmitted-looking port would be an unread ruleset"
+                    " rather than a closed one")
+            if not sockets_ok:
+                missing.append(
+                    "the listening sockets this joins against could not be"
+                    f" read from {PROC_NET}, so there is nothing to attribute"
+                    " a rule to")
+            unavailable["port-exposure"] = "; and ".join(missing)
         collections = [c for c in self.collections() if c not in unavailable]
         return {"available": True, "collections": collections,
                 "unavailable_collections": unavailable}
@@ -2214,8 +2246,22 @@ class Adapter:
         elif collection == "resolver":
             payload = {"manager": await BUS.get_all(RESOLVE1, RESOLVE1_PATH, RESOLVE1_MANAGER),
                        "links": await self._link_dns()}
-        elif collection == "nft-tables":
+        elif collection in ("nft-tables", "nft-rules"):
             payload = await anyio.to_thread.run_sync(_nft_json)
+        elif collection == "listening":
+            # The four tables verbatim, including one that would not open —
+            # shown as the reason it did not, because an unreadable table is
+            # the evidence for the fact that says so.
+            payload = {f"{PROC_NET}/{name}": (_read_text(f"{PROC_NET}/{name}")
+                                              or "could not be read")
+                       for name in ("tcp", "tcp6", "udp", "udp6")}
+        elif collection == "port-exposure":
+            # Both halves, because the row is a join and neither half alone
+            # lets a reader check it.
+            payload = {"sockets": {f"{PROC_NET}/{name}":
+                                   (_read_text(f"{PROC_NET}/{name}") or "could not be read")
+                                   for name in ("tcp", "tcp6", "udp", "udp6")},
+                       "ruleset": await anyio.to_thread.run_sync(_nft_json)}
         elif collection == "tailscale":
             # The raw snapshot verbatim — captured fresh from the file, the
             # very document the facts were shaped from.
