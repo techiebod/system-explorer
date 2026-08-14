@@ -1160,6 +1160,22 @@ function navModel() {
   const subsystems = state.capabilities?.subsystems || {};
   const sections = [];
   const claimed = new Set();
+  const listed = (sub, coll) =>
+    subsystems[sub]?.available && (subsystems[sub].collections || []).includes(coll);
+
+  // FIRST, and that ordering is the whole point. This section carries no
+  // heading — it is separated by space rather than by a label it does not
+  // need — and a headless section renders under whatever heading precedes
+  // it. Built after the estate section, the host's own overview appeared
+  // beneath "estate" and read as estate-scoped, which it is not: it is one
+  // host's landing view (reported from the deployed UI, 2026-08-14). Leading
+  // the nav, there is nothing above it to be mistaken for.
+  for (const [sub, coll, label] of STANDALONE) {
+    if (!listed(sub, coll)) continue;
+    claimed.add(`${sub}/${coll}`);
+    sections.push({ solo: true, heading: null, available: true,
+                    items: [{ sub, coll, label, route: `${sub}/${coll}` }] });
+  }
 
   // Operator-authored views lead the nav when the hub serves any: they are
   // the curated front doors, and the person they were written for should
@@ -1190,19 +1206,6 @@ function navModel() {
     sections.push({ solo: false, heading: "estate", available: true,
                     items: [{ sub: "estate", coll: "findings",
                               label: "findings", route: "estate/findings" }] });
-  }
-
-  const listed = (sub, coll) =>
-    subsystems[sub]?.available && (subsystems[sub].collections || []).includes(coll);
-
-  for (const [sub, coll, label] of STANDALONE) {
-    if (!listed(sub, coll)) continue;
-    claimed.add(`${sub}/${coll}`);
-    // No heading, deliberately: separated by space rather than by a label it
-    // does not need. Consumers must tolerate a headless section — which is
-    // precisely what one of them did not.
-    sections.push({ solo: true, heading: null, available: true,
-                    items: [{ sub, coll, label, route: `${sub}/${coll}` }] });
   }
 
   // Group membership is claimed BEFORE the subsystem sections are built, so a

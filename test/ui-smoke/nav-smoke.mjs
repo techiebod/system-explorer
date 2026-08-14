@@ -186,6 +186,31 @@ const check = (name, fn) => {
 
 console.log("operator UI chrome smoke test");
 
+check("a headless section never renders under the heading above it", () => {
+  /* Reported from the deployed UI: the host's own overview appeared beneath
+     the "estate" heading and read as estate-scoped, which it is not. The
+     section carries no heading deliberately, and a headless section inherits
+     whatever heading precedes it — so its POSITION is load-bearing, and
+     nothing may be inserted above it that carries one. */
+  ui.state.capabilities = CAPABILITIES;
+  ui.state.hub = true;                 // makes the estate section exist
+  ui.state.views = { views: [{ name: "v", title: "A view" }] };
+  const model = ui.navModel();
+  ui.state.hub = false;
+  ui.state.views = null;
+  const first = model[0];
+  if (!first) throw new Error("the nav built no sections");
+  const overview = first.items.find((i) => i.route === "system/overview");
+  if (!overview)
+    throw new Error(`overview is not in the first section (got ${first.heading})`);
+  for (let i = 0; i < model.length; i++) {
+    if (model[i].heading) continue;
+    const above = model.slice(0, i).reverse().find((s) => s.heading);
+    if (above && model[i].items.some((it) => it.route === "system/overview"))
+      throw new Error(`overview would render under "${above.heading}"`);
+  }
+});
+
 /* ── the resources page ──────────────────────────────────────────────────
  *
  * Executed rather than eyeballed, for the reason this whole harness exists:
