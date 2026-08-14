@@ -1190,10 +1190,19 @@ function navModel() {
   // (reported live, 2026-08-12 — the composable-dashboard idea deployed
   // as an accidental estate-wide default). On a host a view DOES name,
   // failures stay loud; that half was right.
+  let viewsHeaded = false;
   for (const doc of state.views?.views || []) {
     if (doc.hosts && state.currentHost && !doc.hosts.includes(state.currentHost))
       continue;
-    sections.push({ solo: false, heading: sections.length ? null : "views",
+    // The FIRST view section carries the heading and the rest join it. Keyed
+    // on whether one has been emitted, not on sections.length — that read as
+    // "am I first overall", and the moment a headless section was promoted
+    // above this loop the heading silently vanished (introduced and caught
+    // within the hour, 2026-08-14). A heading that depends on what else
+    // happens to be in the nav is a heading waiting to disappear.
+    const heading = viewsHeaded ? null : "views";
+    viewsHeaded = true;
+    sections.push({ solo: false, heading,
                     available: true,
                     items: [{ sub: "view", coll: doc.name, label: doc.title,
                               route: `view/${doc.name}` }] });

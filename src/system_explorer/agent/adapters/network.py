@@ -45,7 +45,7 @@ RESOLVE1_MANAGER = "org.freedesktop.resolve1.Manager"
 RESOLVE1_LINK = "org.freedesktop.resolve1.Link"
 
 LINK_REFERENCE = ["ip -d addr show", "networkctl status <link>"]
-ROUTE_REFERENCE = ["ip route show table all", "ip -6 route show table all",
+ROUTE_REFERENCE = ["ip -4 route show table all", "ip -6 route show table all",
                    "ip rule show"]
 RESOLVER_REFERENCE = ["resolvectl status", "resolvectl dns"]
 # The file shape: what glibc itself reads when no resolved stub is present.
@@ -655,6 +655,20 @@ def _hex_addr(raw: str) -> str | None:
     except (ValueError, OSError):
         return None
     return None
+
+
+def _family_of(destination: str) -> str | None:
+    """The address family a route's destination is in, or None where the
+    destination names no address (`default`, and anything unparseable).
+
+    Read from the row so the label cannot contradict the address printed
+    beside it — the failure that made this necessary was a Family fact
+    derived from which subprocess the row arrived in.
+    """
+    try:
+        return f"ipv{ipaddress.ip_network(destination, strict=False).version}"
+    except ValueError:
+        return None
 
 
 def _proc_net_readable() -> bool:
@@ -1505,7 +1519,16 @@ class Adapter:
         rules = await self._routing_rules()
         main_pref = rules.get("main", 32766)
         raw_by_family = {}
-        for family, args in (("ipv4", ["route", "show", "table", "all"]),
+        # `-4` IS LOAD-BEARING, and its absence was not a cosmetic slip.
+        # iproute2 only defaults a route dump to AF_INET when a table filter
+        # is set, and `table all` unsets it — so this call went out as
+        # AF_UNSPEC and the kernel returned BOTH families, every row of which
+        # was then stamped with this loop's family. Every IPv6 route was
+        # emitted twice: once truthfully, once labelled ipv4. Measured on
+        # four live hosts (2026-08-14): on one of them 32 of 54 "ipv4"
+        # rows were IPv6, and the two default routes collapsed onto a
+        # single object id.
+        for family, args in (("ipv4", ["-4", "route", "show", "table", "all"]),
                              ("ipv6", ["-6", "route", "show", "table", "all"])):
             raw_by_family[family] = await anyio.to_thread.run_sync(_ip_json, args)
 
@@ -1551,8 +1574,17 @@ class Adapter:
                 if (table != "main" and pref is not None and pref < main_pref
                         and dst in connected[family]):
                     facts["ShadowsLocalPrefix"] = True
+                # Derived from the ROW, not from the call that produced it.
+                # The label was previously an artefact of which subprocess
+                # the row arrived in, which is what let a widened dump
+                # mislabel a whole family; reading it from the destination
+                # means the fact cannot disagree with the address beside it.
+                # `default` carries no address, so it keeps the call's family
+                # — the one case where the call is the only evidence.
+                shown = _family_of(dst) or family
+                facts["Family"] = shown
                 items.append(env.item_summary(
-                    f"route:{family}/{table}/{dst}/{dev}", "route", native, facts,
+                    f"route:{shown}/{table}/{dst}/{dev}", "route", native, facts,
                     opinions=route_opinions(facts), healthy=None))
         return items
 
@@ -2241,7 +2273,7 @@ class Adapter:
             payload = {"ip_addr": await anyio.to_thread.run_sync(_ip_json, ["-d", "addr", "show"]),
                        "lldp": await self._lldp_by_link()}
         elif collection == "routes":
-            payload = {"ipv4": await anyio.to_thread.run_sync(_ip_json, ["route", "show"]),
+            payload = {"ipv4": await anyio.to_thread.run_sync(_ip_json, ["-4", "route", "show"]),
                        "ipv6": await anyio.to_thread.run_sync(_ip_json, ["-6", "route", "show"])}
         elif collection == "resolver":
             payload = {"manager": await BUS.get_all(RESOLVE1, RESOLVE1_PATH, RESOLVE1_MANAGER),

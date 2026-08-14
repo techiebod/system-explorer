@@ -64,3 +64,41 @@ def test_systemd_261_rehomes_loopback_globals_onto_lo():
     assert "100.100.100.100" not in servers
     # The classic ifindex-0 shape keeps working on older resolved.
     assert global_dns_servers([[0, 2, bytes([9, 9, 9, 9])]]) == ["9.9.9.9"]
+
+
+# ── a route's family is read from the route, not from the call ───────────
+
+def test_family_is_derived_from_the_destination():
+    """The label was an artefact of which subprocess the row arrived in, and
+    a widened dump therefore mislabelled a whole family. Reading it from the
+    destination means the fact cannot contradict the address beside it."""
+    from system_explorer.agent.adapters.network import _family_of
+    assert _family_of("10.0.0.0/8") == "ipv4"
+    assert _family_of("192.168.1.1") == "ipv4"
+    assert _family_of("fd7a:115c:a1e0::53") == "ipv6"
+    assert _family_of("2a01:4b00:875f:b700::/64") == "ipv6"
+    assert _family_of("ff00::/8") == "ipv6"
+
+
+def test_a_destination_naming_no_address_falls_back_to_the_call():
+    """`default` is the one row where the call is the only evidence of
+    family, so it keeps it rather than being dropped or guessed."""
+    from system_explorer.agent.adapters.network import _family_of
+    assert _family_of("default") is None
+    assert _family_of("") is None
+
+
+def test_the_ipv4_dump_states_its_family_to_the_tool():
+    """iproute2 only defaults a route dump to AF_INET when a table filter is
+    set, and `table all` unsets it — so a call without `-4` returns BOTH
+    families and every row gets stamped with the loop's family. This asserts
+    the flag is present in the call AND in the reference command, because an
+    administrator running the cited command must see what was measured."""
+    import inspect
+    from system_explorer.agent.adapters import network
+    source = inspect.getsource(network.Adapter._route_items)
+    assert '"-4", "route", "show", "table", "all"' in source, (
+        "the ipv4 route dump no longer states its family; `table all` widens "
+        "it to AF_UNSPEC and every IPv6 route comes back labelled ipv4"
+    )
+    assert network.ROUTE_REFERENCE[0] == "ip -4 route show table all"

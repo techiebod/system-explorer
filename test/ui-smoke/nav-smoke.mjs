@@ -186,6 +186,19 @@ const check = (name, fn) => {
 
 console.log("operator UI chrome smoke test");
 
+check("the views heading survives a section being promoted above it", () => {
+  /* Regression, caught within the hour of causing it: the heading was keyed
+     on sections.length ("am I first overall"), so promoting the headless
+     overview above the loop made every view section headless too. */
+  ui.state.capabilities = CAPABILITIES;
+  ui.state.views = { views: [{ name: "a", title: "A" }, { name: "b", title: "B" }] };
+  const model = ui.navModel();
+  ui.state.views = null;
+  const headed = model.filter((s) => s.heading === "views");
+  if (headed.length !== 1)
+    throw new Error(`expected exactly one "views" heading, got ${headed.length}`);
+});
+
 check("a headless section never renders under the heading above it", () => {
   /* Reported from the deployed UI: the host's own overview appeared beneath
      the "estate" heading and read as estate-scoped, which it is not. The
