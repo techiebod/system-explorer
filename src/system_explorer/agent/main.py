@@ -180,6 +180,16 @@ async def capabilities() -> dict:
         "observed_at": env.utc_now(),
         "version": VERSION,
         "subsystems": subsystems,
+        # How to open an object id, from the agent that mints them. This was
+        # a table in the browser until 2026-08-14, which is the fourth-copy
+        # failure the fact dictionary exists to prevent, and it had drifted
+        # exactly as that rule predicts: the entire application tier was
+        # missing, so every app-tier relationship chip rendered as dead text.
+        # Narrowed to the collections this host answers, so a chip never
+        # leads anywhere this agent would 404 on.
+        "object_prefixes": env.object_prefixes({
+            name: cap.get("collections") or []
+            for name, cap in subsystems.items() if cap.get("available")}),
     }
     if REVISION:
         out["revision"] = REVISION

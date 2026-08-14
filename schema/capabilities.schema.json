@@ -47,6 +47,32 @@
         }
       }
     },
+    "object_prefixes": {
+      "type": "object",
+      "description": "How to open an object id: `<prefix>` -> the collections that serve objects with that prefix, narrowed to the ones THIS host answers. The FIRST entry is the canonical home; any further entries are the same object seen by another collection (units/units and resources/workloads publish the same `unit:` ids; network/listening and network/port-exposure the same `socket:` ones). A consumer holding only a bare id opens the first; one that also holds a relationship's `subsystem`, or knows which page it is on, should prefer that. Absent from an agent predating the field, in which case a consumer must fall back to not linking rather than to a table of its own.",
+      "propertyNames": {
+        "$ref": "#/$defs/subsystemName"
+      },
+      "additionalProperties": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "required": [
+            "subsystem",
+            "collection"
+          ],
+          "properties": {
+            "subsystem": {
+              "$ref": "#/$defs/subsystemName"
+            },
+            "collection": {
+              "$ref": "#/$defs/subsystemName"
+            }
+          }
+        }
+      }
+    },
     "subsystems": {
       "type": "object",
       "description": "Subsystem name -> capability. Every subsystem the agent knows appears, including those it cannot serve; a subsystem declared in SPEC section 4 with no adapter yet appears here as unavailable with a reason rather than being silently missing.",

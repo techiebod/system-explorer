@@ -135,6 +135,105 @@ LOOK_MEMBERS = ("subsystem", "collection", "fact", "label")
 # published contract and nothing loads them at runtime.
 _ROUTE_NAME = re.compile(r"^[a-z][a-z0-9-]*$")
 
+# ── where an object id can be opened ─────────────────────────────────────
+#
+# An object id is `<prefix>:<native id>` (SPEC rule 15) and the prefix is the
+# only thing a consumer holding a bare id has to go on. The browser used to
+# keep its own copy of this map, which was the fourth-copy failure the fact
+# dictionary exists to prevent, and it had drifted exactly as predicted: the
+# whole application tier was missing, so every app-tier relationship chip
+# rendered as dead text.
+#
+# A LIST, NOT A ROUTE, and that is the substance rather than the shape.
+# A prefix is NOT unique — five are claimed twice, and two of those are the
+# same object genuinely served by two collections:
+#
+#   unit    units/units and resources/workloads publish THE SAME IDS. One is
+#           the systemd view, the other the cgroup accounting view; neither
+#           is a copy of the other and neither is wrong.
+#   socket  network/listening and network/port-exposure, likewise — the
+#           derived collection reuses the socket's id deliberately, because
+#           inventing a second identity for one listening socket would put
+#           two rows in the graph where the kernel has one thing.
+#   daemon  kea and unbound both run one, on the same host.
+#   instance, overview  two subsystems each, for the same reason.
+#
+# So the FIRST entry is the canonical home — where a bare id opens — and the
+# rest are the other places that same object appears. A consumer with more
+# context than a bare id (a relationship's own `subsystem`, or the page it is
+# already on) should prefer that; the order is the answer for one that has
+# nothing. Publishing it as a list is what lets a detail view say "this also
+# appears in resources/workloads" without a second table to disagree with.
+OBJECT_PREFIXES: dict[str, list[tuple[str, str]]] = {
+    "app": [("servarr", "apps")],
+    "array": [("storage", "arrays")],
+    "block-device": [("storage", "block-devices")],
+    "boot": [("system", "boot")],
+    "client": [("downloaders", "clients")],
+    "container": [("docker", "containers")],
+    "daemon": [("kea", "daemon"), ("unbound", "daemon")],
+    "dataset": [("storage", "datasets")],
+    "destination": [("protection", "destinations")],
+    "docker-network": [("docker", "networks")],
+    "domain": [("vms", "domains")],
+    "entry": [("logs", "journal")],
+    "generation": [("nix", "generations")],
+    "health": [("servarr", "health")],
+    "identity": [("system", "identity")],
+    "instance": [("paperless", "instance"), ("bazarr", "instance")],
+    "job": [("protection", "jobs")],
+    "lease": [("kea", "leases")],
+    "library": [("plex", "libraries")],
+    "link": [("network", "links")],
+    "lookup": [("network", "lookups"), ("storage", "lookups")],
+    "mount": [("storage", "mounts")],
+    "nft-rule": [("network", "nft-rules")],
+    "nft-table": [("network", "nft-tables")],
+    "nvme": [("hardware", "nvme")],
+    "overview": [("system", "overview"), ("traefik", "overview")],
+    "package": [("packages", "packages")],
+    "pci": [("hardware", "pci")],
+    "platform": [("hardware", "platform")],
+    "pool": [("storage", "pools")],
+    "request": [("plex", "requests")],
+    "reservation": [("kea", "reservations")],
+    "resolver": [("network", "resolver")],
+    "route": [("network", "routes")],
+    "router": [("traefik", "routers")],
+    "scsi": [("hardware", "scsi")],
+    "server": [("plex", "server")],
+    "service": [("traefik", "services")],
+    "session": [("plex", "sessions")],
+    "socket": [("network", "listening"), ("network", "port-exposure")],
+    "subnet": [("kea", "subnets")],
+    "tailscale": [("network", "tailscale")],
+    "target": [("protection", "targets")],
+    "time": [("system", "time")],
+    "transfer": [("downloaders", "transfers")],
+    "unit": [("units", "units"), ("resources", "workloads")],
+    "usb": [("hardware", "usb")],
+    "volume": [("docker", "volumes")],
+}
+
+
+def object_prefixes(served: dict[str, list[str]]) -> dict[str, list[dict]]:
+    """The map above, narrowed to what THIS host actually serves.
+
+    A host with no libvirt must not claim it can open `domain:`, because a
+    chip that leads to a 404 is worse than one that stayed plain text — the
+    reader followed it. `served` is {subsystem: collections}, and a prefix
+    whose every home has gone leaves the map entirely rather than lingering
+    as an empty list, which reads as "known but currently none".
+    """
+    out: dict[str, list[dict]] = {}
+    for prefix, homes in OBJECT_PREFIXES.items():
+        live = [{"subsystem": subsystem, "collection": collection}
+                for subsystem, collection in homes
+                if collection in served.get(subsystem, ())]
+        if live:
+            out[prefix] = live
+    return out
+
 
 def _look_entry(key: str, entry: object) -> dict:
     """One validated route hint, normalised and copied.

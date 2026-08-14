@@ -174,7 +174,7 @@ const context = vm.createContext(sandbox);
 // its state and helpers with const, which in a vm script are lexically scoped
 // and never become properties of the sandbox. Only code inside that script can
 // see them.
-const EXPORTS = "\n;globalThis.__ui = { state, renderNav, applyNavBadges, renderBuild, navRoutes, navModel, cellValue, PSEUDO_COLUMNS, linkPanel, scalarText, factHelp, renderOverview, renderGrid, renderResources, factLabel, worstOpinionLevel, OPINION_LEVELS, ATTENTION_LEVELS };";
+const EXPORTS = "\n;globalThis.__ui = { state, renderNav, applyNavBadges, renderBuild, navRoutes, navModel, cellValue, PSEUDO_COLUMNS, linkPanel, scalarText, factHelp, renderOverview, renderGrid, renderResources, factLabel, worstOpinionLevel, OPINION_LEVELS, ATTENTION_LEVELS, routeForId, idHomes, factLeaf };";
 vm.runInContext(readFileSync(APP, "utf8") + EXPORTS, context, { filename: "app.js" });
 const ui = sandbox.__ui;
 
@@ -838,6 +838,81 @@ check("a missing fact dictionary costs tooltips, not the page", () => {
     throw new Error("dictionary lookup missed a documented fact");
   if (ui.factHelp("LinkSpeed", "hardware", "scsi") !== null)
     throw new Error("nvme's sentence leaked onto scsi, where lanes do not exist");
+});
+
+/* ── where an object id opens ─────────────────────────────────────────── */
+//
+// The routing table lived in here until 2026-08-14 and had lost the entire
+// application tier, so every app-tier chip rendered as dead text. It is now
+// served by the agent; these checks are what stop the browser growing another
+// copy, and what pin the two rules that make an ambiguous prefix resolvable.
+
+const PREFIXES = {
+  pool: [{ subsystem: "storage", collection: "pools" }],
+  unit: [{ subsystem: "units", collection: "units" },
+         { subsystem: "resources", collection: "workloads" }],
+  socket: [{ subsystem: "network", collection: "listening" },
+           { subsystem: "network", collection: "port-exposure" }],
+};
+
+const withPrefixes = (subsystem) => {
+  ui.state.capabilities = { ...CAPABILITIES, object_prefixes: PREFIXES };
+  ui.state.subsystem = subsystem;
+};
+
+check("an id opens at its canonical home when nothing else is known", () => {
+  withPrefixes("storage");
+  const got = ui.routeForId("pool:tank");
+  if (got?.join("/") !== "storage/pools") throw new Error(`routed to ${got}`);
+});
+
+check("a relationship's own subsystem decides where an ambiguous id lands", () => {
+  withPrefixes("docker");
+  const got = ui.routeForId("unit:docker-abc.scope", "resources");
+  if (got?.join("/") !== "resources/workloads")
+    throw new Error(`the edge said resources and it went to ${got}`);
+});
+
+check("with no hint, an ambiguous id stays on the page the reader is on", () => {
+  // The whole of the reported complaint: clicking a workload sent the reader
+  // to units, because the id prefix was the only thing consulted and it was
+  // consulted globally.
+  withPrefixes("resources");
+  const got = ui.routeForId("unit:docker-abc.scope");
+  if (got?.join("/") !== "resources/workloads")
+    throw new Error(`left the resources page for ${got}`);
+  withPrefixes("units");
+  if (ui.routeForId("unit:sshd.service")?.join("/") !== "units/units")
+    throw new Error("units did not keep its own ids");
+});
+
+check("an unhinted id on an unrelated page falls back to the canonical home", () => {
+  withPrefixes("docker");
+  const got = ui.routeForId("unit:docker-abc.scope");
+  if (got?.join("/") !== "units/units") throw new Error(`fell back to ${got}`);
+});
+
+check("an id the host cannot open is not made a link", () => {
+  withPrefixes("storage");
+  if (ui.routeForId("domain:appliance") !== null)
+    throw new Error("offered a route into a subsystem this host does not serve");
+  if (ui.routeForId("not-an-id") !== null) throw new Error("routed a bare string");
+});
+
+check("an agent that publishes no map costs links, not the page", () => {
+  ui.state.capabilities = CAPABILITIES;
+  ui.state.subsystem = "storage";
+  if (ui.routeForId("pool:tank") !== null)
+    throw new Error("invented a route with no map served");
+  if (ui.factLeaf("pool:tank") !== null)
+    throw new Error("factLeaf linked with no map served");
+});
+
+check("a fact value naming an object becomes a link through the same map", () => {
+  withPrefixes("storage");
+  const node = ui.factLeaf("pool:tank");
+  if (!node || !String(node.href).includes("storage/pools"))
+    throw new Error(`fact value did not link: ${node && node.href}`);
 });
 
 if (failures.length) {

@@ -392,38 +392,47 @@ function hiddenCounts(items, route) {
   return groups.map(g => [g, n.get(g.key)]).filter(([, count]) => count > 0);
 }
 
-const PREFIX_ROUTE = {
-  unit: ["units", "units"],
-  entry: ["logs", "journal"],
-  "block-device": ["storage", "block-devices"],
-  mount: ["storage", "mounts"],
-  array: ["storage", "arrays"],
-  pool: ["storage", "pools"],
-  dataset: ["storage", "datasets"],
-  container: ["docker", "containers"],
-  volume: ["docker", "volumes"],
-  "docker-network": ["docker", "networks"],
-  router: ["traefik", "routers"],
-  client: ["downloaders", "clients"],
-  transfer: ["downloaders", "transfers"],
-  identity: ["system", "identity"],
-  time: ["system", "time"],
-  boot: ["system", "boot"],
-  overview: ["system", "overview"],
-  generation: ["nix", "generations"],
-  package: ["packages", "packages"],
-  platform: ["hardware", "platform"],
-  pci: ["hardware", "pci"],
-  usb: ["hardware", "usb"],
-  scsi: ["hardware", "scsi"],
-  nvme: ["hardware", "nvme"],
-  link: ["network", "links"],
-  route: ["network", "routes"],
-  lookup: ["network", "lookups"],
-  resolver: ["network", "resolver"],
-  "nft-table": ["network", "nft-tables"],
-  domain: ["vms", "domains"],
-};
+/* Where an object id opens — SERVED BY THE AGENT, never a table in here.
+
+   This was a hand-kept map of 31 prefixes until 2026-08-14, and it is the
+   fourth-copy failure the fact dictionary exists to prevent, caught in the
+   act: the entire application tier was missing from it, so every app-tier
+   relationship chip and every fact value naming an app object rendered as
+   dead text. Nothing in the browser could have noticed, because nothing in
+   the browser mints ids.
+
+   /v1/capabilities now carries object_prefixes, narrowed to the collections
+   the host actually answers, as an ORDERED list per prefix: the first entry
+   is the canonical home and any further entries are the same object seen by
+   another collection. Five prefixes are claimed twice — units/units and
+   resources/workloads publish the same `unit:` ids, network/listening and
+   network/port-exposure the same `socket:` ones — which is why resolution
+   takes a hint and why a bare fallback is the LAST resort, not the rule.
+
+   An agent predating the field publishes nothing, and then nothing links.
+   That is deliberate: a stale local table is how the last one went wrong. */
+function idHomes(objectId) {
+  const sep = String(objectId ?? "").indexOf(":");
+  if (sep <= 0) return [];
+  const prefix = objectId.slice(0, sep);
+  return state.capabilities?.object_prefixes?.[prefix] || [];
+}
+
+/* [subsystem, collection] for an id, or null if nothing here serves it.
+
+   `hint` is the subsystem a relationship declared for its target — the only
+   thing that can disambiguate `unit:` between the systemd view and the
+   cgroup one, and the reason env.rel() takes a subsystem= at all. Failing
+   that, STAY WHERE THE READER IS: a `unit:` value on a resources page means
+   the resources row, and jumping to units would be the same wrong answer
+   the old global table gave for every one of these. */
+function routeForId(objectId, hint = null) {
+  const homes = idHomes(objectId);
+  if (!homes.length) return null;
+  const pick = (hinted) => homes.find(h => h.subsystem === hinted);
+  const home = (hint && pick(hint)) || pick(state.subsystem) || homes[0];
+  return [home.subsystem, home.collection];
+}
 
 /* State badges. One table, several vocabularies — `dead` is a normal systemd
    SubState and a warned-about docker container; `down` is a fault on a NIC
@@ -3882,8 +3891,10 @@ function renderExpansion(colspan) {
       const addChips = (list) => {
         for (const r of list) {
           const targetId = r.target.id;
-          const prefix = targetId.split(":", 1)[0];
-          const routeTo = PREFIX_ROUTE[prefix];
+          // The edge's own subsystem decides where it lands. It is the only
+          // thing that can tell `unit:` in the systemd sense from `unit:` in
+          // the cgroup-accounting sense, which is why env.rel() takes it.
+          const routeTo = routeForId(targetId, r.target.subsystem);
           const node = el(routeTo ? "a" : "span", "rel");
           node.appendChild(el("span", "arrow", direction === "out" ? "→" : "←"));
           node.appendChild(document.createTextNode(targetId));
@@ -4163,16 +4174,19 @@ function capacityPanel(facts) {
 }
 
 /* Fact values that name another object ("block-device:sdc") become links,
-   the same routing the relationship chips use. */
+   the same routing the relationship chips use.
+
+   No hint to pass: a fact value is a bare string with no room to carry a
+   subsystem, so routeForId's stay-where-the-reader-is rule is what resolves
+   the ambiguous prefixes. That rule was originally a special case for
+   `lookup` here — every subsystem may carry a lookups collection, so a fact
+   naming one means this subsystem's — and generalising it turned out to be
+   the correct behaviour for `unit` and `socket` too. */
 function factLeaf(value, short = false) {
   if (typeof value !== "string") return null;
   const sep = value.indexOf(":");
   if (sep <= 0) return null;
-  const prefix = value.slice(0, sep);
-  // lookup ids are subsystem-relative: every subsystem may carry a lookups
-  // collection, and a fact naming one means "this subsystem's".
-  const routeTo = prefix === "lookup"
-    ? [state.subsystem, "lookups"] : PREFIX_ROUTE[prefix];
+  const routeTo = routeForId(value);
   if (!routeTo || !routeTo[0]) return null;
   const a = el("a", "fact-link", short ? value.slice(sep + 1) : value);
   a.title = value;
