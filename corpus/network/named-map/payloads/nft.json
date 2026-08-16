@@ -1,0 +1,136 @@
+{
+  "nftables": [
+    {
+      "metainfo": {
+        "version": "1.0.9",
+        "release_name": "Old Doc Yak #3",
+        "json_schema_version": 1
+      }
+    },
+    {
+      "table": {
+        "family": "inet",
+        "name": "maplab",
+        "handle": 6
+      }
+    },
+    {
+      "map": {
+        "family": "inet",
+        "name": "dispatch",
+        "table": "maplab",
+        "type": "inet_proto",
+        "handle": 3,
+        "map": "verdict",
+        "elem": [
+          [
+            "tcp",
+            {
+              "jump": {
+                "target": "landing"
+              }
+            }
+          ],
+          [
+            "udp",
+            {
+              "drop": null
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "chain": {
+        "family": "inet",
+        "table": "maplab",
+        "name": "landing",
+        "handle": 1
+      }
+    },
+    {
+      "chain": {
+        "family": "inet",
+        "table": "maplab",
+        "name": "input",
+        "handle": 2,
+        "type": "filter",
+        "hook": "input",
+        "prio": 0,
+        "policy": "drop"
+      }
+    },
+    {
+      "rule": {
+        "family": "inet",
+        "table": "maplab",
+        "chain": "landing",
+        "handle": 4,
+        "expr": [
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "payload": {
+                  "protocol": "tcp",
+                  "field": "dport"
+                }
+              },
+              "right": 8080
+            }
+          },
+          {
+            "accept": null
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "inet",
+        "table": "maplab",
+        "chain": "input",
+        "handle": 5,
+        "expr": [
+          {
+            "match": {
+              "op": "in",
+              "left": {
+                "ct": {
+                  "key": "state"
+                }
+              },
+              "right": [
+                "established",
+                "related"
+              ]
+            }
+          },
+          {
+            "accept": null
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "inet",
+        "table": "maplab",
+        "chain": "input",
+        "handle": 6,
+        "expr": [
+          {
+            "vmap": {
+              "key": {
+                "meta": {
+                  "key": "l4proto"
+                }
+              },
+              "data": "@dispatch"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

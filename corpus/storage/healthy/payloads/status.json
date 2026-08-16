@@ -1,0 +1,148 @@
+{
+  "output_version": {
+    "command": "zpool status",
+    "vers_major": 0,
+    "vers_minor": 1
+  },
+  "pools": {
+    "host-ba4de5": {
+      "name": "host-ba4de5",
+      "state": "ONLINE",
+      "pool_guid": 18444306082397320711,
+      "txg": 20311647,
+      "spa_version": 5000,
+      "zpl_version": 5,
+      "scan_stats": {
+        "function": "SCRUB",
+        "state": "FINISHED",
+        "start_time": 1786576731,
+        "end_time": 1786602071,
+        "to_examine": 21892006977536,
+        "examined": 21892006207488,
+        "skipped": 130965504,
+        "processed": 0,
+        "errors": 0,
+        "bytes_per_scan": 0,
+        "pass_start": 1786600836,
+        "scrub_pause": 0,
+        "scrub_spent_paused": 0,
+        "issued_bytes_per_scan": 947037921280,
+        "issued": 21891869605888
+      },
+      "vdevs": {
+        "host-ba4de5": {
+          "name": "host-ba4de5",
+          "vdev_type": "root",
+          "guid": 18444306082397320711,
+          "class": "normal",
+          "state": "ONLINE",
+          "alloc_space": 21897377112064,
+          "total_space": 39994735460352,
+          "def_space": 31948919537664,
+          "read_errors": 0,
+          "write_errors": 0,
+          "checksum_errors": 0,
+          "vdevs": {
+            "raidz1-0": {
+              "name": "raidz1-0",
+              "vdev_type": "raidz",
+              "guid": 18443235164185450741,
+              "class": "normal",
+              "state": "ONLINE",
+              "alloc_space": 21897377112064,
+              "total_space": 39994735460352,
+              "def_space": 31948919537664,
+              "rep_dev_size": 39994735460352,
+              "read_errors": 0,
+              "write_errors": 0,
+              "checksum_errors": 0,
+              "vdevs": {
+                "wwn-0x386d3fc46c502217": {
+                  "name": "wwn-0x386d3fc46c502217",
+                  "vdev_type": "disk",
+                  "guid": 1844647468722823387,
+                  "path": "/dev/disk/by-id/wwn-0x386d3fc46c502217-part1",
+                  "phys_path": "pci-0000:01:00.0-sas-phy2-lun-0",
+                  "devid": "scsi-3386d3fc46c502217-part1",
+                  "class": "normal",
+                  "state": "ONLINE",
+                  "rep_dev_size": 7998951810663,
+                  "phys_space": 8001553432576,
+                  "read_errors": 0,
+                  "write_errors": 0,
+                  "checksum_errors": 0,
+                  "slow_ios": 0
+                },
+                "wwn-0x35f5ff79fc3b1a0b": {
+                  "name": "wwn-0x35f5ff79fc3b1a0b",
+                  "vdev_type": "disk",
+                  "guid": 1844204683769140653,
+                  "path": "/dev/disk/by-id/wwn-0x35f5ff79fc3b1a0b-part1",
+                  "phys_path": "pci-0000:01:00.0-sas-phy5-lun-0",
+                  "devid": "scsi-335f5ff79fc3b1a0b-part1",
+                  "class": "normal",
+                  "state": "ONLINE",
+                  "rep_dev_size": 7998951810663,
+                  "phys_space": 8001482129408,
+                  "read_errors": 0,
+                  "write_errors": 0,
+                  "checksum_errors": 0,
+                  "slow_ios": 0
+                },
+                "wwn-0x3496dad367470742": {
+                  "name": "wwn-0x3496dad367470742",
+                  "vdev_type": "disk",
+                  "guid": 1844179786433898117,
+                  "path": "/dev/disk/by-id/wwn-0x3496dad367470742-part1",
+                  "phys_path": "pci-0000:01:00.0-sas-phy6-lun-0",
+                  "devid": "scsi-33496dad367470742-part1",
+                  "class": "normal",
+                  "state": "ONLINE",
+                  "rep_dev_size": 7998951810663,
+                  "phys_space": 8001482129408,
+                  "read_errors": 0,
+                  "write_errors": 0,
+                  "checksum_errors": 0,
+                  "slow_ios": 0
+                },
+                "wwn-0x3e563d0de64dbf36": {
+                  "name": "wwn-0x3e563d0de64dbf36",
+                  "vdev_type": "disk",
+                  "guid": 1844442339052601435,
+                  "path": "/dev/disk/by-id/wwn-0x3e563d0de64dbf36-part1",
+                  "phys_path": "pci-0000:01:00.0-sas-phy7-lun-0",
+                  "devid": "scsi-33e563d0de64dbf36-part1",
+                  "class": "normal",
+                  "state": "ONLINE",
+                  "rep_dev_size": 7998951810663,
+                  "phys_space": 8001482129408,
+                  "read_errors": 0,
+                  "write_errors": 0,
+                  "checksum_errors": 0,
+                  "slow_ios": 0
+                },
+                "wwn-0x3c80914fb41ce7d6": {
+                  "name": "wwn-0x3c80914fb41ce7d6",
+                  "vdev_type": "disk",
+                  "guid": 1844002997201108415,
+                  "path": "/dev/disk/by-id/wwn-0x3c80914fb41ce7d6-part1",
+                  "phys_path": "pci-0000:01:00.0-sas-phy4-lun-0",
+                  "devid": "scsi-33c80914fb41ce7d6-part1",
+                  "class": "normal",
+                  "state": "ONLINE",
+                  "rep_dev_size": 7998951810663,
+                  "phys_space": 8001553432576,
+                  "read_errors": 0,
+                  "write_errors": 0,
+                  "checksum_errors": 0,
+                  "slow_ios": 0
+                }
+              }
+            }
+          }
+        }
+      },
+      "error_count": 0
+    }
+  }
+}

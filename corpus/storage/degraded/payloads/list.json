@@ -1,0 +1,377 @@
+{
+  "output_version": {
+    "command": "zpool list",
+    "vers_major": 0,
+    "vers_minor": 1
+  },
+  "pools": {
+    "host-2f5789": {
+      "name": "host-2f5789",
+      "type": "POOL",
+      "state": "DEGRADED",
+      "pool_guid": "1844405397472344158",
+      "txg": "31",
+      "spa_version": "5000",
+      "zpl_version": "5",
+      "properties": {
+        "size": {
+          "value": "2415919104",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "allocated": {
+          "value": "157713408",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "free": {
+          "value": "2258205696",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "capacity": {
+          "value": "6",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "fragmentation": {
+          "value": "2",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "health": {
+          "value": "DEGRADED",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        }
+      },
+      "vdevs": {
+        "raidz1-0": {
+          "name": "raidz1-0",
+          "vdev_type": "raidz",
+          "guid": "184475880414655943",
+          "class": "normal",
+          "state": "DEGRADED",
+          "properties": {
+            "size": {
+              "value": "2415919104",
+              "source": {
+                "type": "NONE",
+                "data": "-"
+              }
+            },
+            "allocated": {
+              "value": "157713408",
+              "source": {
+                "type": "NONE",
+                "data": "-"
+              }
+            },
+            "free": {
+              "value": "2258205696",
+              "source": {
+                "type": "NONE",
+                "data": "-"
+              }
+            },
+            "capacity": {
+              "value": "6",
+              "source": {
+                "type": "NONE",
+                "data": "-"
+              }
+            },
+            "fragmentation": {
+              "value": "2",
+              "source": {
+                "type": "NONE",
+                "data": "-"
+              }
+            },
+            "health": {
+              "value": "DEGRADED",
+              "source": {
+                "type": "NONE",
+                "data": "-"
+              }
+            }
+          },
+          "vdevs": {
+            "/var/tmp/host-018c4b/disk1": {
+              "name": "/var/tmp/host-018c4b/disk1",
+              "vdev_type": "file",
+              "guid": "18440878419507326978",
+              "path": "/var/tmp/host-018c4b/disk1",
+              "class": "normal",
+              "state": "ONLINE",
+              "properties": {
+                "size": {
+                  "value": "536870912",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "allocated": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "free": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "capacity": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "fragmentation": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "health": {
+                  "value": "ONLINE",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                }
+              }
+            },
+            "/var/tmp/host-018c4b/disk2": {
+              "name": "/var/tmp/host-018c4b/disk2",
+              "vdev_type": "file",
+              "guid": "1844721780806050493",
+              "path": "/var/tmp/host-018c4b/disk2",
+              "class": "normal",
+              "state": "ONLINE",
+              "properties": {
+                "size": {
+                  "value": "536870912",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "allocated": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "free": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "capacity": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "fragmentation": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "health": {
+                  "value": "ONLINE",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                }
+              }
+            },
+            "/var/tmp/host-018c4b/disk3": {
+              "name": "/var/tmp/host-018c4b/disk3",
+              "vdev_type": "file",
+              "guid": "18444528172883678086",
+              "path": "/var/tmp/host-018c4b/disk3",
+              "class": "normal",
+              "state": "ONLINE",
+              "properties": {
+                "size": {
+                  "value": "536870912",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "allocated": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "free": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "capacity": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "fragmentation": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "health": {
+                  "value": "ONLINE",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                }
+              }
+            },
+            "/var/tmp/host-018c4b/disk4": {
+              "name": "/var/tmp/host-018c4b/disk4",
+              "vdev_type": "file",
+              "guid": "184476767232112306",
+              "path": "/var/tmp/host-018c4b/disk4",
+              "class": "normal",
+              "state": "OFFLINE",
+              "properties": {
+                "size": {
+                  "value": "536870912",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "allocated": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "free": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "capacity": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "fragmentation": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "health": {
+                  "value": "OFFLINE",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                }
+              }
+            },
+            "/var/tmp/host-018c4b/disk5": {
+              "name": "/var/tmp/host-018c4b/disk5",
+              "vdev_type": "file",
+              "guid": "18442688292133562484",
+              "path": "/var/tmp/host-018c4b/disk5",
+              "class": "normal",
+              "state": "ONLINE",
+              "properties": {
+                "size": {
+                  "value": "536870912",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "allocated": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "free": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "capacity": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "fragmentation": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "health": {
+                  "value": "ONLINE",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

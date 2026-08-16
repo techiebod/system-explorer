@@ -1,0 +1,6 @@
+{
+  "/dev/disk/by-partuuid/5cb0220e-16a9-967f-5c68-6fa299ab935c": "vda13",
+  "/dev/disk/by-partuuid/5cb09984-a1c1-adf2-5b95-60ef46968cef": "vda1",
+  "/dev/disk/by-partuuid/5cb0bd84-2480-a1cb-6860-4c6953b7988f": "vda15",
+  "/dev/disk/by-partuuid/5cb0232e-8f27-dd63-6236-0e08fcb9da23": "vda14"
+}

@@ -1,0 +1,18 @@
+{
+  "collector": "network",
+  "collections": ["nft-chains"],
+  "variant": "absent",
+  "provenance": "captured",
+  "os": "debian",
+  "os_version": "13",
+  "source_version": "none",
+  "captured": "2026-08-16T09:30:00Z",
+  "regenerable": true,
+  "canaries": [],
+  "anonymised": true,
+  "note": "nft is not installed. There is no payload because there was nothing to read, and that is the whole point of the variant: a decline of absent is a successful reading that commits zero objects, where unauthorised, unavailable and unsupported would leave prior state stale. payloads/ carries only a .gitkeep — git does not track empty directories, and a checkout without the directory would read as a broken corpus rather than an absent interface.",
+  "anchors": [
+    {"collection": "nft-chains", "decline_reason": "absent"}
+  ],
+  "anchors_note": "Staged truth: the guest genuinely had no nft binary, so the reading that retires prior objects is a decline of absent — any other reason would be the collector inventing an inability it did not have."
+}

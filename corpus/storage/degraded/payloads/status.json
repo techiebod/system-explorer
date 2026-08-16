@@ -1,0 +1,144 @@
+{
+  "output_version": {
+    "command": "zpool status",
+    "vers_major": 0,
+    "vers_minor": 1
+  },
+  "pools": {
+    "host-2f5789": {
+      "name": "host-2f5789",
+      "state": "DEGRADED",
+      "pool_guid": 1844405397472344158,
+      "txg": 31,
+      "spa_version": 5000,
+      "zpl_version": 5,
+      "status": "One or more devices has experienced an unrecoverable error.  An\n\tattempt was made to correct the error.  Applications are unaffected.\n",
+      "action": "Determine if the device needs to be replaced, and clear the errors\n\tusing 'zpool clear' or replace the device with 'zpool replace'.\n",
+      "msgid": "ZFS-8000-9P",
+      "moreinfo": "https://openzfs.github.io/openzfs-docs/msg/ZFS-8000-9P",
+      "scan_stats": {
+        "function": "SCRUB",
+        "state": "FINISHED",
+        "start_time": 1786918241,
+        "end_time": 1786918241,
+        "to_examine": 157744128,
+        "examined": 157630464,
+        "skipped": 81920,
+        "processed": 2560,
+        "errors": 0,
+        "bytes_per_scan": 0,
+        "pass_start": 1786918241,
+        "scrub_pause": 0,
+        "scrub_spent_paused": 0,
+        "issued_bytes_per_scan": 157569024,
+        "issued": 157569024
+      },
+      "vdevs": {
+        "host-2f5789": {
+          "name": "host-2f5789",
+          "vdev_type": "root",
+          "guid": 1844405397472344158,
+          "class": "normal",
+          "state": "DEGRADED",
+          "alloc_space": 157713408,
+          "total_space": 2415919104,
+          "def_space": 1929904128,
+          "read_errors": 0,
+          "write_errors": 0,
+          "checksum_errors": 0,
+          "vdevs": {
+            "raidz1-0": {
+              "name": "raidz1-0",
+              "vdev_type": "raidz",
+              "guid": 184475880414655943,
+              "class": "normal",
+              "state": "DEGRADED",
+              "alloc_space": 157713408,
+              "total_space": 2415919104,
+              "def_space": 1929904128,
+              "rep_dev_size": 2415919104,
+              "read_errors": 0,
+              "write_errors": 0,
+              "checksum_errors": 0,
+              "vdevs": {
+                "/var/tmp/host-018c4b/disk1": {
+                  "name": "/var/tmp/host-018c4b/disk1",
+                  "vdev_type": "file",
+                  "guid": 18440878419507326978,
+                  "path": "/var/tmp/host-018c4b/disk1",
+                  "class": "normal",
+                  "state": "ONLINE",
+                  "rep_dev_size": 487902413,
+                  "phys_space": 536870912,
+                  "read_errors": 0,
+                  "write_errors": 0,
+                  "checksum_errors": 0,
+                  "slow_ios": 0
+                },
+                "/var/tmp/host-018c4b/disk2": {
+                  "name": "/var/tmp/host-018c4b/disk2",
+                  "vdev_type": "file",
+                  "guid": 1844721780806050493,
+                  "path": "/var/tmp/host-018c4b/disk2",
+                  "class": "normal",
+                  "state": "ONLINE",
+                  "rep_dev_size": 487902413,
+                  "phys_space": 536870912,
+                  "read_errors": 0,
+                  "write_errors": 0,
+                  "checksum_errors": 0,
+                  "slow_ios": 0
+                },
+                "/var/tmp/host-018c4b/disk3": {
+                  "name": "/var/tmp/host-018c4b/disk3",
+                  "vdev_type": "file",
+                  "guid": 18444528172883678086,
+                  "path": "/var/tmp/host-018c4b/disk3",
+                  "class": "normal",
+                  "state": "ONLINE",
+                  "rep_dev_size": 487902413,
+                  "self_healed": 7680,
+                  "phys_space": 536870912,
+                  "read_errors": 0,
+                  "write_errors": 0,
+                  "checksum_errors": 3,
+                  "scan_processed": 2560,
+                  "slow_ios": 0
+                },
+                "/var/tmp/host-018c4b/disk4": {
+                  "name": "/var/tmp/host-018c4b/disk4",
+                  "vdev_type": "file",
+                  "guid": 184476767232112306,
+                  "path": "/var/tmp/host-018c4b/disk4",
+                  "class": "normal",
+                  "state": "OFFLINE",
+                  "rep_dev_size": 487902413,
+                  "phys_space": 536870912,
+                  "read_errors": 0,
+                  "write_errors": 0,
+                  "checksum_errors": 0,
+                  "slow_ios": 0
+                },
+                "/var/tmp/host-018c4b/disk5": {
+                  "name": "/var/tmp/host-018c4b/disk5",
+                  "vdev_type": "file",
+                  "guid": 18442688292133562484,
+                  "path": "/var/tmp/host-018c4b/disk5",
+                  "class": "normal",
+                  "state": "ONLINE",
+                  "rep_dev_size": 487902413,
+                  "phys_space": 536870912,
+                  "read_errors": 0,
+                  "write_errors": 0,
+                  "checksum_errors": 0,
+                  "slow_ios": 0
+                }
+              }
+            }
+          }
+        }
+      },
+      "error_count": 0
+    }
+  }
+}

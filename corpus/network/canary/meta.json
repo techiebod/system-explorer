@@ -1,0 +1,27 @@
+{
+  "collector": "network",
+  "collections": ["nft-chains"],
+  "variant": "canary",
+  "provenance": "captured-then-planted",
+  "os": "nixos",
+  "os_version": "25.11",
+  "source_version": "nftables-1.1.6",
+  "captured": "2026-08-16T09:00:00Z",
+  "regenerable": false,
+  "canaries": ["se-canary-nft-4f21a9c7d0"],
+  "anonymised": true,
+  "note": "The healthy ruleset with two deliberate plants, one per direction of the leak question. (1) The declared canary se-canary-nft-4f21a9c7d0 sits in a rule COMMENT — free text an operator can put anything into, which nft-chains reads past — and the canary checks assert it reaches no output channel. (2) A synthetic regular chain named se-canary-chain-7e19c4b2d6 pins the opposite truth: chain NAMES are emitted by design, so a credential pasted into one WILL travel — the token is therefore not in `canaries` (it legitimately appears in the expected stream) and is anchored below instead, so a collector that suppressed or rewrote the name fails the anchor. Before the second plant this variant was the healthy payload plus a field nothing reads, and its replay proved nothing healthy's did not.",
+  "anchors": [
+    {"collection": "nft-chains", "object": "inet nixos-fw input-allow",
+     "fact": "JumpedFrom", "value": ["input"]},
+    {"collection": "nft-chains", "object": "inet nixos-fw input-allow",
+     "absent_fact": "Unreferenced"},
+    {"collection": "nft-chains", "object": "inet nixos-fw input-allow",
+     "fact": "RuleCount", "value": 6},
+    {"collection": "nft-chains", "object": "ip filter se-canary-chain-7e19c4b2d6",
+     "fact": "Unreferenced", "value": true},
+    {"collection": "nft-chains", "object": "ip filter se-canary-chain-7e19c4b2d6",
+     "fact": "RuleCount", "value": 0}
+  ],
+  "anchors_note": "Staged truth read from the payload by hand: the input-allow anchors match healthy's (the plant does not touch reachability), and the canary chain was created at staging with no hook, no rules and no rule targeting it — so it must be emitted, name intact, as an unreferenced empty chain."
+}

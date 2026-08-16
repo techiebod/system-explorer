@@ -1,0 +1,27 @@
+{
+  "collector": "storage",
+  "collections": ["pools"],
+  "variant": "degraded",
+  "provenance": "captured",
+  "os": "ubuntu",
+  "os_version": "26.04",
+  "source_version": "zfs-2.4.1-1ubuntu5",
+  "captured": "2026-08-16T22:15:00Z",
+  "regenerable": true,
+  "regenerable_on": "a guest carrying OpenZFS >= 2.3: `zpool status -j` arrived in 2.3, and the lab's Ubuntu 24.04 image ships 2.2.2, which produces no storage payload at all — a drift run there regenerates the network variants and silently skips this one",
+  "canaries": [],
+  "anonymised": true,
+  "note": "A file-backed five-wide raidz1, staged in the lab and faulted deliberately, because the failure paths are where the facts that matter live and a healthy capture teaches none of them. Two DIFFERENT injuries, on two different members, so the specimen separates two things a reader conflates: disk3's backing file was overwritten wide and the pool scrubbed, which left checksum errors on that member and nothing else; disk4 was taken OFFLINE, which is what makes the POOL DEGRADED. The pool therefore reads DEGRADED with Errors=0 — parity repaired every one of disk3's bad blocks, so there are no known DATA errors while the per-vdev counter is non-zero. Errors and the counters are different facts, and a reading that treats either as the other is wrong about whether anything was lost.\n\nKills the hardcoded-healthy port (fleet round a5, fixtures/adversaries/a5_hardcoded_healthy.py): its State is the struct default \"ONLINE\", its StatusMessage is never read because the pools it was written against had none, its Errors is 0 by initialisation, and UnhealthyVdevs/VdevsWithErrors are stubs returning empty slices. Every one of those is an anchor below, so that subject fails this variant on the facts rather than on its stubbed envelope — which is what the storage/healthy pairing could never establish, since a hardcoded-healthy collector is RIGHT about a healthy pool.\n\nThe members are FILES, not disks, and that is visible in the specimen rather than hidden by it: vdev_type is \"file\", the vdev names are absolute paths, and no leaf resolves to a kernel block device. Every leaf row therefore OMITS Device — the absent channel a nested row has, since a fact value is never null (DESIGN 19) — and no unobservable record claims the resolution could not be done, because it could: devlinks.json is committed, so the alias trees were read and simply hold nothing for a file. Stated bound: this pair cannot TEST that distinction. The could-not-read channel opens only for leaves of type disk, so replaying this variant with devlinks.json deleted emits a byte-identical stream — the payload records what the guest had, and a variant whose members are real disks is what would discriminate.",
+  "anchors": [
+    {"collection": "pools", "object": "host-2f5789", "fact": "State", "value": "DEGRADED"},
+    {"collection": "pools", "object": "host-2f5789", "fact": "StatusMessage",
+     "value": "One or more devices has experienced an unrecoverable error.  An\n\tattempt was made to correct the error.  Applications are unaffected."},
+    {"collection": "pools", "object": "host-2f5789", "fact": "Errors", "value": 0},
+    {"collection": "pools", "object": "host-2f5789", "fact": "UnhealthyVdevs",
+     "value": ["raidz1-0", "/var/tmp/host-018c4b/disk4"]},
+    {"collection": "pools", "object": "host-2f5789", "fact": "VdevsWithErrors",
+     "value": ["/var/tmp/host-018c4b/disk3"]},
+    {"collection": "pools", "object": "host-2f5789", "fact": "Redundancy", "value": "raidz1"}
+  ],
+  "anchors_note": "Written from what the staging DID, before any collector was run over the capture. The pool was created five-wide raidz1 (Redundancy), disk4 was offlined and the raidz group therefore degraded (UnhealthyVdevs holds both, the group and the member — losing the member is what degraded the group), disk3's backing file was overwritten and a scrub left three checksum errors on it and none anywhere else (VdevsWithErrors holds that member alone), zpool answered with its ZFS-8000-9P catalogue prose (StatusMessage, anchored as the exact string, which is the absent-fact assertion inverted: this fact must EXIST), and no data was lost because parity repaired it (Errors=0, beside a non-zero per-vdev counter). Every anchored identifier is the scrubbed spelling, which is what the committed payloads carry: the pool name and the vdev directory are the two operator-chosen words the scrub run was handed."
+}

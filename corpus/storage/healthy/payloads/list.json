@@ -1,0 +1,387 @@
+{
+  "output_version": {
+    "command": "zpool list",
+    "vers_major": 0,
+    "vers_minor": 1
+  },
+  "pools": {
+    "host-ba4de5": {
+      "name": "host-ba4de5",
+      "type": "POOL",
+      "state": "ONLINE",
+      "pool_guid": "18444306082397320711",
+      "txg": "20311647",
+      "spa_version": "5000",
+      "zpl_version": "5",
+      "properties": {
+        "size": {
+          "value": "39994735460352",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "allocated": {
+          "value": "21897377112064",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "free": {
+          "value": "18097358348288",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "capacity": {
+          "value": "54",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "fragmentation": {
+          "value": "5",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "health": {
+          "value": "ONLINE",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        }
+      },
+      "vdevs": {
+        "raidz1-0": {
+          "name": "raidz1-0",
+          "vdev_type": "raidz",
+          "guid": "18443235164185450741",
+          "class": "normal",
+          "state": "ONLINE",
+          "properties": {
+            "size": {
+              "value": "39994735460352",
+              "source": {
+                "type": "NONE",
+                "data": "-"
+              }
+            },
+            "allocated": {
+              "value": "21897377112064",
+              "source": {
+                "type": "NONE",
+                "data": "-"
+              }
+            },
+            "free": {
+              "value": "18097358348288",
+              "source": {
+                "type": "NONE",
+                "data": "-"
+              }
+            },
+            "capacity": {
+              "value": "54",
+              "source": {
+                "type": "NONE",
+                "data": "-"
+              }
+            },
+            "fragmentation": {
+              "value": "5",
+              "source": {
+                "type": "NONE",
+                "data": "-"
+              }
+            },
+            "health": {
+              "value": "ONLINE",
+              "source": {
+                "type": "NONE",
+                "data": "-"
+              }
+            }
+          },
+          "vdevs": {
+            "wwn-0x386d3fc46c502217": {
+              "name": "wwn-0x386d3fc46c502217",
+              "vdev_type": "disk",
+              "guid": "1844647468722823387",
+              "path": "/dev/disk/by-id/wwn-0x386d3fc46c502217-part1",
+              "phys_path": "pci-0000:01:00.0-sas-phy2-lun-0",
+              "devid": "scsi-3386d3fc46c502217-part1",
+              "class": "normal",
+              "state": "ONLINE",
+              "properties": {
+                "size": {
+                  "value": "8001553432576",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "allocated": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "free": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "capacity": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "fragmentation": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "health": {
+                  "value": "ONLINE",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                }
+              }
+            },
+            "wwn-0x35f5ff79fc3b1a0b": {
+              "name": "wwn-0x35f5ff79fc3b1a0b",
+              "vdev_type": "disk",
+              "guid": "1844204683769140653",
+              "path": "/dev/disk/by-id/wwn-0x35f5ff79fc3b1a0b-part1",
+              "phys_path": "pci-0000:01:00.0-sas-phy5-lun-0",
+              "devid": "scsi-335f5ff79fc3b1a0b-part1",
+              "class": "normal",
+              "state": "ONLINE",
+              "properties": {
+                "size": {
+                  "value": "8001482129408",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "allocated": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "free": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "capacity": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "fragmentation": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "health": {
+                  "value": "ONLINE",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                }
+              }
+            },
+            "wwn-0x3496dad367470742": {
+              "name": "wwn-0x3496dad367470742",
+              "vdev_type": "disk",
+              "guid": "1844179786433898117",
+              "path": "/dev/disk/by-id/wwn-0x3496dad367470742-part1",
+              "phys_path": "pci-0000:01:00.0-sas-phy6-lun-0",
+              "devid": "scsi-33496dad367470742-part1",
+              "class": "normal",
+              "state": "ONLINE",
+              "properties": {
+                "size": {
+                  "value": "8001482129408",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "allocated": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "free": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "capacity": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "fragmentation": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "health": {
+                  "value": "ONLINE",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                }
+              }
+            },
+            "wwn-0x3e563d0de64dbf36": {
+              "name": "wwn-0x3e563d0de64dbf36",
+              "vdev_type": "disk",
+              "guid": "1844442339052601435",
+              "path": "/dev/disk/by-id/wwn-0x3e563d0de64dbf36-part1",
+              "phys_path": "pci-0000:01:00.0-sas-phy7-lun-0",
+              "devid": "scsi-33e563d0de64dbf36-part1",
+              "class": "normal",
+              "state": "ONLINE",
+              "properties": {
+                "size": {
+                  "value": "8001482129408",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "allocated": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "free": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "capacity": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "fragmentation": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "health": {
+                  "value": "ONLINE",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                }
+              }
+            },
+            "wwn-0x3c80914fb41ce7d6": {
+              "name": "wwn-0x3c80914fb41ce7d6",
+              "vdev_type": "disk",
+              "guid": "1844002997201108415",
+              "path": "/dev/disk/by-id/wwn-0x3c80914fb41ce7d6-part1",
+              "phys_path": "pci-0000:01:00.0-sas-phy4-lun-0",
+              "devid": "scsi-33c80914fb41ce7d6-part1",
+              "class": "normal",
+              "state": "ONLINE",
+              "properties": {
+                "size": {
+                  "value": "8001553432576",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "allocated": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "free": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "capacity": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "fragmentation": {
+                  "value": "-",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                },
+                "health": {
+                  "value": "ONLINE",
+                  "source": {
+                    "type": "NONE",
+                    "data": "-"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

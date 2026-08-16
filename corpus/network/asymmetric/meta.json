@@ -1,0 +1,25 @@
+{
+  "collector": "network",
+  "collections": ["nft-chains"],
+  "variant": "asymmetric",
+  "provenance": "captured",
+  "os": "ubuntu",
+  "os_version": "24.04",
+  "source_version": "nftables-1.0.9",
+  "captured": "2026-08-16T22:10:00Z",
+  "regenerable": true,
+  "canaries": [],
+  "anonymised": true,
+  "note": "One chain name, `shared`, created in BOTH an ip table and an ip6 table of the same name, and jumped to in only one of them. The ip copy is reached from its own `input`; the ip6 copy is reached by nothing at all — a v6 chain that was meant to be wired up and is not, which is the ordinary shape of this mistake in a real ruleset.\n\nKills the name-only-jump port: a walk that records `jumped to shared` without the (family, table) it was written in answers for both copies at once, and gets exactly one of the two answers wrong whichever way it errs — either it hides the dead v6 chain behind the live v4 one, or it reports the live one as unreachable. Both anchors are held for that reason: the point is not that the collector can say Unreferenced, it is that it DISCRIMINATES between two chains sharing a name.\n\nnft prints the two tables' chains with identical handles (1 and 2 in each family), so a subject keyed on the handle instead of the name collapses them the same way.",
+  "anchors": [
+    {"collection": "nft-chains", "object": "ip asym shared",
+     "fact": "JumpedFrom", "value": ["input"]},
+    {"collection": "nft-chains", "object": "ip asym shared",
+     "absent_fact": "Unreferenced"},
+    {"collection": "nft-chains", "object": "ip6 asym shared",
+     "fact": "Unreferenced", "value": true},
+    {"collection": "nft-chains", "object": "ip6 asym shared",
+     "absent_fact": "JumpedFrom"}
+  ],
+  "anchors_note": "Staged truth from the two rulesets that were loaded: the ip table got `input { jump shared }` and the ip6 table got no jump at all, so the ip copy carries JumpedFrom ['input'] and no Unreferenced, and the ip6 copy carries Unreferenced true and no JumpedFrom. Four anchors, not two, because each chain's answer is asserted in both directions — an implementation that leaked reachability across families satisfies half of this and fails the other half, and half is what tells a reader which way it is wrong."
+}
