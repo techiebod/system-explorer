@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "se.answer.1.json",
   "title": "System Explorer problem-domain answer",
-  "description": "A question as an object, minted at the hub: answer, verdict, basis, reach (DESIGN 24). Verdict and epistemic status are separate axes and must never merge; removing evidence may never improve either.",
+  "description": "A question as an object, minted at the hub: answer, verdict, basis, reach (DESIGN 24). Verdict and epistemic status are separate axes and must never merge; removing evidence may never improve either. Closed throughout: an answer is the top of the product, and an unmodelled member here is a claim no consumer was told how to read.",
   "type": "object",
   "required": [
     "id",
@@ -15,13 +15,15 @@
     "basis",
     "reach"
   ],
+  "additionalProperties": false,
   "properties": {
     "id": {
       "type": "string",
       "pattern": "^question:"
     },
     "scope": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "question": {
       "type": "string"
@@ -50,6 +52,8 @@
       "required": [
         "consulted"
       ],
+      "additionalProperties": false,
+      "description": "What was and was not seen. With coverage it carries appendix A's host_reachability vocabulary structurally: consulted holds the connected sources, dark and unswept name the other two states by member, the same way coverage's members carry the coverage vocabulary.",
       "properties": {
         "consulted": {
           "type": "array",
@@ -66,6 +70,7 @@
               "collection",
               "reason"
             ],
+            "additionalProperties": false,
             "properties": {
               "host": {
                 "type": "string"
@@ -87,6 +92,7 @@
               "host",
               "since"
             ],
+            "additionalProperties": false,
             "properties": {
               "host": {
                 "type": "string"
@@ -97,8 +103,17 @@
             }
           }
         },
+        "unswept": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Hosts not heard from since this hub started (DESIGN 06). Not dark: nobody-has-told-us is a different claim from told-us-and-stopped, and only one of them is evidence about the host — which is why it has no since."
+        },
         "coverage": {
           "type": "object",
+          "additionalProperties": false,
           "description": "Identity lists, never bare counts (DESIGN 24).",
           "properties": {
             "declared": {
@@ -150,6 +165,7 @@
         "kind",
         "origin"
       ],
+      "unevaluatedProperties": false,
       "properties": {
         "claim": {
           "type": "string"
@@ -159,7 +175,8 @@
         },
         "origin": {
           "type": "string",
-          "description": "Who is making the claim. For declared kind the convention is intent@r<revision> \u2014 the revision that asserted it."
+          "minLength": 1,
+          "description": "Who is making the claim. For declared kind the convention is intent@r<revision> — the revision that asserted it; for derived kind it is the tier that computed it, constrained below."
         },
         "value_as_read": {},
         "ref": {
@@ -170,7 +187,7 @@
           "items": {
             "type": "string"
           },
-          "description": "References to the claims this derivation consumed \u2014 how a derived claim is re-checked (DESIGN 24)."
+          "description": "References to the claims this derivation consumed — how a derived claim is re-checked (DESIGN 24)."
         }
       },
       "allOf": [
@@ -225,6 +242,10 @@
               "consumed"
             ],
             "properties": {
+              "origin": {
+                "$ref": "se.vocabularies.1.json#/$defs/tier",
+                "description": "Law 4: a derived claim names the tier that computed it (DESIGN 11, 24) — a free string here let a cross-host derivation read as a local reading."
+              },
               "rule": {
                 "type": "string",
                 "description": "rule@version: findings from two versions are comparable only by saying so (DESIGN 25)."
@@ -234,6 +255,7 @@
               },
               "window": {
                 "type": "object",
+                "additionalProperties": false,
                 "properties": {
                   "from": {
                     "type": "string"
@@ -267,7 +289,8 @@
             ]
           }
         }
-      ]
+      ],
+      "description": "unevaluatedProperties rather than additionalProperties, because the kind branches above contribute members; a member no branch evaluated is a claim outside the contract, and an observed element carrying a derived member (or the reverse) is two kinds pretending to be one."
     }
   },
   "allOf": [
@@ -314,6 +337,78 @@
         },
         "description": "No answer of the form all-hosts without its coverage attached (DESIGN 22)."
       }
+    },
+    {
+      "if": {
+        "required": [
+          "reach"
+        ],
+        "properties": {
+          "reach": {
+            "anyOf": [
+              {
+                "required": [
+                  "dark"
+                ],
+                "properties": {
+                  "dark": {
+                    "minItems": 1
+                  }
+                }
+              },
+              {
+                "required": [
+                  "declined"
+                ],
+                "properties": {
+                  "declined": {
+                    "minItems": 1
+                  }
+                }
+              },
+              {
+                "required": [
+                  "unswept"
+                ],
+                "properties": {
+                  "unswept": {
+                    "minItems": 1
+                  }
+                }
+              },
+              {
+                "required": [
+                  "coverage"
+                ],
+                "properties": {
+                  "coverage": {
+                    "required": [
+                      "sources_unreadable"
+                    ],
+                    "properties": {
+                      "sources_unreadable": {
+                        "minItems": 1
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "epistemic": {
+            "enum": [
+              "partial",
+              "unknown",
+              "conflicted"
+            ]
+          }
+        }
+      },
+      "description": "The epistemic derivation is closed and crude on purpose (DESIGN 25): anything declined, dark, unswept or unreadable means the answer is not complete. This is the monotonicity rule's cheapest checkable corner — a dark host beside a complete answer is ignorance laundered into knowledge."
     }
   ]
 }

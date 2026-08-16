@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "se.vocabularies.1.json",
   "title": "System Explorer closed vocabularies",
-  "description": "The closed sets of docs/DESIGN.md appendix A. Every member is deliberate; adding one is a schema change. Renderers switching on these sets must treat an unknown member as unstyled, never as an error (DESIGN 25-26). The coverage vocabulary is the one appendix A row represented structurally rather than as an enum: its members are the property names of se.answer.1.json's reach.coverage.",
+  "description": "The closed sets of docs/DESIGN.md appendix A. Every member is deliberate; adding one is a schema change. Renderers switching on these sets must treat an unknown member as unstyled, never as an error (DESIGN 25-26). Two rows are represented structurally rather than as enums: coverage's members are the property names of se.answer.1.json's reach.coverage, and host_reachability is carried in reach the same way — consulted holds the connected sources while dark and unswept are members of their own (appendix A: carried in reach, not coverage). tier is referenced by a derived basis element's origin (law 4: the tier that computed it). render_state is the stream's channel structure read back — object facts, the absent list, the unobservable record, the decline record, with stale computed downstream against declared freshness — and level and status await their surfaces: an opinion's level (DESIGN 17) and a checkpoint manifest's per-collection status (DESIGN 06) both live in the wire spec appendix B reserves.",
   "$defs": {
     "type": {
       "enum": [
@@ -137,6 +137,16 @@
         "current",
         "stale"
       ]
+    },
+    "discloses": {
+      "enum": [
+        "nothing",
+        "identity",
+        "location",
+        "content",
+        "secret"
+      ],
+      "description": "What a value tells a reader (DESIGN 21). nothing: the same on every machine that has one \u2014 a PCI bus address, a loopback or multicast address, a range's own base. identity: correlates one specific thing across captures. location: where something sits in this estate or how it is reached; a protocol constant is not a location. content: names or text somebody chose, or that arrived from outside. secret: a credential, withheld at source and never emitted."
     }
   }
 }

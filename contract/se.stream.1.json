@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "se.stream.1.json",
   "title": "System Explorer collect stream record",
-  "description": "One NDJSON line of a collect batch (DESIGN 19). A committed collection is authoritative; an uncommitted one is authoritative for nothing. There is no partial commit and no tombstone: everything a committed collection did not emit is gone, and a decline of absent commits empty.",
+  "description": "One NDJSON line of a collect batch (DESIGN 19). A committed collection is authoritative; an uncommitted one is authoritative for nothing. There is no partial commit and no tombstone: everything a committed collection did not emit is gone, and a decline of absent commits empty. Every record type is closed: a member the contract does not name is a claim the judge cannot see (DESIGN 19, two regimes), and an open object is how a Go struct's exported field names shipped as {\"Stable\":…} without a single test going red.",
   "oneOf": [
     {
       "$ref": "#/$defs/begin"
@@ -27,6 +27,50 @@
     }
   ],
   "$defs": {
+    "identity": {
+      "type": "string",
+      "minLength": 1,
+      "description": "An identity string. Empty is not a name: a join over \"\" merges everything it touches, and a batch or request of \"\" makes echo checks vacuously true."
+    },
+    "collection_name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "Mirrors the declaration's collection-name pattern: the stream may only commit under a name a declaration could have declared."
+    },
+    "name_scalar": {
+      "type": [
+        "string",
+        "number"
+      ],
+      "minLength": 1,
+      "description": "A native name is a string or a number, never a structure and never null; minLength binds only the string case."
+    },
+    "name_family": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/name_scalar"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/name_scalar"
+            }
+          }
+        ]
+      },
+      "description": "One stability class's families: each family holds a scalar or a list of scalars — a pool has one guid and several by-id links."
+    },
+    "facts": {
+      "type": "object",
+      "additionalProperties": {
+        "not": {
+          "type": "null"
+        }
+      },
+      "description": "A fact's value is never null: could-not-read is the unobservable record and has-no-such-property is the absent list, each on its own channel, and a null names neither (DESIGN 19)."
+    },
     "begin": {
       "type": "object",
       "required": [
@@ -39,23 +83,29 @@
         "instance",
         "generations"
       ],
+      "additionalProperties": false,
       "properties": {
         "record": {
           "const": "begin"
         },
         "request": {
-          "type": "string",
+          "$ref": "#/$defs/identity",
           "description": "Collator-issued; echoed in end."
         },
         "batch": {
-          "type": "string"
+          "$ref": "#/$defs/identity"
         },
         "declaration": {
-          "type": "string",
+          "$ref": "#/$defs/identity",
           "description": "sha256 of the declaration this stream was produced under. Unknown hash: the batch is held un-applied until fetched (DESIGN 25)."
         },
         "boot_id": {
-          "type": "string"
+          "$ref": "#/$defs/identity",
+          "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+          "not": {
+            "const": "00000000-0000-0000-0000-000000000000"
+          },
+          "description": "UUID-shaped (8-4-4-4-12 hex) and never the nil UUID — the shape catches the stub and the nil placeholder, which is what a single capture can authenticate; a constant VALID id only varies across boots and is a cross-boot variant's to catch (DESIGN 19). The dashless 32-hex spelling is machine-id's, stable across boots, and refusing it is the point."
         },
         "timens": {
           "type": "integer",
@@ -66,10 +116,14 @@
             "string",
             "null"
           ],
-          "description": "Fleet-assigned instance this collector fronts; ids, origins and relations mint under (host, instance) scope. Null means host-native (DESIGN 11, 19)."
+          "minLength": 1,
+          "description": "Fleet-assigned instance this collector fronts; ids, origins and relations mint under (host, instance) scope. Null means host-native (DESIGN 11, 19) — and only null means it: \"\" would mint a third scope nobody declared."
         },
         "generations": {
           "type": "object",
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
           "additionalProperties": {
             "type": "integer",
             "minimum": 0
@@ -87,35 +141,38 @@
         "facts",
         "at"
       ],
+      "additionalProperties": false,
       "properties": {
         "record": {
           "const": "object"
         },
         "collection": {
-          "type": "string"
+          "$ref": "#/$defs/collection_name"
         },
         "name": {
-          "type": "string"
+          "$ref": "#/$defs/identity"
         },
         "names": {
           "type": "object",
-          "description": "Every native name observed for this thing, split by stability class; a join runs on stable only (DESIGN 16, 19).",
+          "additionalProperties": false,
+          "description": "Every native name observed for this thing, split by stability class; a join runs on stable only (DESIGN 16, 19). Closed to exactly these two classes: the marshalling bug this catches emitted {\"Stable\":…,\"Ephemeral\":…} and every name silently left the join.",
           "properties": {
             "stable": {
-              "type": "object"
+              "$ref": "#/$defs/name_family"
             },
             "ephemeral": {
-              "type": "object"
+              "$ref": "#/$defs/name_family"
             }
           }
         },
         "facts": {
-          "type": "object"
+          "$ref": "#/$defs/facts"
         },
         "absent": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "description": "Declared facts this object genuinely lacks. We looked; there is no such property. Distinct from unobservable (DESIGN 19, 27)."
         },
@@ -125,6 +182,7 @@
             "digest",
             "media_type"
           ],
+          "additionalProperties": false,
           "properties": {
             "media_type": {
               "type": "string"
@@ -136,11 +194,36 @@
             "canon": {
               "type": "string"
             }
-          }
+          },
+          "if": {
+            "properties": {
+              "media_type": {
+                "const": "application/json"
+              }
+            },
+            "required": [
+              "media_type"
+            ]
+          },
+          "then": {
+            "required": [
+              "canon"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "canon"
+              ]
+            }
+          },
+          "description": "JSON digests under a named canonicalisation or the digest is a coin toss over key ordering; any other media type digests exact bytes, so a canon there would claim a rule that was never applied (DESIGN 19)."
         },
         "at": {
           "type": "number",
-          "description": "CLOCK_BOOTTIME seconds, stamped immediately before the earliest contributing native read, so age never understates (DESIGN 09, 19)."
+          "exclusiveMinimum": 0,
+          "maximum": 1000000000,
+          "description": "CLOCK_BOOTTIME seconds, stamped immediately before the earliest contributing native read, so age never understates (DESIGN 09, 19). Boot-scale by construction: zero and below is a reading nobody took, and past 1e9 (~31 years of uptime) it is a wall clock smuggled onto the wrong axis."
         }
       }
     },
@@ -154,21 +237,22 @@
         "vantage",
         "target"
       ],
+      "additionalProperties": false,
       "properties": {
         "record": {
           "const": "relation_assertion"
         },
         "collection": {
-          "type": "string"
+          "$ref": "#/$defs/collection_name"
         },
         "name": {
-          "type": "string"
+          "$ref": "#/$defs/identity"
         },
         "type": {
-          "type": "string"
+          "$ref": "#/$defs/identity"
         },
         "vantage": {
-          "type": "string"
+          "$ref": "#/$defs/identity"
         },
         "target": {
           "type": "object",
@@ -176,12 +260,13 @@
             "kind",
             "name"
           ],
+          "additionalProperties": false,
           "properties": {
             "kind": {
-              "type": "string"
+              "$ref": "#/$defs/identity"
             },
             "name": {
-              "type": "string"
+              "$ref": "#/$defs/identity"
             }
           },
           "description": "A name and a kind, never an id, and never an observability: whether the far end was seen is a fact about another collector's output, which only the collator holds (DESIGN 13, 19).",
@@ -192,7 +277,7 @@
           }
         },
         "facts": {
-          "type": "object",
+          "$ref": "#/$defs/facts",
           "description": "Including any declared discriminator values."
         }
       },
@@ -201,7 +286,7 @@
           "observability"
         ]
       },
-      "description": "A collector never states observability \u2014 whether the far end was seen is a fact about another collector's output, which only the collator holds \u2014 and a target carries a name, never an id (DESIGN 13, 19). Both are encoded as negatives."
+      "description": "A collector never states observability — whether the far end was seen is a fact about another collector's output, which only the collator holds — and a target carries a name, never an id (DESIGN 13, 19). Both negatives are kept although closure now also refuses them: they encode rulings, not style."
     },
     "unobservable": {
       "type": "object",
@@ -212,18 +297,19 @@
         "fact",
         "reason"
       ],
+      "additionalProperties": false,
       "properties": {
         "record": {
           "const": "unobservable"
         },
         "collection": {
-          "type": "string"
+          "$ref": "#/$defs/collection_name"
         },
         "name": {
-          "type": "string"
+          "$ref": "#/$defs/identity"
         },
         "fact": {
-          "type": "string"
+          "$ref": "#/$defs/identity"
         },
         "reason": {
           "enum": [
@@ -246,12 +332,13 @@
         "collection",
         "reason"
       ],
+      "additionalProperties": false,
       "properties": {
         "record": {
           "const": "decline"
         },
         "collection": {
-          "type": "string"
+          "$ref": "#/$defs/collection_name"
         },
         "reason": {
           "$ref": "se.vocabularies.1.json#/$defs/decline_reason"
@@ -268,14 +355,17 @@
         "record",
         "collection",
         "generation",
-        "objects"
+        "objects",
+        "assertions",
+        "unobservable"
       ],
+      "additionalProperties": false,
       "properties": {
         "record": {
           "const": "commit"
         },
         "collection": {
-          "type": "string"
+          "$ref": "#/$defs/collection_name"
         },
         "generation": {
           "type": "integer",
@@ -302,7 +392,7 @@
           "complete"
         ]
       },
-      "description": "Always the whole collection: v1 has no partial commit, so a complete member may not appear (DESIGN 19)."
+      "description": "Always the whole collection: v1 has no partial commit, so a complete member may not appear (DESIGN 19). All three counts are required, never optional — a subject that can disable the truncation check by omitting a count has defeated it."
     },
     "end": {
       "type": "object",
@@ -311,15 +401,16 @@
         "request",
         "batch"
       ],
+      "additionalProperties": false,
       "properties": {
         "record": {
           "const": "end"
         },
         "request": {
-          "type": "string"
+          "$ref": "#/$defs/identity"
         },
         "batch": {
-          "type": "string"
+          "$ref": "#/$defs/identity"
         },
         "cpu_ms": {
           "type": "number"

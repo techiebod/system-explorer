@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "se.declaration.1.json",
   "title": "System Explorer collector declaration",
-  "description": "A collector's static account of what it serves and what it means (DESIGN 19). Same on every host; instance binding is fleet configuration, never declared here. Members and meanings are binding; the schema is additive-open because published profiles never close their objects.",
+  "description": "A collector's static account of what it serves and what it means (DESIGN 19). Same on every host; instance binding is fleet configuration, never declared here. Members and meanings are binding, and every object is closed: six artefacts are generated from this file, so a misspelt member that validates is a sandbox path not granted or a redaction not performed, silently.",
   "type": "object",
   "required": [
     "schema",
@@ -10,6 +10,7 @@
     "version",
     "collections"
   ],
+  "additionalProperties": false,
   "properties": {
     "schema": {
       "const": "se.declaration/1"
@@ -24,6 +25,7 @@
     },
     "authority": {
       "type": "object",
+      "additionalProperties": false,
       "description": "What the deployment must grant. Generated into unit configuration; the collator never reads or passes any of it.",
       "properties": {
         "read_paths": {
@@ -82,6 +84,7 @@
         "answer",
         "facts"
       ],
+      "additionalProperties": false,
       "properties": {
         "name": {
           "type": "string",
@@ -98,7 +101,8 @@
         },
         "freshness": {
           "type": "string",
-          "description": "The declared honest freshness, e.g. \"60s\". For watched facts this is the reconcile interval (DESIGN 30)."
+          "pattern": "^[0-9]+(ms|s|m|h|d)$",
+          "description": "The declared honest freshness, e.g. \"60s\". For watched facts this is the reconcile interval (DESIGN 30). The unit is part of the value: a bare \"60\" would be read as seconds by one consumer and milliseconds by another, and staleness verdicts hang off this number."
         },
         "perishability": {
           "$ref": "se.vocabularies.1.json#/$defs/perishability"
@@ -112,6 +116,7 @@
         },
         "ceiling": {
           "type": "object",
+          "additionalProperties": false,
           "description": "A scope error made visible, not a transport limit to paginate around (DESIGN 19).",
           "properties": {
             "records": {
@@ -126,6 +131,7 @@
         },
         "discovers": {
           "type": "object",
+          "additionalProperties": false,
           "description": "Present where this collection produces estate-membership candidates: its universe and blind spots, stated by the collector that knows its interface (DESIGN 22).",
           "properties": {
             "universe": {
@@ -145,6 +151,7 @@
               "class",
               "sentence"
             ],
+            "additionalProperties": false,
             "properties": {
               "class": {
                 "$ref": "se.vocabularies.1.json#/$defs/name_class"
@@ -170,6 +177,7 @@
               "type",
               "carries_facts"
             ],
+            "additionalProperties": false,
             "properties": {
               "type": {
                 "type": "string",
@@ -216,19 +224,63 @@
                     "confirmed_by"
                   ]
                 }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "carries_facts": {
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "carries_facts"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "facts"
+                  ],
+                  "properties": {
+                    "facts": {
+                      "minProperties": 1
+                    }
+                  }
+                },
+                "else": {
+                  "not": {
+                    "required": [
+                      "facts"
+                    ]
+                  }
+                },
+                "description": "carries_facts is a promise the facts map must keep in both directions: true with no facts declares semantics nobody stated, false with facts ships semantics nobody promised."
               }
             ]
           }
         },
         "redactions": {
           "type": "array",
+          "description": "Payload paths whose values are not served verbatim, each with what it reveals. The secret class is withheld entirely; the others are substituted for a public corpus (DESIGN 21).",
           "items": {
-            "type": "string"
-          },
-          "description": "Payload paths withheld from served evidence. Required (possibly empty) wherever evidence is served; empty demands redaction_exemption (DESIGN 19)."
+            "type": "object",
+            "required": [
+              "path",
+              "discloses"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "discloses": {
+                "$ref": "se.vocabularies.1.json#/$defs/discloses"
+              }
+            }
+          }
         },
         "redaction_exemption": {
           "type": "string",
+          "minLength": 1,
           "description": "The reviewed statement that this source has no credential surface. Load-bearing prose: carried verbatim, never paraphrased."
         },
         "reference_commands": {
@@ -239,6 +291,7 @@
               "purpose",
               "argv"
             ],
+            "additionalProperties": false,
             "properties": {
               "purpose": {
                 "type": "string"
@@ -263,6 +316,7 @@
               "changes",
               "destructive"
             ],
+            "additionalProperties": false,
             "properties": {
               "name": {
                 "type": "string"
@@ -285,7 +339,20 @@
             }
           }
         }
-      }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "redactions"
+          ]
+        },
+        {
+          "required": [
+            "redaction_exemption"
+          ]
+        }
+      ],
+      "$comment": "Exactly one, never neither and never both (DESIGN 19): declaring neither is a build failure, and an exemption asserting no credential surface beside a declared redaction list is two rulings contradicting each other in one document."
     },
     "fact": {
       "type": "object",
@@ -293,8 +360,10 @@
         "type",
         "temperament",
         "kind",
-        "sentence"
+        "sentence",
+        "discloses"
       ],
+      "additionalProperties": false,
       "properties": {
         "type": {
           "$ref": "se.vocabularies.1.json#/$defs/type"
@@ -350,8 +419,106 @@
         "from": {
           "type": "string",
           "description": "Extraction path into the evidence payload; what makes the digest checkable (DESIGN 24)."
+        },
+        "discloses": {
+          "$ref": "se.vocabularies.1.json#/$defs/discloses",
+          "description": "Required, with no default: assume nothing and a forgotten serial is published; assume identity and the corpus is scrubbed into uselessness (DESIGN 21)."
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "enum"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "values"
+            ],
+            "properties": {
+              "values": {
+                "minItems": 1
+              }
+            }
+          },
+          "else": {
+            "not": {
+              "required": [
+                "values"
+              ]
+            }
+          },
+          "description": "An enum without its members is an open set a renderer must guess at; members on any other type are a vocabulary nothing will ever check a value against."
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "boolean"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {},
+          "else": {
+            "not": {
+              "required": [
+                "labels"
+              ]
+            }
+          },
+          "description": "labels is a boolean's pair of display words (DESIGN 27); on any other type the pair is dead weight a renderer might wrongly trust."
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "derived"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "derived_from"
+            ],
+            "properties": {
+              "derived_from": {
+                "minItems": 1
+              }
+            }
+          },
+          "description": "Law 4: a derived fact names the facts it consumed — a derivation with no stated inputs cannot be re-checked."
+        },
+        {
+          "if": {
+            "properties": {
+              "unit": {
+                "const": "percent"
+              }
+            },
+            "required": [
+              "unit"
+            ]
+          },
+          "then": {
+            "required": [
+              "denominator"
+            ]
+          },
+          "description": "A percentage with no denominator is a number pretending to be an answer (DESIGN 27, 28)."
+        }
+      ]
     }
   }
 }
