@@ -275,7 +275,7 @@ def _repo_sources():
                                 capture_output=True, text=True, check=False).stdout.split()
     except FileNotFoundError:
         listed = []
-    exts = {".py", ".js", ".mjs", ".md", ".sh", ".json", ".nix", ".css", ".html"}
+    exts = {".py", ".js", ".mjs", ".md", ".sh", ".json", ".jsonl", ".yml", ".nix", ".css", ".html"}
     for name in listed:
         rel = pathlib.Path(name)
         if rel.suffix not in exts or str(rel) in ESTATE_EXEMPT_FILES:
