@@ -1,0 +1,923 @@
+#!/usr/bin/env python3
+"""Scrub a captured payload for a public corpus, against a manifest.
+
+The corpus is public and captures come from real machines. The previous
+scrubber guessed a value's class from its shape, and shape-guessing is what
+rewrote every disk's phys_path into the documentation range, left real WWNs
+untouched because devid spells them without 0x, and walked past JSON integers
+entirely so real pool GUIDs went out verbatim (DESIGN 21). The collector
+already knows what each field is — so the classification now travels with the
+collector, as a manifest, and this tool guesses nothing:
+
+  harness/scrub/<collector>.json maps payload field paths to
+      {"discloses": nothing|identity|location|content|secret,
+       "format": wwn|guid_u64|serial|mac|ipv4|ipv6|hostname|name|path,
+       "payload": <payload stem this entry is scoped to, optional>}
+
+  paths are dotted; '*' matches one dict key or one list index; a trailing
+  '~key' segment classifies the KEY strings of the dict it names (a dict of
+  disks is keyed by the very WWNs its values carry). Every leaf must match
+  exactly one entry or the run FAILS listing the unmatched paths —
+  deny-by-default, because an unclassified field is a capture this tool does
+  not understand, and the failure mode of passing it is publication.
+
+  One manifest covers every payload a collector captures, and those payloads
+  do not all share a root. zpool's documents are keyed by fixed schema
+  members (`pools`, `output_version`); the devlinks map's root keys ARE data,
+  every one of them an alias path carrying a partition UUID. A '~key' entry
+  at the root is right for the second and a misclassification of the first,
+  and a path is all a pattern can say — so an entry may name the `payload`
+  it applies to, by the same stem the replay seam and se-capture-guest use
+  ("status", "list", "devlinks", "nft"). Unscoped entries apply to every
+  payload, which is what nearly all of them want; a scoped and an unscoped
+  entry matching the same leaf is the ordinary two-entries refusal, because
+  which one governs must not depend on this file's iteration order.
+
+  nothing   -> verbatim          identity/location/content -> substituted
+  secret    -> the run is refused outright: a secret must never have been
+               captured, and no amount of substitution repairs that
+
+Substitution is KEYED: replacements derive from HMAC-SHA256(secret,
+class:value), secret from SE_SCRUB_SECRET or a state file created on first
+use. An unkeyed digest is a lookup table for anyone who can enumerate the
+input space — a /10 of addresses falls in seconds. One original maps to one
+replacement globally (the same WWN in three payloads is what teaches the join
+those payloads exist to demonstrate), a replacement keeps its original's
+shape and space, and a replacement is never itself scrubbed (parked out of
+reach until the pass ends).
+
+Replacements land where the independent detectors (se_harness/detectors.py)
+expect anonymised material by convention — and by nothing else; the checker
+shares no pattern, table or code path with this file:
+
+  16-hex identifier bodies   first nibble 3 (NAA locally-assigned: no vendor)
+  32-hex identifiers         prefix 5cb0
+  guid_u64 of >= 15 digits   decimal band 1844… , always <= 2^64-1
+  by-id serial tails         prefix ANON
+  MAC                        02:… (unicast) / 03:… (a group address stays one)
+  addresses                  own space, or the documentation ranges
+
+    se-anonymise --manifest harness/scrub/x.json --hostnames a,b \\
+                 --map ~/.local/state/se/scrub/x.json payload.json
+    se-anonymise --check [--manifest …] [--hostnames a,b] payload.json
+
+--check runs ONLY the detectors. The old check grepped with this tool's own
+patterns and therefore could not fail; it is gone.
+
+Two refusals guard the names channel, because a format-name field with no
+names list no-opped while the tool printed `scrubbed`: a manifest carrying
+format-name entries demands --hostnames up front, and any string leaf a
+substituting class hands back unchanged is refused by path unless the KEEP
+table names it as protocol/structural vocabulary — an unengaged substitution
+is not a weaker scrub but no scrub at all.
+
+The map is the REVERSE map — it de-anonymises every specimen it was used on —
+and the secret is its twin. Both are refused anywhere inside ANY git working
+tree (walked up to a .git), not merely inside this repository: the old guard
+anchored on this repo's source layout and silently disarmed the moment the
+tool was installed somewhere else.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import hmac
+import ipaddress
+import json
+import os
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+DISCLOSES = {"nothing", "identity", "location", "content", "secret"}
+FORMATS = {"wwn", "guid_u64", "serial", "mac", "ipv4", "ipv6", "hostname", "name", "path"}
+
+U64_MAX = 2**64 - 1
+
+# Documentation ranges exist so examples need not borrow somebody's addresses.
+DOC_V4 = "192.0.2"  # RFC 5737 TEST-NET-1
+DOC_V6 = "2001:db8"  # RFC 3849
+
+# Constants: protocol-assigned, identical everywhere, and load-bearing when a
+# reader is trying to understand what a rule matches. Pinned by tests.
+KEEP_V4 = {
+    "0.0.0.0", "255.255.255.255",              # wildcard, broadcast
+    "127.0.0.1", "127.0.0.0",                  # loopback
+    "10.0.0.0", "172.16.0.0", "192.168.0.0",   # RFC 1918 network bases
+    "100.64.0.0",                              # RFC 6598 CGNAT — the tailnet range
+    "169.254.0.0", "169.254.169.254",          # link-local, cloud metadata
+    "224.0.0.0", "224.0.0.1", "224.0.0.2",     # multicast
+    "224.0.0.22", "224.0.0.251", "239.255.255.250",
+}
+KEEP_V6 = {
+    "::", "::1",                               # unspecified, loopback
+    "fe80::",                                  # link-local prefix
+    "ff02::1", "ff02::2", "ff02::fb", "ff02::16", "ff05::c",
+    "fd7a:115c:a1e0::",                        # Tailscale's published ULA prefix
+}
+# A MAC's group constants are the same on every LAN on earth: broadcast, IPv4
+# and IPv6 multicast mappings, and the 802.1D bridge group. Substituting one
+# turns a rule about a protocol into a rule about nothing — and a group
+# address must never come back unicast, which is a change of meaning.
+KEEP_MAC = {"ff:ff:ff:ff:ff:ff"}
+KEEP_MAC_PREFIXES = ("01:00:5e", "33:33", "01:80:c2")
+
+# The KEEP table for the survived-unchanged gate: the vocabulary a
+# substituting field may legitimately hand back verbatim, because the token
+# names a protocol, a daemon or a structure — never this machine. Everything
+# else that a substituting class returns unchanged is a REFUSAL: a
+# classification that changed nothing means no rule engaged, and the failure
+# mode of shrugging is publication. Growing this table is a reviewed code
+# change, which is the point.
+KEEP_UNCHANGED_TOKENS = {
+    # nftables' own words, seen beside addresses in the same member: ct
+    # states, ICMP type names, family/protocol selectors.
+    "established", "related", "new", "invalid", "untracked",
+    "echo-request", "echo-reply", "destination-unreachable", "source-quench",
+    "time-exceeded", "parameter-problem", "packet-too-big",
+    "nd-redirect", "nd-neighbor-solicit", "nd-neighbor-advert",
+    "nd-router-solicit", "nd-router-advert", "router-advertisement",
+    "router-solicitation", "mld-listener-query", "mld-listener-report",
+    "mld-listener-done",
+    "ip", "ip6", "inet", "ipv4", "ipv6", "tcp", "udp", "icmp", "icmpv6",
+    # Interface names software assigns identically on every install: the
+    # loopback, and tailscaled's one device. They teach which daemon runs,
+    # not which machine — an operator-named bridge is exactly not here.
+    "lo", "lo*", "tailscale0", "tailscale0*",
+}
+KEEP_UNCHANGED_SHAPES = (
+    # Bus topology: positional all the way down, identical on every machine
+    # of the model (the phys_path lesson, DESIGN 21). Strictly numeric —
+    # a serial's letters do not fit this grammar.
+    re.compile(r"^pci-[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}"
+               r"\.[0-9a-fA-F](?:-[a-z]+(?:-?\d+)?)*$"),
+    re.compile(r"^(?:scsi|sas|usb|ata)-\d+(?::\d+){1,3}$"),
+    # zpool's structural vdev names: the software's own numbering, carried
+    # under the same format-name entries as the operator-chosen pool name.
+    re.compile(r"^(?:raidz[123]?|mirror|draid[123]?(?:[:\d]+[cds]?)*|spare|"
+               r"replacing|indirect|log)-\d+$"),
+    # @set-name references: the set's own name entry already ruled on it.
+    re.compile(r"^@[\w-]+$"),
+)
+
+TAILNET_ULA = ipaddress.ip_network("fd7a:115c:a1e0::/48")
+ULA = ipaddress.ip_network("fc00::/7")
+CGNAT = ipaddress.ip_network("100.64.0.0/10")
+
+# A PCI/SCSI/ATA topology token and an address are the same characters in the
+# same order (0000:03:00.0, scsi-0:0:0:0). Shape cannot tell them apart —
+# that is the whole lesson of DESIGN 21 — so the ADDRESS patterns anchor on
+# the whole whitespace-delimited token and refuse any that carries a bus
+# prefix. Whether such a field is scrubbed at all is the manifest's decision,
+# never this exemption's.
+EXEMPT_TOKEN_MARKS = ("pci-", "scsi-", "ata-", "usb-", "sas-", "nvme-")
+
+
+# ── the secret, and where it must never live ─────────────────────────────
+
+
+def _inside_git_tree(path: Path) -> bool:
+    """True if path sits inside ANY git working tree, walked up to a .git.
+
+    Not "inside this repository": the tool guards wherever it is installed,
+    and the one place the reverse map will be put by accident is next to the
+    thing it decodes — which is a checkout, wherever that checkout is.
+    """
+    resolved = path.resolve()
+    return any((p / ".git").exists() for p in (resolved, *resolved.parents))
+
+
+def _load_secret() -> bytes:
+    env = os.environ.get("SE_SCRUB_SECRET")
+    if env:
+        return env.encode()
+    state = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state")
+    path = state / "se" / "scrub" / "secret"
+    if _inside_git_tree(path):
+        raise SystemExit(
+            f"refusing secret at {path}: it sits inside a git working tree, "
+            "one commit away from de-anonymising every specimen it keyed. "
+            "Set SE_SCRUB_SECRET or move XDG_STATE_HOME out of the tree."
+        )
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(os.urandom(32).hex() + "\n")
+        path.chmod(0o600)
+    return path.read_text().strip().encode()
+
+
+# ── keyed derivation ─────────────────────────────────────────────────────
+
+
+class Ctx:
+    """One scrub run: the key, the reverse map, and the problems so far."""
+
+    def __init__(self, secret: bytes, mapping: dict, hostnames: list[str],
+                 entries: dict):
+        self.secret = secret
+        self.mapping = mapping  # "class:original" -> replacement, globally
+        self.hostnames = sorted((h for h in hostnames if h), key=len, reverse=True)
+        self.entries = entries
+        self.problems: list[str] = []
+
+    def derive(self, cls: str, value: str, extra: str = "") -> int:
+        msg = f"{cls}:{value}" + (f"#{extra}" if extra else "")
+        digest = hmac.new(self.secret, msg.encode(), hashlib.sha256).digest()
+        return int.from_bytes(digest[:16], "big")
+
+    def remember(self, cls: str, original: str, make):
+        key = f"{cls}:{original}"
+        if key not in self.mapping:
+            self.mapping[key] = make()
+        return self.mapping[key]
+
+
+# ── replacement builders, one per shape ──────────────────────────────────
+
+
+def _hex16_replacement(ctx: Ctx, body: str) -> str:
+    # NAA nibble 3 is "locally assigned": the one spelling that names no
+    # vendor, mirroring the 02: locally-administered MAC. The detectors
+    # recognise the nibble as the anonymised convention.
+    n = ctx.derive("wwn", body.lower())
+    width = len(body)
+    return ctx.remember("wwn", body.lower(), lambda: "3" + f"{n:x}".zfill(width)[1:width])
+
+
+def _hex32_replacement(ctx: Ctx, body: str) -> str:
+    n = ctx.derive("machine-id", body.lower())
+    return ctx.remember("machine-id", body.lower(), lambda: "5cb0" + f"{n % 16**28:028x}")
+
+
+def _guid_replacement(ctx: Ctx, digits: str) -> str:
+    """Same digit count, never above 2^64-1, and inside the 1844… band.
+
+    The band is what lets a checker holding no key tell a replacement from a
+    real GUID: 2^64-1 is 18446…, so the band reads as u64-max-adjacent, and a
+    uniformly random real GUID lands in it with probability ~1e-4. Width is
+    preserved for every width a u64 can carry — a 20-digit guid that came
+    back 19 digits would silently stop exercising the parser.
+    """
+    width = len(digits)
+    if width >= 15:
+        unit = 10 ** (width - 4)
+        lo, hi = 1844 * unit, min(1845 * unit - 1, U64_MAX)
+    else:
+        lo, hi = (10 ** (width - 1) if width > 1 else 0), 10**width - 1
+    n = ctx.derive("guid", digits)
+    return ctx.remember("guid", digits, lambda: str(lo + n % (hi - lo + 1)))
+
+
+def _serial_replacement(ctx: Ctx, serial: str) -> str:
+    n = ctx.derive("serial", serial)
+    body = f"{n:026X}"
+    keep = max(len(serial) - 4, 4)  # length preserved once past the marker
+    return ctx.remember("serial", serial, lambda: "ANON" + body[:keep])
+
+
+def _mac_replacement(ctx: Ctx, mac: str) -> str:
+    low = mac.lower()
+    if low in KEEP_MAC or low.startswith(KEEP_MAC_PREFIXES):
+        return mac
+    n = ctx.derive("mac", low)
+    # 02: locally administered so the OUI names no vendor; a group address
+    # (odd first octet) stays a group address — 03: is its local twin.
+    first = 0x03 if int(low[:2], 16) & 1 else 0x02
+    rest = [(n >> (8 * i)) & 0xFF for i in range(5)]
+    return ctx.remember(
+        "mac", low, lambda: ":".join(f"{o:02x}" for o in [first, *rest])
+    )
+
+
+def _host_replacement(ctx: Ctx, host: str) -> str:
+    """Collision-free buckets: distinct originals -> distinct replacements.
+
+    The old 100-bucket scheme collided by design (node1 and node2 shared a
+    bucket), which merged two machines into one and taught a reader a join
+    that does not exist. Collisions are retried away instead.
+    """
+    key = host.lower()
+    cached = ctx.mapping.get(f"host:{key}")
+    if cached is not None:
+        return cached
+    taken = {v for k, v in ctx.mapping.items() if k.startswith("host:")}
+    attempt = 0
+    while True:
+        n = ctx.derive("host", key, extra=str(attempt) if attempt else "")
+        candidate = f"host-{n % 16**6:06x}"
+        if candidate not in taken:
+            ctx.mapping[f"host:{key}"] = candidate
+            return candidate
+        attempt += 1
+
+
+def _ip_replacement(ctx: Ctx, value: str) -> str | None:
+    """An address, substituted WITHIN ITS OWN SPACE, or kept as a constant.
+
+    Both rules were learned from committed corpus that got them wrong: a
+    well-known constant is the same on every machine on earth and reveals
+    nothing; everything else stays in its space because the space is part of
+    the value's shape — a CGNAT address rewritten into 192.0.2.0/24 turns a
+    rule about tailnet traffic into a rule about nothing. Spaces are decided
+    by the ipaddress module, not by comparing literal base strings.
+
+    Returns None when the value is not an address at all.
+    """
+    if value in KEEP_V4 or value.lower() in KEEP_V6:
+        return value
+    try:
+        ip = ipaddress.ip_address(value)
+    except ValueError:
+        return None
+    if ip.is_multicast:
+        return value  # a group is a constant, whatever the group
+    cls = f"ipv{ip.version}"
+    n = ctx.derive(cls, value.lower())
+
+    def build() -> str:
+        if ip.version == 4:
+            if ip.is_loopback:
+                return f"127.0.0.{n % 254 + 1}"
+            if ip.is_link_local:
+                return f"169.254.{n % 256}.{n % 254 + 1}"
+            if ip in CGNAT:
+                return f"100.{64 + n % 64}.{n // 64 % 256}.{n % 254 + 1}"
+            if ip in ipaddress.ip_network("10.0.0.0/8"):
+                return f"10.{n % 256}.{n // 256 % 256}.{n % 254 + 1}"
+            if ip in ipaddress.ip_network("172.16.0.0/12"):
+                return f"172.{16 + n % 16}.{n // 16 % 256}.{n % 254 + 1}"
+            if ip in ipaddress.ip_network("192.168.0.0/16"):
+                return f"192.168.{n % 256}.{n % 254 + 1}"
+            return f"{DOC_V4}.{n % 254 + 1}"
+        if ip in TAILNET_ULA:
+            # a published prefix survives; only the host part identifies
+            return f"fd7a:115c:a1e0::{n % 65536:x}"
+        if ip.is_link_local:
+            return f"fe80::{n % 65536:x}"
+        if ip in ULA:
+            return f"fd{n >> 32 & 0xFF:02x}:{n >> 16 & 0xFFFF:x}::{n % 65536:x}"
+        return f"{DOC_V6}::{n % 65536:x}"
+
+    return ctx.remember(cls, value.lower(), build)
+
+
+def _cidr_replacement(ctx: Ctx, addr: str, length: int) -> str | None:
+    """A CIDR is scrubbed as a unit: the base masked valid for its length.
+
+    Substituting the address alone produced 100.89.226.124/23 in committed
+    corpus — an address where a network base belongs, which is not a weaker
+    specimen but a wrong one.
+    """
+    replaced = _ip_replacement(ctx, addr)
+    if replaced is None:
+        return None
+    if replaced == addr:
+        return addr  # a kept constant is already a valid base
+    masked = str(ipaddress.ip_network((replaced, length), strict=False).network_address)
+    ctx.mapping[f"cidr:{addr}/{length}"] = masked
+    return masked
+
+
+# ── the text pass, for strings that embed identifiers ────────────────────
+
+WWN_SPELLED = re.compile(
+    r"(wwn-0x|scsi-3|naa\.|nvme-eui\.|eui\.|0x)([0-9a-fA-F]{32}|[0-9a-fA-F]{16})"
+)
+BARE_HEX16 = re.compile(r"\b[0-9a-fA-F]{16}\b")
+BYID_SERIAL = re.compile(r"\b((?:ata|scsi|sas|usb|nvme)-[\w.\-]+_)([A-Za-z0-9]{4,})\b")
+UUID = re.compile(
+    r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+    r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
+)
+HEX32 = re.compile(r"\b[0-9a-fA-F]{32}\b")
+MAC = re.compile(r"\b(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}\b")
+CIDR_V4 = re.compile(r"\b((?:\d{1,3}\.){3}\d{1,3})/(\d{1,2})\b")
+CIDR_V6 = re.compile(
+    r"(?<![0-9a-fA-F:.])((?:[0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4})/(\d{1,3})\b"
+)
+# Bounded so a match cannot start or end mid-token: the trailing guard keeps
+# a following '.' out, the leading guard stops a compressed address being
+# matched from its second half.
+IPV6 = re.compile(
+    r"(?<![0-9a-fA-F:.])(?:[0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}"
+    r"(?![0-9a-fA-F:.])"
+)
+IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+GUID_TEXT = re.compile(r"\b\d{19,20}\b")
+
+
+def _token_around(text: str, start: int, end: int) -> str:
+    a = start
+    while a > 0 and not text[a - 1].isspace():
+        a -= 1
+    b = end
+    while b < len(text) and not text[b].isspace():
+        b += 1
+    return text[a:b]
+
+
+def scrub_text(text: str, ctx: Ctx) -> str:
+    """Substitute every identifying token exactly once.
+
+    Each replacement is parked behind an opaque placeholder and restored at
+    the end. Without that, later patterns eat earlier replacements — a MAC
+    rewritten to 02:… is still colon-separated hex, so the IPv6 pattern
+    would scrub the scrub. That happened; the shape is the one thing that
+    must survive.
+    """
+    parked: list[str] = []
+
+    def park(replacement: str) -> str:
+        parked.append(replacement)
+        return f"\x00{len(parked) - 1}\x00"
+
+    # hostnames first, longest first; substring on purpose, no \b: the
+    # boundary-anchored pattern walked straight past tank/<host>_backups
+    # because '_' is a word character.
+    for host in ctx.hostnames:
+        pattern = re.compile(re.escape(host), re.IGNORECASE)
+        if pattern.search(text):
+            replacement = _host_replacement(ctx, host)
+            text = pattern.sub(lambda _m, _r=replacement: park(_r), text)
+
+    def spelled(match: re.Match) -> str:
+        return park(match.group(1) + _hex16_replacement(ctx, match.group(2)))
+
+    text = WWN_SPELLED.sub(spelled, text)
+
+    def bare16(match: re.Match) -> str:
+        if match.group(0).isdigit():
+            return match.group(0)  # a 16-digit counter, not a hex identifier
+        return park(_hex16_replacement(ctx, match.group(0)))
+
+    text = BARE_HEX16.sub(bare16, text)
+    text = BYID_SERIAL.sub(
+        lambda m: m.group(1) + park(_serial_replacement(ctx, m.group(2))), text
+    )
+
+    def uuid(match: re.Match) -> str:
+        h = _hex32_replacement(ctx, match.group(0).replace("-", ""))
+        return park(f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}")
+
+    text = UUID.sub(uuid, text)
+    text = HEX32.sub(lambda m: park(_hex32_replacement(ctx, m.group(0))), text)
+    text = MAC.sub(lambda m: park(_mac_replacement(ctx, m.group(0))), text)
+
+    def cidr(match: re.Match) -> str:
+        if _exempt(match):
+            return match.group(0)
+        masked = _cidr_replacement(ctx, match.group(1), int(match.group(2)))
+        if masked is None:
+            return match.group(0)
+        return park(f"{masked}/{match.group(2)}")
+
+    def _exempt(match: re.Match) -> bool:
+        token = _token_around(match.string, *match.span())
+        return any(mark in token for mark in EXEMPT_TOKEN_MARKS)
+
+    text = CIDR_V4.sub(cidr, text)
+    text = CIDR_V6.sub(cidr, text)
+
+    def address(match: re.Match) -> str:
+        original = match.group(0)
+        if _exempt(match):
+            return original
+        replaced = _ip_replacement(ctx, original)
+        if replaced is None or replaced == original:
+            return original
+        return park(replaced)
+
+    text = IPV6.sub(address, text)
+    text = IPV4.sub(address, text)
+    text = GUID_TEXT.sub(lambda m: park(_guid_replacement(ctx, m.group(0))), text)
+
+    return re.sub(r"\x00(\d+)\x00", lambda m: parked[int(m.group(1))], text)
+
+
+# ── the manifest, and the walk it governs ────────────────────────────────
+
+
+def load_manifest(path: Path) -> dict[tuple, dict]:
+    raw = json.loads(path.read_text())
+    entries: dict[tuple, dict] = {}
+    problems = []
+    for key, spec in raw.items():
+        if key.startswith("#"):
+            continue  # commentary — JSON has no other way to carry it
+        if not isinstance(spec, dict) or spec.get("discloses") not in DISCLOSES:
+            problems.append(f"{key}: discloses must be one of {sorted(DISCLOSES)}")
+            continue
+        if "format" in spec and spec["format"] not in FORMATS:
+            problems.append(f"{key}: format must be one of {sorted(FORMATS)}")
+            continue
+        if "payload" in spec and not (
+            isinstance(spec["payload"], str) and spec["payload"]
+        ):
+            problems.append(
+                f"{key}: payload must be the stem of the payload file this "
+                "entry is scoped to, as a non-empty string"
+            )
+            continue
+        entries[tuple(key.split("."))] = spec
+    if problems:
+        raise SystemExit(f"{path}: not a usable manifest:\n  " + "\n  ".join(problems))
+    return entries
+
+
+def entries_for(entries: dict[tuple, dict], payload: str) -> dict[tuple, dict]:
+    """The entries that govern ONE payload document.
+
+    Scoping is applied before any matching, so a `payload`-scoped entry is
+    invisible to every other document — including to the ~key demand in
+    _keys_are_data, which would otherwise read the devlinks map's root '*'
+    entry as a claim that zpool's schema roots are data too.
+    """
+    return {
+        pattern: spec
+        for pattern, spec in entries.items()
+        if spec.get("payload") in (None, payload)
+    }
+
+
+def _matches(pattern: tuple, path: tuple) -> bool:
+    return len(pattern) == len(path) and all(
+        p == "*" or p == a for p, a in zip(pattern, path)
+    )
+
+
+def _prefix_matches(pattern: tuple, path: tuple) -> bool:
+    return len(pattern) > len(path) and all(
+        p == "*" or p == a for p, a in zip(pattern, path)
+    )
+
+
+def _dot(path: tuple) -> str:
+    return ".".join(path) or "(root)"
+
+
+def _leaf_entry(path: tuple, ctx: Ctx) -> dict | None:
+    matches = [
+        (pat, entry) for pat, entry in ctx.entries.items()
+        if pat[-1] != "~key" and _matches(pat, path)
+    ]
+    if not matches:
+        ctx.problems.append(f"{_dot(path)}: no manifest entry classifies this leaf")
+        return None
+    if len(matches) > 1:
+        ctx.problems.append(
+            f"{_dot(path)}: matched by {len(matches)} entries "
+            f"({', '.join('.'.join(p) for p, _ in matches)}) — exactly one must"
+        )
+        return None
+    return matches[0][1]
+
+
+def _key_entry(path: tuple, ctx: Ctx) -> dict | None:
+    matches = [
+        entry for pat, entry in ctx.entries.items()
+        if pat[-1] == "~key" and _matches(pat[:-1], path)
+    ]
+    if len(matches) > 1:
+        ctx.problems.append(f"{_dot(path)}: more than one ~key entry applies")
+        return None
+    return matches[0] if matches else None
+
+
+def _keys_are_data(path: tuple, ctx: Ctx) -> bool:
+    """True when some entry walks through this dict's keys with a '*'.
+
+    A '*' here means the keys are named things — pools, disks, datasets —
+    rather than a schema's fixed members, and named things need a '~key'
+    classification of their own: the name in the key is the same name that
+    would be scrubbed in a value.
+    """
+    return any(
+        pat[len(path)] == "*"
+        for pat in ctx.entries
+        if pat[-1] != "~key" and _prefix_matches(pat, path)
+    )
+
+
+def _substitute(value, fmt: str | None, path: tuple, ctx: Ctx):
+    if value is None or isinstance(value, bool):
+        return value  # nothing identifying survives in a bare state
+    if isinstance(value, (int, float)):
+        if fmt == "guid_u64" and isinstance(value, int):
+            return int(_guid_replacement(ctx, str(value)))
+        # A formatless entry is the free-text pass, and a bare number embeds
+        # no token that pass could find — nft's match comparand holds ports
+        # and fwmarks beside addresses in ONE member, so refusing its ints
+        # would make the field unclassifiable at all. The pass-through stops
+        # at 2^48, where real WWNs and GUIDs live (the detectors' own line):
+        # an identifier-scale integer still refuses until its entry says
+        # guid_u64, because that silence is the exact hole the old scrubber
+        # shipped — zpool's integer GUIDs, out verbatim.
+        if fmt is None and isinstance(value, int) and abs(value) < 2**48:
+            return value
+        ctx.problems.append(
+            f"{_dot(path)}: a non-string leaf declared "
+            "identity/location/content needs format guid_u64 — no other "
+            "numeric identifier format exists yet"
+        )
+        return value
+    if fmt == "guid_u64":
+        if not value.isdigit():
+            ctx.problems.append(f"{_dot(path)}: declared guid_u64 but not digits")
+            return value
+        return _guid_replacement(ctx, value)
+    if fmt == "wwn":
+        replaced = WWN_SPELLED.sub(
+            lambda m: m.group(1) + _hex16_replacement(ctx, m.group(2)), value
+        )
+        replaced = BARE_HEX16.sub(
+            lambda m: m.group(0) if m.group(0).isdigit()
+            else _hex16_replacement(ctx, m.group(0)),
+            replaced,
+        )
+        if replaced == value:
+            ctx.problems.append(f"{_dot(path)}: declared wwn but no WWN found in it")
+        return replaced
+    if fmt == "serial":
+        return _serial_replacement(ctx, value)
+    if fmt == "mac":
+        if not MAC.fullmatch(value):
+            ctx.problems.append(f"{_dot(path)}: declared mac but not a MAC")
+            return value
+        return _mac_replacement(ctx, value)
+    if fmt in ("ipv4", "ipv6"):
+        if "/" in value:
+            addr, _, length = value.partition("/")
+            masked = (
+                _cidr_replacement(ctx, addr, int(length))
+                if length.isdigit() else None
+            )
+            if masked is None:
+                ctx.problems.append(f"{_dot(path)}: declared {fmt} but not a CIDR")
+                return value
+            return f"{masked}/{length}"
+        replaced = _ip_replacement(ctx, value)
+        if replaced is None:
+            ctx.problems.append(f"{_dot(path)}: declared {fmt} but not an address")
+            return value
+        return replaced
+    if fmt == "hostname":
+        return _host_replacement(ctx, value)
+    # name, path, or no format: free text that may embed anything
+    return scrub_text(value, ctx)
+
+
+def _keeps_unchanged(value: str) -> bool:
+    """True when a substituting class may hand this string back verbatim."""
+    if not value:
+        return True  # an empty string identifies nothing
+    if value in KEEP_V4 or value.lower() in KEEP_V6:
+        return True
+    try:
+        if ipaddress.ip_address(value).is_multicast:
+            return True  # a group is a constant, whatever the group
+    except ValueError:
+        pass
+    low = value.lower()
+    if MAC.fullmatch(value) and (low in KEEP_MAC or low.startswith(KEEP_MAC_PREFIXES)):
+        return True
+    if low in KEEP_UNCHANGED_TOKENS:
+        return True
+    return any(shape.match(value) for shape in KEEP_UNCHANGED_SHAPES)
+
+
+def _scrub_leaf(value, entry: dict, path: tuple, ctx: Ctx):
+    discloses = entry["discloses"]
+    if discloses == "nothing":
+        return value
+    if discloses == "secret":
+        # never echo the value: this run's output may be the leak
+        ctx.problems.append(
+            f"{_dot(path)}: discloses=secret — a secret must never have been "
+            "captured; scrubbing cannot repair this payload"
+        )
+        return value
+    before = len(ctx.problems)
+    replaced = _substitute(value, entry.get("format"), path, ctx)
+    # Deny-by-default at the value layer: a substituting classification that
+    # changed nothing means no rule engaged — the pool name that outlived a
+    # run which printed `scrubbed` did exactly this. Strings only: a bare
+    # number below 2^48 embeds no token by the pass-through's own argument,
+    # and identifier-scale integers already refuse above. The value itself is
+    # never echoed — a content leaf may BE the leak.
+    if (
+        isinstance(value, str)
+        and replaced == value
+        and len(ctx.problems) == before  # not already refused for this leaf
+        and not _keeps_unchanged(value)
+    ):
+        ctx.problems.append(
+            f"{_dot(path)}: classified {discloses} but the value survived "
+            "scrubbing unchanged and is not a KEEP-table constant — no "
+            "substitution rule engaged; reclassify it, extend KEEP, or hand "
+            "the run the missing name via --hostnames"
+        )
+    return replaced
+
+
+def _scrub_prefix_pair(node: dict, path: tuple, ctx: Ctx) -> dict:
+    """{addr, len} is one value wearing two members: scrub it as a unit.
+
+    Any other members the dict carries walk the manifest normally — only the
+    address takes its length into account.
+    """
+    addr_entry = _leaf_entry((*path, "addr"), ctx)
+    len_entry = _leaf_entry((*path, "len"), ctx)
+    length = node["len"]
+    if len_entry is not None:
+        length = _scrub_leaf(node["len"], len_entry, (*path, "len"), ctx)
+    addr = node["addr"]
+    if addr_entry is not None and addr_entry["discloses"] not in ("nothing", "secret"):
+        masked = _cidr_replacement(ctx, addr, node["len"])
+        if masked is None:
+            ctx.problems.append(f"{_dot(path)}: addr/len pair but addr is not an address")
+        elif masked == addr and not _keeps_unchanged(addr):
+            # same deny-by-default as _scrub_leaf: this branch substitutes
+            # outside it, so it carries the survived-unchanged gate itself
+            ctx.problems.append(
+                f"{_dot(path)}: classified {addr_entry['discloses']} but the "
+                "prefix base survived scrubbing unchanged and is not a "
+                "KEEP-table constant — no substitution rule engaged"
+            )
+        else:
+            addr = masked
+    elif addr_entry is not None:
+        addr = _scrub_leaf(addr, addr_entry, (*path, "addr"), ctx)
+    rest = {
+        k: scrub_node(v, (*path, str(k)), ctx)
+        for k, v in node.items() if k not in ("addr", "len")
+    }
+    return {**rest, "addr": addr, "len": length}
+
+
+def scrub_node(node, path: tuple, ctx: Ctx):
+    if isinstance(node, dict):
+        if (
+            isinstance(node.get("addr"), str)
+            and isinstance(node.get("len"), int)
+            and not isinstance(node.get("len"), bool)
+        ):
+            return _scrub_prefix_pair(node, path, ctx)
+        key_entry = _key_entry(path, ctx)
+        if key_entry is None and _keys_are_data(path, ctx):
+            ctx.problems.append(
+                f"{_dot(path)}: keys here are data (an entry uses '*' at this "
+                f"position) but no '{_dot(path)}.~key' entry classifies them"
+            )
+        out = {}
+        for k, v in node.items():
+            new_key = k
+            if key_entry is not None and isinstance(k, str):
+                new_key = _scrub_leaf(k, key_entry, (*path, k), ctx)
+            out[new_key] = scrub_node(v, (*path, str(k)), ctx)
+        if len(out) != len(node):
+            ctx.problems.append(f"{_dot(path)}: key substitution collided — refusing")
+        return out
+    if isinstance(node, list):
+        return [scrub_node(v, (*path, str(i)), ctx) for i, v in enumerate(node)]
+    entry = _leaf_entry(path, ctx)
+    if entry is None:
+        return node
+    return _scrub_leaf(node, entry, path, ctx)
+
+
+# ── entry points ─────────────────────────────────────────────────────────
+
+
+def _declares_addresses(entries: dict[tuple, dict]) -> bool:
+    return any(
+        e.get("format") in ("ipv4", "ipv6") and e["discloses"] != "nothing"
+        for e in entries.values()
+    )
+
+
+def _require_names(entries: dict[tuple, dict], hostnames: list[str]) -> None:
+    """A format-name field is operator-chosen words, and the ONLY mechanism
+    that substitutes such words is the names list the run is handed. Without
+    one, every name field no-ops while the tool prints `scrubbed` — the
+    demonstrated leak. format hostname is exempt on purpose: there the leaf
+    value IS the name and is substituted whole, no vocabulary needed.
+    """
+    if hostnames:
+        return
+    named = [
+        ".".join(pat) for pat, e in entries.items()
+        if e.get("format") == "name"
+        and e["discloses"] in ("identity", "location", "content")
+    ]
+    if named:
+        raise SystemExit(
+            "refusing to run without --hostnames: the manifest classifies "
+            + ", ".join(sorted(named))
+            + " as format name — operator-chosen words only the names list "
+            "can substitute. Without it those fields no-op silently, and the "
+            "failure mode of shrugging is publication."
+        )
+
+
+def run_check(args, hostnames: list[str]) -> None:
+    """--check is the detectors, and ONLY the detectors.
+
+    The scrubber must not verify itself: a checker that greps with the
+    remover's own pattern cannot fail, and did not — 0 detections in 300
+    fuzzed runs against a scrubber missing real WWNs.
+    """
+    from se_harness import detectors
+
+    declares = False
+    if args.manifest:
+        entries = load_manifest(args.manifest)
+        # the check is as blind to unnamed operator words as the scrub is:
+        # a manifest that declares name fields demands a names source here too
+        _require_names(entries, hostnames)
+        declares = _declares_addresses(entries)
+    dirty = False
+    for path in args.payloads:
+        findings = detectors.scan(
+            json.loads(path.read_text()),
+            declares_address_fields=declares,
+            hostnames=hostnames,
+        )
+        if findings:
+            dirty = True
+            print(f"{path}: {len(findings)} finding(s)")
+            for f in findings:
+                print(f"  {f.path} [{f.value_class}] {f.why}")
+        else:
+            print(f"{path}: no findings")
+    if dirty:
+        raise SystemExit(1)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("payloads", nargs="+", type=Path)
+    parser.add_argument("--manifest", type=Path,
+                        help="scrub manifest (harness/scrub/<collector>.json)")
+    parser.add_argument("--hostnames", default="",
+                        help="comma-separated real hostnames")
+    parser.add_argument("--map", type=Path,
+                        help="write/read the substitution (reverse) map")
+    parser.add_argument("--check", action="store_true",
+                        help="run only the independent detectors; scrub nothing")
+    args = parser.parse_args()
+    hostnames = [h.strip() for h in args.hostnames.split(",") if h.strip()]
+
+    if args.check:
+        run_check(args, hostnames)
+        return
+
+    if not args.manifest:
+        raise SystemExit(
+            "refusing to scrub without --manifest: this tool no longer "
+            "guesses a value's class from its shape (DESIGN 21)"
+        )
+    if args.map and _inside_git_tree(args.map):
+        raise SystemExit(
+            f"refusing --map {args.map.resolve()}: the substitution map "
+            "de-anonymises every specimen it was used on, and this path is "
+            "inside a git working tree. Write it somewhere private."
+        )
+
+    entries = load_manifest(args.manifest)
+    _require_names(entries, hostnames)
+    mapping: dict[str, str] = {}
+    if args.map and args.map.exists():
+        mapping = json.loads(args.map.read_text())
+    ctx = Ctx(_load_secret(), mapping, hostnames, entries)
+
+    scrubbed: list[tuple[Path, object]] = []
+    for path in args.payloads:
+        # The manifest view for THIS document, so a scoped entry cannot reach
+        # a payload it was not written for. One Ctx across all of them: the
+        # mapping is global by rule 2 of DESIGN 21, and the same WWN in three
+        # payloads must come back as one replacement.
+        ctx.entries = entries_for(entries, path.stem)
+        scrubbed.append((path, scrub_node(json.loads(path.read_text()), (), ctx)))
+
+    if ctx.problems:
+        # nothing is written: a partial scrub looks exactly like a full one
+        raise SystemExit(
+            "refusing to write, the capture is not fully understood:\n  "
+            + "\n  ".join(dict.fromkeys(ctx.problems))
+        )
+
+    for path, document in scrubbed:
+        path.write_text(json.dumps(document, indent=2, sort_keys=False) + "\n")
+        print(f"{path}: scrubbed")
+
+    if args.map:
+        args.map.write_text(json.dumps(ctx.mapping, indent=2, sort_keys=True) + "\n")
+        print(f"{args.map}: {len(ctx.mapping)} substitutions "
+              f"(keep this OUT of any repository — it is the reverse map)")
+
+
+if __name__ == "__main__":
+    main()

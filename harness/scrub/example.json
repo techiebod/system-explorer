@@ -1,0 +1,38 @@
+{
+  "#": "Scrub manifest for a fictional 'exampled' collector — the format specimen the regeneration step authors real manifests from. One file per collector at harness/scrub/<collector>.json, covering the union of every payload file that collector captures.",
+  "#paths": "Dotted payload paths. '*' matches exactly one dict key or one list index. A trailing '~key' segment classifies the KEY strings of the dict it names — required wherever an entry walks a dict with '*', because keys there are named things (pools, disks) and a name in a key leaks like a name in a value. Every leaf must match exactly one entry or the scrub run fails listing the unmatched paths.",
+  "#discloses": "nothing = verbatim; identity/location/content = substituted, keyed and shape-preserving; secret = the run is refused — a secret must never have been captured. There is no default and both possible defaults are wrong (DESIGN 21).",
+  "#format": "Optional substitution hint: wwn|guid_u64|serial|mac|ipv4|ipv6|hostname|name|path. guid_u64 is required for any numeric identifier (an integer stays an integer, <= 2^64-1, digit-width preserved). Without a format, a string gets the full embedded-token pass — right for free text, slower and blunter than naming the shape.",
+  "#payload": "Optional scope: the stem of the one payload file an entry applies to ('status', 'devlinks', 'nft' — the same names the replay seam and se-capture-guest use). Omit it and the entry applies to every payload, which is what nearly every entry wants. It exists because one manifest covers payloads that do not share a root: a document whose ROOT keys are data needs a '~key' entry at the root, and that same entry unscoped would misclassify the fixed schema members another payload's root carries. A scoped and an unscoped entry matching one leaf is the ordinary two-entries refusal — which one governs must not depend on file order.",
+
+  "output_version.command": {"discloses": "nothing"},
+  "output_version.vers_major": {"discloses": "nothing"},
+  "output_version.vers_minor": {"discloses": "nothing"},
+
+  "pools.~key": {"discloses": "content", "format": "name"},
+  "pools.*.name": {"discloses": "content", "format": "name"},
+  "pools.*.state": {"discloses": "nothing"},
+  "pools.*.pool_guid": {"discloses": "identity", "format": "guid_u64"},
+  "pools.*.disks.~key": {"discloses": "identity", "format": "name"},
+  "pools.*.disks.*.wwn": {"discloses": "identity", "format": "wwn"},
+  "pools.*.disks.*.serial": {"discloses": "identity", "format": "serial"},
+  "pools.*.disks.*.by_id_path": {"discloses": "identity", "format": "path"},
+  "pools.*.disks.*.phys_path": {"discloses": "nothing"},
+  "#phys_path": "A bus address locates a card on a bus and is identical across every machine of that model — the field the shape-guessing scrubber rewrote into the documentation range. The manifest, not shape, is what says it stays.",
+
+  "interfaces.~key": {"discloses": "nothing"},
+  "interfaces.*.mac": {"discloses": "identity", "format": "mac"},
+  "interfaces.*.addresses.*.addr": {"discloses": "location", "format": "ipv4"},
+  "interfaces.*.addresses.*.len": {"discloses": "nothing"},
+  "#addresses": "{addr, len} pairs are scrubbed as a unit: the replacement is masked to a valid base for its length. Well-known constants (appendix A) survive verbatim; everything else stays within its own address space.",
+
+  "~key": {"discloses": "identity", "format": "path", "payload": "devlinks"},
+  "*": {"discloses": "nothing", "payload": "devlinks"},
+  "#devlinks": "The payload-scoped pair, on the shape that forced them: a flat {alias path: kernel name} map, whose root keys are the data. Unscoped, these two would claim the same about every other payload's root.",
+
+  "host.fqdn": {"discloses": "location", "format": "hostname"},
+  "host.machine_id": {"discloses": "identity"},
+  "host.notes": {"discloses": "content"},
+
+  "api.token": {"discloses": "secret"}
+}

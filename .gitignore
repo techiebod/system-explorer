@@ -29,3 +29,16 @@ venv/
 .vscode/
 *.swp
 *~
+
+# Substitution maps de-anonymise every specimen they were used on.
+scrub-map*.json
+*.scrub-map.json
+
+# The keyed scrubber's state: maps are named <variant>.json under a scrub/
+# state dir and the secret lives beside them. Both are refused inside a git
+# tree by the tool itself; these patterns are the second lock for the day a
+# state dir lands here anyway. harness/scrub/ holds the committed manifests,
+# which carry no secrets, so it is re-included by name.
+**/scrub/*.json
+!harness/scrub/*.json
+**/scrub/secret
