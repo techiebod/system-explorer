@@ -265,30 +265,92 @@ def _md_holders(kname: str) -> list[str]:
 
 # ── zfs helpers ──────────────────────────────────────────────
 
-
-def _resolve_leaf_kname(name: str) -> str | None:
-    """Leaf vdev name -> kernel block name. zpool reports whatever path the
-    pool was imported with (wwn-*, by-id, plain sdX, absolute paths, or —
-    for stripe-pool leaves — a bare partition GUID); the kname is what
-    lsblk and the block-devices collection agree on."""
-    path = name if name.startswith("/") else None
-    if path is None:
-        # by-partuuid: stripe leaves are named by partition GUID alone.
-        for base in ("/dev", "/dev/disk/by-id", "/dev/disk/by-partuuid"):
-            candidate = f"{base}/{name}"
-            if os.path.exists(candidate):
-                path = candidate
-                break
-    if path and os.path.exists(path):
-        return os.path.basename(os.path.realpath(path))
-    return None
+# The alias trees a vdev reference resolves through. by-id is where zpool's
+# own path field points; by-partuuid is how stripe leaves are named (a bare
+# partition GUID, verified against a stripe layout 2026-08-09); mapper is a
+# pool imported over dm/LUKS nodes, whose /dev/mapper name is not its kernel
+# name.
+_DEVLINK_TREES = ("/dev/disk/by-id", "/dev/disk/by-partuuid", "/dev/mapper")
 
 
-def _flatten_vdevs(nodes: dict | None, out: list[dict], group: str = "data",
+def _devlinks() -> dict[str, str] | None:
+    """{alias path: kernel block name} for every device symlink on the host.
+
+    This is an ACQUISITION, module-level on purpose: it is the one place vdev
+    resolution touches the filesystem, so the replay seam can redirect it the
+    same way it redirects the zpool documents (a payload named "devlinks").
+    While resolution called os.path.realpath inline, the emitted Device was a
+    property of the machine RUNNING the code, not the machine that produced
+    the payload — every committed corpus Device was null because the corpus
+    was generated on a workstation with no /dev/disk.
+
+    None when no tree is readable. That is could-not-read, a different
+    statement from an empty tree, and the caller routes it to the
+    unobservable channel rather than letting it impersonate absence.
+    """
+    links: dict[str, str] | None = None
+    for tree in _DEVLINK_TREES:
+        try:
+            entries = sorted(os.listdir(tree))
+        except OSError:
+            continue
+        if links is None:
+            links = {}
+        for entry in entries:
+            path = f"{tree}/{entry}"
+            try:
+                links[path] = os.path.basename(os.readlink(path))
+            except OSError:
+                continue  # /dev/mapper/control and friends: nodes, not aliases
+    return links
+
+
+def _resolve_kname(ref: str, links: dict[str, str]) -> str | None:
+    """vdev path or name -> kernel block name, through the devlinks map ONLY.
+
+    zpool reports whatever the pool was imported with (wwn-*, by-id, plain
+    sdX, absolute paths, or — for stripe leaves — a bare partition GUID); the
+    kname is what lsblk and the block-devices collection agree on. No
+    filesystem read happens here: under replay the map is the capture's, so
+    the answer stays a fact about the captured machine, and a ref the map
+    cannot account for is an honest absence rather than a guess.
+    """
+    if ref.startswith("/"):
+        kname = links.get(ref)
+        if kname:
+            return kname
+        # A node named directly — /dev/sdc1, /dev/vdb — dereferences nothing:
+        # the basename IS the kernel name, which is what lets a virtio disk
+        # (which grows no by-id link) still resolve.
+        tail = ref.removeprefix("/dev/")
+        if ref.startswith("/dev/") and "/" not in tail:
+            return tail
+        return None
+    for tree in ("/dev/disk/by-id", "/dev/disk/by-partuuid"):
+        kname = links.get(f"{tree}/{ref}")
+        if kname:
+            return kname
+    # A bare kernel name (a pool imported as plain sdc) appears in the map as
+    # an alias TARGET, never as an alias.
+    return ref if ref in links.values() else None
+
+
+def _flatten_vdevs(nodes: dict | None, out: list[dict],
+                   links: dict[str, str] | None, group: str = "data",
                    depth: int = 1) -> None:
     """Depth-first vdev walk. Group vdevs (logs, l2cache, spares) label their
     subtree; the root vdev is namespace, not a device. Depth drives the UI's
-    tree indentation; Device is the resolved, linkable kernel block name."""
+    tree indentation; Device is the resolved, linkable kernel block name,
+    read through the devlinks acquisition (`links`) and nothing else.
+
+    Each disk leaf also publishes its own name set (law 1): its guid, the wwn
+    its by-id name encodes, the devid zpool recorded — the stable names a
+    collator joins pool members to block devices on — plus the resolved
+    kernel path, carried because a person searches for /dev/sdc and joined on
+    never. It rides the row: a stream object's names channel holds flat
+    scalar families (the contract's name_scalar), so a PER-LEAF set can only
+    live where the leaf itself does.
+    """
     for name, vdev in (nodes or {}).items():
         is_container = vdev.get("vdev_type") == "root" or name in ZFS_GROUP_VDEVS
         next_group = name if name in ZFS_GROUP_VDEVS else group
@@ -299,36 +361,46 @@ def _flatten_vdevs(nodes: dict | None, out: list[dict], group: str = "data",
             # parent is a plain disk in zpool's own semantics — the JSON
             # just leaves the key out. Infer "disk" so stripe leaves get
             # the same Device resolution and member-of edges as typed raidz
-            # leaves; State stays as reported (absent -> None, which the
-            # UnhealthyVdevs filter already tolerates). Native semantic,
-            # absent key — verified against a stripe layout, 2026-08-09.
+            # leaves. State stays as reported; where zpool omits it, the row
+            # omits it too — DESIGN 19 forbids a null standing in for an
+            # absent key, and the UnhealthyVdevs filter tolerates the gap.
             vdev_type = vdev.get("vdev_type")
             if vdev_type is None and not vdev.get("vdevs"):
                 vdev_type = "disk"
-            # Key order is column order in the UI's mini-table: the resolved
-            # Device sits beside State (the wwn-* vdev name alone answers
-            # nothing), and Group only appears for special classes — "data"
-            # is the default, not information.
             entry = {
                 "Name": name,
                 "Depth": depth,
                 "Type": vdev_type,
                 "State": vdev.get("state"),
-                # Explicit None on container rows keeps the Device column
-                # beside State — the UI derives column order from the first
-                # row that mentions a key, and raidz rows come first.
-                "Device": None,
             }
             if vdev_type == "disk":
                 # zpool's own path field is authoritative; the vdev NAME is
                 # only a fallback (some hosts lack the matching by-id link).
+                # links None means the acquisition itself was unreadable —
+                # the CALLER emits the unobservable record for that, because
+                # a missing Device here must not impersonate absence.
                 kname = None
-                path = vdev.get("path")
-                if path and os.path.exists(path):
-                    kname = os.path.basename(os.path.realpath(path))
-                if kname is None:
-                    kname = _resolve_leaf_kname(str(name))
-                entry["Device"] = f"block-device:{kname}" if kname else None
+                if links is not None:
+                    path = vdev.get("path")
+                    kname = _resolve_kname(str(path), links) if path else None
+                    if kname is None:
+                        kname = _resolve_kname(str(name), links)
+                if kname:
+                    entry["Device"] = f"block-device:{kname}"
+                stable: dict[str, object] = {}
+                if vdev.get("guid") is not None:
+                    stable["guid"] = str(vdev["guid"])
+                if str(name).startswith("wwn-"):
+                    stable["wwn"] = str(name)
+                if vdev.get("devid"):
+                    stable["devid"] = vdev["devid"]
+                leaf_names: dict[str, dict] = {}
+                if stable:
+                    leaf_names["stable"] = stable
+                if kname:
+                    leaf_names["ephemeral"] = {"kernel": f"/dev/{kname}"}
+                if leaf_names:
+                    entry["Names"] = leaf_names
             if next_group != "data":
                 entry["Group"] = next_group
             entry.update({
@@ -336,9 +408,39 @@ def _flatten_vdevs(nodes: dict | None, out: list[dict], group: str = "data",
                 "WriteErrors": _int_or_none(vdev.get("write_errors")),
                 "ChecksumErrors": _int_or_none(vdev.get("checksum_errors")),
             })
-            out.append(entry)
+            # Null is never a fact value (DESIGN 19): a member zpool did not
+            # report is simply not on the row. This costs the old trick of an
+            # explicit None pinning the Device column beside State — a column
+            # position is not worth a value that names none of the three
+            # statements a reader could take from it.
+            out.append({k: v for k, v in entry.items() if v is not None})
             child_depth = depth + 1
-        _flatten_vdevs(vdev.get("vdevs"), out, next_group, child_depth)
+        _flatten_vdevs(vdev.get("vdevs"), out, links, next_group, child_depth)
+
+
+def _split_absent(facts: dict) -> tuple[dict, list[str]]:
+    """DESIGN 19: a fact's value is never null — value, absent list and
+    unobservable record are three statements with three channels, and a null
+    names none of them. A None here is the source reporting the property
+    genuinely missing (lsblk and findmnt emit JSON null for exactly that), so
+    it moves to the object's absent list; a None that means could-not-read is
+    routed to the unobservable channel by the caller that knows the reason,
+    BEFORE this sweep runs."""
+    return ({k: v for k, v in facts.items() if v is not None},
+            sorted(k for k, v in facts.items() if v is None))
+
+
+def _attach_channels(item: dict, absent: list[str] | None = None,
+                     unobservable: list[dict] | None = None) -> dict:
+    """The stream channels, riding the item beside its facts. Additive on the
+    live API's row shape (the way `depth` already is) and lifted verbatim by
+    the reference collector — one representation, so the API and the stream
+    cannot tell two different stories about the same reading."""
+    if absent:
+        item["absent"] = absent
+    if unobservable:
+        item["unobservable"] = sorted(unobservable, key=lambda u: u["fact"])
+    return item
 
 
 def _leaf_device_knames(vdevs: list[dict]) -> dict[str, str]:
@@ -450,9 +552,10 @@ _POOL_GLOSSARY = {
         "ScanEndTime and ScanAgeDays are empty mid-scrub."
     ),
     "ScanEndTime": (
-        "When the recorded scan finished, whatever kind it was. Null while "
-        "a scan is running; a plain prose date on OpenZFS too old to render "
-        "the machine-readable form, and then no age is derived from it."
+        "When the recorded scan finished, whatever kind it was. On the "
+        "absent list while a scan is running — no end exists yet; a plain "
+        "prose date on OpenZFS too old to render the machine-readable form, "
+        "and then no age is derived from it."
     ),
     "ScanAgeDays": (
         "Whole days since the recorded scan finished — the SCAN, not "
@@ -461,10 +564,10 @@ _POOL_GLOSSARY = {
         "is a finished scrub."
     ),
     "LastScrubEndTime": (
-        "When the last completed scrub finished. Null with a reason in "
-        "LastScrubEndTimeUnobservable when a later resilver replaced the "
-        "scrub's record — the value exists, this pool just cannot report "
-        "it."
+        "When the last completed scrub finished. An unobservable record, "
+        "with the reason in LastScrubEndTimeUnobservable, when a later "
+        "resilver replaced the scrub's record — the value exists, this pool "
+        "just cannot report it."
     ),
     "LastScrubEndTimeUnobservable": (
         "Why the last scrub's end time cannot be read from this pool: ZFS "
@@ -647,10 +750,11 @@ class Adapter:
             status = await anyio.to_thread.run_sync(_zpool_status)
         except Exception:  # noqa: BLE001 - enrichment only, never break block-devices
             return {}
+        links = await anyio.to_thread.run_sync(_devlinks)
         out: dict[str, str] = {}
         for pool_name, pool in (status.get("pools") or {}).items():
             vdevs: list[dict] = []
-            _flatten_vdevs(pool.get("vdevs"), vdevs)
+            _flatten_vdevs(pool.get("vdevs"), vdevs, links)
             for kname in _leaf_device_knames(vdevs).values():
                 out[kname] = pool_name
         return out
@@ -678,9 +782,13 @@ class Adapter:
                 # by construction and a virtio disk belongs to neither.
                 "Transport": node.get("tran"),
             }
+            # lsblk emits JSON null for a property a device does not have
+            # (a partition's MODEL, a virtual device's TRAN): that is the
+            # absent list's statement, never a null fact (DESIGN 19).
+            facts, absent = _split_absent(facts)
             item = env.item_summary(f"block-device:{name}", node.get("type") or "disk", name, facts)
             item["depth"] = depth
-            items.append(item)
+            items.append(_attach_channels(item, absent))
         return items
 
     async def _mount_items(self) -> list[dict]:
@@ -695,11 +803,14 @@ class Adapter:
                 "UsedBytes": node.get("used"), "AvailBytes": node.get("avail"),
                 "UsePercent": use,
             }
+            # A pseudo-filesystem genuinely has no size or usage: findmnt
+            # reports null, and the absent list is what that means here.
+            facts, absent = _split_absent(facts)
             item = env.item_summary(f"mount:{target}", "mount", target, facts,
                                     opinions=mount_opinions(facts),
                                     healthy="ok" if use is not None else "info")
             item["depth"] = depth
-            items.append(item)
+            items.append(_attach_channels(item, absent))
         return items
 
     async def _array_items(self) -> list[dict]:
@@ -718,15 +829,22 @@ class Adapter:
                 "MetadataVersion": arr["metadata_version"], "UUID": arr["uuid"],
                 "SyncAction": action, "SyncPercent": arr["sync_percent"],
                 "SizeBytes": arr["size_bytes"],
-                "Members": [{"Device": f"block-device:{kname}",
-                             "State": member["state"],
-                             "Slot": member["slot"],
-                             "Errors": member["errors"]}
+                # A member attribute sysfs did not yield is left off the row
+                # rather than carried as null; the rulebook reads members
+                # with .get() and treats the gap as no statement.
+                "Members": [{k: v for k, v in
+                             {"Device": f"block-device:{kname}",
+                              "State": member["state"],
+                              "Slot": member["slot"],
+                              "Errors": member["errors"]}.items()
+                             if v is not None}
                             for kname, member in arr["members"].items()],
             }
-            items.append(env.item_summary(f"array:{name}", arr["level"] or "md-array",
-                                          name, facts,
-                                          opinions=array_opinions(facts)))
+            facts, absent = _split_absent(facts)
+            item = env.item_summary(f"array:{name}", arr["level"] or "md-array",
+                                    name, facts,
+                                    opinions=array_opinions(facts))
+            items.append(_attach_channels(item, absent))
         return items
 
     async def _pool_items(self) -> list[dict]:
@@ -734,13 +852,33 @@ class Adapter:
         try:
             listing = (await anyio.to_thread.run_sync(_zpool_list)).get("pools") or {}
         except Exception:  # noqa: BLE001 - capacity is enrichment; status is the fact
-            listing = {}
+            # None, not {}: a listing that could not be read makes the
+            # capacity facts unobservable, which is a different statement
+            # from a listing that reported no such properties.
+            listing = None
+        links = await anyio.to_thread.run_sync(_devlinks)
         items = []
         for name, pool in (status.get("pools") or {}).items():
+            absent: list[str] = []
+            unobservable: list[dict] = []
             vdevs: list[dict] = []
-            _flatten_vdevs(pool.get("vdevs"), vdevs)
+            _flatten_vdevs(pool.get("vdevs"), vdevs, links)
+            if links is None:
+                # The alias trees could not be read (live) or no devlinks
+                # payload was captured (replay). Every leaf's Device is a
+                # could-not-read, one record each — never a silent null and
+                # never a claim about the machine doing the replaying.
+                for entry in vdevs:
+                    if entry.get("Type") == "disk":
+                        unobservable.append({
+                            "fact": f"Vdevs/{entry['Name']}/Device",
+                            "reason": "unavailable",
+                            "detail": "no device alias tree could be read, "
+                                      "so the member's kernel name cannot "
+                                      "be resolved"})
             scan = pool.get("scan_stats") or {}
-            props = (listing.get(name) or {}).get("properties") or {}
+            props = ((listing.get(name) or {}).get("properties") or {}
+                     if listing is not None else {})
 
             # Per-vdev fullness from zpool list -v, matched onto the status
             # walk's entries by vdev name.
@@ -762,22 +900,47 @@ class Adapter:
                         }
                     collect_caps(vd.get("vdevs"), caps)
 
-            collect_caps((listing.get(name) or {}).get("vdevs"), vdev_caps)
+            collect_caps(((listing or {}).get(name) or {}).get("vdevs"), vdev_caps)
             for entry in vdevs:
                 cap = vdev_caps.get(str(entry["Name"]))
                 if cap:
-                    entry.update(cap)
+                    # cap members can be None (leaves report '-'): the same
+                    # null-is-no-statement rule as the walk's own members.
+                    entry.update({k: v for k, v in cap.items() if v is not None})
             unhealthy = [vdev["Name"] for vdev in vdevs
                          if vdev.get("State") not in (None, "ONLINE", "AVAIL")]
             vdev_errors = [vdev["Name"] for vdev in vdevs
                            if any((vdev.get(key) or 0) for key in
                                   ("ReadErrors", "WriteErrors", "ChecksumErrors"))]
             cap_pct = _int_or_none(_prop_value(props, "capacity"))
+            sfacts = scan_facts(scan)
+            if "LastScrubEndTimeUnobservable" in sfacts:
+                # scan_facts speaks the old in-band pair (rule 7); DESIGN 19
+                # gives could-not-read its own record instead. The null half
+                # moves to that channel; the reason stays a string fact
+                # because the rulebook cites it as evidence.
+                del sfacts["LastScrubEndTime"]
+                unobservable.append({
+                    "fact": "LastScrubEndTime", "reason": "unavailable",
+                    "detail": sfacts["LastScrubEndTimeUnobservable"]})
+            if "ScanAgeDays" not in sfacts:
+                if isinstance(sfacts.get("ScanEndTime"), str):
+                    # an end time was reported but as prose (no --json-int):
+                    # the age exists and this OpenZFS cannot let us derive it
+                    unobservable.append({
+                        "fact": "ScanAgeDays", "reason": "unsupported",
+                        "detail": "this OpenZFS renders scan end_time as "
+                                  "prose, not an epoch, so no age can be "
+                                  "derived from it"})
+                else:
+                    # no scan record, or a scan still running: there is
+                    # genuinely no end to measure an age from
+                    absent.append("ScanAgeDays")
             facts = {
                 "State": pool.get("state"),
                 "StatusMessage": (pool.get("status") or "").strip() or None,
                 "Errors": pool.get("error_count"),
-                **scan_facts(scan),
+                **sfacts,
                 "SizeBytes": _int_or_none(_prop_value(props, "size")),
                 "AllocatedBytes": _int_or_none(_prop_value(props, "allocated")),
                 "FreeBytes": _int_or_none(_prop_value(props, "free")),
@@ -787,12 +950,56 @@ class Adapter:
                 "UnhealthyVdevs": unhealthy,
                 "VdevsWithErrors": vdev_errors,
             }
+            if listing is None:
+                # the properties are on the pool; zpool list is what could
+                # not be read — five unobservables, not five absences
+                for key in ("SizeBytes", "AllocatedBytes", "FreeBytes",
+                            "CapacityPercent", "FragmentationPercent"):
+                    facts.pop(key)
+                    unobservable.append({
+                        "fact": key, "reason": "unavailable",
+                        "detail": "zpool list could not be read; zpool "
+                                  "status alone carries no capacity "
+                                  "properties"})
             layout, tolerated = _redundancy(vdevs)
             if layout:
                 facts["Redundancy"] = layout
                 facts["DeviceFailuresTolerated"] = tolerated
-            items.append(env.item_summary(f"pool:{name}", "pool", name, facts,
-                                          opinions=pool_opinions(facts)))
+            else:
+                # the pool HAS a layout; this walk cannot justify a claim
+                # about it (an unrecognised top-level vdev shape) — which is
+                # could-not-read, not has-no-such-property
+                for key in ("Redundancy", "DeviceFailuresTolerated"):
+                    unobservable.append({
+                        "fact": key, "reason": "unsupported",
+                        "detail": "a top-level vdev of a shape this reading "
+                                  "does not recognise; claiming a tolerance "
+                                  "the walk cannot justify is the direction "
+                                  "that gets somebody hurt"})
+            facts, missing = _split_absent(facts)
+            absent = sorted(absent + missing)
+            item = env.item_summary(f"pool:{name}", "pool", name, facts,
+                                    opinions=pool_opinions(facts))
+            # Law 1: every native name observed, split by stability class.
+            # A names family holds scalars (the contract's name_scalar), so
+            # the pool's channel carries the guid that survives rename and
+            # import, the member names as ZFS records them, and the kernel
+            # paths a person searches for — while each leaf's fuller name
+            # set (guid/wwn/devid) rides its own Vdevs row.
+            leaves = [entry for entry in vdevs if entry.get("Type") == "disk"]
+            stable: dict[str, object] = {}
+            if pool.get("pool_guid") is not None:
+                stable["guid"] = str(pool["pool_guid"])
+            devices = [str(entry["Name"]) for entry in leaves]
+            if devices:
+                stable["devices"] = devices
+            kernels = [entry["Names"]["ephemeral"]["kernel"] for entry in leaves
+                       if "ephemeral" in entry.get("Names", {})]
+            if stable:
+                item["names"] = {"stable": stable}
+                if kernels:
+                    item["names"]["ephemeral"] = {"kernel": kernels}
+            items.append(_attach_channels(item, absent, unobservable))
         return items
 
     async def _dataset_items(self) -> list[dict]:
@@ -829,24 +1036,33 @@ class Adapter:
             # across two hosts, every one of them wrong (2026-08-10 audit).
             #
             # That is the sandbox's value, not the dataset's, and the stored
-            # property is masked behind it. Report the absence with its reason
-            # (SPEC section 2 rule 7) rather than publishing the artifact as a
-            # fact. Unmounted datasets are unaffected: no mount, no override,
-            # so their local/inherited value is the truth.
+            # property is masked behind it. Could-not-read has its own
+            # channel (DESIGN 19): ReadOnly becomes an unobservable record —
+            # never a null standing where a fact should be — while the reason
+            # stays a string fact because consumers cite it in place.
+            # Unmounted datasets are unaffected: no mount, no override, so
+            # their local/inherited value is the truth.
             readonly_source = _prop_source(props, "readonly")
             masked = readonly_source == "temporary"
-            facts["ReadOnly"] = None if masked else _prop_value(props, "readonly")
-            facts["ReadOnlySource"] = readonly_source
+            unobservable: list[dict] = []
             if masked:
                 facts["ReadOnlyUnobservable"] = (
                     "masked by a temporary mount-option override in the agent's "
                     "own mount namespace (ProtectSystem=strict): zfs reads "
                     "/proc/self/mounts, not PID 1's. This dataset's mount row "
                     "carries the host's live read-only state.")
-            items.append(env.item_summary(
+                unobservable.append({
+                    "fact": "ReadOnly", "reason": "unavailable",
+                    "detail": facts["ReadOnlyUnobservable"]})
+            else:
+                facts["ReadOnly"] = _prop_value(props, "readonly")
+            facts["ReadOnlySource"] = readonly_source
+            facts, absent = _split_absent(facts)
+            item = env.item_summary(
                 f"dataset:{name}", ds.get("type", "filesystem"), name, facts,
                 opinions=dataset_opinions(facts),
-                healthy="ok" if use_pct is not None else "info"))
+                healthy="ok" if use_pct is not None else "info")
+            items.append(_attach_channels(item, absent, unobservable))
         return items
 
     def _source_for(self, collection: str) -> dict:
@@ -869,7 +1085,11 @@ class Adapter:
                         "raid_disks,metadata_version,uuid,sync_action,sync_completed}",
                         "cat /sys/block/<md>/md/dev-*/{state,slot,errors}",
                         "cat /sys/block/<device>/size"]),
-            "pools": ("zfs-json", "zpool -j", ["zpool status -j", "zpool list -j -p"]),
+            # The alias listing is how a reader reproduces Device resolution:
+            # the links' targets ARE the kernel names the rows carry.
+            "pools": ("zfs-json", "zpool -j",
+                      ["zpool status -j", "zpool list -j -p",
+                       "ls -l /dev/disk/by-id /dev/disk/by-partuuid /dev/mapper"]),
             "datasets": ("zfs-json", "zfs -j", ["zfs list -j -p -o " + ZFS_LIST_COLUMNS]),
             "lookups": ("zfs-json", "zfs list -j -t snapshot,bookmark",
                         ["zfs list -t snapshot -d 1 <dataset>",

@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+# Capture native payloads from a lab guest into a corpus variant.
+#
+# The other half of a corpus pair comes from se-capture, which runs the
+# reference implementation over these payloads. This half is the raw truth: what
+# the interface on that guest, at that version, actually produced.
+#
+#   se-capture-guest <ssh-target> <collector> <variant-dir>
+#
+# The guest is reached through the lab's own ssh config, so this works against
+# any guest vm-lab has brought up without knowing how it was addressed.
+#
+# Anonymisation is NOT done here. Payloads land raw, and the scrubbing pass runs
+# before commit — the corpus is public, and structural consistency must be
+# preserved across payloads (the same WWN in three files stays one WWN) which
+# is not a per-file transformation and must not be attempted as one.
+
+set -euo pipefail
+
+if [[ $# -ne 3 ]]; then
+    sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
+    exit 2
+fi
+
+target="$1"
+# ssh parses its destination as an option if it starts with a dash, so a
+# crafted target could run a local command through -oProxyCommand.
+if [[ $target == -* ]]; then
+    echo "refusing a target that starts with '-'" >&2
+    exit 2
+fi
+collector="$2"
+variant="$3"
+
+lab_ssh_config="$(dirname "$0")/../../test/vm-lab/.state/ssh_config"
+ssh_opts=(-o BatchMode=yes)
+[[ -f "$lab_ssh_config" ]] && ssh_opts+=(-F "$lab_ssh_config")
+
+payload_dir="$variant/payloads"
+mkdir -p "$payload_dir"
+
+# What each collector reads, and under which payload name the replay seam
+# expects to find it. Keep in step with SEAM in se-reference-collector.
+#
+# devlinks is the storage adapter's _devlinks() acquisition, captured as the
+# same {alias path: kernel name} map it builds live: vdev resolution goes
+# through that map and nothing else, so a replay without it can only say
+# "unobservable" — the capture is what lets the corpus carry the guest's OWN
+# Device answers instead of the replaying machine's.
+devlinks_py='
+import json, os
+links = {}
+for tree in ("/dev/disk/by-id", "/dev/disk/by-partuuid", "/dev/mapper"):
+    try:
+        entries = sorted(os.listdir(tree))
+    except OSError:
+        continue
+    for entry in entries:
+        path = tree + "/" + entry
+        if os.path.islink(path):
+            links[path] = os.path.basename(os.readlink(path))
+print(json.dumps(links))
+'
+declare -a acquisitions
+case "$collector" in
+    storage)
+        acquisitions=(
+            "status|zpool status -j --json-int"
+            "list|zpool list -j -p -v -o name,size,alloc,free,cap,frag,health"
+            "devlinks|python3 -c '$devlinks_py'"
+        )
+        ;;
+    network)
+        acquisitions=("nft|nft -j list ruleset")
+        ;;
+    *)
+        echo "unknown collector '$collector'" >&2
+        exit 2
+        ;;
+esac
+
+version_probe=""
+case "$collector" in
+    storage) version_probe="zfs version | head -1" ;;
+    network) version_probe="nft --version" ;;
+esac
+
+echo "capturing $collector from $target"
+for entry in "${acquisitions[@]}"; do
+    name="${entry%%|*}"
+    command="${entry#*|}"
+    echo "  $name  <-  $command"
+    if ! ssh "${ssh_opts[@]}" -- "$target" "$command" > "$payload_dir/$name.json"; then
+        echo "  FAILED: $command" >&2
+        echo "  A collector that cannot read its interface on this guest is a" >&2
+        echo "  finding about the guest, not a payload to commit." >&2
+        rm -f "$payload_dir/$name.json"
+        exit 1
+    fi
+    if ! python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$payload_dir/$name.json"; then
+        echo "  FAILED: $name is not JSON — text-scraping is forbidden (DESIGN 18)" >&2
+        exit 1
+    fi
+done
+
+source_version="$(ssh "${ssh_opts[@]}" -- "$target" "set -o pipefail; $version_probe" | tr -d '\r')"
+if [[ -z $source_version ]]; then
+    echo "could not read the interface version on $target — a capture whose" >&2
+    echo "source_version is unknown cannot tell a drift diff what changed." >&2
+    exit 1
+fi
+os_release="$(ssh "${ssh_opts[@]}" -- "$target" '. /etc/os-release && echo "$ID|$VERSION_ID"' | tr -d '\r')"
+
+cat <<EOF
+
+captured to $payload_dir
+  source_version : $source_version
+  os             : ${os_release%%|*}
+  os_version     : ${os_release##*|}
+
+Next:
+  1. scrub the payloads — serials, WWNs, MACs, hostnames, paths — preserving
+     structural consistency across every file in this variant
+  2. harness/bin/se-anonymise --hostnames <real,names> \\
+       --map ~/.local/state/se/scrub/<variant>.json $payload_dir/*.json
+     (the map de-anonymises every specimen; it is refused inside the repo)
+  3. write $variant/meta.json with the values above, the variant name, whether
+     the lab can re-stage it, and any planted canaries
+  4. harness/bin/se-capture --write $variant
+  5. read the diff before committing it
+EOF

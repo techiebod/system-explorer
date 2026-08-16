@@ -342,8 +342,8 @@ _NFT_CHAIN_GLOSSARY = {
     "Priority": "The order this base chain runs in relative to others on the same hook, lowest first. Two chains on one hook are both traversed; this says which sees the packet first, and a negative number is normal.",
     "Policy": "What happens to a packet that reaches the end of this base chain matching nothing — accept or drop. It is the verdict the whole chain falls back to, so a chain of narrow accepts under an accept policy admits everything the rules did not mention. Absent on a regular chain, which returns to its caller instead.",
     "RuleCount": "How many rules this chain holds. Counted, never read: this says nothing about what any of them permits.",
-    "JumpedFrom": "Every chain that transfers control here, by jump or goto — how a packet reaches this chain at all. Derived by reading every rule's target across the whole ruleset, so it is the answer to 'what runs this' that no single chain's own document contains.",
-    "Unreferenced": "Stated only when true, and only for a regular chain: nothing in this ruleset jumps or gotos here and the kernel does not call it, so no packet can reach any rule in it. Usually a leftover; occasionally a rule that was meant to be reachable and is not.",
+    "JumpedFrom": "Every chain that transfers control here, by jump or goto — how a packet reaches this chain at all. Derived by reading every rule's target across the whole ruleset, and the elements of every named verdict map some rule uses, so it is the answer to 'what runs this' that no single chain's own document contains.",
+    "Unreferenced": "Stated only when true, and only for a regular chain: no rule, and no named verdict map any rule uses, jumps or gotos here, and the kernel does not call it, so no packet can reach any rule in it. Usually a leftover; occasionally a rule that was meant to be reachable and is not.",
 }
 
 _EXPOSURE_GLOSSARY = {
@@ -837,9 +837,10 @@ NFT_CHAIN_NOTES = [
     " that path enters it; a regular chain runs only when something jumps or"
     " gotos to it. The distinction decides whether any rule inside is reached"
     " at all, so it is the first thing on the row rather than a detail.",
-    "JumpedFrom is derived by reading every rule in every table, not from the"
-    " chain's own document — nft's JSON does not say what calls a chain, and"
-    " it is the fact that makes a large ruleset navigable.",
+    "JumpedFrom is derived by reading every rule in every table — and the"
+    " elements of every named verdict map a rule uses — not from the chain's"
+    " own document: nft's JSON does not say what calls a chain, and it is"
+    " the fact that makes a large ruleset navigable.",
     "Rules are COUNTED here, never read. A chain of narrow accepts and a"
     " chain that admits everything are indistinguishable in this collection;"
     " nft-rules holds what each rule says, and port-exposure answers what"
@@ -1018,6 +1019,82 @@ def _render_rule(expr: list) -> dict:
             "opaque_reason": opaque_reason}
 
 
+def _verdict_targets(node: object) -> list[str]:
+    """Every chain this expression tree can hand control to, in document
+    order, each named once.
+
+    The WHOLE tree, not the top-level statements. nftables nests verdicts
+    inside expression bodies — a ct-state verdict map carries its jumps two
+    levels down, in the map's data — and the distribution firewall this
+    product most often reads opens its input chain with exactly that shape.
+    A discovery that iterated only the surface published the chain holding
+    every inbound accept as Unreferenced, and the wrong answer went into the
+    corpus as expected, where it rejected two independently written correct
+    collectors (DESIGN 20). Generic descent over dicts and lists covers any
+    verdict nested anywhere in the tree this function is GIVEN — and only
+    that tree. A NAMED verdict map is the shape this cannot see: the rule
+    dispatching through `vmap @dispatch` carries just the string, and the
+    jumps live in the top-level map OBJECT's elem list, which no rule
+    expression contains. Whoever holds the whole document must feed that
+    elem list in separately; the chains derivation does.
+
+    Both verbs, because both reach the chain. goto differs from jump in
+    where it RETURNS to, not in whether it arrives — counting only jumps
+    would report a goto-only chain as unreachable, which is the one fact
+    here somebody would act on.
+
+    Each target once: a vmap routing two ct states to one chain reaches it
+    twice at runtime but references it once, and a caller walking the graph
+    must not visit — or report — the same subtree per key that names it.
+    """
+    found: list[str] = []
+
+    def descend(node: object) -> None:
+        if isinstance(node, dict):
+            for verb in ("jump", "goto"):
+                body = node.get(verb)
+                if (isinstance(body, dict) and body.get("target")
+                        and body["target"] not in found):
+                    found.append(body["target"])
+            for value in node.values():
+                descend(value)
+        elif isinstance(node, list):
+            for value in node:
+                descend(value)
+
+    descend(node)
+    return found
+
+
+def _map_references(node: object) -> set[str]:
+    """Every named set or map this expression tree consults, @ stripped.
+
+    "@name" is the one spelling libnftables-json has for such a reference,
+    wherever the grammar lets one appear — a vmap or map lookup holds it in
+    "data", a match against a named set in "right" — so collecting @-strings
+    generically is the same no-recurrence choice as _verdict_targets'
+    descent: the next expression that can consult a named object is covered
+    without being foreseen. Names only, deliberately: which of them is a
+    verdict map, and what its elements do, is a join the caller makes
+    against the document's own map objects — this function must not decide.
+    """
+    found: set[str] = set()
+
+    def descend(node: object) -> None:
+        if isinstance(node, str):
+            if node.startswith("@"):
+                found.add(node[1:])
+        elif isinstance(node, dict):
+            for value in node.values():
+                descend(value)
+        elif isinstance(node, list):
+            for value in node:
+                descend(value)
+
+    descend(node)
+    return found
+
+
 # ── port exposure: the socket, and the rules that admit it ───────────
 #
 # The derived collection, and the one that answers the question. Three cloud
@@ -1128,7 +1205,7 @@ def _walk_input_path(document: dict) -> list[tuple[dict, list]]:
     two would find an unconditional accept and report every port on the host
     as admitted from anywhere — the exact inversion this collection exists to
     prevent, arriving through the path instead of through the renderer.
-    Measured against beacon's live ruleset, 2026-08-13.
+    Measured against a live single-purpose cloud host's ruleset, 2026-08-13.
 
     Cycles and depth are bounded; a chain already on the current path is not
     re-entered, which is conservative in the right direction — it can only
@@ -1144,20 +1221,26 @@ def _walk_input_path(document: dict) -> list[tuple[dict, list]]:
         for rule in by_chain.get(key, []):
             expr = rule.get("expr") or []
             ordered.append((rule, guards))
-            rendered = _render_rule(expr)
-            if rendered["jump_target"]:
+            for target in _verdict_targets(expr):
                 # Everything in the target chain runs only if this rule
                 # matched, so its conditions guard the whole subtree.
                 # EVERY statement of the jumping rule, not only the ones
                 # this renderer understands. Keeping just the readable
-                # matches turns an opaque guard into NO guard: beacon's
+                # matches turns an opaque guard into NO guard: a live host's
                 # `xt match "conntrack" jump nixos-fw-accept` then made the
                 # bare accept inside look unconditional, and every port on
                 # the host reported "certainly admitted from anywhere" — the
                 # inversion again, arriving through the path rather than the
                 # renderer. Carrying the whole expression means the residue
                 # travels with it and the descendant can never be certain.
-                walk((key[0], key[1], rendered["jump_target"]), depth + 1,
+                #
+                # Only a BARE top-level jump/goto is dropped from the guards:
+                # it is control transfer with no matching content of its own.
+                # A statement that nests its verdict — a ct-state vmap — IS
+                # the dispatch condition, so it stays, and it stays as
+                # residue: a vmap-dispatched subtree can therefore never
+                # reach the certain answer, which is under-claiming, loudly.
+                walk((key[0], key[1], target), depth + 1,
                      seen, guards + [st for st in expr
                                      if not (isinstance(st, dict)
                                              and ("jump" in st or "goto" in st))])
@@ -1902,7 +1985,8 @@ class Adapter:
         chain objects sit in the same document as the rules and were being
         skipped. Two facts here are not in that document and are the ones
         that make it navigable — JumpedFrom, which needs every rule in every
-        table read to answer "what runs this chain", and Unreferenced, which
+        table read, plus the element list of every named verdict map a rule
+        uses, to answer "what runs this chain" — and Unreferenced, which
         falls out of it.
 
         No opinions, for the reason nft-rules has none: whether a policy or a
@@ -1914,6 +1998,8 @@ class Adapter:
         chains: dict[tuple, dict] = {}
         rule_counts: dict[tuple, int] = {}
         jumped: dict[tuple, set[str]] = {}
+        map_targets: dict[tuple, list[str]] = {}
+        map_users: dict[tuple, set[str]] = {}
         for entry in data.get("nftables", []):
             if "chain" in entry:
                 c = entry["chain"]
@@ -1922,20 +2008,58 @@ class Adapter:
                 r = entry["rule"]
                 key = (r.get("family"), r.get("table"), r.get("chain"))
                 rule_counts[key] = rule_counts.get(key, 0) + 1
-                # Both verbs, because both reach the chain. goto differs from
-                # jump in where it returns to, not in whether it arrives —
-                # counting only jumps would report a goto-only chain as
-                # unreachable, which is the one fact here somebody would act
-                # on.
-                for statement in r.get("expr") or []:
-                    if not isinstance(statement, dict):
-                        continue
-                    for verb in ("jump", "goto"):
-                        body = statement.get(verb)
-                        if isinstance(body, dict) and body.get("target"):
-                            jumped.setdefault(
-                                (r.get("family"), r.get("table"), body["target"]),
-                                set()).add(r.get("chain"))
+                # The whole expression tree, not the top-level statements: a
+                # verdict map carries its jumps nested in the map's data, and
+                # reading only the surface published the chain holding every
+                # inbound accept as Unreferenced. Both verbs, at any depth —
+                # _verdict_targets holds the reasoning for each.
+                for target in _verdict_targets(r.get("expr") or []):
+                    jumped.setdefault(
+                        (r.get("family"), r.get("table"), target),
+                        set()).add(r.get("chain"))
+                # Which named objects this rule consults, keyed in the rule's
+                # own (family, table) because "@dispatch" names THIS table's
+                # object and no other's. Joined against the map objects below.
+                for ref in _map_references(r.get("expr") or []):
+                    map_users.setdefault(
+                        (r.get("family"), r.get("table"), ref),
+                        set()).add(r.get("chain"))
+            elif "map" in entry:
+                # A NAMED verdict map keeps its jumps HERE, in the top-level
+                # map object's elem list — the rule dispatching through it
+                # carries only the string "@dispatch" — so a derivation that
+                # read rule expressions alone published a map-dispatched
+                # chain as {"RuleCount": 0, "Unreferenced": true}: the vmap
+                # defect again, one spelling further out. The same descent
+                # as a rule expression, so an element wrapped for a comment
+                # or timeout is covered too. Maps only, by grammar rather
+                # than oversight: libnftables-json gives mapped data to the
+                # map object alone (its "map" member names the data type,
+                # "verdict" here) — a set object's elem list holds bare
+                # keys, and verdict is not a key type, so a set has nowhere
+                # for a jump to sit.
+                m = entry["map"]
+                map_targets[(m.get("family"), m.get("table"),
+                             m.get("name"))] = _verdict_targets(
+                                 m.get("elem") or [])
+        # A map's targets count only where some rule consults the map: the
+        # kernel never traverses a map no rule uses, so a jump inside an
+        # unused map is latent — reachability through an UNREFERENCED map is
+        # not reachability, and counting it would retire Unreferenced from
+        # exactly the chains it is telling the truth about. APPROXIMATION,
+        # stated: "some rule" means any rule in the map's own (family,
+        # table), not a rule proven base-reachable — the same standard the
+        # rule-sourced references above already apply, since a jump written
+        # in an unreachable chain counts there too. The callers recorded are
+        # the consulting rules' chains: control leaves that chain, goes
+        # through the map, and lands on the target.
+        for (family, table, mname), targets in map_targets.items():
+            users = map_users.get((family, table, mname))
+            if not users:
+                continue
+            for target in targets:
+                jumped.setdefault((family, table, target),
+                                  set()).update(users)
         items = []
         for (family, table, name), chain in chains.items():
             key = (family, table, name)

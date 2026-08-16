@@ -1,0 +1,319 @@
+#!/usr/bin/env python3
+"""The reference implementation, wearing a collector's face.
+
+Rule 4 of the plan: the shipping agent is the reference implementation, and a
+ported collector earns its place by reproducing what this emits for the same
+payloads. So this speaks the collector contract of DESIGN 18 — a request line
+on stdin, an NDJSON stream on stdout — over the shipping adapters, and reads
+its native documents from SE_REPLAY_DIR rather than from the live interface.
+
+It exists to make the corpus real before a single Go binary does, so the
+harness that judges those binaries is itself exercised and trusted first.
+
+This is a development tool. It retires when the last collector is ported.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import os
+import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(REPO / "src"))
+
+
+def fail(message: str) -> None:
+    """Non-zero means 'I could not run' — never a decline (DESIGN 18)."""
+    print(message, file=sys.stderr)
+    raise SystemExit(2)
+
+
+def pin_clock(when: str) -> None:
+    """Freeze wall-clock time to the moment the corpus was captured.
+
+    Some facts are derived at acquisition against *now* — a scrub's age in
+    days, a snapshot's age in seconds. Replayed against a live clock they
+    change every day, so a corpus pair would rot on the shelf and the harness
+    would teach a reader to ignore it.
+
+    Called at MODULE scope, before the adapters are imported: a module that
+    binds ``from time import time`` at import scope would otherwise keep the
+    real callable and escape the pin silently.
+    """
+    import datetime as _dt
+    import time as _time
+
+    moment = _dt.datetime.fromisoformat(when.replace("Z", "+00:00"))
+    epoch = moment.timestamp()
+    _time.time = lambda: epoch  # noqa: E731
+
+    class _Frozen(_dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return moment.astimezone(tz) if tz else moment.replace(tzinfo=None)
+
+        @classmethod
+        def utcnow(cls):
+            return moment.replace(tzinfo=None)
+
+    _dt.datetime = _Frozen
+
+
+if os.environ.get("SE_REPLAY_NOW"):
+    pin_clock(os.environ["SE_REPLAY_NOW"])
+
+from system_explorer.agent.adapters import network, storage  # noqa: E402
+
+# Which module-level acquisition each collector redirects, and what payload
+# file feeds it. This table is the whole of the replay seam for the reference
+# implementation; a Go collector implements the same redirect natively.
+#
+# `acquisitions` are the interface documents — all of them missing means the
+# interface was absent and the batch declines. `auxiliary` are acquisitions
+# that qualify the interface without being it (device alias links): a missing
+# one pins to its stated default so the adapter can say could-not-read,
+# rather than counting toward absence.
+SEAM = {
+    "storage": {
+        "module": storage,
+        "adapter": storage.Adapter,
+        "interface": "zpool",
+        "acquisitions": {"_zpool_status": "status", "_zpool_list": "list"},
+        "auxiliary": {"_devlinks": ("devlinks", None)},
+        # The capability probe asks the host whether zpool exists. Under
+        # replay the payload is the evidence that it did, on the machine the
+        # capture came from — so the probe is satisfied by the corpus rather
+        # than re-run against the wrong host.
+        "instance": {"_zfs": True},
+    },
+    "network": {
+        "module": network,
+        "adapter": network.Adapter,
+        "interface": "nft",
+        "acquisitions": {"_nft_json": "nft"},
+        "instance": {},
+    },
+}
+
+
+def load_payloads(directory: Path) -> dict[str, object]:
+    return {p.stem: json.loads(p.read_text()) for p in sorted(directory.glob("*.json"))}
+
+
+def emit(record: dict) -> None:
+    print(json.dumps(record, sort_keys=True, separators=(",", ":")))
+
+
+def parse_generations(tokens: list[str]) -> dict[str, int]:
+    """collect <collection>:<generation>… (DESIGN 18).
+
+    The generation is everything after the LAST colon, because names in this
+    product legitimately contain colons. The collator issued it and this side
+    only echoes it — in begin's map and on the collection's commit — which is
+    the whole of the newest-wins mechanism (DESIGN 19). A token without an
+    integer generation is a malformed request: exit 2 is "I could not run",
+    and a request this side cannot parse genuinely was not.
+    """
+    if not tokens:
+        fail("empty collect: the request line is 'collect <collection>:<generation>…'")
+    generations: dict[str, int] = {}
+    for token in tokens:
+        name, _, generation = token.rpartition(":")
+        if not name or not generation.isdigit():
+            fail(f"malformed token {token!r}: expected <collection>:<generation>")
+        generations[name] = int(generation)
+    return generations
+
+
+def uncaptured(payload_name: str):
+    """An acquisition whose payload the variant did not capture.
+
+    It must never fall back to the live interface of the machine REPLAYING
+    the corpus — that is exactly the seam escape that put the replaying
+    workstation's filesystem into committed facts — so it raises, and the
+    adapter's own degradation decides what that costs (zpool list is
+    enrichment and degrades to unobservable capacity facts; zpool status is
+    the fact source and cannot).
+    """
+
+    def read(*_args, **_kwargs):
+        raise RuntimeError(f"payload {payload_name!r} was not captured in this variant")
+
+    return read
+
+
+def run(collector: str, generations: dict[str, int], payload_dir: Path) -> None:
+    spec = SEAM.get(collector)
+    if spec is None:
+        fail(f"unknown collector {collector!r}; known: {sorted(SEAM)}")
+
+    payloads = load_payloads(payload_dir)
+    module = spec["module"]
+
+    # Decline only when EVERY interface acquisition is missing. A storage
+    # capture with status but no list is a partially-readable interface, and
+    # the shipping adapter degrades through it on purpose — declining there
+    # would make this a second implementation rather than the reference one,
+    # in the direction that destroys data, since an absent decline retires
+    # objects.
+    present = [n for n in spec["acquisitions"].values() if n in payloads]
+    absent = not present
+
+    for attribute, payload_name in spec["acquisitions"].items():
+        if payload_name in payloads:
+            value = payloads[payload_name]
+            setattr(module, attribute, lambda _v=value, *a, **k: _v)
+        else:
+            setattr(module, attribute, uncaptured(payload_name))
+    for attribute, (payload_name, default) in spec.get("auxiliary", {}).items():
+        value = payloads.get(payload_name, default)
+        setattr(module, attribute, lambda _v=value, *a, **k: _v)
+
+    begin = {
+        "record": "begin",
+        "request": "replay",
+        "batch": "replay",
+        "declaration": "sha256:replay",
+        # A replay has no boot, so this is a fixed v4-shaped id, "5e" up
+        # front so no reader mistakes it for a capture. The old "replay" stub
+        # is what the shape rule now refuses; that the constant itself still
+        # passes is DESIGN 19's named deferral — one capture cannot tell a
+        # constant valid id from a real one, only a cross-boot variant can.
+        "boot_id": "5e000000-0000-4000-8000-000000000001",
+        "timens": 0,
+        "instance": None,
+        "generations": generations,
+    }
+    emit(begin)
+
+    def commit(collection: str, objects: int, assertions: int,
+               unobservable: int) -> None:
+        # All three counts, always, zero when zero (DESIGN 19): they are
+        # required members precisely so a subject cannot disable the
+        # truncation check by omitting the count.
+        emit(
+            {
+                "record": "commit",
+                "collection": collection,
+                "generation": generations[collection],
+                "objects": objects,
+                "assertions": assertions,
+                "unobservable": unobservable,
+            }
+        )
+
+    def end() -> None:
+        # end closes the batch and request begin opened — echoed from begin,
+        # never restated, so the two cannot drift. The costs are the
+        # reference's deterministic stand-ins: run-varying members are
+        # rule-governed rather than byte-compared (DESIGN 19), and the rule
+        # wants a batch that ran to report positive measured cost.
+        emit(
+            {
+                "record": "end",
+                "request": begin["request"],
+                "batch": begin["batch"],
+                "cpu_ms": 0.5,
+                "wall_ms": 1.0,
+            }
+        )
+
+    if absent:
+        # absent is authoritative-empty (DESIGN 19): it must be able to retire
+        # objects a previous batch published, so it declines AND commits zero.
+        for collection in generations:
+            emit(
+                {
+                    "record": "decline",
+                    "collection": collection,
+                    "reason": "absent",
+                    "detail": f"no {spec['interface']} on this host",
+                }
+            )
+            commit(collection, objects=0, assertions=0, unobservable=0)
+        end()
+        return
+
+    adapter = spec["adapter"]()
+    for attribute, value in spec.get("instance", {}).items():
+        setattr(adapter, attribute, value)
+
+    # `at` is a monotonic reading in production; under replay it is the
+    # reference constant 1.0 + 0.001*i in emission order — finite, positive,
+    # boot-scale and strictly advancing, so the structural rule that governs
+    # it (DESIGN 19's run-varying regime) is exercised by the corpus instead
+    # of being satisfied by a hardcoded zero.
+    emitted_objects = 0
+    for collection in generations:
+        try:
+            items = asyncio.run(adapter.acquire(collection))
+        except Exception as exc:  # a real inability to run, not a decline
+            fail(
+                f"{collector}/{collection}: acquisition raised "
+                f"{type(exc).__name__}: {exc}"
+            )
+
+        unobservable_count = 0
+        for item in items:
+            record = {
+                "record": "object",
+                "collection": collection,
+                "name": item["native_id"],
+                "facts": item["facts"],
+                "at": round(1.0 + 0.001 * emitted_objects, 3),
+            }
+            emitted_objects += 1
+            # The adapter's own channels, passed through verbatim: names is
+            # law 1's obligation and absent/unobservable are DESIGN 19's two
+            # non-value statements. Lifting facts back out of the facts dict
+            # here is what the old hardcoded key list did, and no storage
+            # item ever carried those keys — so no committed object had
+            # names at all.
+            if item.get("names"):
+                record["names"] = item["names"]
+            if item.get("absent"):
+                record["absent"] = item["absent"]
+            emit(record)
+            for missing in item.get("unobservable", []):
+                emit(
+                    {
+                        "record": "unobservable",
+                        "collection": collection,
+                        "name": item["native_id"],
+                        **missing,
+                    }
+                )
+                unobservable_count += 1
+        commit(collection, objects=len(items), assertions=0,
+               unobservable=unobservable_count)
+
+    end()
+
+
+def main() -> None:
+    payload_dir = os.environ.get("SE_REPLAY_DIR")
+    if not payload_dir:
+        fail("SE_REPLAY_DIR is unset: this shim only replays, it never reads a host")
+    directory = Path(payload_dir)
+    if not directory.is_dir():
+        fail(f"SE_REPLAY_DIR={payload_dir} is not a directory")
+
+    line = sys.stdin.readline().strip()
+    if not line:
+        fail("no request line on stdin")
+    parts = line.split()
+    if parts[0] != "collect":
+        fail(f"this shim serves collect only, not {parts[0]!r}")
+
+    collector = os.environ.get("SE_REFERENCE_COLLECTOR")
+    if not collector:
+        fail("SE_REFERENCE_COLLECTOR must name which adapter to replay")
+
+    run(collector, parse_generations(parts[1:]), directory)
+
+
+if __name__ == "__main__":
+    main()

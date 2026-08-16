@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+"""Generate the expected half of a corpus pair from the reference implementation.
+
+The plan's rule 4: the shipping agent is the reference implementation, so what
+it emits for a set of payloads is what a ported collector must reproduce. This
+writes that down.
+
+Generated is not the same as reviewed. This tool prints the diff against what
+is already committed and refuses to overwrite unless told to, because a
+reference answer nobody read is a reference answer nobody can trust — and a
+corpus that regenerates itself silently would ratify a regression the first
+time one landed.
+
+    se-capture corpus/storage/healthy            # show what would change
+    se-capture --write corpus/storage/healthy    # write it, after reading
+"""
+
+from __future__ import annotations
+
+import argparse
+import difflib
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent.parent
+REFERENCE = REPO / "harness" / "bin" / "se-reference-collector"
+
+sys.path.insert(0, str(REPO / "harness"))
+
+from se_harness.replay import issue_generations  # noqa: E402
+
+
+def capture(variant: Path) -> str:
+    meta = json.loads((variant / "meta.json").read_text())
+    collections = meta.get("collections") or []
+    env = dict(os.environ)
+    env["SE_REPLAY_DIR"] = str(variant / "payloads")
+    env["SE_REFERENCE_COLLECTOR"] = meta["collector"]
+    if meta.get("captured"):
+        env["SE_REPLAY_NOW"] = meta["captured"]
+
+    # The request line is the new wire (DESIGN 18): each token carries the
+    # generation the harness-as-collator issues, from the same deterministic
+    # rule the replay tests use — so a captured pair and a replayed one are
+    # judged under identical issuance, and a bare-name token (the OLD wire)
+    # is exit 2 rather than a second dialect.
+    issued = issue_generations(collections)
+    tokens = " ".join(f"{name}:{gen}" for name, gen in sorted(issued.items()))
+    proc = subprocess.run(
+        [sys.executable, str(REFERENCE)],
+        input=f"collect {tokens}\n",
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=120,
+    )
+    if proc.returncode != 0:
+        print(proc.stderr, file=sys.stderr)
+        raise SystemExit(f"{variant}: reference collector exited {proc.returncode}")
+
+    canaries = meta.get("canaries") or []
+    for canary in canaries:
+        if canary in proc.stdout:
+            raise SystemExit(
+                f"{variant}: planted canary {canary!r} appears in the captured "
+                "stream — capturing a leak into the corpus would make the "
+                "canary check ratify it forever"
+            )
+    return proc.stdout
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("variants", nargs="+", type=Path)
+    parser.add_argument(
+        "--write", action="store_true", help="write after you have read the diff"
+    )
+    args = parser.parse_args()
+
+    changed = 0
+    for variant in args.variants:
+        produced = capture(variant)
+        target = variant / "expected.jsonl"
+        current = target.read_text() if target.exists() else ""
+        if produced == current:
+            print(f"{variant}: unchanged")
+            continue
+        changed += 1
+        diff = difflib.unified_diff(
+            current.splitlines(True),
+            produced.splitlines(True),
+            fromfile=f"{target} (committed)",
+            tofile=f"{target} (reference)",
+            n=1,
+        )
+        sys.stdout.writelines(diff)
+        if args.write:
+            target.write_text(produced)
+            print(f"{variant}: written")
+        else:
+            print(f"{variant}: would change — rerun with --write once read")
+
+    if changed and not args.write:
+        raise SystemExit(1)
+
+
+if __name__ == "__main__":
+    main()
