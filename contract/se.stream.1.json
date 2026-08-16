@@ -1,0 +1,333 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "se.stream.1.json",
+  "title": "System Explorer collect stream record",
+  "description": "One NDJSON line of a collect batch (DESIGN 19). A committed collection is authoritative; an uncommitted one is authoritative for nothing. There is no partial commit and no tombstone: everything a committed collection did not emit is gone, and a decline of absent commits empty.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/begin"
+    },
+    {
+      "$ref": "#/$defs/object"
+    },
+    {
+      "$ref": "#/$defs/relation_assertion"
+    },
+    {
+      "$ref": "#/$defs/unobservable"
+    },
+    {
+      "$ref": "#/$defs/decline"
+    },
+    {
+      "$ref": "#/$defs/commit"
+    },
+    {
+      "$ref": "#/$defs/end"
+    }
+  ],
+  "$defs": {
+    "begin": {
+      "type": "object",
+      "required": [
+        "record",
+        "request",
+        "batch",
+        "declaration",
+        "boot_id",
+        "timens",
+        "instance",
+        "generations"
+      ],
+      "properties": {
+        "record": {
+          "const": "begin"
+        },
+        "request": {
+          "type": "string",
+          "description": "Collator-issued; echoed in end."
+        },
+        "batch": {
+          "type": "string"
+        },
+        "declaration": {
+          "type": "string",
+          "description": "sha256 of the declaration this stream was produced under. Unknown hash: the batch is held un-applied until fetched (DESIGN 25)."
+        },
+        "boot_id": {
+          "type": "string"
+        },
+        "timens": {
+          "type": "integer",
+          "description": "The collector's CLOCK_BOOTTIME namespace offset. A mismatch with the collator is stated, never corrected (DESIGN 09)."
+        },
+        "instance": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Fleet-assigned instance this collector fronts; ids, origins and relations mint under (host, instance) scope. Null means host-native (DESIGN 11, 19)."
+        },
+        "generations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "Collator-issued monotonic generation per collection, echoed. Below-applied commits are refused (DESIGN 19). A fresh acquisition always takes a new generation; retransmission of already-captured output may reuse one."
+        }
+      }
+    },
+    "object": {
+      "type": "object",
+      "required": [
+        "record",
+        "collection",
+        "name",
+        "facts",
+        "at"
+      ],
+      "properties": {
+        "record": {
+          "const": "object"
+        },
+        "collection": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "names": {
+          "type": "object",
+          "description": "Every native name observed for this thing, split by stability class; a join runs on stable only (DESIGN 16, 19).",
+          "properties": {
+            "stable": {
+              "type": "object"
+            },
+            "ephemeral": {
+              "type": "object"
+            }
+          }
+        },
+        "facts": {
+          "type": "object"
+        },
+        "absent": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Declared facts this object genuinely lacks. We looked; there is no such property. Distinct from unobservable (DESIGN 19, 27)."
+        },
+        "evidence": {
+          "type": "object",
+          "required": [
+            "digest",
+            "media_type"
+          ],
+          "properties": {
+            "media_type": {
+              "type": "string"
+            },
+            "digest": {
+              "type": "string",
+              "description": "Over the redacted payload as served. JSON under the named canon; any other media type over exact post-redaction bytes (DESIGN 19)."
+            },
+            "canon": {
+              "type": "string"
+            }
+          }
+        },
+        "at": {
+          "type": "number",
+          "description": "CLOCK_BOOTTIME seconds, stamped immediately before the earliest contributing native read, so age never understates (DESIGN 09, 19)."
+        }
+      }
+    },
+    "relation_assertion": {
+      "type": "object",
+      "required": [
+        "record",
+        "collection",
+        "name",
+        "type",
+        "vantage",
+        "target"
+      ],
+      "properties": {
+        "record": {
+          "const": "relation_assertion"
+        },
+        "collection": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "vantage": {
+          "type": "string"
+        },
+        "target": {
+          "type": "object",
+          "required": [
+            "kind",
+            "name"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "description": "A name and a kind, never an id, and never an observability: whether the far end was seen is a fact about another collector's output, which only the collator holds (DESIGN 13, 19).",
+          "not": {
+            "required": [
+              "id"
+            ]
+          }
+        },
+        "facts": {
+          "type": "object",
+          "description": "Including any declared discriminator values."
+        }
+      },
+      "not": {
+        "required": [
+          "observability"
+        ]
+      },
+      "description": "A collector never states observability \u2014 whether the far end was seen is a fact about another collector's output, which only the collator holds \u2014 and a target carries a name, never an id (DESIGN 13, 19). Both are encoded as negatives."
+    },
+    "unobservable": {
+      "type": "object",
+      "required": [
+        "record",
+        "collection",
+        "name",
+        "fact",
+        "reason"
+      ],
+      "properties": {
+        "record": {
+          "const": "unobservable"
+        },
+        "collection": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "fact": {
+          "type": "string"
+        },
+        "reason": {
+          "enum": [
+            "unauthorised",
+            "unavailable",
+            "unsupported"
+          ],
+          "description": "The decline vocabulary minus absent: could-not-read-because-it-is-not-there is the absent list's statement, on its own channel (DESIGN 19)."
+        },
+        "detail": {
+          "type": "string",
+          "description": "Bounded and scrubbed at the collator boundary; this string travels to a hub and out over MCP (DESIGN 19)."
+        }
+      }
+    },
+    "decline": {
+      "type": "object",
+      "required": [
+        "record",
+        "collection",
+        "reason"
+      ],
+      "properties": {
+        "record": {
+          "const": "decline"
+        },
+        "collection": {
+          "type": "string"
+        },
+        "reason": {
+          "$ref": "se.vocabularies.1.json#/$defs/decline_reason"
+        },
+        "detail": {
+          "type": "string"
+        }
+      },
+      "description": "absent is a successful reading and is followed by a zero-object commit; the other three never commit and mark prior state stale (DESIGN 19)."
+    },
+    "commit": {
+      "type": "object",
+      "required": [
+        "record",
+        "collection",
+        "generation",
+        "objects"
+      ],
+      "properties": {
+        "record": {
+          "const": "commit"
+        },
+        "collection": {
+          "type": "string"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "objects": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "assertions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unobservable": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cpu_ms": {
+          "type": "number"
+        }
+      },
+      "not": {
+        "required": [
+          "complete"
+        ]
+      },
+      "description": "Always the whole collection: v1 has no partial commit, so a complete member may not appear (DESIGN 19)."
+    },
+    "end": {
+      "type": "object",
+      "required": [
+        "record",
+        "request",
+        "batch"
+      ],
+      "properties": {
+        "record": {
+          "const": "end"
+        },
+        "request": {
+          "type": "string"
+        },
+        "batch": {
+          "type": "string"
+        },
+        "cpu_ms": {
+          "type": "number"
+        },
+        "wall_ms": {
+          "type": "number"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "se.vocabularies.1.json",
+  "title": "System Explorer closed vocabularies",
+  "description": "The closed sets of docs/DESIGN.md appendix A. Every member is deliberate; adding one is a schema change. Renderers switching on these sets must treat an unknown member as unstyled, never as an error (DESIGN 25-26). The coverage vocabulary is the one appendix A row represented structurally rather than as an enum: its members are the property names of se.answer.1.json's reach.coverage.",
+  "$defs": {
+    "type": {
+      "enum": [
+        "boolean",
+        "integer",
+        "number",
+        "string",
+        "enum",
+        "timestamp",
+        "duration",
+        "list",
+        "object"
+      ]
+    },
+    "unit": {
+      "enum": [
+        "none",
+        "bytes",
+        "bytes_per_second",
+        "seconds",
+        "milliseconds",
+        "microseconds",
+        "nanoseconds",
+        "celsius",
+        "percent",
+        "ratio",
+        "count",
+        "hertz",
+        "watts",
+        "volts",
+        "rpm"
+      ]
+    },
+    "temperament": {
+      "enum": [
+        "existence",
+        "configuration",
+        "state",
+        "counter",
+        "gauge"
+      ]
+    },
+    "kind": {
+      "enum": [
+        "observed",
+        "derived",
+        "declared"
+      ]
+    },
+    "tier": {
+      "enum": [
+        "collector",
+        "collator",
+        "hub"
+      ]
+    },
+    "level": {
+      "enum": [
+        "info",
+        "warn",
+        "critical"
+      ]
+    },
+    "verdict": {
+      "enum": [
+        "healthy",
+        "degraded",
+        "critical"
+      ]
+    },
+    "epistemic": {
+      "enum": [
+        "complete",
+        "partial",
+        "unknown",
+        "conflicted"
+      ]
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "partial",
+        "error"
+      ]
+    },
+    "name_class": {
+      "enum": [
+        "stable",
+        "ephemeral"
+      ]
+    },
+    "observability": {
+      "enum": [
+        "confirmed",
+        "asserted",
+        "contradicted"
+      ]
+    },
+    "decline_reason": {
+      "enum": [
+        "absent",
+        "unauthorised",
+        "unavailable",
+        "unsupported"
+      ]
+    },
+    "perishability": {
+      "enum": [
+        "perishable",
+        "reconstructible",
+        "sampled"
+      ]
+    },
+    "render_state": {
+      "enum": [
+        "value",
+        "absent",
+        "unobservable",
+        "declined",
+        "stale"
+      ]
+    },
+    "host_reachability": {
+      "enum": [
+        "connected",
+        "dark",
+        "unswept"
+      ]
+    },
+    "freshness": {
+      "enum": [
+        "current",
+        "stale"
+      ]
+    }
+  }
+}

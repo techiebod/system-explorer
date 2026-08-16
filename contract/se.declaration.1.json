@@ -1,0 +1,357 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "se.declaration.1.json",
+  "title": "System Explorer collector declaration",
+  "description": "A collector's static account of what it serves and what it means (DESIGN 19). Same on every host; instance binding is fleet configuration, never declared here. Members and meanings are binding; the schema is additive-open because published profiles never close their objects.",
+  "type": "object",
+  "required": [
+    "schema",
+    "collector",
+    "version",
+    "collections"
+  ],
+  "properties": {
+    "schema": {
+      "const": "se.declaration/1"
+    },
+    "collector": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "authority": {
+      "type": "object",
+      "description": "What the deployment must grant. Generated into unit configuration; the collator never reads or passes any of it.",
+      "properties": {
+        "read_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "credentials": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "commands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "probe": {
+      "type": "string",
+      "description": "Prose: what the probe verb establishes."
+    },
+    "collections": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/collection"
+      }
+    }
+  },
+  "$defs": {
+    "collection": {
+      "type": "object",
+      "required": [
+        "name",
+        "question",
+        "prefix",
+        "freshness",
+        "perishability",
+        "answer",
+        "facts"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "question": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The question this collection answers, in the words someone would ask it (DESIGN 15)."
+        },
+        "prefix": {
+          "type": "string",
+          "minLength": 1
+        },
+        "freshness": {
+          "type": "string",
+          "description": "The declared honest freshness, e.g. \"60s\". For watched facts this is the reconcile interval (DESIGN 30)."
+        },
+        "perishability": {
+          "$ref": "se.vocabularies.1.json#/$defs/perishability"
+        },
+        "answer": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The facts that belong on a row (DESIGN 26)."
+        },
+        "ceiling": {
+          "type": "object",
+          "description": "A scope error made visible, not a transport limit to paginate around (DESIGN 19).",
+          "properties": {
+            "records": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "discovers": {
+          "type": "object",
+          "description": "Present where this collection produces estate-membership candidates: its universe and blind spots, stated by the collector that knows its interface (DESIGN 22).",
+          "properties": {
+            "universe": {
+              "type": "string"
+            },
+            "blind_spots": {
+              "type": "string"
+            }
+          }
+        },
+        "names": {
+          "type": "object",
+          "description": "Every name family this collection publishes, by stability class. A join runs on stable only (DESIGN 16, 19).",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "class",
+              "sentence"
+            ],
+            "properties": {
+              "class": {
+                "$ref": "se.vocabularies.1.json#/$defs/name_class"
+              },
+              "sentence": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "facts": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "$ref": "#/$defs/fact"
+          }
+        },
+        "relations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "type",
+              "carries_facts"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "minLength": 1
+              },
+              "carries_facts": {
+                "type": "boolean"
+              },
+              "discriminator": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "The facts that distinguish parallel instances. Absent asserts at-most-singular, and a second instance is an error (DESIGN 13)."
+              },
+              "inverse_observable": {
+                "type": "boolean"
+              },
+              "facts": {
+                "type": "object",
+                "additionalProperties": {
+                  "$ref": "#/$defs/fact"
+                }
+              },
+              "confirmed_by": {
+                "type": "string",
+                "description": "The assertion type that confirms this relation from the far end. Required where inverse_observable is true; pairing carries a maximum age spread derived from the tighter collection's declared freshness (DESIGN 19)."
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "inverse_observable": {
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "inverse_observable"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "confirmed_by"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "redactions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Payload paths withheld from served evidence. Required (possibly empty) wherever evidence is served; empty demands redaction_exemption (DESIGN 19)."
+        },
+        "redaction_exemption": {
+          "type": "string",
+          "description": "The reviewed statement that this source has no credential surface. Load-bearing prose: carried verbatim, never paraphrased."
+        },
+        "reference_commands": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "purpose",
+              "argv"
+            ],
+            "properties": {
+              "purpose": {
+                "type": "string"
+              },
+              "argv": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "mutations": {
+          "type": "array",
+          "description": "Declared and never executed by anything defined in the design (DESIGN 19, 34).",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "argv",
+              "changes",
+              "destructive"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "argv": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "changes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "destructive": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    },
+    "fact": {
+      "type": "object",
+      "required": [
+        "type",
+        "temperament",
+        "kind",
+        "sentence"
+      ],
+      "properties": {
+        "type": {
+          "$ref": "se.vocabularies.1.json#/$defs/type"
+        },
+        "unit": {
+          "$ref": "se.vocabularies.1.json#/$defs/unit"
+        },
+        "temperament": {
+          "$ref": "se.vocabularies.1.json#/$defs/temperament"
+        },
+        "kind": {
+          "$ref": "se.vocabularies.1.json#/$defs/kind"
+        },
+        "sentence": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What one of the two consumers renders (DESIGN 28). Never a label."
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Closed members, where type is enum."
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "A boolean's two display labels (DESIGN 27)."
+        },
+        "bound": {
+          "type": "string",
+          "description": "The fact naming this gauge's bound, where one exists (DESIGN 27)."
+        },
+        "denominator": {
+          "type": "string",
+          "description": "The fact this percentage is over (DESIGN 27)."
+        },
+        "rate_companion": {
+          "type": "string",
+          "description": "The derived windowed gauge published beside this counter (DESIGN 12)."
+        },
+        "derived_from": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "from": {
+          "type": "string",
+          "description": "Extraction path into the evidence payload; what makes the digest checkable (DESIGN 24)."
+        }
+      }
+    }
+  }
+}

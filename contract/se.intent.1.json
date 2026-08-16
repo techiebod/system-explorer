@@ -1,0 +1,246 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "se.intent.1.json",
+  "title": "System Explorer intent declaration",
+  "description": "The estate's account of what should be true, held only by hubs, hashed and compared on federation (DESIGN 08, 21). Every fact derived from it carries declared kind. Never reaches a host.",
+  "type": "object",
+  "required": [
+    "schema",
+    "estate",
+    "revision",
+    "reviewed",
+    "membership"
+  ],
+  "properties": {
+    "schema": {
+      "const": "se.intent/1"
+    },
+    "estate": {
+      "type": "string",
+      "minLength": 1
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "reviewed": {
+      "type": "string",
+      "description": "Review age is a fact: a declaration nobody has looked at in a year is a weaker claim (DESIGN 22)."
+    },
+    "estate_hub": {
+      "type": "string",
+      "description": "The hub owning estate-scoped finding lifecycle; siblings serve those read-only (DESIGN 06, proposal)."
+    },
+    "membership": {
+      "type": "object",
+      "required": [
+        "discovery",
+        "hosts"
+      ],
+      "properties": {
+        "discovery": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "collection",
+              "independence"
+            ],
+            "properties": {
+              "collection": {
+                "type": "string"
+              },
+              "independence": {
+                "type": "string",
+                "description": "The failure-domain group. Two vantages on one group are redundancy; a second group is evidence (DESIGN 22)."
+              }
+            }
+          }
+        },
+        "min_independent_sources": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "min_vantages_per_source": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "hosts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "roles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "machine_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Facts about the declared host, not its name: a changed machine-id under a declared host is a legible reinstall (DESIGN 16)."
+              },
+              "expected_units": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "expected_disks": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "not_hosts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "denoted_by",
+              "why",
+              "by",
+              "revision"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "denoted_by": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "source",
+                    "name"
+                  ],
+                  "properties": {
+                    "source": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "why": {
+                "type": "string"
+              },
+              "by": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "integer"
+              },
+              "review_by": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "Classification with an author and a revision, never a filter list: an unclassified candidate is a finding until somebody rules (DESIGN 22)."
+        }
+      }
+    },
+    "objects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "denoted_by"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "denoted_by": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "host",
+                "name"
+              ],
+              "properties": {
+                "host": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "description": "Estate identity: the only way two hosts' native names become one object \u2014 declaration, never correlation (DESIGN 16)."
+    },
+    "protection": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "target",
+          "owner",
+          "class",
+          "destinations"
+        ],
+        "properties": {
+          "target": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "class": {
+            "type": "string"
+          },
+          "destinations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "window": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "reachability": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "role",
+          "permitted_ports"
+        ],
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "permitted_ports": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            }
+          }
+        }
+      }
+    }
+  }
+}

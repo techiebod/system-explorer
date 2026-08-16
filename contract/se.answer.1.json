@@ -1,0 +1,319 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "se.answer.1.json",
+  "title": "System Explorer problem-domain answer",
+  "description": "A question as an object, minted at the hub: answer, verdict, basis, reach (DESIGN 24). Verdict and epistemic status are separate axes and must never merge; removing evidence may never improve either.",
+  "type": "object",
+  "required": [
+    "id",
+    "scope",
+    "question",
+    "answer",
+    "verdict",
+    "epistemic",
+    "freshness",
+    "basis",
+    "reach"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^question:"
+    },
+    "scope": {
+      "type": "string"
+    },
+    "question": {
+      "type": "string"
+    },
+    "answer": {
+      "type": "string",
+      "description": "The answer first, in a sentence (DESIGN 27)."
+    },
+    "verdict": {
+      "$ref": "se.vocabularies.1.json#/$defs/verdict"
+    },
+    "epistemic": {
+      "$ref": "se.vocabularies.1.json#/$defs/epistemic"
+    },
+    "freshness": {
+      "$ref": "se.vocabularies.1.json#/$defs/freshness"
+    },
+    "basis": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/basis_element"
+      }
+    },
+    "reach": {
+      "type": "object",
+      "required": [
+        "consulted"
+      ],
+      "properties": {
+        "consulted": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "declined": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "host",
+              "collection",
+              "reason"
+            ],
+            "properties": {
+              "host": {
+                "type": "string"
+              },
+              "collection": {
+                "type": "string"
+              },
+              "reason": {
+                "$ref": "se.vocabularies.1.json#/$defs/decline_reason"
+              }
+            }
+          }
+        },
+        "dark": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "host",
+              "since"
+            ],
+            "properties": {
+              "host": {
+                "type": "string"
+              },
+              "since": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "coverage": {
+          "type": "object",
+          "description": "Identity lists, never bare counts (DESIGN 24).",
+          "properties": {
+            "declared": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "discovered_not_declared": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "unclassified": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "sources_readable": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "sources_unreadable": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "contributors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "basis_element": {
+      "type": "object",
+      "required": [
+        "claim",
+        "kind",
+        "origin"
+      ],
+      "properties": {
+        "claim": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "se.vocabularies.1.json#/$defs/kind"
+        },
+        "origin": {
+          "type": "string",
+          "description": "Who is making the claim. For declared kind the convention is intent@r<revision> \u2014 the revision that asserted it."
+        },
+        "value_as_read": {},
+        "ref": {
+          "type": "string"
+        },
+        "consumed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "References to the claims this derivation consumed \u2014 how a derived claim is re-checked (DESIGN 24)."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "observed"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "value_as_read",
+              "batch",
+              "generation",
+              "from",
+              "evidence_digest",
+              "ref"
+            ],
+            "properties": {
+              "batch": {
+                "type": "string"
+              },
+              "generation": {
+                "type": "integer"
+              },
+              "evidence_digest": {
+                "type": "string",
+                "description": "An equality commitment, not retained evidence: it answers whether the document is still the one this claim was made from, never what the old document contained."
+              },
+              "canon": {
+                "type": "string"
+              },
+              "from": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "derived"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "rule",
+              "consumed"
+            ],
+            "properties": {
+              "rule": {
+                "type": "string",
+                "description": "rule@version: findings from two versions are comparable only by saying so (DESIGN 25)."
+              },
+              "observability": {
+                "$ref": "se.vocabularies.1.json#/$defs/observability"
+              },
+              "window": {
+                "type": "object",
+                "properties": {
+                  "from": {
+                    "type": "string"
+                  },
+                  "to": {
+                    "type": "string"
+                  },
+                  "complete": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "declared"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "value_as_read",
+              "ref"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "epistemic": {
+            "const": "unknown"
+          }
+        },
+        "required": [
+          "epistemic"
+        ]
+      },
+      "else": {
+        "properties": {
+          "basis": {
+            "minItems": 1
+          }
+        },
+        "description": "An unknown answer may carry an empty basis; every other answer cites at least one claim (DESIGN 24)."
+      },
+      "then": {}
+    },
+    {
+      "if": {
+        "properties": {
+          "scope": {
+            "const": "estate"
+          }
+        },
+        "required": [
+          "scope"
+        ]
+      },
+      "then": {
+        "properties": {
+          "reach": {
+            "required": [
+              "consulted",
+              "coverage"
+            ]
+          }
+        },
+        "description": "No answer of the form all-hosts without its coverage attached (DESIGN 22)."
+      }
+    }
+  ]
+}
