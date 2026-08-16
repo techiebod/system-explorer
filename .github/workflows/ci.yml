@@ -20,6 +20,35 @@ jobs:
       - run: python -m pip install -e ".[test,mcp]"
       - run: python -m pytest -q
 
+  corpus:
+    name: corpus coverage is stated
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e ".[test]"
+      - name: corpus states its coverage, and is not empty
+        run: |
+          python - <<'PY'
+          import json, sys
+          sys.path.insert(0, "harness")
+          from se_harness import corpus
+
+          variants = corpus.all_variants()
+          report = corpus.coverage(variants)
+          print(json.dumps(report, indent=2))
+          # A job that only prints cannot fail, and a corpus that is empty
+          # would print an empty report and go green — the exact shape the
+          # replay harness exists to refuse.
+          assert report["variants"], "corpus is empty"
+          assert len(report["operating_systems"]) >= 2, (
+              f"corpus covers {report['operating_systems']}: interface drift "
+              "is what the corpus is for, and one OS cannot show it"
+          )
+          PY
+
   go:
     name: go toolchain (contract readable)
     runs-on: ubuntu-latest

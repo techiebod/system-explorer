@@ -4,7 +4,7 @@
 
 This plan executes [The Observation Model](DESIGN.md) and its Appendix C. The model says what and why; this says when, where, in what order, and by whom. Where the two disagree, the model wins — and where the model is silent, work stops and the gap goes to its adjudication queue, per its own governance rule.
 
-## 01 · Five standing rules
+## 01 · Six standing rules
 
 > **1 · A gate is a set of tests, not a feeling**
 >
@@ -25,6 +25,10 @@ This plan executes [The Observation Model](DESIGN.md) and its Appendix C. The mo
 > **5 · Silence is a blocker at every tier of worker**
 >
 > Every executing agent's brief carries the same instruction: where the design document is unclear, silent, or contradicts the code you are writing, **stop, file the gap to the adjudication queue, and take other work.** Guessing is how the last architecture accumulated the drift this one exists to prevent — and the weaker the model, the more explicitly this must be said to it.
+
+> **6 · A guard ships with the reversion that proves it discriminates**
+>
+> Not a test the fixed code passes — a demonstration that the unfixed code fails, executed. Round two found the round-one repair pinned by tests that stayed green with their fixes reverted: a check written to catch a known defect catches that defect and generalises to nothing. So every guard lands with its reversion run and shown red, an adversary's passing-wrong subject joins the suite as a permanent fixture, and a challenger-vs-reference mismatch is an adjudication, never a verdict — the reference has to be able to lose.
 
 ## 02 · The development loop
 
@@ -69,6 +73,27 @@ The three empty buckets get their machinery before any product code exists to hi
 > **Gate 1 opens when**
 >
 > the pipeline works end-to-end for two sources on two OSes · item 8 (an empty environment cannot go green) · item 11 across the channels that exist so far.
+>
+> *Retracted 2026-08-16: this gate's first green was false — the round-two audit showed the items passing for the wrong reasons. The criteria stand, but gate 1 now opens only through gate 1.5 below.*
+
+### Phase 1.5 — the repair (medium)
+
+A second adversarial round (six agents, 34 findings, 14 reproduced first-hand) showed gate 1's green was false: the published contract was enforced by nothing, the corpus certified a wrong answer about a firewall and punished the correct one, real identifiers sat unscrubbed in unpushed commits, and the round-one repair tests mostly pinned nothing. Scope, in order:
+
+1. **Adapter truth** — recursive vmap/goto reachability walk, device resolution moved behind the replay seam, names published per law 1, no null fact values.
+2. **Harness** — issued generations on the request line, the two-regimes law made self-enforcing (every dropped member has a named structural rule, proven exhaustively), typed fact equality, clone-safe corpus loading.
+3. **Contract teeth** — every object closed, a rejection suite so a gutted schema is a red run.
+4. **Scrubber** — manifest-driven deny-by-default classification, keyed substitution, an independent detector as the publish gate.
+5. **Corpus** — reconstructed, re-scrubbed, regenerated, every variant carrying planted-truth anchors written at staging time.
+6. **Guard discipline** — a guard ships with the reversion that proves it discriminates; the round's own passing-wrong collectors join the suite as permanent regression fixtures.
+7. **Lab variants** — degraded pool, goto-reached chain, family-asymmetric ruleset, partial read, relation assertions, unobservable records, the three non-absent decline reasons, an nft-rules canary.
+8. **History** — the six unpushed commits re-authored from origin/main as a clean series (the plaintext never enters public history), then push, then CI's first run from a clean checkout.
+
+> **Gate 1.5 — defined before the run — opens when**
+>
+> the six adversarial surfaces are re-fleeted against the repaired whole · every round-two exploit prints red · no new passing-wrong collector at equal effort · the suite green from a fresh clone. Only then does gate 1 open and Phase 2 (walking skeleton) begin.
+
+The round's generalisable lesson is now standing rule 6 (§01): every guard ships with its reversion, and a challenger-vs-reference mismatch is an adjudication, not a verdict.
 
 ### Phase 2 — walking skeleton on a guest (medium, sequential)
 

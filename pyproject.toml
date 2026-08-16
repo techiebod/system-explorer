@@ -81,7 +81,7 @@ system_explorer = ["ui/*"]
 [tool.pytest.ini_options]
 # src/ so the conformance suite imports system_explorer without an install;
 # conformance/ so `from common import ...` keeps working from any cwd.
-pythonpath = ["src", "conformance"]
+pythonpath = ["src", "conformance", "harness"]
 testpaths = ["conformance"]
 
 # ── static checks ─────────────────────────────────────────────────────────

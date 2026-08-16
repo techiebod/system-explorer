@@ -1,0 +1,22 @@
+{
+  "schema": "se.crash-boundaries/1",
+  "note": "Every point where a kill must leave state all-or-nothing (acceptance item 3). Enumerated in phase 1 because these are properties of the protocol rather than of any implementation; a list assembled later would be the boundaries somebody remembered.",
+  "boundaries": [
+    {"id": "mid-object", "kill": "collector", "after": "an object record, before commit",
+     "expect": "no part of the collection is applied; prior state stands, unmarked"},
+    {"id": "pre-commit", "kill": "collector", "after": "the last object, before its commit",
+     "expect": "identical to mid-object — a partial read must never delete anything"},
+    {"id": "post-commit-pre-apply", "kill": "collator", "after": "receiving commit, before the durable transaction",
+     "expect": "on restart the collection is at its previous generation; the batch is re-run"},
+    {"id": "mid-apply", "kill": "collator", "during": "the durable transaction that applies and advances generation",
+     "expect": "all of it or none of it; a generation may never advance over unapplied objects"},
+    {"id": "post-apply-pre-ack", "kill": "collator", "after": "the durable transaction, before acknowledging",
+     "expect": "applied and durable; a re-sent identical batch at the same generation is a no-op"},
+    {"id": "mid-checkpoint", "kill": "hub", "during": "a reconnect checkpoint, after some collections",
+     "expect": "nothing in the checkpoint is promoted; the host stays unswept and resolves no finding"},
+    {"id": "post-manifest-pre-terminal", "kill": "collator", "after": "the checkpoint manifest, before its terminal record",
+     "expect": "the hub discards the partial checkpoint and the host stays unswept"},
+    {"id": "post-promote-pre-persist", "kill": "hub", "after": "promoting a checkpoint, before persisting finding lifecycle",
+     "expect": "on restart, findings freeze rather than resolve — unswept is not dark"}
+  ]
+}
