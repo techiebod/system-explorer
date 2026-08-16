@@ -1,0 +1,43 @@
+<svg viewBox="0 0 920 330" role="img" aria-label="The lab development loop: build on the workstation, deploy both stacks to one lab guest, compare their answers, replay the corpus, and pass the results to the gate." xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7a8590"/>
+    </marker>
+  </defs>
+  <g fill="none" stroke="#7a8590" font-family="ui-monospace,Menlo,monospace" font-size="12">
+    <rect x="20" y="40" width="200" height="86" rx="3"/>
+    <text x="36" y="66" fill="#7a8590" stroke="none" font-weight="600">workstation</text>
+    <text x="36" y="88" fill="#7a8590" stroke="none" font-size="11" opacity=".8">nix build · go test</text>
+    <text x="36" y="105" fill="#7a8590" stroke="none" font-size="11" opacity=".8">replay harness (no VM)</text>
+
+    <path d="M 220 83 L 292 83" marker-end="url(#ar)"/>
+    <text x="256" y="73" text-anchor="middle" fill="#7a8590" stroke="none" font-size="10.5" opacity=".75">deploy</text>
+
+    <text x="296" y="30" font-size="11" letter-spacing="1.6" fill="#7a8590" stroke="none" opacity=".65">ONE LAB GUEST</text>
+    <rect x="296" y="40" width="330" height="250" rx="4" stroke-opacity=".5"/>
+    <rect x="316" y="62" width="290" height="70" rx="3"/>
+    <text x="330" y="86" fill="#7a8590" stroke="none" font-weight="600">new stack</text>
+    <text x="330" y="106" fill="#7a8590" stroke="none" font-size="11" opacity=".8">collectors · collator · slice · module</text>
+    <rect x="316" y="150" width="290" height="70" rx="3" stroke-dasharray="5 4"/>
+    <text x="330" y="174" fill="#7a8590" stroke="none" font-weight="600">old agent 0.6</text>
+    <text x="330" y="194" fill="#7a8590" stroke="none" font-size="11" opacity=".8">reference implementation</text>
+    <text x="316" y="252" fill="#7a8590" stroke="none" font-size="11" opacity=".7">same kernel, same facts on the ground —</text>
+    <text x="316" y="269" fill="#7a8590" stroke="none" font-size="11" opacity=".7">so a diff between them is signal, not noise</text>
+
+    <path d="M 606 97 L 690 130" marker-end="url(#ar)"/>
+    <path d="M 606 185 L 690 155" marker-end="url(#ar)"/>
+    <text x="648" y="105" fill="#7a8590" stroke="none" font-size="10.5" opacity=".75">answers</text>
+
+    <rect x="694" y="112" width="200" height="62" rx="3" stroke-width="2"/>
+    <text x="710" y="137" fill="#7a8590" stroke="none" font-weight="600">comparator</text>
+    <text x="710" y="157" fill="#7a8590" stroke="none" font-size="11" opacity=".8">parity report per collection</text>
+
+    <path d="M 794 174 L 794 218" marker-end="url(#ar)" stroke-width="2"/>
+    <rect x="694" y="222" width="200" height="62" rx="3" stroke-width="2"/>
+    <text x="710" y="247" fill="#7a8590" stroke="none" font-weight="600">the gate</text>
+    <text x="710" y="267" fill="#7a8590" stroke="none" font-size="11" opacity=".8">acceptance items + old suite</text>
+
+    <path d="M 120 126 C 130 230, 400 300, 690 262" stroke-dasharray="4 5" marker-end="url(#ar)" stroke-opacity=".7"/>
+    <text x="330" y="308" fill="#7a8590" stroke="none" font-size="10.5" opacity=".75">corpus replay + crash harness results, straight from CI</text>
+  </g>
+</svg>

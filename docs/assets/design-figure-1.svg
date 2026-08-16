@@ -1,0 +1,76 @@
+<svg viewBox="0 0 960 452" role="img" aria-label="Deployment diagram: collectors and one collator inside a system-explorer slice on each host, connected by systemd-activated unix sockets; the collator connects outbound to a hub container which serves REST by default and optional MCP, MQTT and UI front-ends." xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7a8590"/>
+    </marker>
+  </defs>
+  <g fill="none" stroke="#7a8590" font-family="ui-monospace,Menlo,monospace" font-size="12">
+
+    <text x="20" y="24" font-size="11" letter-spacing="1.6" fill="#7a8590" stroke="none" opacity=".65">EVERY HOST</text>
+    <rect x="20" y="36" width="560" height="392" rx="4" stroke-opacity=".45"/>
+    <rect x="40" y="66" width="520" height="342" rx="3" stroke-dasharray="5 4" stroke-opacity=".7"/>
+    <text x="56" y="90" fill="#7a8590" stroke="none" font-size="11.5" opacity=".8">system-explorer.slice — CPUQuota, MemoryMax</text>
+
+    <rect x="60" y="112" width="176" height="40" rx="3"/>
+    <text x="72" y="137" fill="#7a8590" stroke="none">se-collect-units</text>
+    <rect x="60" y="164" width="176" height="40" rx="3"/>
+    <text x="72" y="189" fill="#7a8590" stroke="none">se-collect-storage</text>
+    <rect x="60" y="216" width="176" height="40" rx="3"/>
+    <text x="72" y="241" fill="#7a8590" stroke="none">se-collect-docker</text>
+    <rect x="60" y="268" width="176" height="40" rx="3" stroke-dasharray="3 3" stroke-opacity=".55"/>
+    <text x="72" y="293" fill="#7a8590" stroke="none" opacity=".65">…one per interface</text>
+
+    <text x="60" y="336" fill="#7a8590" stroke="none" font-size="11" opacity=".7">systemd holds every grant:</text>
+    <text x="60" y="352" fill="#7a8590" stroke="none" font-size="11" opacity=".7">groups · capabilities · credentials</text>
+    <text x="60" y="368" fill="#7a8590" stroke="none" font-size="11" opacity=".7">run-and-exit · no resident memory</text>
+
+    <line x1="290" y1="100" x2="290" y2="330" stroke-dasharray="4 5" stroke-opacity=".55"/>
+    <text x="290" y="92" text-anchor="middle" fill="#7a8590" stroke="none" font-size="10.5" opacity=".75">unix socket</text>
+    <text x="290" y="346" text-anchor="middle" fill="#7a8590" stroke="none" font-size="10.5" opacity=".75">socket-activated</text>
+
+    <path d="M 236 132 L 284 174" marker-end="url(#ar)" stroke-opacity=".8"/>
+    <path d="M 236 184 L 284 190" marker-end="url(#ar)" stroke-opacity=".8"/>
+    <path d="M 236 236 L 284 206" marker-end="url(#ar)" stroke-opacity=".8"/>
+    <text x="250" y="120" fill="#7a8590" stroke="none" font-size="10.5" opacity=".7">stdout</text>
+
+    <path d="M 340 230 C 320 260, 300 260, 292 244" marker-end="url(#ar)" stroke-opacity=".8"/>
+    <text x="300" y="272" fill="#7a8590" stroke="none" font-size="10.5" opacity=".7">request</text>
+
+    <rect x="336" y="112" width="200" height="112" rx="3" stroke-width="2"/>
+    <text x="350" y="138" fill="#7a8590" stroke="none" font-size="13.5" font-weight="600">se-collate</text>
+    <text x="350" y="158" fill="#7a8590" stroke="none" font-size="11" opacity=".8">mints ids · joins · judges</text>
+    <text x="350" y="174" fill="#7a8590" stroke="none" font-size="11" opacity=".8">schedules · watches · records</text>
+    <text x="350" y="190" fill="#7a8590" stroke="none" font-size="11" opacity=".8">serves REST + single-host UI</text>
+    <text x="350" y="210" fill="#7a8590" stroke="none" font-size="11" opacity=".62">one credential: its own hub identity</text>
+
+    <path d="M 580 160 L 660 160" marker-end="url(#ar)" stroke-width="2"/>
+    <text x="620" y="150" text-anchor="middle" fill="#7a8590" stroke="none" font-size="10.5" opacity=".8">collator dials out</text>
+    <text x="620" y="180" text-anchor="middle" fill="#7a8590" stroke="none" font-size="10.5" opacity=".65">hub never dials in</text>
+    <text x="620" y="196" text-anchor="middle" fill="#7a8590" stroke="none" font-size="10.5" opacity=".65">requests ride back down</text>
+
+    <text x="668" y="24" font-size="11" letter-spacing="1.6" fill="#7a8590" stroke="none" opacity=".65">ONE PER SITE</text>
+    <rect x="668" y="36" width="272" height="392" rx="4" stroke-opacity=".45"/>
+    <text x="684" y="60" fill="#7a8590" stroke="none" font-size="11.5" opacity=".8">se-hub — container</text>
+
+    <rect x="686" y="76" width="236" height="76" rx="3" stroke-width="2"/>
+    <text x="700" y="100" fill="#7a8590" stroke="none" font-size="13.5" font-weight="600">REST</text>
+    <text x="700" y="118" fill="#7a8590" stroke="none" font-size="11" opacity=".8">intent · estate ids · roll-up</text>
+    <text x="700" y="134" fill="#7a8590" stroke="none" font-size="11" opacity=".8">findings lifecycle · problem domains</text>
+
+    <text x="686" y="182" fill="#7a8590" stroke="none" font-size="11" opacity=".7">optional front-ends, same image:</text>
+    <rect x="686" y="194" width="236" height="36" rx="3" stroke-dasharray="4 4"/>
+    <text x="700" y="217" fill="#7a8590" stroke="none">MCP</text>
+    <rect x="686" y="238" width="236" height="36" rx="3" stroke-dasharray="4 4"/>
+    <text x="700" y="261" fill="#7a8590" stroke="none">MQTT → home automation</text>
+    <rect x="686" y="282" width="236" height="36" rx="3" stroke-dasharray="4 4"/>
+    <text x="700" y="305" fill="#7a8590" stroke="none">estate UI</text>
+
+    <path d="M 804 152 L 804 194" marker-end="url(#ar)" stroke-opacity=".55"/>
+    <path d="M 804 230 L 804 238" marker-end="url(#ar)" stroke-opacity=".55"/>
+    <path d="M 804 274 L 804 282" marker-end="url(#ar)" stroke-opacity=".55"/>
+
+    <text x="686" y="352" fill="#7a8590" stroke="none" font-size="11" opacity=".7">holds the intent declaration</text>
+    <text x="686" y="368" fill="#7a8590" stroke="none" font-size="11" opacity=".7">federates only with a matching hash</text>
+    <text x="686" y="384" fill="#7a8590" stroke="none" font-size="11" opacity=".7">last-received in memory; persists metadata</text>
+  </g>
+</svg>

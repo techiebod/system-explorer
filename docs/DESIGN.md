@@ -1,0 +1,1918 @@
+# The observation model
+
+*Why a homelab's truth drifts from its owner's belief, and what a product has to do — and refuse to do — to keep the two together.*
+
+## Summary
+
+**A homelab accumulates belief, and beliefs go stale silently.** Every native tool stays correct while that happens, which is what makes it hard to notice. The failure this product exists to prevent is **confident wrongness**, and this estate produced two examples in a week: "are all hosts up to date" answered yes with the internet-facing host five revisions behind, and months of green replication over data with no off-site copy.
+
+**System Explorer answers the questions that cross native tools — over a whole estate, with a stated opinion, and against a record of what came before** — and never writes to the system it observes. That names four kinds of value: **join, estate, judgement, record**.
+
+**Three tiers.** A **collector** reads one native interface, writes what it saw, and exits. A **collator** is one service per host: it schedules collectors, mints ids, joins what no collector could see, judges what is self-evidently wrong, and keeps the record. A **hub** holds intent — what *should* be — and is the only tier that can judge one host against another.
+
+**Two axes.** Collections are organised by what the OS offers; questions are asked by what somebody wants to know. Problem domains are assembled from collector domains, and this product has built only the first axis. That is the best single predictor of which parts of it are good.
+
+**Six layers, five laws.** Names are observed and ids are minted. Reach decides tier. Relations are minted, and their observability is stated. Every claim names its origin. Every tier is complete without the tiers above it.
+
+Two of those laws exist because both founding incidents were failures of the same kind. **A registry that agrees with itself is not a complete registry**, and **an edge observed at one end is not an edge** — green replication with no off-site copy is a half-observed relation reported as a whole one.
+
+**What the system is, and what we could establish about it, are separate axes.** A dark host does not make the storage sicker; it makes the answer narrower. Merging the two invents a false belief in both directions, and the test that catches it is one sentence: *removing evidence must never improve either the verdict or the epistemic status.*
+
+**And the targets are stated, because a specification with no tolerances invites unbounded rigour.** Ten hosts, one-second time resolution, hours of hub downtime tolerable, one part-time maintainer. Every proposal must name the target it moves; "more correct in general" is not one.
+
+**Time is a prohibition, not a subsystem.** An age is measured on one clock and two hosts' wall clocks are never compared — because the timestamps that answer an administrator's questions live *inside the data*, where no precision of ours can improve them. Our stamps answer only how stale a page is, which needs seconds.
+
+**The spec is founded on captured reference answers** — one corpus per native source, in variant states, with every declaration written against a real document sitting beside it.
+
+- **What is binding.** Unmarked prose and `[schema]` blocks are the contract — a `[schema]` fixes the members and what they mean, not their spelling. **Nothing marked `[decision]` or `[open]` may be implemented**: those are choices this document is asking for rather than making, and two people building against them will build different systems.
+- Chip legend: `[audited]` case-study support · `[decision]` proposed, do not build · `[schema]` binding members and meanings · `[open]` blocked
+
+> **How this document is governed**
+>
+> **This is the living record of intent, and it outranks every other artefact, including the code.** Wherever it is unclear, silent, or self-contradictory, the gap is not filled in place — it goes to the adjudication queue (appendix C), gets ruled on, and the ruling is written here *before* any code is built against it. A chip is how a section says it is still waiting.
+
+---
+
+# Part I — the problem this exists to solve
+
+## 01 · Why
+
+A homelab accumulates belief. You set something up, it works, you stop looking at it. The belief persists; the system moves.
+
+Every native tool stays perfectly correct while that happens, which is what makes it hard to notice. htop is never wrong about what is using the machine — the belief about *which container that is* goes wrong. `systemctl status` is never wrong — the belief that the backup ran, because the timer is enabled and green, goes wrong.
+
+> **The failure this exists to prevent**
+>
+> **Confident wrongness.** Not an outage — a gap between a system and somebody's model of it, which persists precisely because everything on screen is true.
+
+Two from this estate, inside one week:
+
+> **Both answers were true. Both beliefs were false.**
+>
+> **"Are all hosts up to date?" → yes.** The only internet-facing host in the estate was five revisions behind, registered with no hub, and absent from every listing. Every host the registry knew about *was* up to date. The answer was correct and the belief it created was not.
+>
+> **Irreplaceable data, no off-site copy, months of green replication.** Every job succeeded. Every dashboard was clean. Nothing was safe. The replication was real; the belief that it constituted a backup was not.
+
+These are not two anecdotes about carelessness. They are two instances of one structure, and the model below is built to make each of them impossible to reproduce:
+
+- **The first is a registry reporting on itself.** A list of hosts answered a question about all hosts, and nothing anywhere held an independent belief about how many there were. §22 is the answer.
+- **The second is an edge observed at one end.** The push was real and honest; the far end was never looked at; and the product had no vocabulary for the difference between a relationship confirmed at both ends and one asserted at one. §13 is the answer.
+
+### Which is why the disciplines are what they are
+
+These read as good engineering habits. They are not — each is a direct defence against a specific way a belief goes stale:
+
+| Discipline | The drift it prevents |
+|---|---|
+| **Absence is never health** | a false green *is* the drift — it is the exact shape of both incidents above |
+| **Opinions cite their evidence** | a belief you can check is one that can be corrected; one you must trust cannot |
+| **Observed / derived / declared** | you should know what you are trusting at the moment you form a belief from it |
+| **Unobservable says so, by name** | "I could not look" and "I looked and it was fine" produce opposite beliefs |
+| **A registry says it is a registry** | completeness assumed is the belief that hid a host for five revisions |
+| **A record of before** | drift is invisible without one — you cannot see a change you have no baseline for |
+
+### And why the four kinds of value are the ones that matter
+
+They are not virtues in themselves. Each closes a place where belief and system come apart:
+
+- **join** — beliefs cross tools, so drift hides in the gaps between them
+- **estate** — nobody holds six hosts in their head, so the forgotten one is where it hides
+- **judgement** — a number never tells you your belief about it is wrong
+- **record** — without a before, a changed thing looks exactly like a thing that was always so
+
+## 02 · The problem, concretely
+
+A Linux host exposes its state through dozens of interfaces — D-Bus, procfs, sysfs, netlink, cgroupfs, engine APIs — each with its own vocabulary, its own tool, and its own narrow question. **Those tools are excellent.** htop turns half a million procfs entries into "what is using this machine, ranked". `systemctl status` turns a unit's property set into state, cause, and the last few log lines. `lsblk` uses tree shape because the shape *is* the answer. None of them is improved by being reimplemented, and a collection that reimplements one is strictly worse than the original — the original is already installed.
+
+What is left over is that **an administrator's questions do not respect those boundaries.**
+
+> *Why is this host slow?* — crosses cgroups, units, containers and disks.
+ *Is this data safe?* — crosses datasets, snapshots, jobs, and a repository on another machine.
+ *What changed?* — crosses all of them, and time.
+
+> **What this product is for**
+>
+> **System Explorer answers the crossing questions — over a whole estate, with a stated opinion, and against a record of what came before.**
+
+### Which names exactly four kinds of value
+
+Everything below follows from these, and scope is decided by them:
+
+| Value | What it adds | What its absence looks like |
+|---|---|---|
+| **join** | crosses interfaces no single tool crosses | `zpool status` cannot tell you the disk is in slot 3 of the enclosure |
+| **estate** | **the union is not obtainable by asking each subject in turn at comparable cost** | `systemctl` answers for one box, and you have six |
+| **judgement** | an opinion attached, so a reader need not already know what is bad | a table of numbers is data, not an answer |
+| **record** | what it looked like before — **where the subject outlives the sweep and the diff is not dominated by counters** | nothing on the box remembers |
+
+> **The scope test, in one line**
+>
+> **A collection must deliver at least one of join, estate, judgement or record, over what the native tool already does.** None of the four means it has reimplemented a native tool, worse.
+
+> **And then taste, deliberately**
+>
+> Which crossing questions to answer *first* is opinion, and should be. The scope test says what is admissible; it does not say what is interesting. Same division as the interface, where routes are contract and grouping is judgement — the principle bounds the space and preference chooses within it.
+
+## 03 · What the product does today, audited `[audited]`
+
+Before the model: what applying it found. Fifty-five collections judged against the four values, the laws and a measured cost budget, on six live hosts. §32 carries the full audit; this is the part that belongs beside the problem, because it *is* the problem, still happening.
+
+> **The family built for the founding failure is green over a job that has never run**
+>
+> On one host, a maintenance job — call it `vault-maintenance` — reads **State: ok**, **Basis: registered-never-succeeded**, and carries **no opinion at all**. No unit, no receipts, no result. Its window is 14 days, barely begun, so it has nearly two weeks of reading green ahead. protection/jobs on that host is **16 of 16 ok**.
+>
+> **The facts are honest; the judgement is absent.** `registered-never-succeeded` is on the row — the five-states discipline worked. What is missing is any opinion, so the dot is green and the roll-up counts it as fine. The mechanism is a gap in a ladder: *stale and never* is critical, *stale* is warn, *last run failed* is warn — a job that has *never run* and is not yet late matches none of them.
+>
+> And it matters more than a generic hole because of which job it is. The destination that job maintains declares, in its own security prose, that until a separate maintenance identity exists the pushing credential retains authority it should not keep. The job that would establish that identity is this one. So a declared gap is visible only by reading two prose facts on two pages, and nothing above the fact level raises it.
+
+### The ranking, and what predicts it
+
+Ranked by use, independently of any model: *units — truly great. disks — magical. resources — maturing but not great. protection and apps — potential but messy.*
+
+A model is only worth writing down if it predicts judgements already made. This one does: the two good subsystems have **zero** violations of the laws in §11, the middling one has **one**, and the two messy ones have **two each**. The ranking falls out of the count, and §31 shows the working.
+
+Protection is the one worth reading carefully, because the count alone understates it. It is not messy because it is badly built — it is the *highest-stakes belief in the estate*, and the product half-delivers on it. What "messy" measures there is the gap between how much it matters and how much arrives.
+
+### Four findings that changed the model rather than the code
+
+An audit that validates its own instrument perfectly is not an audit:
+
+- **Twelve ESTATE credits struck.** The product is estate-wide, so every collection was being credited with estate by association. Measured against live capabilities, `storage/arrays` has subjects on one host of five and eleven app-tier collections observe exactly one instance.
+- **RECORD was a property of the hub**, not of the collection — nine credits rested on "perishable, therefore recorded, because the hub snapshots everything". A value axis nothing fails is not an axis.
+- **Nothing said what a counter does to a diff.** The single highest-yield missing line, and its absence produced the same finding six times.
+- **Eleven reach faults resolve to one absent component.** No cross-host rule exists anywhere in the product. Not eleven bugs — one empty column, and §23 names the tier that fills it.
+
+## 04 · Two axes, and the one we have not built
+
+Collections are organised by **what the OS offers**. Questions are asked by **what somebody is trying to find out**. These are different axes, and the product has only ever built one of them.
+
+> **The two domains**
+>
+> **A collector domain** is a family of things one interface can tell you about: PCI and SCSI and USB devices; block devices and partitions; filesystems; packages; units and cgroups; sockets and rules.
+>
+> **A problem domain** is a question somebody actually has: *what is running and should it be? is the storage healthy? is my data protected? is this box up to date? what can reach it? why is it slow? what changed?*
+>
+> Problem domains are **assembled from** collector domains, many-to-many. Neither is derivable from the other, and confusing them is where the product's weaker parts come from.
+
+That is one claim, and §31 makes another: quality tracks the number of law violations. They are not two rival predictors — **the first is the cause and the second is the mechanism.** Building a problem domain in its source's shape is what puts identity and reach in the wrong place, because a collection that mirrors one interface mints ids from that interface's names and judges with only that interface's facts. The confusion is the disease; the fault count is the symptom you can measure.
+
+### Which re-reads the ranking
+
+| Subsystem | What it actually is | Consequence |
+|---|---|---|
+| **units** | a collector domain that nearly coincides with a problem domain | "truly great" — question and interface happen to share a shape, so no assembly is needed |
+| **disks** | a problem domain, hand-assembled from five collector domains | "magical" — somebody did the assembly by hand, and the assembly *is* the value |
+| **resources** | a collector domain presented as if it were a problem domain | "maturing" — shaped like an answer to *why is this slow*, without the assembly that would make it one |
+| **protection** | a problem domain built with the shape of its source | "messy" — three collections mirroring a manifest's three stanzas. The question is *is my data safe*; the shape is *what does this file say* |
+| **apps** | a collector domain per vendor API | "messy" — seven subsystems shaped by seven APIs, and nobody asks a question in those terms |
+
+> **Two tests that follow**
+>
+> **A problem domain is whatever produces an answer, a verdict, a basis and a reach (§24) — source count is not the test.** A single collector domain plus intent, history and judgement can be a real one; *is this box up to date* is nearly that shape. But a single-source domain producing none of those is a collector domain with an aspirational name, and one source is the smell that says look closer.
+>
+> **A collector domain feeding no problem domain is inventory.** It may be perfectly correct and still answer nothing.
+
+Both reproduce verdicts reached independently: the first flags protection — one source, and no answer object anywhere; the second catches `hardware/usb`, which the audit retired for delivering none of the four values.
+
+### The map, as it stands
+
+Rows are questions, columns what must be assembled to answer them. **Bold** means the product assembles it today; plain means the facts exist and nothing joins them; *italic* means the facts are not collected at all.
+
+| Problem domain | Assembled from | State |
+|---|---|---|
+| **What is running, and should it be?** | **units** · containers · VMs · cgroup workloads · *declared-vs-loaded* | partly — four collector domains, no assembly, and nothing compares the unit file on disk with what is loaded |
+| **Is the storage healthy?** | **SCSI/NVMe · SMART · enclosure · block · pools · datasets · arrays** | assembled — this is "disks", the only fully built one |
+| **Is my data protected?** | the manifest · jobs · receipts · *the datasets it names* · *snapshots* · *the destination's own state* | not assembled — the manifest is read; the data it describes is never joined to it |
+| **Is this box up to date?** | generations · packages · *every other host's revision* | not assembled — the cross-host comparison exists nowhere, and this is the question that answered "yes" wrongly |
+| **What can reach it?** | **listening sockets · firewall rules · chains** · links · routes · tailscale | assembled — port-exposure, with two closures |
+| **Why is it slow?** | cgroup counters · PSI · io · *the unit behind the cgroup* · *containers* · *disks* | partly — the attribution is done; the join to what the workload *is* is not |
+| **What changed?** | snapshot history · generations · deployment receipts | partly — the diff exists and is dominated by counters, so it reports change continuously |
+| **Is the box itself healthy?** | platform/DMI · CPU · memory · temperatures · boot · clock | not assembled — six collector domains, one overview card, no question |
+
+### And so: two views, not one
+
+The first view — **facts and derived facts with opinions overlaid, organised by the interface that produced them** — is built, and most of this document describes it. It must exist and must be complete: it is where an answer is checked, where evidence hangs, and what a language model walks.
+
+The second — **the problem-solving view, organised by the question being asked** — is barely started. Nobody arrives at a screen wanting a collector domain. They arrive with a question, and today the product mostly makes them do the assembly in their head.
+
+> **What this makes of "views"**
+>
+> Views today are a config-driven page composing existing collections. That is the right *mechanism* and the wrong *framing*: it treats a projection as a dashboard somebody arranges, when a problem domain is a first-class thing with its own identity, its own opinions and its own answer.
+>
+> The difference is in what each can say. A dashboard can put the protection manifest beside the dataset list. A problem domain can say **"this dataset is declared irreplaceable and has no copy anywhere this host can see"** — an opinion belonging to neither collection, statable by neither. §24 gives it a shape.
+
+---
+
+# Part II — the architecture
+
+## 05 · The envelope: what this is built for
+
+Everything below is fitted to a particular size and a particular tolerance, and until those are written down every reader supplies their own. That is not a hypothetical failure — it is the one this document has actually suffered. Each review has proposed the next increment of correctness; each increment was individually defensible; and the only reason to decline any of them was a target nobody had stated.
+
+> **The rule that makes "no" a decision rather than laziness**
+>
+> **A specification with no stated tolerances invites unbounded rigour.** Absent a number, the reviewer supplies one, and theirs will always be tighter — because tighter is defensible in the abstract and only a target makes it excessive.
+>
+> Which is this product's own discipline turned on its documentation. It refuses to report absence as health; this document refuses to *imply* a precision it is not aiming at. An unstated tolerance is a belief the reader supplies and the page never earned.
+
+### The targets
+
+These are aspirations, not measurements. Where a figure was measured, the section that uses it says so.
+
+| Dimension | Target | What it licenses — or forbids |
+|---|---|---|
+| **Estate size** | ~10 hosts, 2 sites | the hub holding last-received in memory; a full checkpoint on every reconnect costing nothing worth optimising |
+| **Per host** | ~2,000 objects, ~15,000 facts | SQLite; whole-collection commits; **no pagination inside a collection**, which is why a ceiling is a scope error rather than a cursor |
+| **Time resolution** | **one second** | no clock-synchronisation subsystem, no uncertainty arithmetic, skew reported to the nearest second (§09) |
+| **Freshness** | 60 s typical; hours for slow collections; on-demand for the rest | polling with declared cadence; watches as an optimisation, never as the contract |
+| **Hub availability** | hours of downtime tolerable | no HA, no failover, no quorum, no leader election. A site is one hub |
+| **Recovery** | estate view back within minutes | checkpoint-on-reconnect rather than a durable replication log |
+| **Concurrency** | one operator, occasionally two | no locking model, no multi-tenancy, no per-user views |
+| **Trust** | one owner; a second site owned by somebody trusted; a LAN not fully controlled | authentication between tiers is required; a hostile-multi-user threat model is not |
+| **Loss tolerance** | both survivable — history archived, lifecycles reset | the big-bang cut (§06): losses are stated on screen, and the effort goes into arriving instead |
+| **Product cost** | ≤1% of a core; bounded resident memory | the slice, run-and-exit collectors, and cost published as a fact about ourselves |
+| **Maintainer** | **one person, part-time** | the hardest constraint in the table, and the one the mechanism budget in appendix A exists to protect |
+
+### And what it is deliberately not built for
+
+Stated as flatly as the targets, because these are where proposals arrive and a polite silence reads as an omission rather than a decision:
+
+- **Sub-second cross-host ordering.** Nothing consumes it. §09 works through why.
+- **Exactly-once delivery.** Collectors are read-only and idempotent, so at-least-once with generation ordering is sufficient and much smaller.
+- **Byzantine tolerance between hubs.** A sibling hub is trusted or not federated; there is no third state and no voting.
+- **Unbounded scale.** Ten hosts is not a hundred, and a design that stayed honest to a hundred would be worse at ten.
+- **Continuous availability.** The product being down is an inconvenience; the product being *wrong* is the failure it exists to prevent. Where the two trade, correctness wins and the outage is stated.
+
+> **Which gives every future proposal a question to answer**
+>
+> **Name the target it moves, or the target it would otherwise miss.** "More rigorous", "more correct in general", and "a real system would" are not targets — and a mechanism that improves a number nobody is aiming at costs the one budget in the table with no slack in it.
+
+## 06 · Three tiers
+
+The two axes have a structural consequence. **A collector domain is host-local by nature** — one interface, one machine, what is. **A problem domain almost always needs intent** — what *should* be — and intent is estate-wide. Nothing can be both, so the product is three tiers and the boundaries between them are the load-bearing decisions in this document.
+
+![diagram](assets/design-figure-1.svg)
+
+***The deployment.** Every arrow into a collector originates at the collator, and the connection to the hub is opened by the host, never toward it. The collator holds no group, no capability and no credential belonging to the observed system — systemd applies those per collector unit, which is what makes the blast radius one interface rather than their union.*
+
+### Collector
+
+**A collector is a program, in any language, that reads one native interface, writes what it saw, and exits.** It holds no state between invocations, which is what makes its idle cost zero and its memory bounded by one acquisition rather than by uptime. It mints no identity, joins nothing, and has never been shown estate configuration — it reports what one interface said about the host it runs on.
+
+Each is a systemd socket-activated unit. The collator connects to a per-collector socket; systemd spawns the collector with the connection as its standard input and output, applies that collector's grants and sandbox, and reaps it when it exits.
+
+> **Why socket activation, and the payoff that falls out of it**
+>
+> The alternative is a collator that forks its collectors — which means the collator must hold the union of every grant in order to hand them down. That is the blast radius this design exists to break, reintroduced in the one process that talks to the network.
+>
+> With `Accept=yes` on the socket unit, systemd hands the accepted connection to the collector as fd 0 and fd 1. **So a collector never opens a socket, never links a socket library, and never contains daemon code.** It reads a request line from stdin and writes NDJSON to stdout — which is *identical* to how it behaves when a person runs it in a terminal. The wire contract and the command-line contract are the same contract, a collector can be written in shell, and every collector is testable with a pipe.
+>
+> It also means `RuntimeMaxSec` bounds a hung collector, the journal already has its stderr, and a collector that crashes takes nothing with it.
+
+### Collator
+
+**One long-lived service per host.** It is the only tier that sees every collector's output at once, and everything it does follows from that:
+
+- **Mints host-scoped ids**, because identity requires seeing every candidate name together (law 1)
+- **Joins across collector domains** — the cgroup to the unit to the container, the block device to the vdev to the enclosure slot — which no single collector can do and which is where most of the product's value has always come from
+- **Mints host-scoped relations** and states whether each was confirmed at both ends (§13)
+- **Judges what is self-evidently wrong**: a unit failed, a pool is degraded, a disk reports pending sectors. No intent required
+- **Schedules**, from each collector's declared freshness and its measured cost against the slice budget
+- **Watches** — udev, inotify, D-Bus signals — and turns a notification into a scheduling decision, never into a fact (§30)
+- **Anchors time**, because it shares a kernel clock with every collector (§09)
+- **Keeps the record**: the snapshot store and the diff behind *what changed*
+- **Serves the host**: REST and the single-host UI, so a host stays completely usable with no hub anywhere
+
+> **What the collator does and does not hold, stated precisely**
+>
+> It holds **no credential belonging to the observed system** — no docker group, no capability, no vendor API key. Everything privileged happens in a collector that systemd launched with exactly the authority that collector declared.
+>
+> It does hold **one credential of its own**: the client identity it presents to the hub. That is not an exception to the rule, it is a different category — an identity for the collator as a network participant, useless for reading anything on the host.
+>
+> And it does touch native interfaces, in one narrow way: it **subscribes to change notifications** — udev, inotify, D-Bus signals. It never reads state through them. The distinction is load-bearing rather than pedantic, and §30 is where it earns its keep: a notification schedules a collector, and the fact still comes from something that looked.
+
+### Hub
+
+**One per site, in a container.** The hub holds *intent* — what should be — and is therefore the only tier that can say *"this is not what you asked for"* rather than merely *"this is self-evidently bad"*. It is also the only tier that can see two hosts at once, which is what makes the cross-host questions answerable at all.
+
+By default it exposes REST and nothing else. **MCP, MQTT and the estate UI are front-ends on the same image, enabled by configuration** — the pattern the repository already uses to build three console scripts from one distribution. They are separate because their postures differ: MCP is a surface a language model reads, MQTT writes into somebody else's broker, and the UI is unauthenticated.
+
+> **What outbound-only forces the hub to hold**
+>
+> The connection is opened by the collator, so the hub cannot fetch on demand. Two consequences, and both need writing down before somebody solves them by opening an inbound port:
+>
+> **The hub holds the last-received envelope per collator, in memory.** That is not a cache in the forbidden sense — it is the only copy of what a host said, and it is stamped with when it arrived. It is served with its age visible, never as though current, and it does not survive a restart.
+>
+> **Evidence-on-demand rides back down the collator's own channel.** A request for a raw native payload travels over the connection the host opened; the collator invokes the collector and streams the answer up. Evidence stays captured-fresh and stored nowhere — only the direction of the request changes. That reverse channel carries `evidence`, `object` and `lookup` and nothing else, only for collections this collator's own declaration lists, and anything else is refused and recorded — a closed list, not a filter of known-bad verbs.
+>
+> Which names the cost of reversing the direction, and it should be stated rather than discovered: **outbound-only removes the network as a containment layer, so the hub's identity becomes the only thing standing between it and every host's collectors.** That is a trade, not a free win, and it is why the client identity in §08 is mutual rather than decorative.
+>
+> Persistence at the hub stays what it already is: **metadata, never observations**. Findings lifecycle, transitions, coverage claims, and the immutable basis of §24 — which is metadata under this rule, because a basis is *a quotation of what we claimed and when*, not a copy of host state. It may be served in answer to a question about a finding and never in answer to a question about now. §14 already grants exactly this exemption for our own claims about our own claims.
+
+> **A restarted hub must not resolve the estate**
+>
+> The hub's observations are in memory, so after a restart it holds findings and no facts. Left alone, that reads as *every condition in the estate cleared at once* — the absence-as-health shape, written into the permanent record, at the moment of least attention.
+>
+> The rule that prevents it already exists and must be carried forward: **absence only resolves where the host could look.** A collection the sweep could not evaluate freezes its findings — lifecycle untouched, current honestly unstated — rather than resolving them. The new architecture adds one state that rule has never needed before: **a collator that has not yet reconnected since the hub started is `unswept`, not `dark`**. Nobody has told us is a different claim from the host told us and stopped, and only one of them is evidence about the host.
+>
+> Telling them apart costs one thing: each finding persists the batch generation and arrival stamp that derived it, so a restarted hub can say which it is.
+
+### Reconnect: declarations, then a checkpoint, then transitions
+
+Nothing about a hub that only receives makes it obvious when it knows enough to answer, so the order is fixed. On connect a collator sends **its declarations** — the hub cannot render or serve MCP without the fact axes — then a **current-state checkpoint**, then the ordinary stream. Until the checkpoint completes the host is `unswept` and says so.
+
+> **"Complete" needs a wire meaning, or a hub answers from a fragment**
+>
+> A checkpoint **opens with a manifest** — every collection this collator declares, with its current generation and status — and **closes with a terminal record**. It is promoted **all at once**, and until it is, nothing in it is visible to a roll-up, a problem domain, or a projection.
+>
+> Without that, the failure is specific and quiet: the hub receives one collection, considers the host swept, recomputes an estate finding over a subset, and *resolves* it — a finding cleared by partial knowledge, which is the failure this whole document is written against, arriving during recovery when nobody is looking.
+
+And a finding remembers **every input that produced it** — each contributing host, collection, generation and arrival — not a single batch id. One generation cannot say whether the two other collections that fed a cross-host answer have come back yet, and a finding that cannot enumerate its own contributors cannot tell "all my evidence returned and the condition is gone" from "one third of my evidence returned".
+
+Without that rule a hub restart leaves collections at long cadence, or invoked only on demand, missing for hours while everything on screen looks settled. And one thing the checkpoint deliberately does *not* attempt: replaying every transition that occurred during a partition. A condition that appeared and resolved while the link was down is **lost, and the gap is stated** — a `history-gap` marker over the disconnected interval — because the alternative is an unbounded queue whose failure mode is the collator dying of somebody else's outage. A stated gap is a worse answer than complete history and a far better one than a confident timeline with a hole in it.
+
+> **One regression to accept deliberately**
+>
+> Putting the hub in a container on a host means that when that host's container engine is down, the estate UI is down — which is exactly when somebody wants it. The founding invariant survives, because each collator serves its own host in full and can be reached directly. But it survives *only if the collator keeps its own UI*, so that is not optional: the collator serves the single-host interface, the hub serves the estate one, and both render the same envelopes so there is no second judgement to drift.
+>
+> **And the same argument applies to both consumers, not one.** If a human keeps a surface when the hub is down, so does a model — there is no UI-private API, and an asymmetry here would make the two-consumers rule a slogan. So MCP is a front-end on *both*: host-scoped at the collator, estate-scoped at the hub. A per-site MCP endpoint is also what stops any site's visibility depending on an inter-site path.
+
+### What the split fixes, at the root
+
+Protection today is a collector that reads a declaration — a fact generator doing a hub's job. Its three symptoms are that one misplacement:
+
+- **Twenty-two targets published by every host.** A collector republishing estate config, five times.
+- **Owner-scoped opinions.** A workaround for the consequence: a host judging estate intent would judge it once per host, so the judgement was suppressed everywhere but one.
+- **The chain cannot be assembled.** Every host holds the intent and only its own facts.
+
+Move the intent to the hub and all three go. **Owner-scoping does not get fixed — it deletes itself**, because it only ever existed to compensate for judgement sitting where the facts were not. Which is law 2 resolving itself: the opinion had been weakened in place because the facts were out of reach; put the intent where it can reach every host's facts and the opinion moves there, as the law says it must.
+
+### Hubs agree or refuse
+
+Two hubs federating from different declarations are describing different estates, and merging them silently mixes two worldviews. So a hub hashes its declaration, exchanges the hash on connect, and **refuses to federate while they differ**. That is a *protocol* check where the present arrangement has only a deployment hope: today the protection adapter's own source note asserts that "the declaration is identical on every host" — an assumption the design depends on, stated in prose, and verified by nothing.
+
+> **Two things the refusal has to get right**
+>
+> **It must be legible.** Not a connection error — *"this site holds declaration abc123, the sibling holds def456; the estate view is unavailable until they agree"*. The same distinction the hub already draws between an agent that is dark and one that is empty.
+>
+> **Local observation must be untouched.** Each hub keeps serving its own site in full; only the cross-site view degrades, and it says why.
+
+**And one consequence to accept deliberately:** during a rolling deploy the hubs legitimately disagree for a window, so the estate view goes away and comes back. That is the right behaviour — an incoherent merged view is worse than a stated gap — but it will be visible on every deploy, so it should be a decision rather than a surprise.
+
+### What a sibling hub may ask for, and what it may not
+
+Reversing the connection deletes the mechanism cross-site federation was built on. The old arrangement had one hub proxy live to another site's hosts, and the addressing was what made loops impossible — the host URLs a hub hands out are site-internal, so a cross-site consumer necessarily goes through the owning hub rather than dialling hosts itself. A collator that only dials out cannot be proxied to at all, so the rule needs restating rather than assuming.
+
+> **A hub answers for its own hosts from what they told it, and for a sibling's only by asking the sibling**
+>
+> Exactly one hop, as before, and now enforced by capability rather than by URL shape: **a hub has no way to reach another site's collators**, so it cannot forward even if it wanted to.
+>
+> A sibling's data is served with **two ages visible** — when the host told its own hub, and when that hub told this one. Collapsing them into one figure is how doubly-stale data gets presented as current, and only the second is this hub's to measure.
+
+Which side dials is a deployment choice and must be stated per pair rather than assumed symmetric — a site behind NAT can only originate, **which means the other member accepts, and that acceptance is not the forbidden port: a hub may accept an authenticated sibling session.** The prohibition is on inbound paths to collators and hosts — the reachability model the rest of this section removes. A sibling request names its origin, is answered only from the receiving hub's own site, and is never forwarded onward; and the handshake carries protocol and semantic versions beside the intent hash, because two hubs agreeing on what the estate *is* while disagreeing on what a fact *means* is the same wrong merge, quieter. The one shortcut that stays forbidden outright: **replicating observations between hubs**, which would make every hub a store of another site's facts and quietly repeal the metadata-only rule.
+
+> **Estate findings have one owner `[decision]`**
+>
+> An estate-scoped finding — a coverage gap, a cross-host comparison, a protection-chain verdict — could be derived by either hub, and two hubs each persisting their own copy diverge at the first partition and disagree about acknowledgements forever after. So **the intent document names one hub as the owner of estate-scoped finding lifecycle**; the sibling serves those findings read-only, marked with their origin. Site-scoped findings stay with the site's own hub, untouched. The cheapest rule that prevents the split-brain, and it costs one member in the intent schema.
+
+### The cut
+
+The replacement is a **big-bang cutover, not a strangler**. The new stack is built to completion against its own harnesses (§18), lands first on the estate's disposable canary host, and then replaces the old agent outright. No dual-mode hub, no per-host migration state machine, no findings-key mapping — that is machinery for protecting an estate this product does not yet have, and the effort goes into arriving sooner instead.
+
+Two consequences are accepted and *displayed* rather than engineered away. **The record does not cross the cut:** the old snapshot store is kept as a read-only archive, and comparisons across the cut are not offered, because law 1 re-mints every id and the old rows carry no temperament. **Findings lifecycle resets:** `first_seen` restarts at the cut and says so where it is shown, so a post-cut finding is never mistaken for a new condition. And one role survives the old stack's retirement: while the new one is being built, the old agent's envelopes on a live host are the **reference implementation** — the thing a ported collector's output is diffed against.
+
+### What each tier is made of
+
+The principles and the stack beneath them are settled.
+
+- **Collectors are the simplest components in the product, and the cheapest.** They gather data points and leave. Minimal overhead is a hard requirement with a measured basis — an interpreter start costs 126–632 ms on this estate against 1.5 ms for a binary, twenty times a sweep — and ease of writing is what lets coverage grow one small program at a time.
+- **The collator is long-running on every observed host:** robust, lightweight, and disciplined about memory. The current agent's 100 MB resident — import weight plus allocator arenas that never return — is the measured failure this requirement exists to not repeat.
+- **The hub is where expressiveness pays.** It holds the judgement, the intent, the problem domains and every outward surface — REST, MCP, MQTT — and it is the component that changes most often. Maintainability outranks footprint: one per site, on the largest box, and its memory has never been the complaint.
+- **The UI prefers modern native HTML and CSS over JavaScript**, under one lightweight design system shared by the host and estate views. Server-side rendering is also what the model itself wants: §26's rule — the renderer knows nothing the producer knows — is satisfied trivially when the producer renders, and the class of browser-side fourth-copy bugs this product has already shipped three of becomes structurally impossible. `[decision]` The design system proposed is the one already in production: the token set the current UI ships — palette, type scale, spacing, chips — carried forward as *the* library, no external framework. It is small, it is owned, and both scales of the product already speak it.
+
+| Tier | Proposed | Because |
+|---|---|---|
+| **collectors** | Go, one static binary each; shell stays legal for trivial ones | 1.5 ms spawns, no runtime on the host, cross-compiles for the whole estate. The contract stays language-neutral — this binds first-party code only |
+| **collator** | Go | long-running under the strictest memory discipline in the product; single-binary deploys; the behavioural tests survive as corpus fixtures whatever the language |
+| **hub** | Python | the existing hub, MCP and findings code evolves rather than being rewritten; the richest MCP/REST/MQTT libraries; expressiveness where the product changes most |
+| **UI** | server-rendered HTML + CSS from collator and hub; JavaScript only for polling and filtering | one design-token system, two scales of one product; the design library itself is queued |
+
+## 07 · Where each layer runs
+
+The six layers of §10 are not free to live anywhere. Each has a lowest tier that can see what it needs, and law 2 puts it there.
+
+| Layer | Collector | Collator | Hub | Why there |
+|---|---|---|---|---|
+| **1 · Observed fact** | all of it | — | — | only a collector touches a native interface, and every observed fact must name one |
+| **2 · Identity** | none | host ids | estate ids | aliasing needs every candidate name at once; a collector sees one interface |
+| **3 · Structure** | pointers within one interface | across interfaces | across hosts | a relation is minted where both endpoints resolve — which rises with scope |
+| **4 · Derived fact** | within one acquisition | host arithmetic | cross-host arithmetic | a collector exits, so it can derive from what it just read and nothing else |
+| **5 · Opinion** | none | self-evident | intent-relative | the split that keeps a hubless host judged (§17) |
+| **6 · Projection** | none | single host | estate + problem domains | an audience is an estate concept; a host still renders itself |
+
+*Layer 4 is deliberately not "none" at the collector: arithmetic over values read in the same acquisition needs no memory and forbidding it would be ceremony. What a collector cannot do is derive across acquisitions or across collectors — it has exited, and it never saw the other one.*
+
+> **The consequence that is easiest to miss**
+>
+> Today one process holds every adapter, so `docker` can emit an edge to a block device because it happened to observe both ends. **Split the processes and that stops being true** — every cross-domain edge in the product loses its legal home under a law that requires one observer to have seen both, and the block↔dataset↔container joins that make disks "magical" would have nowhere to be emitted from.
+>
+> That is why law 3 is restated rather than kept. A tier may mint a relation no collector could have, because it is the tier that sees both names — but only along names a collector actually *published*, never by matching values that merely resemble each other.
+
+## 08 · Configuration: four kinds, four owners
+
+"Configuration" is four unrelated things that fail differently, and keeping them apart is what stops a credential ending up in a store path or a host inventing an estate opinion.
+
+| Kind | Owned by | Contains | Rule |
+|---|---|---|---|
+| **Fleet** | the host deployment | which collectors exist, and any parameter a probe cannot discover — a socket path, an endpoint, an instance list — each instance named, and the name becomes part of id scope (§11) | world-readable, no secrets, generated by the module |
+| **Authority** | systemd, not us | groups, capabilities, credentials, read paths, sandbox | **never enters our config at all.** It is unit configuration, applied by systemd to one collector, and the collator cannot see or pass it |
+| **Reach** | the collator | the hub URL and the collator's own client identity; the budget; the history path | optional in full — a host with no hub block is a complete product, not a degraded one |
+| **Intent** | the hub, alone | what should be: estate membership and its discovery policy, expected units, reachability, host roles, protection targets and destinations, estate object identity | never reaches a host. Hashed, and federation refuses on mismatch (§21) |
+
+The first three answer *what may this host do*. The fourth answers *what is this estate supposed to be*, and it is the only one that can make the product confidently wrong in a new direction — which is why every fact derived from it carries `declared` kind, so a reader always knows they are trusting an assertion rather than a measurement.
+
+> **What the slice buys, beyond tidiness**
+>
+> Putting every unit in `system-explorer.slice` makes the budget a **kernel-enforced ceiling rather than an arithmetic we perform**. `CPUQuota` and `MemoryMax` on the slice mean the product cannot exceed its declared share even if our scheduler is wrong, which is a materially different promise from one our own code makes about itself.
+>
+> It also makes the product's cost observable through its own collectors: the slice is a cgroup, and `resources` already reads cgroupfs. **What System Explorer costs the host is a fact the product publishes about itself**, measured the same way it measures everything else.
+>
+> **But a ceiling is not a guarantee**, and the failure mode is specific: under quota, collectors run late, collections miss their declared freshness, and the product serves stale readings as current. §15 makes that a stated finding rather than silent decay.
+>
+> And one shape of the ceiling is actively dangerous. **A single `MemoryMax` over the whole slice lets a runaway collector kill the collator** — the one component whose job is to notice and report that a collector went wrong. The budget is therefore two-level: a per-collector limit, and beneath it a **protected control-plane reservation the collectors cannot reach.** The observer must be the last thing in the slice to die, or its failure is silent by construction.
+
+## 09 · Time, and why there is less of it than you expect
+
+Every distributed observation system meets the same wall: two hosts' wall clocks disagree, so any comparison between them inherits an error nobody measured. The usual answer is a clock-synchronisation subsystem — timestamp exchanges, offset estimates, uncertainty bounds carried on every record forever.
+
+This product does not need one, and building one would be answering a question nobody asked.
+
+> **The rule, and it is a prohibition rather than a mechanism**
+>
+> **An observation's age is measured on one clock. Two hosts' wall clocks are never compared.**
+>
+> On a host: the collector and the collator share a monotonic clock, so age is exact and no wall clock is involved. Across hosts: the hub stamps arrivals from its own clock, and that single domain is the whole of the cross-host time model.
+
+### Why nothing more is needed
+
+Ask what an administrator's questions actually turn on. *When did the backup run?* — the receipt's own timestamp. *When was this snapshot made?* — ZFS's. *When does this certificate expire?* — the certificate's. *How long has this unit been failed?* — systemd's.
+
+> **The timestamps that answer questions are inside the data**
+>
+> They are wall-clock facts the observed system stamped, and **no precision in our transport improves them.** If two hosts' clocks disagree, their receipts and snapshots disagree, and the fix is NTP — which every distribution runs by default — not a second time service inside an observation tool.
+>
+> Our own stamps answer exactly one question: *how stale is what I am looking at?* That question is answered in seconds, and it is answered by one clock.
+
+So the machinery a stricter reading of "bounded uncertainty" would demand — a four-timestamp exchange, an affine clock mapping, drift bounds widening between probes, per-record error intervals — is **deliberately not here.** It would be a competent reimplementation of SNTP inside a product whose consumers cannot tell the difference between two observations four seconds apart on different machines, and whose own budget rules (§15) sample most collections at intervals two orders of magnitude larger than the precision it would buy.
+
+### Skew is an observation, not an instrument
+
+Clock skew is still worth reporting, because a genuinely wrong clock breaks real things — TOTP at thirty seconds, Kerberos at five minutes, log correlation at whatever a person can hold in their head. **Every one of those thresholds is coarse**, so a crude measurement is a sufficient one.
+
+The collator reports its host's wall reading as an ordinary fact; the hub compares it against its own on arrival. Network transit contaminates that by milliseconds, which is noise against a threshold measured in seconds, so it is not corrected for — it is stated. Because it is a relation between two clocks (§13), the offset lands on that edge rather than being smeared across every observation either host makes.
+
+### Three things that are correctness, not precision
+
+Each of these produces an age that is *wrong* rather than imprecise, which is why they survive a section otherwise dedicated to doing less:
+
+1. **`CLOCK_BOOTTIME`, and every stamp carries its boot id.** Monotonic stops across suspend, which a homelab does. And a monotonic reading means nothing outside the boot that produced it, so without the boot id a stale reading is uninterpretable rather than merely old. This is journald's own dual-stamp pattern.
+2. **A time namespace breaks the shared-clock assumption entirely.** `CLONE_NEWTIME` offsets `CLOCK_BOOTTIME` per namespace, a container is the ordinary way to acquire one, and the boot id is identical on both sides — so the arithmetic silently yields a wrong age. The collator compares its own offset against the collector's at handshake and **states a mismatch rather than correcting for it**, because a correction we cannot verify is the confident arithmetic this document exists to refuse.
+3. **Retention deletes data using wall-clock arithmetic, so a clock jump destroys records.** That is not a time-model problem and it is the one place a clock genuinely governs loss, so it gets a safeguard where it lives (§15) rather than a synchronisation protocol here: a retention pass whose *now* has moved implausibly against monotonic time refuses to run and says why.
+
+> **And the stamp breaks toward older, never fresher**
+>
+> An object's `at` is taken **immediately before the earliest native read that contributes to it**. A collection that takes six seconds — and one in this estate does — would otherwise report itself up to six seconds fresher than its oldest contributing byte.
+>
+> That overstates age slightly, which is the harmless direction: it can make something look staler than it is and never fresher. The joined object then carries the *oldest* contributing `at`, by the same reasoning one level up.
+
+---
+
+# Part III — the model
+
+## 10 · The six layers
+
+| # | Layer | What it decides | Sight required | Sites |
+|---|---|---|---|---|
+| 1 | **Observed fact** | What a native interface said, about a native name, at a stated time | the interface | one per interface |
+| 2 | **Identity** | Which native names denote the *same* object. Aliasing only. | every candidate name at once | exactly one per scope |
+| 3 | **Structure** | What parts an object has; relations to others, and whether each was seen from both ends | both endpoints' names | many |
+| 4 | **Derived fact** | Arithmetic or inference over 1–3 | whatever 1–3 supply | many |
+| 5 | **Opinion** | Judgement over 1–4, citing the facts it read | every fact it cites | many |
+| 6 | **Projection** | Which of the above an audience sees, and how. Screens are instances. | — | many |
+
+**Identity and structure are separate layers because they fail differently.** Aliasing fails by one object appearing twice, or two objects wrongly merging — you can only catch that by seeing every candidate name together, which is why it must have exactly one home per scope. Structure fails by a part going missing, or by a relationship being asserted from one side and never confirmed. Forcing every relation through the identity site would be expensive and would prevent neither.
+
+Layer 3 is the layer this document previously understated. It does not only hang pointers off objects; **it can produce objects of its own**, and §13 is why that matters more than it sounds.
+
+## 11 · The five laws `[audited]`
+
+These are stated against the architecture rather than above it. Each names the tier it constrains, and each is checkable by something other than good intentions.
+
+> **Law 1 · names are observed, ids are minted**
+>
+> **A collector publishes native names and never an id.** An id is minted only where every candidate name for that object is **co-visible in one place** — the collator for a host, the hub for the estate — and **the id carries the scope that makes it unique.**
+>
+> Scope is not only the host. Where a collector fronts one *instance* of something — a container, an application — that instance is part of the scope, because two instances of one application legitimately mint the same native name. Absent means host-native.
+
+> **Instance scope is not optional, and dropping it breaks something already built**
+>
+> Two Servarr instances in one project both speak API v3 and both emit ids shaped `indexer:3`. Without an instance in the scope they are one object, and the estate view is silently wrong — which is the fault §31 records against **apps**.
+>
+> It is also load-bearing beyond correctness: the shipped findings registry is *keyed* on that scope, so a design that re-keys identity without carrying it orphans every acknowledgement in the estate — the cut (§06) accepts that reset and displays it, rather than hiding it.
+
+A bare name is not an identity. `nginx.service` is a name *inside a service manager*; `sanoid` is a job name *inside a host*. Treating either as global is how two objects quietly become one.
+
+The change from "exactly one site mints an id" is that the site now has a name, and the consequence is larger than it sounds. Today twenty-one adapters each apply their own prefix convention, and a browser held a thirty-one-entry copy of that convention which rotted. **With minting in one process, the prefix registry is one table, and two collectors cannot disagree about an id because neither makes one.** The law stops being a discipline and becomes a property of where the code runs.
+
+![diagram](assets/design-figure-2.svg)
+
+***Why the collator is the minting site.** The overlap is what makes the walk possible, and the *choice* of overlap is what makes it safe: all three collectors publish the WWN, so the join runs on that. `/dev/sdc` is published and carried as a name a person will search for, but it is never the hop — kernel device names are reassigned on rescan, and a join across two collectors that ran either side of one would link the wrong disk.*
+
+> **Law 2 · reach decides tier**
+>
+> Every opinion and every derivation runs at the **lowest tier that can see every fact it cites.** Where a tier cannot reach a fact, the judgement **moves up — it is never weakened in place, and never guessed.**
+
+This is the law that is easiest to break by accident and hardest to see afterwards, because breaking it produces a page that looks fine and is quietly judging less than it appears to. Under three tiers it also becomes enforceable: an opinion declares the facts it cites, and registering it at a tier that cannot resolve them fails at load rather than at 3am.
+
+> **Law 3 · relations are minted, and their observability is stated**
+>
+> A relation is minted **from names a collector actually published**, never from values that merely resemble each other — a tier may join what no collector could see.
+>
+> And every relation states what is known of each end: **confirmed at both, asserted at one, or contradicted.** An edge whose far end was never observed is not a weaker edge — it is a different fact, and it must not render as the same one.
+>
+> **An endpoint that resolves to nothing is a statement, not a licence to delete the edge.**
+
+The first clause is what unblocks cross-domain structure once collectors are separate processes. The second is the founding failure, stated as a rule: months of green replication over data with no off-site copy was an edge asserted at one end and displayed as an edge.
+
+The third clause exists because the obvious implementation quietly re-creates that failure. Requiring both endpoints to *resolve* before minting sounds like rigour, and it deletes exactly the case the law was written for: a repository nothing in the estate reads has a name that resolves to nothing, so the strict rule discards the relation and the target disappears from the graph — clean, defensible, and identical in effect to never having looked. §13 is the whole of that argument, and §19 is where it is easiest to get wrong.
+
+> **Law 4 · every claim names its origin**
+>
+> Every observed fact names **the collector that observed it and the interface it came from.** Every derived fact additionally names **the tier that computed it and the facts it consumed.**
+
+With one process this was implicit and nearly free. With three tiers and an estate it is the difference between two claims that render identically and mean different things: a figure read on this host, and the same figure computed at a hub from two hosts. `observed · derived · declared` says how much to trust a claim; origin says who is making it, and from where.
+
+> **Law 5 · every tier is complete without the tiers above it**
+>
+> A collector is useful with no collator. A host is fully observable with no hub. **And what the missing tier would have added is named as absent, never silently omitted.**
+
+This is the founding rule — absence is never health — turned on our own architecture. It is the reason the collator keeps a UI, the reason a collector's stdout is human-readable, and the reason a hubless host must show *"no intent declared here; nothing is comparing this host to any other"* rather than an unqualified green. A product whose aggregator is a precondition for its judgement has rebuilt the failure it exists to prevent, one level up.
+
+## 12 · What a fact is
+
+> **The definition, corrected**
+>
+> **A fact is a non-judgmental, provenance-bearing assertion about an object.** Its *kind* says where the assertion came from: **observed** — a native interface said it; **derived** — arithmetic or inference over other facts; **declared** — somebody asserted it in the intent document. An *opinion* is judgement over facts, and is never one.
+
+The earlier definition — "what a native interface said" — described only the first kind and then quietly contradicted itself by admitting the other two. It also used `measured` where `observed` belongs, and that word was doing damage: `Health: "ONLINE"` was never measured, it was read, and *measure* is separately the word this document uses for counters and gauges. Two vocabularies, one word, in a document whose thesis is that a consumer must never have to guess.
+
+### Five temperaments
+
+How a fact *changes* is a different question from where it came from, and the differences are operational rather than philosophical. **Knowing a disk is there, knowing which DNS servers are configured, and knowing a CPU counter's value are three different kinds of knowledge.** An *event* is deliberately not among them: an event is not a kind of fact about an object, and §14 is where that boundary is drawn.
+
+| Temperament | Example | Changes when | Re-observation | Can be watched? |
+|---|---|---|---|---|
+| **Existence** | `scsi:0:0:0:0` is present | hardware appears or goes | can contradict | yes — udev |
+| **Configuration** | resolver `Nameservers` | somebody intends it | can contradict | yes — inotify, D-Bus |
+| **State** | unit `ActiveState` | the system decides | can contradict | yes, at a cost |
+| **Counter** | `CpuUsageUsec` | continuously, one way | supersedes; only *differences* mean anything | **no — must be sampled** |
+| **Gauge** | `MemoryCurrentBytes`, `PsiIoFullAvg60` | continuously | supersedes, never contradicts | **no — must be sampled** |
+
+**Existence and configuration are cheap and watchable.** A disk appears; udev says so. `resolv.conf` changes; inotify says so. These can be observed reactively, cost nothing at idle, and a stale one is a bug.
+
+**State is watchable but the cost lands on the wrong side.** Subscribing to systemd makes PID 1 broadcast a property change for every unit transition, permanently, to every subscriber. On a one-core box that is a cost imposed on *the observed system* to save the observer — which is the wrong side of this product's line. Watch state only where the notification is already being emitted for someone else.
+
+> **And measures are different in kind**
+>
+> **Nothing can notify you that a counter advanced** — it advances constantly, and that is what it is for. Counters and gauges must be sampled, which means the product chooses a rate, and that choice shows up on somebody's CPU bill.
+>
+> And the two are not the same thing. A **gauge** reads meaningfully on its own: 612 MB resident is a fact about now. A **counter** does not: `CpuUsageUsec = 4118442900` answers nothing by itself, and only a *difference between two samples* does. The kernel concedes this by computing PSI averages for you over fixed windows — a pre-differenced gauge, published precisely because the raw counter was not usable.
+
+> **A counter is never published as a rate — and never rendered as one either**
+>
+> A rate is a claim about a window, and the window belongs to whoever sampled. So a counter travels as a counter, and where a rate is wanted **the collator publishes a companion derived gauge whose window is declared**: `CpuUsageUsec` the counter, `CpuUsageRate60s` the derived gauge, window stated on the fact.
+>
+> This is the only arrangement that satisfies both rules at once. A renderer computing a rate would need two samples — which would make the renderer a derivation site, exactly what §26 forbids. The collator holds the record, so it is the tier that already has both samples. The producer owns the window, as it must.
+
+> **The rule the temperaments were missing**
+>
+> **A fact whose temperament is counter or gauge must not participate in the snapshot diff.** A counter changes on every sample by definition, so a diff that includes one reports change continuously and says nothing.
+>
+> Measured on the estate: 57 of 222 `nft-rules` rows change hourly and every one of them differs only in `CounterPackets` and `CounterBytes` — 96 times a day for thirty days. Every SMART row on every disk changes on every 24-hour diff, because `SmartSnapshotAgeSeconds` is computed at acquisition and stored, which is a permanent false positive that would *hide a Serial or EnclosureSlot actually changing*. 17 of 18 datasets churn on `AvailBytes` alone.
+
+> **Which forces a decision the rule alone does not make**
+>
+> Exclude counters and gauges from the diff and `resources` — almost entirely measures — has no record value left at all. That is the honest outcome and it should be stated rather than discovered: **resources delivers join, estate and judgement, and not record.**
+>
+> What replaces it is not history of the measure but history of the *opinion* over it. "This workload was above its memory high watermark" is a state with a present tense, it can resolve, and it diffs meaningfully. The counter belongs to a time-series database if anyone wants its shape; the judgement belongs here.
+
+**And it explains resources.** That subsystem is the only one made almost entirely of measures, in a product whose model — identity, current state, re-observation contradicting the last look — is built for the other three temperaments. It is not badly built. It is the one place where the model fits worst, and "maturing but not great" is exactly what that feels like.
+
+### The axes a fact declaration carries
+
+| Axis | Answers | Consumer | Failure if wrong |
+|---|---|---|---|
+| **type** | integer, number, string, boolean, enum, timestamp, list, object | sorting, filtering | a numeric column sorts lexically and `"10"` lands below `"9"` |
+| **unit** | bytes, bytes/sec, microseconds, celsius, percent, count, none… | rendering | 2.0 GB/s displayed as 1.8 GiB/s, disagreeing with every table the reader checks next |
+| **temperament** | existence · configuration · state · counter · gauge | acquisition, diff | polled when it could be watched; or churning the diff forever |
+| **kind** | observed · derived · declared | trust | arithmetic restated with the confidence of a reading |
+| **origin** | the collector and interface; for derived, the tier and inputs | trust, debugging | a cross-host derivation reads as a local reading (law 4) |
+
+> **Why this is not over-engineering**
+>
+> Without declared type and unit, the renderer has to guess — and it does, from fact-name suffixes: `*Bytes`, `*Seconds`, `*BytesPerSec`, `*Percent`. That is a consumer inferring semantics the producer already knows, which is the fourth-copy failure this product has fixed twice elsewhere.
+>
+> And it is already leaking: `Usec` is not in the suffix list, so **every microsecond fact in resources renders as a bare integer.** `CpuUsageUsec: 4118442900`, on screen, unlabelled. Declared units delete that class of bug rather than adding another suffix to the guesser.
+
+## 13 · Relations
+
+The model so far treats objects as primary and edges as attributes hanging off them. That is wrong for a specific and consequential class of thing, and the evidence is the founding incident.
+
+> **The second founding failure is an edge failure**
+>
+> *Months of green replication over data with no off-site copy.* The push side was observed and honest — jobs ran, exited zero, receipts were written. The far side was never looked at. And the product had no way to express the difference between **a relationship confirmed at both ends** and **one asserted at one end**, so it rendered the second as the first.
+>
+> Everything else in that incident worked correctly. The gap was a missing distinction in the model, not a missing check in the code.
+
+### The design pressure is already visible as workarounds
+
+Two places in the current product are relations wearing costumes, and both were built that way because a fact needs an object to hang on:
+
+- **Protection hop facts became structured dictionaries** — `{"Destination":…, "Host":…, "Job":…}` stuffed into a single fact on a target — because the facts belong to the *hop* and there was nowhere else to put them.
+- **Routes are minted as objects.** A route *is* a relation between a prefix, an interface and a gateway, carrying its own facts (metric, protocol, scope, table). We already model that edge as a node, because a node is the only thing that can hold facts.
+
+> **The test**
+>
+> **Does the edge carry facts that belong to neither endpoint?** If yes, it is an object, and it arrives through structure rather than through a collector's own naming. If no, it stays what it is today — a typed pointer.
+
+| Edge | Facts of its own | So |
+|---|---|---|
+| `pool contains vdev` | none | a typed pointer, exactly as today |
+| `unit runs container` | none | pointer |
+| `hostA peers-with hostB` | Online, LastSeen, Relay, CurAddr, RxBytes | **an object** |
+| `target copied-to destination` | last receipt, lag, verification state | **an object** |
+| `clockA skews-from clockB` | offset, uncertainty | **an object** |
+| `prefix routed-via gateway` | metric, protocol, scope, table | **an object** — which is why it is already one |
+
+*Not a new layer. The admission that *some objects are relations*, and that they arrive through a different door — minted from endpoints rather than observed under a name.*
+
+### Three properties that make them genuinely different
+
+**They are directed, because observation has a vantage.** `Online: true` for a tailnet peer is not a fact about that peer; it is a fact about the link *as seen from here*. Two hosts reporting different values is not a contradiction to resolve — it is two facts about two edges. Directing relations means each holds one value per fact, and "these two disagree" becomes a statement about the *assembly* — the next layer's to make, never the vantage's — and precisely the estate-discovery finding §22 needs.
+
+**Their identity is minted from names, like everything else.** Nothing on the box has a native name for the link between two things, so a relation's key is derived — from the source object's id, the type, the declared discriminator, and *the target's name as published*. Never from the target's resolved id: resolution is a property that changes, and a key that changed with it would reset the relation's lifecycle every time the estate learned something. Tier placement stays arithmetic — a relation is minted where its *source* resolves: host-local at the collator, cross-host at the hub — and law 3 remains an identity constraint rather than a rule of good behaviour.
+
+**They have an observability state of their own — and it lives on the assembled relation, never on one vantage's assertion.** Directed assertions are what is stored; the states below are computed over every assertion about the pair, because confirmation and contradiction are claims about an end no single vantage can see. Three values, and the distinction between the first two is the founding failure:
+
+| State | Means | Example |
+|---|---|---|
+| **confirmed** | both ends observed, and they agree | a container's mount, seen by docker and by the block collector |
+| **asserted** | one end observed; the far end never looked at | **a backup job that pushes to a repository nothing in the estate reads** |
+| **contradicted** | both ends observed, and they disagree | host A sees the peer online, host B does not |
+
+`asserted` is the state the product needed and never had. It is not a degraded `confirmed` and it must never render as one — an asserted relation carries a positive claim about what was *not* looked at, which is the same discipline as `unobservable` on a fact, applied to structure.
+
+And `contradicted` is a state, not a verdict — asymmetric visibility is sometimes benign. Where it does matter, **a finding cites the state**, and gains what a state cannot have: a lifecycle, an acknowledgement, and a resolution when the vantages re-agree.
+
+### What happens when an endpoint does not resolve
+
+This is the single easiest place to rebuild the founding failure while believing you have fixed it, so the rule is split by **why** the endpoint failed to resolve rather than by the fact that it did:
+
+> **Resolution is two-stage, because each tier may only test what it can see**
+>
+> **At the collator: nothing on this host claims the name.** No collector here published it — and that is the whole test, because intent never reaches a host (§08). **Mint the relation, mark it `asserted`, carry the target as the bare name.** This is not a dangling pointer — it is the condition this section exists for.
+>
+> **At the hub: every asserted relation is re-tested** against the intent declaration's objects and every other host's published names, and its resolution upgraded where a match exists. An upgrade flips the target's `resolved` property and attaches the id — **it never changes the relation's key**, so no lifecycle resets when the estate learns something. A repository declared in intent confirms this way; a repository nothing anywhere claims stays `asserted`, which is the founding condition, preserved at estate scope.
+>
+> **A collector published the endpoint and it went.** The walk hit a device removed mid-sweep, and the endpoint's absence is *itself observed*. Drop the relation, and record the drop on the source object with its reason — a dropped relation is a statement, and a statement needs somewhere to live.
+
+The distinction is whether anybody looked, which is the distinction the whole document turns on. A renderer must be able to tell the two apart without reading prose, so a target carries `resolved` alongside its name, and an unresolved-and-unclaimed target renders as an edge into open space rather than as no edge at all.
+
+### Identity: endpoints alone are not enough
+
+A relation's id derives from its endpoints and type, which collides the moment two instances of the same relationship exist — and they routinely do: two backup jobs from one target to one destination, two ECMP routes to one prefix, the same filesystem mounted at two paths, two connections between one pair of services.
+
+So a relation type **declares its discriminator**: the fact, or ordered facts, that distinguish parallel instances. A type that declares none is asserting it is at most singular between any pair, and that assertion is checkable — a second instance arriving is an error the collator reports rather than a silent overwrite.
+
+> **Where the shape is genuinely more than binary**
+>
+> A route relates a prefix, a gateway, an interface and a table, and forcing it into two endpoints and a discriminator is a worse model than the one the product already has: **it is an object with typed roles.** The test in this section is not "make everything a relation" — it is "does this edge carry facts of its own", and where the answer is yes *and* the shape is more than two-ended, the honest form is an object whose roles are named. Routes stay exactly as they are.
+
+> **What this fixes, beyond the incident**
+>
+> **The protection chain** becomes a chain of relation objects with per-hop facts and per-hop observability, so "asserted, never confirmed" is a *state on the row* rather than a caveat somebody has to notice in prose.
+>
+> **Estate discovery** becomes edges from an observing host to an observed name, so coverage is the union of observed relations against the declared set — and no observable discovery source means an honestly empty union rather than a silent one.
+>
+> **Clock skew and replication lag** stop needing homes invented for them: offset and uncertainty land on the edge between two clocks, where they belong, instead of being smeared across every observation either host makes.
+
+> **And one thing `confirmed` must not be allowed to mean**
+>
+> Bilateral observation proves that a copy *exists at the far end*. It does not prove content integrity, an independent failure domain, retention, key recoverability, prune authority, or that a restore has ever succeeded. **Confirmed is a statement about observation, not about safety**, and the protection answer must name which of those it has established rather than letting a solid line imply all of them.
+>
+> This matters because protection is the flagship case. Upgrading it from "the push succeeded" to "the copy is there" is a large step and still not the whole question — and a product that framed the second as the answer would have invented a new confident wrongness at one remove from the old one.
+
+Two things this does **not** change. Structural pointers stay exactly as they are — most edges carry no facts and making them objects would be ceremony. And **no collector gains a new obligation** beyond the one it already has: publish the names you saw, and say from where. Relations are still minted above, from names, and never correlated.
+
+## 14 · Which system owns what
+
+> **The boundary**
+>
+> **An object has a present tense. An event has only a past.** System Explorer owns a thing when *"what is it doing right now?"* is a meaningful question about it. Where that question is a category error, the thing is an event, and it stays with the system that already stores it — **journald** for log entries, a **flow collector** for closed flows, **systemd-coredump** for dump payloads, a **time-series database** for a metric's history.
+
+Ask it of a journal entry and the question dissolves. The entry is not doing anything; it happened, and its relationship to the system was fixed at write time. The same is true of a closed NetFlow record and of the bytes of a core dump.
+
+> **Two tests that look right and are not**
+>
+> **"Not re-observable" is false.** A journal entry is perfectly re-observable — read it a thousand times and get the same bytes. What it lacks is not readability, it is a *now* to read.
+>
+> **"Immutable, therefore somebody else's" is also false**, and the product itself refutes it: a nix generation's closure never changes, and generations are unarguably System Explorer's — because `Current`, `Booted` and `Profile` change even though the closure does not. **The object needs a present tense; its contents do not.**
+>
+> Nor is it about volume, which gets it wrong in both directions: ZFS snapshots run to thousands and belong to System Explorer, because `used` and holds change under you; core dump payloads number in the tens and belong to systemd-coredump, because the bytes are what they were.
+
+### Worked
+
+| The thing | Temperament | Owned by | System Explorer's part | Because |
+|---|---|---|---|---|
+| journal entry | event | systemd-journald | reads it as **evidence** | immutable, and its id is a cursor. journald already has remote, upload and gatewayd. |
+| *a unit's* critical entries in the last hour | gauge | System Explorer | derives it | attached to a unit, which has a now — so it can rise, fall and resolve |
+| NetFlow record | event | a flow collector | links out to it | a closed flow is final |
+| conntrack entry | state | System Explorer | publishes it | state, counters and expiry all change under you |
+| core dump payload | event | systemd-coredump | links out to it | the bytes are what they were; storing them would make this a storage engine |
+| core dump *inventory* | existence | System Explorer | publishes it | `COREFILE` goes present → missing when tmpfiles vacuums at three days |
+| nix generation | existence + state | System Explorer | publishes it | the closure is immutable; `Current` and `Booted` are not |
+| a metric's history | gauge over time | a time-series database | publishes the current reading only | retention and downsampling are a different job with different storage |
+| ZFS snapshot | existence + gauge | System Explorer | publishes it | identity, and figures that change. Volume alone would have said no. |
+
+### What the journal is *for*, then
+
+"Not an object" is not the same as "not useful", and the stream has two legitimate roles that outrank exclusion:
+
+- **As evidence.** A journal entry is exactly the raw payload that backs an opinion about a unit. Evidence is captured fresh and never cached, which fits precisely: you fetch the lines when somebody asks *why*, and not before.
+- **As a derived measure on something that does have a present.** Critical entries in the last hour, attached to the unit that emitted them. That can rise, fall and resolve — which is what alerting needs and what an entry itself can never offer.
+
+One place the product legitimately stores events, stated so the rule does not look violated: **finding lifecycle transitions.** Those are events about *our own claims* — "we said this at time T" — not about the system. That is provenance, not observation.
+
+## 15 · Scope: what to collect, and when
+
+§02 says what is admissible: a collection must add join, estate, judgement or record. That bounds the space. Within it, three further decisions remain, and conflating them is what makes scope feel arbitrary.
+
+"Has a present tense" says what *could* be an object. It says nothing about what should be, and every sysfs attribute on the box passes it. Today 5 of 21 collectors state the question their collections answer, and nothing checks — so the surface grew by taste rather than by rule.
+
+But the obvious rule is wrong, and wrong in a way that would quietly gut the product: **"collect what someone asks for" is a present-tense test applied to a thing whose value is mostly latent.** The fact that settles an incident at 3am is worthless on the 364 days before it, and by the time the circumstance arrives, adding a collector is too late.
+
+> **Scope is three decisions**
+>
+> **1.** Should a collector for this *exist*?
+ **2.** How often should it be *invoked*?
+ **3.** Should its output be *kept*?
+>
+> They have different tests, and only the second is about routine usefulness.
+
+### 1. Existence — and the bar is low, because breadth is nearly free
+
+A collector should exist if there is *any* circumstance in which someone would want it. That is a deliberately low bar, and the architecture is what makes it affordable *at runtime*: **a socket-activated collector that is never connected to costs a unit file on disk.** No import, no resident memory, no sweep time.
+
+> **Runtime is not the only budget, and the other one has no ceiling**
+>
+> A dormant collector still costs a declaration to keep true, a corpus to capture and re-capture per version, unit configuration, a sandbox to get right, packaging on every platform, attack surface if it holds any authority, documentation, and somebody to own it when its interface changes. **None of that is bounded by a slice**, and all of it is paid by one maintainer.
+>
+> So the low bar is a runtime claim, not an admission policy. A collector is admitted on: a consequence worth the interface changing under it, a named owner, a source stable enough to declare against, testability from the corpus, and — where it holds authority — a blast radius somebody has looked at. "Someone might want it" clears the runtime bar and does not clear this one.
+
+This inverts the current pressure. Today every collection is imported into one process and swept on one clock, so breadth is paid for continuously by every host — which is precisely why scope feels fraught. Make invocation the thing that costs, and the question "should this exist" stops being expensive to answer wrongly.
+
+The test that remains is not usefulness but *fit*: does this product add anything? If the answer is one native command away, with no join, no estate view, no history and no judgement, then reading it natively is better and the collector is latency with extra steps.
+
+> **A low bar for existence is not a licence to read everything**
+>
+> The estate's storage host carries **76,000 entries under /sys and 476,000 under /proc**. The product publishes, on that same host, **1,993 objects and 14,785 facts** — about 37:1. Four separate rules say no to the rest, and each cuts differently:
+>
+> - **It is not 552,000 facts.** /sys is a projection: one disk appears under /sys/block, /sys/class/block and /sys/devices/pci…, all symlinks to one object. Collapsing that is the identity layer's job.
+> - **Almost none pass the promotion test** — cited by no opinion, used in no join, part of no declared answer. They are *evidence*, already reachable, already free until asked.
+> - **You never collect a tree. You walk a class from an anchor.** `/sys/class/scsi_device/*` is fourteen entries, not seventy-six thousand. A collector whose acquisition is a tree walk has skipped the identity step, and its size is the symptom.
+> - **And the budget catches what the rules miss.** A collector reading 76,000 files has a measured cost to match, so its derived interval stretches until it barely runs — the system reporting a scope error as latency rather than paying for it silently forever.
+>
+> The 37:1 is defensible. What is inside it has never been argued fact by fact, and that is the gap the promotion lint exists to close. One indication of what it will find: `nix/generations` is **1,918 of those 14,785 facts — 13% of everything the host publishes**, for a collection reconstructible from immutable store paths and separately measured at 79% of a sweep's cost.
+
+### 2. Cadence — the budget, driven by routine value
+
+Each collector declares a freshness it wants, the collator measures what it actually costs, and the interval is derived against the slice's declared share of a core. A collection nobody reads routinely can sit at a very long interval, or at none at all — invoked only when asked. **Existing and being sampled are different states.**
+
+> **The collection is the unit of cadence, of cost, and of authority**
+>
+> One unit, everywhere, or the scheduler cannot do its arithmetic: **freshness is declared per collection, generation is issued per collection, commit is per collection, and cost is reported per collection.** Per-fact sampling rates sound appealing and give the scheduler nothing to allocate against.
+>
+> A collector may still serve several collections from one acquisition — `zpool status` answers for pools and vdevs at once — so the invocation names the collections wanted and the commits attribute the cost between them. What is forbidden is a batch that reports one number for work the scheduler must apportion.
+
+Facts that genuinely want different rates therefore say so by belonging to different collections, which is a real design constraint and a clarifying one: if half a collection wants sampling every ten seconds and the other half every hour, that is usually two questions wearing one name.
+
+> **A missed budget is a finding, not a slower page**
+>
+> The slice is a ceiling, not a scheduling guarantee. Under quota, collectors run late and collections drift past the freshness they declared — and a product that then serves those readings without comment has reintroduced its own founding failure through the door marked performance.
+>
+> **A collection past its declared freshness produces a finding that names the reason**: budget exhausted, collector timed out, or host under pressure. The resource limit becomes an honest statement rather than silent decay.
+
+### 3. Retention — and this is where the 3am case is actually won
+
+The test is not value. It is **perishability**:
+
+> **The retention test**
+>
+> **Would the circumstance in which you want this fact also destroy your ability to obtain it?** If yes, collect it eagerly and keep it. If no, it can be fetched when the question is asked, and keeping it is storage without a reason.
+>
+> **And the test is applied to a question, not to a fact.** "What is this pool's state?" is answerable at any time by asking. "What was it on Tuesday?" is not answerable at all unless somebody wrote it down — and it is the same fact. Read carelessly, perishability makes almost every mutable value perishable, because some future question always wants an earlier value.
+
+Which means retention is bounded by the questions the product commits to answering, not by what might one day be interesting. Each recorded fact names the diagnostic question its history serves, and each horizon is declared and separately budgeted — snapshots, perishable facts, bases, declarations, intent revisions, evidence commitments and finding transitions age out on different clocks and for different reasons. **A finding whose basis has aged out says so** rather than presenting a warrant it can no longer produce.
+
+| Fact | Obtainable later? | Consequence |
+|---|---|---|
+| *"is this pool healthy?"* | yes — ask again | no need to record; the question is about now and now is always available |
+| *"was it healthy last Tuesday?"* | no | record it, or the question is unanswerable — the same fact, a different question |
+| a container that crashed and was removed | no — it is gone | eager, and kept |
+| SMART on a drive that has since failed | often not — it may not answer | eager, and kept |
+| a protection job's receipt | no — the run is the only trace | eager, and kept |
+| a nix generation's closure delta | yes — store paths are immutable | **reconstructible; a poor candidate for eager work** |
+| the current listening sockets | yes | sample at a rate; no need to keep every reading |
+
+### Fact or evidence — where most scope questions actually resolve
+
+> **Facts are a promotion**
+>
+> **A fact must be cited by an opinion, used in identity or a relation, or be part of the collection's declared answer. Everything else is evidence.** Evidence is captured fresh, unbounded in scope — and bounded per request like everything else (§19) — costing nothing until somebody asks — so "should we publish every sysfs attribute" answers itself: no, and they are all one request away.
+
+### What makes this enforceable
+
+- **Every collection declares its question**, in the words someone would ask it, carried on the wire. Seeded as a budget at the collectors that do not, ratcheting to zero.
+- **Every fact is cited, joined, or in the answer** — the fact-dictionary orphan check pointed the other way. Its first run is expected to find real inventory.
+- **Every collection publishes what it costs**, so cost and question are read together.
+- **Every recorded fact declares its perishability** — which of the three classes in appendix A it claims.
+
+## 16 · Identity: prefer a walk to a correlation
+
+The best join in the product is not a correlation engine. The disks view picks **one anchor** — the SCSI address — and *walks*: every other identity is reached by following a link the kernel already publishes from that anchor. Enclosure slot, SAS address, by-path name, block device, PCI address, hwdb model. Nothing is matched against anything; each step is a link that either exists or does not.
+
+The near-miss shows what that buys: a drive's `WWN` and its `SASAddress` differ in the last nibble — target port address versus device address. A correlating matcher pairs those. A walk never sees them as candidates for each other at all.
+
+> **Identity, in practice**
+>
+> **Pick the native identity whose own interface contains navigable links to the others, and follow them.** Where such an anchor exists, identity is a walk. Where none exists, identity is a correlation and needs a declared, reviewable rule — and correlation is where merges go wrong, so declare it rather than inferring it.
+
+> **A walk is safer than a correlation. It is not infallible, and four things break it**
+>
+> - **Name reuse.** `/dev/sdc` is reassigned on rescan and across boots — that is why `by-id` exists. A join that hops via a kernel device name links whatever holds that name now. **A join must use stable names only, and declare which name class it used.**
+> - **Non-atomicity.** Three collectors run at three moments. A device removed between them leaves a walk pointing at something gone, and under §13 that is a relation whose far end failed to resolve — dropped with a reason, never dangling.
+> - **Partial permission.** A collector that can read only part of its interface publishes fewer names, silently narrowing the join. The missing name must be an `unobservable` record, not an omission.
+> - **Source defects.** udev rules and hwdb entries are wrong sometimes. A walk inherits that, and the only defence is that evidence makes it checkable.
+
+### Does the collator need configuration to do this?
+
+Almost none, and the exception matters more than the rule. **Host identity needs no configuration at all**, because it is a walk and the links come from the kernel. What it needs instead is an obligation on collectors:
+
+> **The obligation that replaces identity config**
+>
+> **A collector publishes every native name it observed for a thing — not only the one it would have used itself.** The collator cannot follow a link it was never shown, and a collector that reports only its preferred name has silently deleted a join it did not know anyone wanted.
+
+That costs a collector nothing: the names are already in the payload it read. **Estate identity does need declaration, and only the hub can hold it.** A restic repository at `b2:bucket/path` observed from two hosts is one object, and nothing on either host can know that — neither can see the other, and the repository has no native identity either of them can walk to.
+
+| Scope | Minted by | Mechanism | Configuration |
+|---|---|---|---|
+| **Within one interface** | collator | the native name | none |
+| **Across interfaces on a host** | collator | a walk along published stable names | none — collectors publish their names |
+| **Across hosts** | hub | declared identity | the intent declaration names the object and the per-host names that denote it |
+
+> **And one identity problem no walk solves**
+>
+> `machine-id` changes on reinstall, so a rebuilt host is a new host to everything keyed on it — its history detaches, and its findings resolve *en masse* because nothing is saying them any more. That is the absence-as-health shape arriving through the door marked "clean install".
+>
+> The fix is that a host's estate identity is **declared at the hub**, like every other cross-host identity, and `machine-id` becomes a fact about it rather than its name. A changed `machine-id` under a declared host is then a legible event — "this host was reinstalled" — instead of a silent substitution.
+
+## 17 · Opinions
+
+An opinion is a judgement over facts that **names the facts it read**. It carries a level, a message written for a person, and the evidence keys. It never restates a fact; it says what the fact means.
+
+Opinions are pure functions of facts — no acquisition, no I/O — so they can be tested exhaustively without a host, and a row and an opened object can never disagree about severity because both call the same function.
+
+### Two classes, because a host must stay judged
+
+Law 2 places an opinion at the lowest tier that can reach its facts, and with intent at the hub that divides opinions cleanly in two. The division is not cosmetic: it is what stops the hub becoming a precondition for judgement.
+
+| Class | Runs at | Says | Examples |
+|---|---|---|---|
+| **Self-evident** | collator | *this is bad on its own terms* — no intent needed, and true of any Linux host | a unit failed · a pool is degraded · a disk reports pending sectors · a filesystem is at 98% · a certificate expires in 3 days |
+| **Intent-relative** | hub | *this is not what you asked for* | this host is behind the others · a unit that should run is not loaded · a port is open that no role permits · a declared target has no copy anywhere · a host exists that nothing declared |
+
+> **"Self-evident" is two things, and one of them is policy wearing a native costume**
+>
+> *A unit failed* is a fault the system itself declares — systemd says `failed`, and no threshold of ours is involved. *A filesystem is at 98%* and *a certificate expires in three days* are nothing of the kind: 98 and 3 are **our numbers**, and they encode a risk appetite, a workload and a renewal lead time that vary by host and by owner.
+>
+> Shipping those as "self-evident" hides a policy decision inside a word that means "not a decision". So the class splits three ways, and only the first is genuinely evidence:
+>
+> - **Intrinsic** — the source declares the fault. No threshold of ours exists to argue with.
+> - **Default policy** — our threshold, shipped, versioned, and *visible on the finding it produces*. A reader must be able to see 98 and disagree with it.
+> - **Estate policy** — the same threshold, overridden in intent. Which makes it intent-relative, and moves it up a tier by law 2.
+
+The practical test is whether the number could reasonably differ between two hosts. Where it could, it is policy, and policy that cannot be seen or changed is the product asserting a preference as though it were a measurement.
+
+**A host with no hub keeps every intrinsic opinion and every default policy, and loses every intent-relative one** — and law 5 says it must say so rather than reading green. The single-host UI carries the statement directly: *"no intent declared here; nothing is comparing this host to any other."*
+
+This is also the answer to the question the whole product failed once. **Every opinion the product can state today is self-evident**, which is exactly why "are all hosts up to date" could answer yes: nothing anywhere held the belief that there were six hosts. The intent tier is not an enhancement, it is the missing half of the founding failure.
+
+> **Where the declarative engine fits**
+>
+> Roughly four fifths of opinions are expressible as data: a predicate over facts, a level, and a message template. The remaining fifth need real code — arithmetic with unit rendering, set algebra across list facts, comparisons of two independently-decaying kernel averages with a tolerance that scales.
+>
+> **Making the four fifths declarative is a portability move, not a quality move**, and it should not be done before identity is right: it would deliver a beautifully portable engine for opinions still attached to the wrong objects. It does become more attractive under three tiers, because the same predicate then evaluates at whichever tier can reach its facts — which is law 2 implemented rather than merely stated.
+
+---
+
+# Part IV — the contracts
+
+## 18 · The collector contract
+
+A collector reads one request line on standard input and writes to standard output. Under socket activation systemd supplies both from the accepted connection; in a terminal a person supplies them. **Those are the same contract**, which is what makes a collector testable with a pipe and writable in any language.
+
+```
+declare                       # static: what it serves and what it means
+probe                         # can it run here — a verdict, not an exit code
+collect <collection:gen>…     # NDJSON: the named collections, each under its own generation
+object <collection> <name>    # one object, in full
+evidence <collection> <name>  # the raw native payload, redacted as declared, streamed
+lookup <name> <input>         # a parameterised read-only question
+```
+
+Note `<name>`, not `<id>`. A collector is addressed by the native name it published, because it does not know what id the collator minted for it (law 1).
+
+> **The request line is data, and the collator is the validating party**
+>
+> Names in this product legitimately contain slashes, colons and spaces — `dataset:tank/photos` is an ordinary id. So the request line is **a fixed token count, length-bounded, with a declared encoding for anything containing whitespace**, and **a collector treats every token as data — never as a path fragment, never as an option, never as part of a command string.**
+>
+> Validation belongs at the collator because the collator is the party that *knows*: it minted the id and it holds the name the collector published, so it can reject a name that was never emitted rather than guessing whether one is safe. A collector that receives a name it did not publish declines; it does not sanitise.
+
+This needs saying because the contract advertises shell collectors, and a shell collector is where an unquoted expansion is one keystroke away. **A shell collector receives its request tokens as positional parameters and never interpolates them into a command string** — and a token beginning with `-` is passed after `--` or not at all. The rule this replaces was already in the product and was already right: a lookup input *never reaches a shell and never selects which command runs*. Splitting the process must not quietly repeal it.
+
+The socket carries the same discipline at the other end: **mode `0600`, owned by the collator's user**, and the collector verifies its peer's credentials before answering. Socket activation means systemd creates it, so this is unit configuration and therefore generated — but unstated, it is generated wrong once and nobody notices, because a too-permissive socket behaves identically until it is abused.
+
+> **Exit status means one thing only**
+>
+> **Non-zero means "I could not run".** A collector that ran and found nothing, or found the subsystem absent, or was refused permission, exits **zero** and says so in a record.
+>
+> A decline is data. Making it an error would put the product's founding failure into the process contract: a non-zero exit is indistinguishable from a crash, and both would read as absence.
+
+### What run-and-exit costs, stated plainly
+
+A collector that exits cannot memoise. Any derivation expensive enough to want caching therefore does not belong in a collector — it belongs at the collator, which is long-lived. That is a constraint, and it is a clarifying one: **a fact is about right now, and anything that needs to remember across invocations was never a fact.**
+
+It also means collectors want to be compiled: a process spawn is 1.5 ms for a binary and 78 ms for a Python interpreter with one module loaded. Across a sweep, that is the difference between negligible and a third of the bill.
+
+### Three things break differently, and only one is new
+
+Moving a collector out of Python raises the question of what happens to the hundred conformance tests that walk the Python source. It is narrower than it looks, because those tests were never doing the job that matters most.
+
+| Failure | Example | Caught by |
+|---|---|---|
+| **Internal hygiene** | a fact emitted and never documented; a name nothing resolves; a path read with no reference command | the source lints today — and **declaration validation** after, since the declaration carries the same data as JSON |
+| **Interface drift** | `docker inspect` changes shape; OpenZFS renames a field; systemd drops a property | **the corpus and the lab.** The source lints read *our* code and have never caught one (§20) |
+| **Declaration mismatch** | a collector declares it emits X and emits Y | **contract verification** — genuinely new, because today the declaration and the code are one artefact |
+
+**Contract verification is cheap and belongs in CI:** run `declare`, run `collect`, and assert that every fact emitted was declared, every declared fact has a sentence, every value matches its declared type, and every relation type and discriminator was declared. That is a generic harness — one implementation, every collector, any language — and it checks what the collector *does* rather than what its source appears to say.
+
+> **But run naively, that harness is a subset guard**
+>
+> A decline exits zero, by the law above. So on a CI machine with no ZFS, no docker and no nftables, `collect` emits three declines and **every assertion passes over an empty set.** A green suite that establishes nothing, reporting success about everything it could not reach — the exact shape this document is written against, built into its own test strategy.
+>
+> The fix is already in the document and merely unconnected: **the corpus of §20 is the harness's input.** Replaying captured payloads makes the check non-vacuous by construction, and it works before any real interface exists — which also answers how a collector is developed before it can be deployed anywhere.
+
+So the harness has two modes, and they assert different things. **Replay** runs every collector against every corpus variant, in CI, on a machine with none of the interfaces present. **Live** runs on a real host, where a decline is a legitimate result and what is asserted is that it names a reason from the closed set rather than failing.
+
+And one tier is still uncovered by both. **The collator harness feeds two collectors' recorded streams in and asserts what comes out** — the ids minted, the joins made, the relation observabilities assigned, the opinions raised. That is where this architecture's new value lives, it is entirely deterministic given two streams, and nothing else in the strategy touches it.
+
+## 19 · The declaration and the stream `[schema]`
+
+These are the two artefacts everything else is generated from. The members and meanings below are binding; only the spelling may still move.
+
+### The declaration
+
+**The declaration is the contract's teeth.** It is static JSON, the same on every host, and six other things are derived from it rather than maintained beside it: the fact dictionary, the conformance harness, the deployment's sandbox paths, the renderer's semantics, the MCP tool descriptions, and the module's build-time check that an enabled collector has the authority it needs.
+
+```json schema=se.declaration/1
+{
+  "schema": "se.declaration/1",
+  "collector": "storage",
+  "version": "0.7.0",
+
+  "authority": {
+    "read_paths": ["/proc/spl/kstat/zfs", "/dev/zfs"],
+    "groups": [], "capabilities": [], "credentials": [],
+    "commands": ["zpool", "zfs"]
+  },
+
+  "probe": "the zfs kernel module is loaded and /dev/zfs is readable",
+
+  "collections": [{
+    "name": "pools",
+    "question": "are my pools healthy, and is anything degraded or resilvering?",
+    "prefix": "pool",
+    "freshness": "60s",
+    "perishability": "sampled",
+    "answer": ["Health", "AllocPercent", "ErrorsRead", "SlowIos"],
+    "ceiling": {"records": 5000, "bytes": 4194304},
+
+    "names": {
+      "guid":    {"class":"stable",    "sentence":"The pool GUID, which survives rename and import."},
+      "devices": {"class":"stable",    "sentence":"by-id links to each member, as ZFS records them."},
+      "kernel":  {"class":"ephemeral", "sentence":"Kernel device names. Reassigned on rescan; never joined on."}
+    },
+
+    "facts": {
+      "Health":     {"type":"enum","values":["ONLINE","DEGRADED","FAULTED","OFFLINE","UNAVAIL","REMOVED"],
+                     "temperament":"state","kind":"observed","from":"/pools/0/state",
+                     "sentence":"The pool's overall verdict, as ZFS itself reports it."},
+      "SizeBytes":  {"type":"integer","unit":"bytes","temperament":"gauge","kind":"observed",
+                     "from":"/pools/0/properties/size/value",
+                     "sentence":"Total raw capacity, before parity and before compression."},
+      "AllocPercent":{"type":"number","unit":"percent","temperament":"gauge","kind":"derived",
+                     "derived_from":["AllocatedBytes","SizeBytes"], "denominator":"SizeBytes",
+                     "sentence":"Allocated over size. Not a promise about how much you can still write."},
+      "ErrorsRead": {"type":"integer","unit":"count","temperament":"counter","kind":"observed",
+                     "from":"/pools/0/error_count/read", "rate_companion":"ErrorsReadRate60s",
+                     "sentence":"Read errors ZFS has attributed to this pool since it was imported."},
+      "SlowIos":    {"type":"integer","unit":"count","temperament":"counter","kind":"observed",
+                     "from":"/pools/0/slow_ios",
+                     "sentence":"Operations ZFS considered slow but not failed. The pre-failure signal a healthy-looking pool hides."},
+      "ScanState":  {"type":"enum","values":["SCANNING","FINISHED","CANCELED"],
+                     "temperament":"state","kind":"observed","from":"/pools/0/scan_stats/state",
+                     "sentence":"The state of the running or last-completed scrub or resilver."}
+    },
+
+    "relations": [
+      {"type":"contains",  "carries_facts":false},
+      {"type":"backed-by", "carries_facts":true, "discriminator":["VdevPath"],
+       "inverse_observable":false,
+       "facts":{"VdevPath":{"type":"string","temperament":"configuration","kind":"observed",
+                            "from":"/pools/0/vdevs/*/name",
+                            "sentence":"The vdev this member sits in, as zpool names it."}}}
+    ],
+
+    "redactions": [],
+    "redaction_exemption":
+      "zpool output carries no credential surface: pool names, GUIDs, device links and counters only.",
+
+    "reference_commands": [
+      {"purpose":"the same verdict, by hand","argv":["zpool","status","-j",""]},
+      {"purpose":"capacity as ZFS reports it","argv":["zpool","list","-j",""]}
+    ],
+
+    "mutations": [
+      {"name":"scrub","argv":["zpool","scrub",""],
+       "changes":["ScanFunction","ScanState","ScanStartTime"], "destructive":false}
+    ]
+  }]
+}
+```
+
+Several members do unobvious work:
+
+- **`answer`** names the facts that belong on a row — today twenty-one separate adapter judgements with no rule, and the single biggest lever on whether a table is readable.
+- **`from`** is the extraction path into the evidence payload, declared *once* rather than restated on every emitted value. That is what makes §24's digest worth having: a reader with the payload and the path can check the collector's reading rather than trusting it.
+- **`denominator` and `rate_companion`** are what §27's rendering rules actually need. A percentage renders beside the figure it is a percentage *of*, and a counter renders as its declared windowed gauge — neither is possible unless the producer names the other fact, and a renderer that guessed would be the fourth-copy failure again.
+- **`inverse_observable`** says whether this relation type *can* be confirmed from the far end. Some can never be, and a type that declares so is honest rather than perpetually `asserted`; a type that declares it can be, and never is, is a finding. A type that can be confirmed names, in `confirmed_by`, the assertion that confirms it, and pairing carries a maximum age spread — two assertions farther apart than the tighter collection's declared freshness neither confirm nor contradict, because they are two ages of the world.
+- **`redactions`, or a written exemption** — see below.
+- **`labels`, `bound`, `discovers`** — members downstream sections already depend on: a boolean's two display labels (§27), a gauge's bound where one exists (§27), and — where a collection produces estate-membership candidates — the capability, with its universe and blind spots stated by the collector that knows its interface (§22).
+- **`mutations`** are declared and never executed: nothing here runs them, but declaring them beside the facts they would change means an action catalogue is derived from the graph rather than hand-maintained, and that verification of an action is re-observation of those exact facts.
+
+> **Every collector that serves evidence declares its redactions, or declares why it needs none**
+>
+> Evidence is a raw native payload, and raw native payloads carry credentials. **A collector serving evidence must name the payload paths it withholds, or carry a reviewed statement that its source has no credential surface.** Declaring neither is a build failure, and a collector that announces a redaction it did not perform inverts the provenance contract as surely as performing one silently.
+>
+> Putting this in the declaration rather than in a shared library is what makes it survive the split: a Python redactor cannot help a collector written in Go, but a declared path list is checkable by the same harness in any language. The same boundary bounds and scrubs decline `detail` and truncation reasons, because those strings now travel to a hub and out over MCP — and one of this estate's planned upstreams accepts its API key only as a query parameter, so a single 401 is a credential channel.
+>
+> **Stderr is the channel that bypasses all of this** — it goes straight to the journal. So the rule is behavioural and enforced by test rather than by plumbing: a collector writes diagnostics to stderr and never payload content, and the corpus plants **canary credentials** in its fixtures precisely so the harness can assert their absence from every channel at once — stdout, evidence, facts, decline detail, stderr, and the journal it lands in.
+
+### The stream
+
+NDJSON, one object per line, discriminated by `record`. A run is a **batch**, and the batch is what makes a missing object mean something specific rather than one of five things.
+
+```jsonl schema=se.stream/1
+{"record":"begin","request":"rq-4471","batch":"01JC8K…",
+ "declaration":"sha256:9ab3…","boot_id":"4f2a…","timens":0,"instance":null,
+ "generations":{"pools":8814,"arrays":77}}
+
+{"record":"object","collection":"pools","name":"tank",
+ "names":{"stable":   {"guid":"11550964…","devices":["by-id/wwn-0x5000c50…"]},
+          "ephemeral":{"kernel":["/dev/sdc"]}},
+ "facts":{"Health":"ONLINE","SizeBytes":32985348833280,
+          "AllocPercent":61.2,"ErrorsRead":0},
+ "absent":["ScanState"],
+ "evidence":{"media_type":"application/json","digest":"sha256:5e11…","canon":"jcs/1"},
+ "at":214697.204}
+
+{"record":"relation_assertion","collection":"pools","name":"tank",
+ "type":"backed-by","vantage":"pools",
+ "target":{"kind":"block-device","name":"by-id/wwn-0x5000c50…"},
+ "facts":{"VdevPath":"raidz2-0"}}
+
+{"record":"unobservable","collection":"pools","name":"tank","fact":"SlowIos",
+ "reason":"unsupported","detail":"not reported by this OpenZFS version"}
+
+{"record":"decline","collection":"arrays","reason":"absent",
+ "detail":"no md devices in /proc/mdstat"}
+{"record":"commit","collection":"arrays","generation":77,"objects":0,"cpu_ms":0.4}
+
+{"record":"commit","collection":"pools","generation":8814,
+ "objects":3,"assertions":8,"unobservable":1,"cpu_ms":9.1}
+{"record":"end","request":"rq-4471","batch":"01JC8K…","cpu_ms":11.4,"wall_ms":38.2}
+```
+
+> **A committed collection is authoritative. An uncommitted one is authoritative for nothing.**
+>
+> **Everything a committed collection did not emit is gone** — that is what expresses deletion, and it is why no tombstone record exists. A collection with no `commit` is held and never applied: its objects are a partial read, and a partial read must not be allowed to delete anything.
+>
+> **And a decline of `absent` is a successful reading, so it commits.** "There are no md devices" establishes something, and it must be able to retire the array objects a previous batch published — so `absent` is followed by a commit with zero objects, and the two records together are the statement. The other three decline reasons never commit: `unauthorised`, `unavailable` and `unsupported` leave prior state in place and mark it *stale*, because nothing was established.
+>
+> There is no partial commit. A `commit` in v1 always means *this is the whole collection*; anything less does not commit at all.
+
+That distinction is the whole record type. Collapsing it — treating every decline as a failure, or every decline as an emptiness — produces one of the two errors this product is about: stale arrays displayed forever, or a whole subsystem deleted because a socket was busy.
+
+### Nine properties, each closing a specific way this goes wrong
+
+- **Truncation is detectable without the exit status.** A collector killed by `RuntimeMaxSec` mid-stream exits non-zero, but a person piping the same command has no exit status to consult and neither does a corrupted transport. The `commit` marker makes the stream self-describing, and its counts let the collator check it received what was sent.
+- **`names` is split by stability class.** This is where law 1's obligation lands — everything the collector saw that denotes this thing — *and* where §16's rule becomes enforceable rather than advisory: **a join runs on `stable` only.** `ephemeral` names are carried because a person searches for `/dev/sdc`, and are never hopped through, because the kernel reassigns them on rescan.
+- **`at` is stamped immediately before the earliest native read that contributes to the object**, as a monotonic reading from the clock §09 names. Per object rather than per batch because a collector reading three interfaces legitimately has three ages. Before rather than after, because the tie must break toward *older*: a six-second acquisition stamped at completion reports itself up to six seconds fresher than its oldest contributing byte.
+- **`unobservable` is a record, and `absent` is a list.** These are different statements and neither is a null: *we could not read this named fact* versus *we read, and this object genuinely has no such property*. §27 renders them differently, so the stream must distinguish them, and a missing key means neither — it means the collector does not serve that fact at all. An unobservable reason draws from the decline vocabulary *minus* `absent`: could-not-read-because-it-is-not-there is the absent list's statement, on its own channel.
+- **A collector emits a relation *assertion*, never a relation.** It names its vantage, the type, the native name of the far end, and any discriminator — and it does **not** state observability, because it cannot: whether the far end was seen is a fact about another collector's output, which only the collator holds. A collector that claimed `confirmed` would be minting a judgement one tier below where the evidence for it exists.
+- **An unresolved target is minted, not dropped** — see §13. The collator resolves against its own host's published names; a name nothing here claims yields an `asserted` relation keyed on the name, which the hub later re-tests against intent and the other hosts — upgrading resolution without ever re-keying. Only an endpoint whose absence was itself observed is dropped, and the drop is recorded on the source object with its reason.
+- **The evidence commitment is taken at acquisition**, because it cannot be taken later — the document will have changed. `digest` is over the *redacted* payload the collector would serve, under a named canonicalisation, so that re-reading and re-digesting is a meaningful comparison rather than a coin toss over key ordering. JSON names its rule (`jcs/1`); any other media type digests the exact post-redaction bytes, and `media_type` says which regime applies. Which fact came from where in that payload is declared once, statically, in the declaration — not restated on every emission.
+- **The declaration hash rides in `begin`,** with the boot id and the time-namespace offset §09 requires. A hash mismatch triggers a refetch rather than a second spawn on every collect.
+- **`instance` scopes everything beneath it.** A collector fronting one of several instances of an application carries the fleet-assigned instance name in `begin`, and the collator mints every id, origin and relation under (host, instance) scope — law 1's answer to two instances of one application both emitting `indexer:3`. Null means host-native.
+
+### Ordering, size, and what the collator owes back
+
+> **The collator decides what is newest, not the arrival order**
+>
+> The collator issues a **monotonic generation per collection** and the collector echoes it in `begin`. A commit whose generation is older than the applied one is **refused, not applied**.
+>
+> Without it there is a live hazard, because this design has two things that start collections: a watch fires, batch A begins; the schedule fires, batch B begins later and finishes first; A commits last and replaces newer state with older. Distinct batch ids make that *look* handled — they make retry idempotent and nothing else.
+>
+> Four rules settle it, and a fifth settles what "retry" means:
+>
+> - A commit whose generation is **below** the applied one is refused.
+> - **Equal**, with the same content, is a no-op — that is what makes a retransmission safe.
+> - **Equal, with different content, is a protocol error**, not a merge. Two different readings claiming one generation means somebody reused it.
+> - Applying a collection and advancing its generation are **one durable transaction**, so a collator that dies mid-apply comes back having done all of it or none.
+> - And **a fresh acquisition always takes a new generation.** Re-sending bytes already captured may reuse one; going back to the interface may not. A transport retry and a second look at the system are different events and only the first is idempotent.
+
+**A ceiling is a scope error, not a transport limit.** Declared record and byte ceilings exist so an unbounded read cannot exhaust the slice, and exceeding one ends the collection without a commit and with a truncation reason. But a collection that *honestly* exceeds its ceiling every time is not a transport problem to paginate around — it is a collection that should be split, and leaving it permanently unapplied while showing a reason is the system reporting a scope error rather than hiding it. Where genuine size is unavoidable, the split happens at the collection boundary, where the question boundary already is.
+
+The request-shaped verbs carry the same discipline: `evidence`, `object` and `lookup` have their own declared byte and time bounds, run single-flight per collector, and a response that hits its bound says so on the payload — a truncated document marked truncated is still evidence; an unmarked one is a lie about the system.
+
+Two smaller rules complete it. **Retry is always safe** — collectors are read-only and hold no state, so a failed batch is re-run and the batch id makes a duplicate arrival idempotent. And **a join runs over the latest committed generation of each collection**, with the minted object carrying the *oldest* contributing `at`, so a joined object is never presented as fresher than its stalest input.
+
+## 20 · The reference corpus
+
+Everything above describes what a collector emits. Nothing so far says what it is emitting *from*, and that gap is why "what do we take from each source" has been the hardest question in this document to answer rigorously.
+
+> **The spec is founded on captured reference answers**
+>
+> For every native source: **the real payloads, in variant states, versioned — plus the declaration written against them, plus a ledger of every field deliberately left.** A declaration is not written from memory of what a tool outputs; it is written beside a document that tool actually produced.
+
+This turns three vague obligations into one artefact. Every sentence in the fact dictionary becomes checkable against a real value. Every type and unit is verified rather than asserted. And the skip ledger makes the 90% we do not take into a stated decision per field rather than an aggregate ratio — which is the difference between "we take 7% of docker" and knowing which 93% and why.
+
+> **The trap, and it is this document's own favourite failure**
+>
+> A specimen shows one machine on one day. A healthy `zpool status -j` does not contain the degraded shape. A payload from one version does not show a field the next version adds. **Found a spec on single captures and you have rebuilt the subset guard** — the corpus enumerates what its author happened to capture and implies completeness about everything else.
+>
+> So the corpus states its own coverage, in the same way every other part of this product does:
+>
+> - **Variants, named:** healthy, degraded, absent, and the edge case that broke something once.
+> - **A producing-version stamp on every capture** — OpenZFS 2.2.4, docker 27.1, systemd 256 — because a field's presence is a fact about a version, not about the tool.
+> - **Every declared fact marked `seen-in-corpus` or `documented-but-uncaptured`**, so a reader knows which sentences rest on a specimen and which rest on a manual page.
+
+> **The payoff: interface drift becomes mechanical**
+>
+> Interface drift is the failure that actually breaks a working product, and until now only "boot a guest and hope something fails" could catch it. If the multi-OS lab's job becomes **regenerating the corpus**, then **a diff over the regenerable variants is the drift detector**. OpenZFS renames a field and the corpus diff shows it before any code runs.
+>
+> *Regenerable* is doing real work in that sentence. A lab guest can re-stage healthy, absent and several edge cases on a new version; it cannot re-stage a degraded twelve-bay enclosure. So drift in failure paths — which is where the facts that matter most live — stays uncovered by the diff, and the corpus must mark which variants it could not re-stage rather than presenting a clean diff over a partial set.
+>
+> It still answers the version-matrix question concretely: **as deep as the corpus**, with the uncovered set named.
+
+One real cost, and it must be paid properly. Reference answers captured on a live estate carry serials, MAC addresses, dataset names, hostnames and paths, and this repository is public. **Anonymisation has to preserve structural consistency** — the same WWN appearing in three collectors' payloads must remain the same WWN after scrubbing, or the specimens stop demonstrating the joins they exist to teach. A naive per-file scrub destroys exactly the property that makes the corpus worth having.
+
+## 21 · The intent declaration `[schema]`
+
+One document per estate, held by every hub, hashed and compared on federation. It is the only place in the product where somebody writes down what *should* be true, and it is what turns self-evident judgement into judgement against a purpose.
+
+```json schema=se.intent/1
+{
+  "schema": "se.intent/1",
+  "estate": "home",
+  "revision": 41,
+  "reviewed": "2026-08-14",
+
+  "membership": {
+    "discovery": [
+      {"collection":"network/tailscale", "independence":"tailnet-control-plane"},
+      {"collection":"network/leases",    "independence":"site-dhcp"},
+      {"collection":"network/neighbours","independence":"link-layer"}
+    ],
+    "min_independent_sources": 2,
+    "min_vantages_per_source": 2,
+
+    "hosts": {
+      "storage-1": {"roles":["storage","hypervisor"], "machine_ids":["9f2c…","44ae…"],
+                    "expected_units":["sanoid.timer","zfs-zed.service"], "expected_disks":12},
+      "edge-1":    {"roles":["internet-facing"], "machine_ids":["0b71…"]}
+    },
+
+    "not_hosts": [
+      {"id":"nh-7", "denoted_by":[{"source":"network/tailscale","name":"phone-1"}],
+       "why":"a handset", "by":"estate-owner", "revision":38, "review_by":"2027-02-01"}
+    ]
+  },
+
+  "objects": [
+    {"id":"repository:offsite-vault", "kind":"restic-repository",
+     "denoted_by":[{"host":"storage-1","name":"b2:bucket/vault"},
+                   {"host":"nas-1","name":"/srv/restic/vault"}]}
+  ],
+
+  "protection": [
+    {"target":"tank/photos", "owner":"storage-1", "class":"irreplaceable",
+     "destinations":["repository:offsite-vault"], "window":"14d"}
+  ],
+
+  "reachability": [ {"role":"internet-facing", "permitted_ports":[22,443]} ]
+}
+```
+
+`objects[].denoted_by` is the estate-identity mechanism from §16: the only way two hosts' native names become one object, and declaration rather than correlation on purpose. `membership` is §22, and it is the part that closes the first founding incident.
+
+> **The symmetrical risk**
+>
+> A stale or wrong declaration makes the product confidently wrong in a *new* direction: reporting drift that is not there, or missing drift because the declaration moved along with the system. Which is why the hash check is not optional decoration, why `revision` and `reviewed` are carried and displayed, and why every fact derived from a declaration carries `declared` kind.
+
+## 22 · Estate boundary and coverage
+
+"Are all hosts up to date?" answered yes while the only internet-facing host in the estate sat five revisions behind. Every host the registry knew about *was* up to date. The registry was the problem, and a registry cannot detect that it is incomplete.
+
+> **Which the architecture, left alone, would reproduce exactly**
+>
+> Hub federation hashes the intent declaration and refuses to merge while hashes differ. That proves **two hubs share the same registry**. It proves nothing whatever about whether that registry lists every host. Forget one, both hubs agree, and the question answers wrongly again — with a cryptographic check standing behind the wrong answer.
+>
+> This is the estate's most repeated defect in its purest form: *a check that enumerates what its author thought of, and reports success about the rest.*
+
+> **Membership is a claim, and a claim states its coverage**
+>
+> The estate is not "the hosts in the declaration". It is a claim carrying the **declared**, **discovered-but-not-declared** and **unclassified** identity lists, the discovery sources that were and were not readable, each host's reachability — **connected**, **dark**, or **unswept** — a provenance, and a review age. **No answer of the form "all hosts…" may be given without its coverage attached.**
+
+### Discovery: collections declare, intent selects
+
+A registry needs a second, independent opinion about what exists — and it must come from somewhere nobody updates as a documentation step. Nobody adds a machine to the tailnet to be tidy; they do it because they want the machine to work.
+
+> **The product already collects this and throws it away**
+>
+> `network/tailscale` mints an object per tailnet peer — `HostName`, `DNSName`, `OS`, `Online`, `LastSeen`. That is an independent host inventory — complete only for its own declared universe, which is the point of declaring one — gathered on every host that runs tailscale, compared against nothing. DHCP leases are a second such source and also already shipped.
+>
+> **The finding that would have caught the founding incident costs a comparison, not an architecture.**
+
+But hardcoding "tailscale and kea" would be a third-party's problem and a maintenance trap. So the mechanism follows the document's own division of labour:
+
+- **A collection declares that it produces estate-membership candidates** — a capability in its declaration, like any other. It does not know what an estate is.
+- **The intent document selects which collection instances count** as independent discovery, and sets the policy. Somebody running an unfamiliar DHCP server gets estate discovery by writing a collector, with no change from us.
+- **A candidate is a relation**, not a host: an edge from the observing host to an observed name, carrying `source`, the stable identity it was seen under, and `last_seen`. Which is why §13 comes first — two vantages disagreeing about a peer is `contradicted`, and that is a finding rather than a merge conflict.
+
+### Four rules, each closing a way this could be quietly defeated
+
+> **Classification, never filtering**
+>
+> A real tailnet carries handsets, laptops and a friend's node, so most discovered candidates are not estate hosts. **Excluding one is a written statement with an author and a revision** — the `not_hosts` block above — and never a filter list in code or a pattern in config. An unclassified candidate produces a finding until somebody rules on it.
+>
+> Build the filter and call it classification and you have rebuilt the subset guard with better manners.
+
+1. **Vantages and sources are different things, and only one of them buys independence.** Reading the tailnet peer list from two hosts guards against one host being wrong or dark. It does *not* make two sources: both hosts are asking the same coordination server, so one ACL, one outage or one stale record defeats both at once. **A second vantage is redundancy; a second *independence group* is evidence.** Getting this wrong would be this section committing the failure it opens by describing — a check satisfied by a count that never had to discriminate.
+2. **Discovery has its own reach, and it is recursive.** If the only host that can see the tailnet is dark, discovery is dark — and coverage resting on a source that could not be read is the founding failure one level further out. So the coverage claim names which discovery sources were readable at the time it was made.
+3. **No observable source means coverage is unknown**, and the hub **refuses the unqualified answer**. "All 6 hosts are up to date" becomes "all 6 declared hosts are up to date; no discovery source was readable, so I cannot tell you whether 6 is the right number." Slower to read, and true.
+4. **Review age is a fact.** A declaration nobody has looked at in a year is a weaker claim than one reviewed last week, and the roll-up should say so rather than treating both as ground truth.
+
+The result is that *a host forgotten within a declared universe is loud*. It appears in a discovery source, matches no declared host, is not classified as a non-host, and produces an intent-relative finding at the hub — the exact class of opinion §17 says the product has never been able to state.
+
+> **And a host outside every universe is still silent, so the claim is worded to admit it**
+>
+> A machine with a static address, no lease, no tailnet membership and no ARP traffic past any observer appears in nothing. There is **no closed-world authority in a homelab** — no source that can say "these and no others" — so completeness is not available and pretending otherwise would be the original failure with more machinery.
+>
+> What is available is an honest conditional, and it is the only form an estate answer may take: *"all six hosts declared or visible through the tailnet and DHCP are current; those sources do not see a statically-addressed host on a network neither observes."* Longer than "all hosts are up to date" and it does not lie.
+>
+> Which is why each discovery source **declares its own universe and blind spots**, in its collection declaration rather than in intent — the collector knows what its interface can and cannot see, and the estate should not have to guess on its behalf.
+
+One more state has to be kept rather than tidied away. **A candidate that disappears before anyone classified it is classification debt, not a resolved question** — it was seen once, nobody said what it was, and it is now gone. Dropping it silently is how a host that appeared for one afternoon leaves no trace at all; it is held, with its last sighting, until somebody rules on it or an explicit expiry retires it with that reason recorded.
+
+## 23 · What each tier derives `[schema]`
+
+Layer 4 with addresses. Nothing here is a new kind of thing; the point is that each derivation has exactly one legal home under law 2, and today most of the hub column is empty.
+
+| Derivation | Tier | From | State |
+|---|---|---|---|
+| object identity, host scope | collator | every collector's `names` | new — the walk exists inside adapters today |
+| host-scoped relations + observability | collator | resolved names on both ends | new as a tier function |
+| cgroup → unit → container | collator | resources + units + docker | the "why is it slow" join, unbuilt |
+| arithmetic over one host's facts | collator | facts | exists, inside adapters |
+| counter → windowed rate gauge | collator | two samples + declared window | new — §12 |
+| self-evident opinions | collator | facts | exists |
+| snapshot diff, counters excluded | collator | the record | exists; the exclusion does not |
+| freshness violations | collator | declared freshness vs actual | new — §15 |
+| capability and cost roll-up | collator | collector declines and cost records | exists |
+| **estate object identity** | hub | the intent declaration; re-tests and upgrades collator-asserted relations (§13) | nothing above one host mints identity at all |
+| **estate membership + coverage** | hub | declared vs discovered candidates | the first founding failure |
+| **revision comparison** | hub | every host's deployment revision | the question that answered wrongly |
+| **clock skew** | hub | each host's wall reading against the hub's on arrival | crude on purpose; the thresholds that matter are coarse (§09) |
+| **the protection chain** | hub | target · snapshots · jobs · receipts · the destination's own state | the second founding failure |
+| **intent-relative opinions** | hub | facts + declaration | the missing half of judgement |
+| findings lifecycle | hub | host findings over time | exists |
+| estate roll-up, with reach | hub | every host's status + who was dark | exists; reach is not stated |
+| problem-domain answers | hub | everything above | §24 |
+
+> **Eleven faults, one missing component**
+>
+> The audit found eleven separate reach faults and they resolve to a single absence: **no cross-host rule exists anywhere in the product.** "Are all hosts up to date" needs a revision comparison implemented nowhere; clock skew's deciding fact is another clock the hub holds on every sweep and never compares. These are not eleven bugs. They are one empty column in the table above.
+
+## 24 · The problem-domain object `[schema]`
+
+A problem domain is not a page template. It is an object, minted at the hub, with an id, facts, opinions and relations like anything else — and the page is its projection.
+
+```json schema=se.answer/1
+{
+  "id": "question:data-protected",
+  "scope": "estate",
+  "question": "is my data protected?",
+
+  "answer": "Two of eleven declared targets have no copy anywhere the estate can see.",
+
+  "verdict":   "critical",
+  "epistemic": "partial",
+  "freshness": "current",
+
+  "basis": [
+    {"claim":"tank/photos is declared irreplaceable",
+     "kind":"declared", "origin":"intent@r41",
+     "value_as_read":"irreplaceable", "ref":"/hub/intent/r41#protection/tank-photos"},
+
+    {"claim":"its most recent receipt at repository:offsite-vault is 46 days old",
+     "kind":"observed", "origin":"storage-1/protection/receipts",
+     "value_as_read":"2026-06-29T02:14:00Z",
+     "batch":"01JC8K…", "generation":8814,
+     "evidence_digest":"sha256:5e11…", "canon":"jcs/1", "from":"/snapshots/0/time",
+     "ref":"/v1/protection/receipts/receipt:offsite-vault-2026-06-29"},
+
+    {"claim":"the copied-to relation for tank/photos has not been confirmed in the recorded window",
+     "kind":"derived", "origin":"hub", "rule":"protection.unconfirmed-copy@3",
+     "observability":"asserted",
+     "consumed":["/hub/intent/r41#protection/tank-photos",
+                 "/v1/protection/receipts/receipt:offsite-vault-2026-06-29"],
+     "window":{"from":"2026-07-15T00:00:00Z","to":"2026-08-14T09:20:00Z","complete":true}}
+  ],
+
+  "reach": {
+    "consulted": ["storage-1/protection", "storage-1/storage", "nas-1/protection"],
+    "declined":  [{"host":"nas-1","collection":"storage/datasets","reason":"absent"}],
+    "dark":      [{"host":"edge-1","since":"2026-08-13T22:04:11Z"}],
+    "coverage":  {"declared":["storage-1","edge-1","nas-1","…"],
+                  "discovered_not_declared":[], "unclassified":[],
+                  "sources_readable":["tailnet-control-plane"],
+                  "sources_unreadable":["site-dhcp"]}
+  },
+
+  "contributors": ["protection/targets","protection/jobs","protection/receipts",
+                   "storage/datasets","storage/snapshots"]
+}
+```
+
+> **Health and knowledge are separate axes, and merging them invents a new false belief**
+>
+> *"This is unhealthy"* and *"I cannot establish whether this is healthy"* are different claims, and pushing both onto one severity scale corrupts them in both directions: **an unknown estate becomes warning-level unhealthy**, and **a critical observed defect gets softened because coverage was partial.**
+>
+> So an answer carries `verdict` — what the evidence says about the system — beside `epistemic` — how much of the question the evidence covered — and `freshness`. Attention roll-ups may escalate on missing knowledge; the health claim underneath stays what it was.
+
+The derivation is deliberately crude, and closed: **complete** — everything consulted answered, and every selected discovery source was readable where membership is part of the question; **partial** — anything among them declined, dark, unswept or unreadable; **unknown** — nothing consulted could answer; **conflicted** — sources disagree about a fact the basis cites. Crude is enough: the axis exists to keep ignorance out of the verdict, not to grade it finely — and it makes the monotonicity rule below checkable against definitions rather than intentions. One consequence is stated so no shape forces a lie: an `unknown` answer may carry an empty basis — it knows nothing, and fabricating a citation to satisfy a schema would be the exact failure the basis exists to prevent.
+
+"Degrade the verdict when a host is dark" was the obvious rule and it is the wrong one. The dark host does not make the storage sicker; it makes the answer narrower, and saying so on a different axis is what lets a reader tell a broken estate from an unobserved one at a glance.
+
+> **The monotonicity rule, which is the acceptance test for all of this**
+>
+> **Removing evidence, or making a source dark, must never improve either the verdict or the epistemic status.**
+>
+> It reads as obvious and it is violated constantly by ordinary-looking code: a host goes dark, its findings stop arriving, the roll-up counts fewer criticals and the estate reads better than it did. Every aggregation in the product — roll-ups, problem domains, projections, the home-automation surface — is testable against this one sentence, and it is the cheapest single check in this document.
+
+> **A basis is immutable, or it is not a basis**
+>
+> A basis element's shape follows its kind. **Observed** carries the value as read, the batch and generation it came from, the extraction path, and a digest of the evidence at capture. **Declared** carries the value and the intent revision that asserted it. **Derived** carries the rule and its version, its window, and **the claims it consumed, by reference**. Observed and declared each carry a pointer to where the claim can be read again; a derived claim is re-checked through its rule and what it consumed — and none carries less than re-checking it requires.
+>
+> A basis that only pointed at a live route would silently start saying something else the moment the underlying fact changed: an opinion whose stated reasoning has moved underneath it. That is confident wrongness, committed by the product, in the one place it claims to be checkable.
+
+And the immutable version makes drift into a feature. Re-reading the pointer and finding a different value than `value_as_read` is exactly the thing this product exists to surface — *"this finding was raised when the receipt was 46 days old; it now reads 2 days old"* — which a mutable basis could never say, because it would have quietly become the new number.
+
+Evidence is still captured fresh and stored nowhere. The **digest** is what survives, which costs bytes rather than storage and answers the only question worth asking later: is the raw document still the one this claim was made from?
+
+Four other properties make it an object rather than a report:
+
+- **It has an id**, minted with the `question:` prefix like any other id, so it can be linked to, bookmarked, watched over time, and carried in a finding.
+- **Its verdict is an opinion like any other**, so it enters the roll-up, gains a lifecycle, and can resolve. A problem domain that could not resolve would be a report, not an answer.
+- **`reach` is mandatory and structured**, and carries coverage *as identities, not counts* — "six of six" tells a reader nothing they can check, while a list they can read tells them immediately that the host they were thinking of is not in it. What was dark and what was unreadable sets `epistemic`, never `verdict`.
+- **It cites rather than restates**, and can cite a relation's observability directly — which is how "asserted, never confirmed" reaches the top of the product instead of being buried on a row.
+
+## 25 · Schema evolution
+
+One process could change its facts atomically. Three independently deployed tiers cannot: a collector may be newer than its collator, a collator newer than its hub, and every combination will occur during a rolling deploy whether or not anyone designed for it.
+
+> **The hard case, and the only honest answer**
+>
+> **A collector emits a fact its collator has never heard of.** Drop it and data disappears silently. Reject it and every deploy is brittle. Pass it through unmarked and the renderer must guess at its semantics — which §26 forbids.
+>
+> So: **pass it through, marked `undeclared`, render it raw with the caveat stated — and quarantine it**: an undeclared fact enters no identity walk, no join, no opinion, no roll-up and no problem-domain answer, because shown is not the same as trusted, and semantics arrive only with the declaration. Unknown is stated, never dropped, and never leaned on.
+
+| Change | Breaking? | Handling |
+|---|---|---|
+| a new fact appears | no | additive; older tiers pass it through marked `undeclared` |
+| a fact stops being emitted | no | it leaves rows; history keeps it; the declaration must say it was withdrawn rather than simply omitting it |
+| a sentence changes | no | prose, not contract |
+| **a unit or type changes** | yes | **a new fact name, never a redefinition.** History holds the old values and a renderer holds the old ladder; silently changing what a number means makes every stored reading wrong |
+| a temperament changes | yes | it changes diff participation and acquisition, so the same rule: new name |
+| a derived formula changes | soft | the fact keeps its name only if its meaning is unchanged; the formula carries a version, and a basis cites the version it used |
+| an opinion threshold or rule changes | soft | the rule version bumps and rides on every finding it produces — findings from two versions are comparable only by saying so |
+| an enum gains a member | soft | renderers must already handle an unknown member as unstyled rather than as an error |
+| a relation type appears | no | unknown types render as an untyped link; the declaration is what closes the set |
+
+Version skew between a collator and its declarations is handled by the hash in `begin`: a batch carrying an unknown hash is **held, un-applied, until the declaration is fetched and validated** — then applied or refused, never applied on faith. A deploy that replaces a collector is thus picked up on its next run rather than on a restart. **And the hub needs every fact's axes to render and to answer MCP**, which the collator holds — so declarations travel up the same connection, on connect and on change, and a hub with a declaration it does not recognise renders those facts `undeclared` rather than refusing the host.
+
+---
+
+# Part V — the surfaces
+
+## 26 · Rendering
+
+Layer 6. Given facts, derived facts, relations and opinions, how they reach somebody.
+
+> **The rule everything else follows from**
+>
+> **The renderer knows nothing the producer knows.** Every semantic a consumer needs arrives over the wire. A renderer that infers meaning is a second copy of the producer's knowledge, and it will drift.
+
+This is not theoretical; it has been violated three times and each was found the same way — the copy rotted while nothing noticed:
+
+- **A routing table of 31 id prefixes in the browser.** The whole application tier was missing from it, so every app-tier link rendered as dead text. Nothing in the browser mints ids, so nothing in the browser could have noticed.
+- **Three severity tables**, each re-deciding what the rulebook had already decided, two of them over-claiming on conditions the rulebook had deliberately declined to judge.
+- **A unit guesser inferring meaning from fact-name suffixes.** It does not know `Usec`, so every microsecond fact renders as a bare integer to this day.
+
+Which is the argument for declaring a fact's **type, unit, temperament, kind and origin**: they are not metadata, they are rendering instructions, and the alternative is the renderer guessing.
+
+### Three densities, and what each is for
+
+| Density | Carries | Exists because |
+|---|---|---|
+| **row** | the collection's declared `answer` facts, plus warn/critical verdicts | a table is scanned, not read. A row that carries everything carries nothing |
+| **object** | every fact, every opinion including the informational ones, and the relations with their observability | this is where somebody arrives having decided this row is the interesting one |
+| **evidence** | the raw native document, captured fresh | so an answer can be checked rather than trusted, and so the 90% not published is still reachable |
+
+The measured spread is larger than it looks: a timer's row carries 4 facts and its object 9, and across eight collections the objects are **8.4× the bytes of the rows**. Choosing what a row carries is most of what makes a table readable — which is why it becomes a declared member rather than a per-collection habit.
+
+> **Evidence is checkable, not infallible**
+>
+> Calling evidence "the one thing that cannot be wrong" overstates it. Evidence is captured *now*, which means it may show a system that has changed since the fact was read; it can be truncated by a limit; and it inherits whatever the source itself gets wrong.
+>
+> What it genuinely offers is different and still worth the whole mechanism: **it is the only thing in the product that is not our interpretation.** Which is why §24 keeps a digest — so a claim can say whether the document it was made from is still the document you are looking at.
+
+## 27 · The viewing guide
+
+§26 gives the rules. This is the vocabulary they imply — the part a person building a screen needs, and the part a language model needs stated because it has no CSS to fall back on.
+
+### A fact's shape is a function of its declaration
+
+Not a judgement made per screen. Given type, unit and temperament, the widget follows:
+
+| Declaration | Renders as | Rule |
+|---|---|---|
+| `enum` | a chip, coloured only where the vocabulary is shared | `down` is a fault on a NIC carrying addresses and correct on an empty bridge — colour needs the same meaning everywhere the enum appears, or none. An unknown member renders unstyled, never as an error |
+| `boolean` | **its two declared labels** — enabled/disabled, mounted/unmounted — never a tick and a cross, and never a present/absent mark | a cross reads as a failure and most booleans are not verdicts. And `absent` is already a *render state* two rows down, meaning "we looked and there is no such property" — so drawing `false` as absence collapses a measured negative into an epistemic one, which is this document's founding error in miniature |
+| `integer` + `unit:bytes` | one ladder, product-wide, labelled | pick IEC or SI once and never mix. The disagreement between two tables is worse than either convention |
+| `temperament:counter` | **its declared companion rate gauge**; the raw counter on the object page only | a bare cumulative integer means nothing, and the renderer must not compute the rate itself — the window belongs to the producer (§12) |
+| `number` + `unit:percent` | the figure with its denominator beside it | a percentage with no denominator is a number pretending to be an answer |
+| `gauge` with a known bound | figure plus a bar against the bound | and no bar where the bound is unknown, because an unbounded bar invents a scale |
+| `timestamp` | relative age, absolute on hover; both on an object page | "3 days ago" is the question people actually have |
+| `list` of scalars | chips, wrapping, never truncated mid-item | see the firewall-rule failure below |
+| `list` of uniform objects | **a nested table** | a structured value earns structure; comma-joining it destroys it |
+| `string`, prose | verbatim, wrapping, never clipped | a security statement is load-bearing text; truncating it changes what it says |
+| any, `kind:declared` | marked as declared wherever it appears | a reader forming a belief should know it rests on an assertion |
+| any, `undeclared` | raw, with the caveat visible | a fact from a newer collector than this renderer (§25) — shown, never dropped, never styled as understood |
+
+### Five states, and only one of them is a value
+
+The most common rendering bug in this product's history is collapsing these into a blank cell:
+
+| State | Means | Renders as |
+|---|---|---|
+| **value** | we looked, and this is it | the value |
+| **absent** | we looked; the thing genuinely has no such property | an em dash, muted |
+| **unobservable** | we could not look, and here is why | **the reason, on the row** — never blank, never zero |
+| **declined** | the whole collection does not apply here | the collection states its reason instead of showing an empty table |
+| **stale** | the newest reading is older than its declared freshness | the value, with its age prominent and the reason if one is known |
+
+> **Where rendering breaks the founding rule**
+>
+> **Absence must render as absence.** A blank cell reads as fine; a zero reads as measured. Every rule about not reporting absence as health is enforced at acquisition and then thrown away by a renderer that prints an empty string for null.
+>
+> The clearest case shipped and was caught: a firewall rule truncated at the column edge. `meta iifname tailscale0 tcp dport 22 counter accept` clipped to `tcp dport 22 counter accept` is a rule confining sshd to one interface rendered as one admitting it from anywhere — the exact inversion the renderer goes to great lengths to prevent, reintroduced by CSS.
+
+### Relations render their observability, always
+
+A relation is drawn as a link, and **the three states of §13 are visually distinct at every density** — not a tooltip, not a detail-page footnote:
+
+- **confirmed** — a solid link.
+- **asserted** — visibly incomplete, and labelled with what was not looked at. *"pushes to repository:offsite-vault — the far end has never been read"* is the sentence that would have prevented an incident, and it belongs on the row.
+- **contradicted** — both ends shown, disagreeing, with each vantage named.
+
+An asserted relation styled like a confirmed one is not a cosmetic bug. It is the founding failure re-entering through layer 6 after five other layers went to considerable trouble to prevent it.
+
+### Navigating between the two axes
+
+- **A problem domain always drills into the collector domains it was assembled from**, and names them even when it has nothing to say about one. That is the reach caveat made navigable.
+- **A collector domain names the problem domains it feeds.** A collection feeding none is inventory — a test from §04, made visible on the screen rather than found in an audit.
+- **Evidence is always one step from any fact**, at any depth, in either axis.
+
+### The shape of an answer
+
+Every rendering vocabulary the product has is for the collector axis — tables of objects, key/value grids, meters, trees. There is no shape for a *problem domain*, and that is why views feel like arranged dashboards rather than answers. A problem-domain page needs three things a table has no room for:
+
+1. **The answer first, in a sentence.** Not a table that implies one.
+2. **The reasoning** — the basis, each element with its kind and origin visible, each linking to what it was read from, and each showing where the current value now differs from the value as read.
+3. **The reach** — what was consulted, what declined, what was dark, and what the coverage was, because an answer assembled from six collector domains is only as good as the one that was unobservable.
+
+*"This dataset is declared irreplaceable and has no copy anywhere this host can see"* is a sentence with a reach caveat built into it, and no table can say it.
+
+## 28 · MCP: the consumer without eyes
+
+There is no UI-private API. The browser and a language model receive the same envelopes and render them differently — and the model's rendering is prose, which means it has no CSS to fall back on and no tooltip to hover.
+
+> **For that consumer, the declaration is the rendering**
+>
+> A model reading `CpuUsageUsec: 4118442900` needs to be told it is a counter in microseconds, observed rather than derived, or it will restate it as a reading and quote it as a rate. Everything the browser gets from a unit ladder and a tooltip, the model must get from the wire.
+
+Which raises the bar on the fact dictionary rather than lowering it: **the sentence explaining a fact is not documentation, it is what one of the two consumers renders.** Three consequences:
+
+- **The axes travel with the data**, or one cacheable fetch away. Making a model fetch the dictionary and correlate by hand is a rendering step performed by the consumer — the thing §26 forbids.
+- **Reach and coverage are fields, not prose.** A model summarising an estate must be able to say "and one host was dark, and no discovery source was readable" without inferring it from a missing key.
+- **Problem domains need their own tool.** Today's tools are one per route, which is the collector axis exclusively; a model asked "is my data safe" has to do the assembly a person shouldn't have to do either.
+
+| Tool | Returns |
+|---|---|
+| list_hosts | hosts, capabilities, which are dark, **and the coverage claim** |
+| get_status(host?) | roll-up with reach |
+| get_collection / get_object | envelopes verbatim, relations carrying observability |
+| get_evidence | the raw native payload |
+| get_fact_dictionary | sentences plus the five axes |
+| what_changed(since) | the diff, counters excluded |
+| lookup(name, input) | parameterised read-only questions |
+| get_views | the operator-authored projections, read from the deployed directory (fate proposed below) |
+| answer(question, scope) | **new** — a problem-domain object: answer, verdict, basis, reach. `question` is a stable id from `list_questions()`, never free text |
+| list_questions() | **new** — what problem domains exist, so the tool is discoverable |
+
+> **The fate of views `[decision]`**
+>
+> **`se.views/1` survives unchanged.** The schema, the deployed-directory pattern and the documents an estate already carries port as they are, served by both tiers like every other projection — a view is operator judgement about arrangement, which problem domains do not replace. When problem domains mature, views may become one way of *rendering* them; nothing about that requires deciding today, and deleting a shipped, working surface to force the question would be churn without a consumer.
+
+> **The injection surface, stated correctly**
+>
+> Once app-tier collectors publish media titles, release names and container labels, envelopes carry **text written by strangers on the internet**, returned verbatim to a model.
+>
+> It would be comfortable to say the worst case is a misleading answer, because this product cannot act. **That is false.** A model reading these envelopes is almost never a model with only these tools — it has a shell, a filesystem, an issue tracker. Attacker-authored text arriving through a read-only source can trigger actions through *every other tool in that session*, and our being read-only bounds our own blast radius and nobody else's.
+>
+> What the product owes is therefore concrete rather than reassuring: **mark which facts carry third-party text**, so a consumer can treat them as data rather than instructions; keep mutations declared and unexecuted, so this surface never gains its own action path; and state this plainly in the MCP surface documentation rather than leaving it to be discovered.
+>
+> **None of which mitigates the risk.** The marking is provenance that lets a consumer decide; it is not a defence, and no escaping or stripping would be one — filtering the payload would corrupt the raw document evidence exists to be, and would collide with the rule two sections up that a security statement must render verbatim because truncating it changes what it says. The exposure is accepted, and bounding it belongs to the session holding the other tools.
+
+## 29 · Home automation
+
+An MQTT front-end on the hub, publishing to a broker somebody else runs. Small, and easy to get wrong in a way that reintroduces the founding failure at the transport layer.
+
+> **Project findings, never facts**
+>
+> A fact has no lifecycle and would flap; a finding has one, by design. **The home-automation surface projects the findings registry and the estate roll-up, and nothing else.**
+
+| Decision | Choice | Because |
+|---|---|---|
+| **Retained messages** | discovery only, never state | a retained state message is *a stored observation served as current* — precisely what the hub is forbidden to do. A restarted broker would replay a green from before an outage |
+| **Availability** | an explicit availability topic, driven by whether the hub could look | this is absence-vs-health at the transport layer. A host going dark must make its entities *unavailable*, never leave them at their last value |
+| **Unique id** | an opaque, topic-safe encoding of the finding key, scoped by estate | law 1 over a namespace we do not own: two estates on one broker must not collide, native names are not legal topics, and machine identity does not belong in somebody else's broker in the clear |
+| **Acknowledgement** | an attribute, never a filter | an acknowledged finding is still true. Suppression is the one power the findings design refuses to create, and a projection must not create it either |
+
+> **Refusing retain is honest, and it needs a republish protocol or it is just silence**
+>
+> A subscriber that restarts has no retained state to read, so without something more it stays unknown indefinitely — which is technically honest and practically useless. The missing half is that **the hub republishes current state on demand and on its own reconnect**: a birth message when it attaches, a last-will that marks everything unavailable when it does not, and a republish triggered by the broker's own restart. Unknown must be a state you pass through in seconds, not one you live in.
+>
+> And a resolved finding must have its discovery entry *removed*, not merely set to a good value — otherwise the entity list accumulates every condition the estate has ever had. Topics carry the opaque finding key rather than native names, because a dataset path is not a legal topic and a machine identity is not something to publish into somebody else's broker in the clear.
+
+> **Considered: MQTT deeper in the stack**
+>
+> Once a broker exists it is tempting to make it the transport — collators publishing observations onto topics, the hub subscribing. Refused, on three grounds, each already load-bearing elsewhere in this document. **Retained messages are stored observations served as current** — this section's own first rule. **The broker becomes a component the observation path depends on** — a stateful third party between tiers, observed by nothing, in a product whose founding invariant is that observation must not depend on an aggregator, let alone somebody else's. And **half the wire is request-shaped** — evidence, object and lookup ride back down the channel, and rebuilding request/response plus §19's generation and checkpoint semantics on top of pub/sub is strictly more machinery than the one connection it would replace.
+>
+> So MQTT stays what it is here: **a projection out** — publish-only, into a broker the home-automation system already owns, carrying findings and never facts.
+
+The natural entity set is small and should stay small: one per host (its roll-up), one per problem domain, and one per open finding. **Do not project envelopes.** A sensor per fact would be thousands of entities that flap, and the history would live in a recorder that is not a time-series database and was never asked to be one.
+
+Two axes reach this surface too, and collapsing them here would undo §24: **an entity's availability carries the epistemic status and its state carries the verdict.** A host going dark makes its entities unavailable; it never makes them *warn*.
+
+## 30 · Reactivity
+
+Re-reading everything on a timer is the dominant cost of observation, and most of what is re-read never changed. Where the kernel or a service already emits a change notification *for its own reasons*, use it. Where it does not, sample — and choose the rate per *collection*, informed by the temperaments inside it, rather than sweeping everything at one cadence. Facts that genuinely want different rates say so by belonging to different collections (§15).
+
+> **The collator watches; the collector reads**
+>
+> A run-and-exit collector cannot hold a watch, so **the watches live in the collator** — udev, inotify, D-Bus signals. This is the one place the collator touches a native interface, and it touches it in exactly one way: **it subscribes to notifications and never reads state through them.**
+>
+> A notification produces no fact. It invalidates a schedule: the collator runs the collector that owns that interface, and the fact still comes from something that looked.
+
+That division is what keeps law 4 intact under reactivity. A fact minted from an event payload would name a collector that never ran, and the first time the event stream and the interface disagreed there would be no way to tell which was wrong.
+
+> **The rule reactivity must not break**
+>
+> **A missed notification must be visible as a missed notification.** A dropped netlink message, a udev buffer overrun, a transparent bus reconnect — every one of them looks exactly like "nothing changed". A watcher that cannot say *"I may have missed events since T"* reintroduces absence-as-health at the transport layer: the product's founding failure mode, arriving through the door marked performance.
+
+Which means every watch needs a reconcile: a periodic full read whose only job is to disagree with the event stream if it has drifted, and to say so when it does. **The reconcile interval is the honest freshness of a watched fact**, and it is what the declaration carries — not the optimistic interval that assumes no notification is ever lost.
+
+And a watch is a scheduling signal that can arrive in storms — a device reset emits hundreds of uevents in a second. So **a notification sets a dirty bit, and collection runs are single-flight**: one run per collection at a time, a storm collapsing into at most one follow-up, never a queue of them. The floor on how often a dirty collection re-runs is its declared freshness; the ceiling on concurrency is a bounded worker pool, with the collator's own control plane funded first (§08).
+
+---
+
+# Part VI — the warrant
+
+## 31 · The autopsy `[audited]`
+
+The model's warrant. Three fault types, scored against the five subsystems whose quality was ranked independently of it.
+
+| Subsystem | Law 1 — second minting site | Law 1 — missing scope | Law 2 — facts out of reach | Faults | Ranked |
+|---|---|---|---|---|---|
+| units | – | – | – | 0 | "truly great" |
+| disks | – | – | – | 0 | "magical" |
+| resources | yes | – | – | 1 | "maturing but not great" |
+| protection | – | yes | yes | 2 | "potential but messy" |
+| apps | yes | yes | – | 2 | "potential but messy" |
+
+*The ranking was given before the model existed. That it falls out of a fault count is the only reason to believe any of this.*
+
+> **What this table is worth, stated against its own standard**
+>
+> The ranking genuinely predates the model. But the fault *vocabulary* was built while inspecting these same five subsystems, the scoring was done by their author, and §32 records the model being **amended by the same audit that scores it**. That is training evidence, not validation, and five subjectively-labelled observations could not validate a universal law even if the rubric had been frozen.
+>
+> So the honest claim is narrower than the table's neatness suggests: **the laws are consistent with every case examined so far, and no case has yet been scored blind.** What would raise it: freeze the rubric, score held-out collections prospectively, have somebody who did not write the model do the scoring, and publish the disagreements and the false positives rather than the tidy column.
+
+**units** borrows nothing: systemd mints the name, resolves it, and hands over the facts on one connection in one acquisition. There is no join to get wrong.
+
+**disks** is the anchor-walk of §16 — nine or more native interfaces, one anchor, zero correlation.
+
+**resources** mints ids from a cgroup directory basename in a tree containing every manager's hierarchy. It *spells* the same as a unit id; it is not one. Three separate defences in one function exist to paper over the collisions that follow.
+
+**protection** satisfies the identity law — a single manifest names every target — and violates reach: the facts about each hop live on hosts that manifest cannot read, so opinions are weakened in place instead of moving to something that can see both ends.
+
+**apps** mints per-instance ids without an instance scope, so two instances of the same application collide.
+
+> **Why reach is a separate law**
+>
+> It is tempting to fold reach into identity — to say an id must be minted somewhere that can see the whole object. Protection satisfies that completely: a single manifest names all 22 targets, rendered identically onto every host. It is still one of the two worst-rated subsystems.
+>
+> What protection cannot see is not the identity. It is the **facts** — each hop's receipts live on a host the manifest cannot read. Identity and reach fail separately, so they are separate laws.
+
+## 32 · The audit in full `[audited]`
+
+Fifty-five collections, six live hosts, judged against the four values, the laws and a measured cost budget. §03 carries the headline; this is the rest.
+
+### What the audit found
+
+- **Twelve ESTATE credits struck.** The product is estate-wide, so every collection was being credited with estate by association. Measured against live capabilities, `storage/arrays` has subjects on one host of five and eleven app-tier collections observe exactly one instance.
+- **Twenty-two collections carry an identity fault** — four of them on the very record the collection exists to keep.
+- **Two retire, five demote to evidence, four split.** `docker/volumes` costs 10.4 ms per sweep to return zero objects. `hardware/usb` mints its id from a bus-port path, so moving a dongle creates a new object and plugging something else into that port inherits the old identity.
+- **`nix/generations` is 83.9% of one host's collection CPU** and 6,524 ms of a 6,525 ms sweep on another — and the expensive half, the pairwise closure delta, is recomputed every 60 s and discarded.
+
+### The exemplars, which are the pattern to copy
+
+- **network/port-exposure — ignorance can only under-claim.** Two closures, certain and possible, so a rule the renderer cannot read degrades the answer toward *less* claimed exposure, never more. The only collection with no native equivalent at all.
+- **hardware/nvme — reach done right.** A false positive on an M.2 socket that is physically x2 was fixed by moving the *fact* into reach — the upstream bridge's capability — rather than softening the verdict. Every reach fault elsewhere in the audit softened the opinion in place instead.
+- **units, docker, traefik — edges better than clean.** units withholds a container edge it cannot confirm; docker emits it from the end that observed both sides; traefik emits its edge from the service side because that document carries full names where the other carries a short name a join would have to guess at. One side owns each edge, chosen by which side holds the confirmable id. §13 generalises this from a habit three adapters share into a rule with a name.
+- **Absence stated positively** — the stall attribution that states its unobservable arm, the SMART reading that distinguishes a sleeping disk from a silent one, the library count that makes its own missing half conspicuous.
+
+### Where the audit faulted the model
+
+An audit that validates its own instrument perfectly is not an audit. Four findings amended the model rather than being filed as commentary:
+
+| The hole | What it was, and what it is now |
+|---|---|
+| **ESTATE was a property of the deployment** | "the same question on every host" has no threshold, and it is not a fact about the collection. Now: *the union is not obtainable by asking each subject in turn at comparable cost.* |
+| **RECORD was a property of the hub** | Nine credits rested on one rule — perishable, therefore recorded, because the hub snapshots everything. A value axis nothing fails is not an axis. Now: *the subject outlives the sweep and the diff is not dominated by counters.* |
+| **Nothing said what a counter does to a diff** | The single highest-yield line missing, and its absence produced the same finding six times. Now a rule beside the temperaments, with the companion-gauge mechanism that makes it renderable. |
+| **Reach has no destination** | Eleven faults resolve to one missing component: no cross-host rule exists anywhere. Not eleven bugs — the empty hub column in §23, and the tier that fills it is now named. |
+
+One rule held under pressure. **The boundary** — an object has a present tense, an event has only a past — decided three contested cases without argument, and in each the adapter had already half-conceded it in a comment. A rule the implementation reaches for independently is carrying weight.
+
+## 33 · What we take from each source `[audited]`
+
+Measured by diffing each collection's *evidence payload* against the facts it publishes. This is the precursor to the corpus of §20, and its limits are exactly why the corpus is needed.
+
+> **One limit of the method, and the row where it bites**
+>
+> Evidence shows what the collector *asked for*, not everything the source has. For interfaces that dump their whole state — `docker inspect`, the systemd Manager object, `zpool status -j`, `ip -j`, a sysfs walk — the count is the true surface and the ratio means what it looks like.
+>
+> **For an interface queried by name there are two ratios.** `storage/datasets` is the clear case: ZFS offers roughly **180** dataset properties; the collector requests **8**; it publishes **13** facts from those 8, because several are derived. So the published-over-requested figure exceeds 100% and says nothing about scope, while the requested-over-available figure — **4%** — is the number that matters and is invisible in the payload.
+>
+> **That 8-of-180 was the scope decision, made silently, inside one string.** Which is the argument for the corpus in a sentence.
+
+| Collection | Interface | Offered | Taken | Ratio |
+|---|---|---|---|---|
+| docker/containers | docker engine API | 147 | 10 | 7% |
+| system/boot | systemd1.Manager | 137 | 20 | 15% |
+| hardware/nvme | sysfs nvme + udisks2 | 81 | 26 | 32% |
+| units/units | systemd1 Unit | 61 | 7 | 11% |
+| storage/pools | `zpool status -j` | 63 | 17 | 27% |
+| hardware/scsi | sysfs scsi/sas/enclosure | 46 | 10 | 22% |
+| network/tailscale | `tailscale status --json` | 46 | 14 | 30% |
+| hardware/usb | sysfs + udev hwdb | 44 | 7 | 16% |
+| network/links | `ip -j` (rtnetlink) | 38 | 7 | 18% |
+| system/identity | hostname1 + os-release | 29 | 12 | 41% |
+| storage/datasets | `zfs list -j -o <8 columns>` | ~180 | 13 | see above |
+| **And the ones that publish more than their source — the join, visible as a number** |
+| resources/workloads | cgroupfs | 10 | 28 | 280% |
+| system/overview | procfs | 10 | 34 | 340% |
+| network/nft-chains | `nft -j` | 1 | 7 | 700% |
+| vms/domains | libvirt | 10 | 12 | 120% |
+
+### What the 90% we skip actually is
+
+- **Redundant encodings.** systemd publishes every timestamp twice — `FinishTimestamp` and `FinishTimestampMonotonic` — so 20 of system/boot's 117 skipped fields are the second copy of one we take.
+- **Defaults that restate configuration.** Forty of those 117 are `DefaultLimit*` pairs. They are the config you wrote, read back. They cannot diverge from themselves.
+- **Capability flags.** `CanStart`, `CanIsolate`, `AllowIsolate`, `RefuseManualStop` — derived from the unit file, constant, and nothing acts on them.
+
+> **Which gives the field-level rule**
+>
+> **Take the fields where the system's actual state can diverge from what someone believes about it.** A capability flag cannot diverge — it is a restatement of what you wrote. A monotonic twin cannot diverge from its pair. What can diverge is what is worth carrying.
+
+### Five fields the rule says we should be taking and are not
+
+| Field | Source | The divergence it detects |
+|---|---|---|
+| `NeedDaemonReload` | systemd unit | **The unit file on disk differs from what systemd has loaded.** You edited it, did not reload, and `systemctl status` looks perfectly fine. The founding failure in a single boolean — and the one place a native interface holds both the declared and the running state and compares them for us. |
+| `Tainted` | systemd Manager | The kernel is not the kernel you think it is — an out-of-tree module, an unsigned one, a forced module load. |
+| `quota` / `refquota` | ZFS dataset | Never requested, so never seen. `UsePercent` is computed against available space in the *pool*; a dataset at 100% of its own quota and 20% of the pool reads as fine. Adding it is one word in an eight-word string. |
+| `slow_ios` | `zpool status -j` | A disk that is slow but not yet erroring — the classic pre-failure signal, and the one a healthy-looking pool hides. |
+| `Privileged`, `CapAdd`, `ReadonlyRootfs` | docker | A container's security posture, set once and forgotten. Nothing in the product surfaces that something runs privileged. |
+
+Two more worth noting: `WWN` is taken on `hardware/scsi` and skipped on `hardware/nvme`, which is an identity fact treated inconsistently between two collections in the same subsystem; and `ConditionResult` / `AssertResult` answer "why did this unit silently not start", which is a question with no other answer on the box.
+
+## 34 · Non-goals
+
+- **Writing to the observed system.** No component here has a write path, and mutations may be *declared* beside the facts they would change while something else runs them. **Stated honestly, the guarantee is narrower than "read-only by construction":** the collator holds no authority over the host at all, and that part *is* structural. A collector holds exactly the authority its unit grants — and some of those grants are powerful in a way no sandbox undoes, because a docker socket is host-root-equivalent and `/dev/zfs` can destroy a pool. What the design guarantees is that each collector's authority is *declared, minimal and separately reviewable*; what it cannot guarantee is that a granted interface is incapable of writing.
+- **Being a general store for streams or metrics.** The product keeps a bounded snapshot record so it can answer *what changed*, and keeps its own claims — findings, transitions, bases — because those are provenance. What it does not do is retain somebody else's stream: journald retains log entries, a flow collector retains flows, systemd-coredump retains dumps, a time-series database retains samples. Each is a different storage problem, already solved, by something already installed.
+- **Being a precondition for itself.** A host must remain fully observable by whoever can reach it, with no aggregator running anywhere. Law 5 is this non-goal made structural.
+- **Reporting absence as health.** Anything unobservable says so, in its own words, on the row where it would otherwise have been silent.
+- **Inventing concepts.** Where the system already has a name for something, that name is used, even when a prettier one exists.
+- **Answering "all of X" without saying what X covers.** §22, and the first founding incident.
+
+## 35 · Open questions `[open]`
+
+1. **Does refusing to federate on a declaration mismatch cost too much during a rolling deploy?** The estate view goes away and comes back on every deploy. Correct, and visible enough to want deciding rather than discovering.
+2. **Does the projection layer own an opinion's audience?** A finding that matters to one audience and not another is currently a level, which is the wrong axis.
+3. **How much of the corpus can be captured from the lab versus the live estate?** Lab guests give clean, versioned, anonymous payloads and cannot produce a degraded pool or a twelve-bay enclosure. The variants that matter most are the ones only real hardware has been in.
+
+## 36 · Glossary
+
+- **collector** — a program that reads one native interface, writes what it saw, and exits
+- **collator** — one service per host: schedules collectors, mints ids and relations, joins, judges, records, serves
+- **hub** — one service per site: holds intent, judges across hosts, projects
+- **object** — a thing with an id that survives re-observation
+- **relation** — an edge carrying facts of its own, assembled from directed assertions, keyed on source id, type, discriminator and target name; the assembly states whether it is confirmed, asserted or contradicted
+- **assertion** — one vantage's directed claim about a relation, carrying the names it saw. Stored beneath the assembly, never rendered as the relation
+- **name** — what a native interface called something. Observed, never minted
+- **id** — minted by a collator or a hub, carrying its scope — including the instance, where a collector fronts one of several
+- **fact** — a non-judgmental, provenance-bearing assertion about an object, carrying five axes
+- **kind** — observed, derived or declared — where the assertion came from
+- **temperament** — existence, configuration, state, counter or gauge — how a fact changes and whether anything can watch it
+- **type · unit** — the value's shape, and the dimension it is measured in
+- **origin** — which collector observed it, and which tier derived it
+- **batch** — one collect run, committed per collection. A committed collection is authoritative; an uncommitted one is authoritative for nothing
+- **generation** — a monotonic number the collator issues per collection, so an older commit arriving late is refused rather than applied
+- **name class** — stable or ephemeral. Only stable names may be joined through
+- **verdict** — what the evidence says about the system: healthy, degraded or critical
+- **epistemic status** — how much of the question the evidence covered: complete, partial, unknown or conflicted. Never merged with the verdict
+- **evidence** — the raw native payload a fact was read from, captured fresh on request, never stored — only digested
+- **opinion** — a levelled judgement over facts, naming the facts it read. Self-evident or intent-relative
+- **finding** — an opinion at warn or above, with a lifecycle across time
+- **declaration** — a collector's static account of what it serves and what it means
+- **corpus** — captured reference answers per native source, versioned and in variant states, that declarations are written against
+- **intent** — the estate's account of what should be true, held only by hubs
+- **coverage** — the identity lists an estate answer carries — declared, discovered-but-not-declared, unclassified — plus which discovery sources were readable. Host reachability travels in reach
+- **reach** — what an answer consulted, what declined, and what was dark
+- **problem domain** — a question, as an object: answer, verdict, basis, reach
+- **projection** — a selection and shaping of the graph for an audience; a screen is an instance
+
+## A · Appendix — the closed vocabularies `[schema]`
+
+Every one of these is closed, because a renderer switching on an open set has to guess at the default — and guessing is what §26 forbids. Adding a member is a schema change and a deliberate act.
+
+| Vocabulary | Members |
+|---|---|
+| **type** | boolean · integer · number · string · enum · timestamp · duration · list · object |
+| **unit** | none · bytes · bytes_per_second · seconds · milliseconds · microseconds · nanoseconds · celsius · percent · ratio · count · hertz · watts · volts · rpm |
+| **temperament** | existence · configuration · state · counter · gauge |
+| **kind** | observed · derived · declared |
+| **tier** | collector · collator · hub |
+| **level** | info · warn · critical |
+| **verdict** | healthy · degraded · critical |
+| **epistemic status** | complete · partial · unknown · conflicted |
+| **status** | ok · partial · error |
+| **name class** | stable — survives reboot and rescan; the only class a join may hop through · ephemeral — carried because people search for it, never joined on |
+| **observability** | confirmed — both ends seen, agreeing · asserted — one end only, far end never read · contradicted — both seen, disagreeing |
+| **decline reason** | absent — not on this host · unauthorised — present, may not read · unavailable — present, not answering · unsupported — present, shape unknown to us |
+| **perishability** | perishable — the circumstance destroys the evidence, so record it · reconstructible — obtainable later, so do not · sampled — a measure; keep the opinion, not the reading |
+| **render state** | value · absent · unobservable · declined · stale |
+| **freshness** | current · stale — an answer's own age against its inputs' declared freshness |
+| **coverage** | declared · discovered_not_declared · unclassified — identity lists, never bare counts — plus the readable and unreadable discovery sources |
+| **host reachability** | connected — streaming now · dark — was connected, is not · unswept — not heard from since this hub started. Carried in reach, not coverage |
+
+**Four decline reasons rather than free prose** because they carry different verdicts and a consumer must be able to act on the difference without reading English. `absent` is not a fault *and is authoritative* (§19); `unauthorised` is a deployment error; `unavailable` is an incident; `unsupported` is interface drift and should reach whoever maintains the collector — and, under §20, whoever maintains the corpus. Free prose accompanies the code, and never replaces it.
+
+> **And a budget on this table itself**
+>
+> Seventeen closed vocabularies, five fact axes, six layers, five laws, three tiers. Every one of them is a thing an implementer must hold in their head and a reviewer will propose adding to. **A new vocabulary or axis must either delete an existing one, or name a defect that it alone catches** — and "it would be more rigorous" is not that defect.
+>
+> The rule exists because the failure it prevents is the one that actually kills a specification: not a wrong decision, but a correct decision taken thirty times until nobody can build the thing. This document is for a homelab maintained by one person, and a model too heavy to hold is a model that gets ignored in favour of the code.
+>
+> It is the count-shaped half of §05's rule. The envelope bounds how *exact* each mechanism must be; this bounds how *many* there may be. A proposal has to clear both.
+
+## B · Appendix — reserved: the wire and API spec `[open]`
+
+This document is meant to stand alone, which means the repository's separate specification is absorbed into it rather than left beside it to disagree. That absorption is deliberately not in this revision, because the surviving parts depend on contracts above that are still proposals — writing the routes before the stream is settled would produce two things to change instead of one.
+
+What lands here, and what happens to what it replaces:
+
+| From the existing spec | Fate | Why |
+|---|---|---|
+| envelope schemas, routes, pagination | rewritten | the tiers changed and so did the shape — batches, relations, coverage |
+| federation: hub pulls, proxies verbatim, stateless | reversed | the collator dials out. **An unreconciled spec is what an agent set loose to code would follow, and it would build an inbound port** |
+| security model, DynamicUser, grants | rewritten | authority moves to per-collector units; the threat model for an unauthenticated UI and raw evidence is owed and not yet written |
+| fact dictionary rules | survives | already stated here; the endpoint contract is what is missing |
+| lookups — parameterised read-only questions | survives | a collector subcommand under the new contract, unchanged in spirit |
+| UI contract, conformance postures | survives | §27 supersedes the rendering half; the rest is still right |
+| history and what-changed | amended | counters excluded, and the migration question in §35 unanswered |
+| rule 15 — the composite locator `(machine_id, container?, app?, object, opinion)` | restored | dropped by an earlier draft of law 1 and put back in §11; it is the key the findings registry is already built on |
+| rule 16 — "the mechanism is a fact" | undisposed | which package manager, which resolver. Survives in spirit and is named nowhere here |
+| conformance rule 10 — evidence redaction | rewritten | moves into the declaration (§19), because a shared Python redactor cannot follow a collector into another language |
+| §6.3 — write posture and the `unobserved` freeze | amended | the freeze is carried forward in §06 and gains `unswept`; the write posture for acknowledgement is unchanged and unrestated |
+| §6.2 — views and `se.views/1` | undisposed | §04 reframes views and no section says what happens to the schema, the directory, or the documents an estate already deploys (queued: appendix C) |
+| the `logs` subsystem | retired by implication | §14's boundary sends journal entries to journald. That is a deletion nobody has stated, and it should be stated |
+| COLLECTOR-DEPLOYMENT.md — manifest, service config, credential flow | rewritten | becomes input to unit generation: under socket activation systemd holds every credential and the collator holds none, which the box below spells out |
+
+> **And there is a second specification in the repository that disagrees with this one**
+>
+> `COLLECTOR-DEPLOYMENT.md` is also normative and also unbuilt, and it contradicts this document on the thing that matters most: it has the **service** reading an `environmentFile` and passing credentials to a collector it invokes. Under socket activation the collator invokes nothing and holds nothing — systemd reads the credential and applies it to the unit — so the manifest in that document becomes *input to unit generation* rather than a runtime file anybody reads.
+>
+> Two unbuilt specifications disagreeing about who holds an API key is precisely the situation this appendix exists to prevent, so it is named here rather than left for whoever implements second. The test for this table is not that it lists what came up in review: **a reader should be able to diff the two documents and find no undisposed rule.** It does not pass that test yet.
+
+Closing this appendix is an adjudication, not a drafting exercise: its open rulings sit in the queue (appendix C), and it closes when the diff test above passes — no undisposed rule in either repository document. Until then the existing specifications stay normative **for the product currently running**, and this document is normative for what replaces it. Where they disagree about the future, this one wins; where they disagree about today, the deployed one does.
+
+## C · Appendix — execution: packages, acceptance, adjudication
+
+The order of work, what blocks what, and the tests that say each piece is done. The companion to §05's envelope: the envelope says how good is good enough; this says what gets built, in what order, and when it counts.
+
+| Package | Depends on | Accepted when |
+|---|---|---|
+| **1 · Contract package** — the schemas of §19, §21 and §24 as real, versioned JSON Schema files | — | every example in this document validates against them in CI — the check that would have caught both broken examples this document has shipped |
+| **2 · Corpus + anonymisation** | — | every current adapter has at least one captured pair (payload + emitted records); canaries planted; structural consistency survives scrubbing |
+| **3 · Replay harness** | 1, 2 | non-vacuous by construction: every `seen-in-corpus` fact emitted by at least one fixture; declines only ever from the closed set |
+| **4 · Collator + its harness** | 1 | recorded streams in, assertions out; acceptance items 1–7 and 9 |
+| **5 · Collectors, one per adapter** | 1, 2, 3 | replay equivalence per corpus variant; live declines name closed reasons on the lab |
+| **6 · Hub evolution + protocol suite** | 1, 4 | checkpoint, generation and crash tests green; items 9–10 |
+| **7 · Surfaces** — server-rendered UI, MCP, MQTT projection | 4, 6 | an MCP tool per route, in the same commit; UI smoke; item 11 |
+| **8 · The cut** (§06) | all of the above | the whole suite green on the canary host; item 12 |
+
+### The acceptance suite
+
+Twelve tests, written before the components they judge. A package is not done because its code exists; it is done when its numbered items pass.
+
+1. Two instances with identical native names never merge — at the collator or at the hub.
+2. Every decline reason produces exactly its declared authority effect: `absent` commits empty and retires stale objects; the other three leave prior state, marked stale.
+3. Kill the collector, collator or hub at every record, commit, transaction and checkpoint boundary: state is all-or-nothing, never partial.
+4. Concurrent, duplicated and replayed batches can never move a collection's state backward.
+5. A six-second acquisition never reports itself fresher than its oldest contributing read.
+6. Unresolved, resolved-later, absent, confirmed, contradicted and parallel relations each reach their defined state — and an upgrade never re-keys.
+7. A batch with an unknown declaration hash is held, not applied; undeclared facts reach no join, opinion, roll-up or answer.
+8. Corpus replay is non-vacuous: an empty environment cannot produce a green run.
+9. A hub restart with only some collators reconnected resolves nothing — `unswept` is not `dark`, and the freeze holds.
+10. Federation connects in NAT mode, one hop holds, a forwarded request is refused, and versions are checked beside the intent hash.
+11. Planted canary credentials appear in no output channel: stdout, evidence, facts, decline detail, stderr, journal.
+12. Post-cut findings display their reset; none reads as a new condition.
+
+### The adjudication queue
+
+Everything below is blocked awaiting a ruling, per the governance rule at the head of this document. A ruled item leaves this list and its section loses its chip.
+
+- **Estate findings have one owner**, named in intent (§06) — blocks phase 4, written proposal in place.
+- **`se.views/1` survives unchanged** (§28) — blocks phase 5, written proposal in place.
+- **The UI design system is the production token set, no external library** (§06) — blocks phase 5, written proposal in place.
+
+---
+
+*Written against SE 0.6, measured live on a six-host estate. The autopsy in §31 was scored against a quality ranking given before the model existed, which is the only reason to believe it.
+ Status chips mark what is settled: `[audited]` was scored against live systems and is case-study support rather than independent validation, `[decision]` is a proposal awaiting a ruling, `[schema]` binds its members and their meanings (spelling may still move), and `[open]` is blocked pending adjudication. Unmarked prose is the contract.*
