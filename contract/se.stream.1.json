@@ -62,14 +62,28 @@
       },
       "description": "One stability class's families: each family holds a scalar or a list of scalars — a pool has one guid and several by-id links."
     },
+    "fact_value": {
+      "type": [
+        "string",
+        "number",
+        "boolean",
+        "array",
+        "object"
+      ],
+      "items": {
+        "$ref": "#/$defs/fact_value"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/fact_value"
+      },
+      "description": "Any JSON value except null, at any depth: the type list omits null and the array/object branches recurse. The non-recursive rule this replaces refused a null only at the top of the facts dict and passed the same null nested one level down, inside a vdev row — which is exactly where marshalling a struct with nil members puts it."
+    },
     "facts": {
       "type": "object",
       "additionalProperties": {
-        "not": {
-          "type": "null"
-        }
+        "$ref": "#/$defs/fact_value"
       },
-      "description": "A fact's value is never null: could-not-read is the unobservable record and has-no-such-property is the absent list, each on its own channel, and a null names neither (DESIGN 19)."
+      "description": "A fact's value is never null, at any depth: could-not-read is the unobservable record and has-no-such-property is the absent list, each on its own channel, and a null names neither (DESIGN 19)."
     },
     "begin": {
       "type": "object",

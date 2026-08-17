@@ -230,6 +230,99 @@ def test_an_object_without_a_monotonic_reading_is_caught() -> None:
     assert any("`at`" in p for p in replay.check_stream(records))
 
 
+def test_an_at_that_runs_backwards_within_its_collection_is_caught() -> None:
+    """The structural part of DESIGN 19's third replay bound: within one
+    collection, emission order is acquisition order and a clock cannot run
+    backwards inside one acquisition pass. Only shape is judged under a
+    pinned clock — the reading's truth is the live comparator's — so the
+    rule must hold exactly this much and no more: backwards is red, a tie
+    is not (two reads in one clock tick), and a second collection's clock
+    restarting lower is not (a collector reading two interfaces has two
+    ages and may interleave them)."""
+
+    def obj(collection: str, name: str, at: float) -> dict:
+        return {"record": "object", "collection": collection, "name": name,
+                "facts": {"Health": "ONLINE"}, "at": at}
+
+    def stream(objects: list[dict]) -> list[dict]:
+        collections = sorted({o["collection"] for o in objects})
+        records = [{"record": "begin",
+                    "generations": {c: 1 for c in collections}}, *objects]
+        for c in collections:
+            count = sum(1 for o in objects if o["collection"] == c)
+            records.append({"record": "commit", "collection": c,
+                            "generation": 1, "objects": count})
+        records.append({"record": "end"})
+        return records
+
+    backwards = stream([obj("pools", "a", 2.0), obj("pools", "b", 1.5)])
+    problems = replay.check_stream(backwards)
+    assert any("non-decreasing within its collection" in p for p in problems), (
+        f"a backwards `at` inside one collection raised nothing: {problems}"
+    )
+    tie = stream([obj("pools", "a", 2.0), obj("pools", "b", 2.0)])
+    assert not any("non-decreasing" in p for p in replay.check_stream(tie)), (
+        "two readings in one clock tick were refused — the rule is "
+        "non-decreasing, not strictly increasing"
+    )
+    interleaved = stream([obj("pools", "a", 5.0), obj("arrays", "m", 1.0),
+                          obj("pools", "b", 5.5)])
+    assert not any("non-decreasing" in p for p in replay.check_stream(interleaved)), (
+        "a second collection's lower reading was refused — the rule is "
+        "per collection, and a collector reading two interfaces has two ages"
+    )
+
+
+def test_a_nested_null_fact_value_is_caught() -> None:
+    """The null-fact rule checked depth one, so it was the subset guard
+    wearing the judge's clothes: a vdev row carrying "State": null — what
+    marshalling a struct with nil fields produces — passed check_stream
+    while the same null one level up was refused. The recursion used to
+    live only in test_reference_honesty, hardwired to the reference; now
+    the rule the PORTS are judged by descends every dict and list."""
+    records = [
+        {"record": "begin", "generations": {"pools": 1}},
+        {"record": "object", "collection": "pools", "name": "tank",
+         "facts": {"Vdevs": [{"Name": "raidz1-0", "Type": "raidz",
+                              "State": None}]},
+         "at": 1.0},
+        {"record": "commit", "collection": "pools", "generation": 1,
+         "objects": 1},
+        {"record": "end"},
+    ]
+    problems = replay.check_stream(records)
+    assert any("Vdevs[0]/State is null" in p for p in problems), (
+        f"a null nested in a vdev row raised nothing: {problems}"
+    )
+    # The same law from the schema's side: the wire refuses the record too,
+    # and the healthy twin passes — so what discriminates is the null, not
+    # some unrelated shape defect in the fixture.
+    from jsonschema import Draft202012Validator
+    from referencing import Registry, Resource
+
+    registry = Registry()
+    for path in sorted((REPO / "contract").glob("*.json")):
+        schema = json.loads(path.read_text())
+        registry = registry.with_resource(
+            schema["$id"], Resource.from_contents(schema))
+    validator = Draft202012Validator(
+        json.loads((REPO / "contract" / "se.stream.1.json").read_text()),
+        registry=registry,
+    )
+    nested_null = dict(records[1], record="object")
+    assert list(validator.iter_errors(nested_null)), (
+        "the schema accepted a nested null fact value — its facts rule "
+        "still stops at depth one"
+    )
+    healthy = dict(nested_null,
+                   facts={"Vdevs": [{"Name": "raidz1-0", "Type": "raidz",
+                                     "State": "ONLINE"}]})
+    assert not list(validator.iter_errors(healthy)), (
+        "the non-null twin fails the schema, so the red above indicts the "
+        "fixture rather than the null"
+    )
+
+
 # ── the anonymiser must not corrupt the shapes it protects ───────────────
 #
 # The scrubber is manifest-driven and keyed (DESIGN 21): each case below runs

@@ -10,7 +10,7 @@
   "regenerable": false,
   "canaries": [],
   "anonymised": true,
-  "note": "A real seven-table ruleset — ip/ip6 filter, mangle and nat plus the distribution's own inet table — with twenty chains and thirty-nine rules, captured live and not re-stageable by a lab guest. This is the shape the collection was built for: JumpedFrom needs every rule in every table read to answer what runs a chain, and a single-table fixture cannot exercise that.",
+  "note": "A real seven-table ruleset — ip/ip6 filter, mangle and nat plus the distribution's own inet table — with twenty chains and thirty-nine rules, captured live and not re-stageable by a lab guest. This is the shape the collection was built for: JumpedFrom needs every rule in every table read to answer what runs a chain, and a single-table fixture cannot exercise that. The nft payload also serves nft-rules, and a two-collection request over it replays deterministically — but the round-a5 fixtures are chains-only ports judged over every network pair, so widening this request waits on those subjects or on scoping the before/after machinery by served collections; until then every committed pair opens one collection and the issuance stride rides on no pair.",
   "anchors": [
     {"collection": "nft-chains", "object": "inet nixos-fw input-allow",
      "fact": "JumpedFrom", "value": ["input"]},

@@ -1,4 +1,4 @@
-{"batch":"replay","boot_id":"5e000000-0000-4000-8000-000000000001","declaration":"sha256:replay","generations":{"nft-chains":100},"instance":null,"record":"begin","request":"replay","timens":0}
+{"batch":"replay","boot_id":"5e000000-0000-4000-8000-000000000001","declaration":"sha256:replay","generations":{"nft-chains":845},"instance":null,"record":"begin","request":"replay","timens":0}
 {"at":1.0,"collection":"nft-chains","facts":{"BaseChain":true,"Family":"ip","Handle":20,"Hook":"input","Name":"INPUT","Policy":"accept","Priority":0,"RuleCount":1,"Table":"filter","Type":"filter"},"name":"ip filter INPUT","record":"object"}
 {"at":1.001,"collection":"nft-chains","facts":{"BaseChain":true,"Family":"ip","Handle":27,"Hook":"forward","Name":"FORWARD","Policy":"accept","Priority":0,"RuleCount":1,"Table":"filter","Type":"filter"},"name":"ip filter FORWARD","record":"object"}
 {"at":1.002,"collection":"nft-chains","facts":{"BaseChain":false,"Family":"ip","Handle":56,"JumpedFrom":["FORWARD"],"Name":"ts-forward","RuleCount":4,"Table":"filter"},"name":"ip filter ts-forward","record":"object"}
@@ -20,5 +20,5 @@
 {"at":1.018,"collection":"nft-chains","facts":{"BaseChain":true,"Family":"inet","Handle":3,"Hook":"input","Name":"input","Policy":"drop","Priority":0,"RuleCount":3,"Table":"nixos-fw","Type":"filter"},"name":"inet nixos-fw input","record":"object"}
 {"at":1.019,"collection":"nft-chains","facts":{"BaseChain":false,"Family":"inet","Handle":4,"JumpedFrom":["input"],"Name":"input-allow","RuleCount":6,"Table":"nixos-fw"},"name":"inet nixos-fw input-allow","record":"object"}
 {"at":1.02,"collection":"nft-chains","facts":{"BaseChain":false,"Family":"ip","Handle":99,"Name":"se-canary-chain-7e19c4b2d6","RuleCount":0,"Table":"filter","Unreferenced":true},"name":"ip filter se-canary-chain-7e19c4b2d6","record":"object"}
-{"assertions":0,"collection":"nft-chains","generation":100,"objects":21,"record":"commit","unobservable":0}
+{"assertions":0,"collection":"nft-chains","generation":845,"objects":21,"record":"commit","unobservable":0}
 {"batch":"replay","cpu_ms":0.5,"record":"end","request":"replay","wall_ms":1.0}

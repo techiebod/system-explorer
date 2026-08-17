@@ -164,7 +164,7 @@ VIOLATIONS = {
 def test_the_control_stream_is_clean() -> None:
     """Without this, every reachability proof below could be finding some
     unrelated defect in the fixture rather than the rule it names."""
-    issued = replay.issue_generations(["pools"])
+    issued = replay.issue_generations(["pools"], seed="regime-control")
     assert not replay.check_stream(_stream(issued), issued)
 
 
@@ -181,7 +181,7 @@ def test_the_named_rule_is_reachable(record_type, member) -> None:
         f"{record_type}.{member} joined RULED without a violation proving its "
         "rule fires — a guard ships with the demonstration it discriminates"
     )
-    issued = replay.issue_generations(["pools"])
+    issued = replay.issue_generations(["pools"], seed="regime-control")
     records = _stream(issued)
     VIOLATIONS[(record_type, member)](records)
     problems = replay.check_stream(records, issued)
@@ -213,7 +213,7 @@ def test_a_nil_or_misshapen_boot_id_is_refused(boot_id: str) -> None:
     every other stub. UUID shape plus not-nil is the deny-by-default form —
     and the honest bound, since single-capture physics cannot tell a constant
     valid id from a real one (DESIGN 19)."""
-    issued = replay.issue_generations(["pools"])
+    issued = replay.issue_generations(["pools"], seed="regime-control")
     records = _stream(issued)
     records[0]["boot_id"] = boot_id
     problems = replay.check_stream(records, issued)
@@ -223,8 +223,36 @@ def test_a_nil_or_misshapen_boot_id_is_refused(boot_id: str) -> None:
     )
 
 
-def test_issue_generations_is_the_agreed_issuance() -> None:
+def test_issue_generations_is_deterministic_seeded_and_strided() -> None:
     """Both sides of the wire implement `collect <name>:<gen>` from the same
-    deterministic issuance — sorted collections, 100 + 17*i. If this drifts,
-    every committed expected half stops being reproducible."""
-    assert replay.issue_generations(["b", "a", "c"]) == {"a": 100, "b": 117, "c": 134}
+    deterministic issuance — sorted collections, per-seed base + 17*i. The
+    exact-value assertion this replaces pinned the OLD rule, 100 + 17*i,
+    whose base was the constant the echo guard could never catch: every
+    variant opened one collection, so every request issued 100 and a
+    collector echoing 100 passed every channel. What is pinned now is the
+    property set, corpus-free — determinism (a committed pair must be
+    reproducible), seed-variance (no constant passes everywhere; the
+    corpus-backed disjointness half lives in test_corpus_replay), the
+    stride (a second collection takes base + 17 — no committed pair opens
+    two collections yet, so this table and test_reference_honesty's direct
+    two-collection request are what exercise it), and the exclusion of 0
+    and 100, the two constants shipped adversaries actually echo."""
+    seeds = ("storage/healthy", "network/healthy", "network/goto")
+    bases = {}
+    for seed in seeds:
+        issued = replay.issue_generations(["b", "a", "c"], seed=seed)
+        assert issued == replay.issue_generations(["c", "b", "a"], seed=seed), (
+            "issuance is not deterministic over collection order"
+        )
+        base = issued["a"]
+        assert issued == {"a": base, "b": base + 17, "c": base + 34}, (
+            f"the stride moved: {issued}"
+        )
+        assert not any(v in (0, 100) for v in issued.values()), (
+            f"seed {seed} issued a shipped adversary's constant: {issued}"
+        )
+        bases[seed] = base
+    assert len(set(bases.values())) == len(seeds), (
+        f"distinct seeds share a base {bases} — a constant echoing it would "
+        "pass more than one variant, which is the exact hole the seed closed"
+    )

@@ -1,5 +1,5 @@
-{"batch":"replay","boot_id":"5e000000-0000-4000-8000-000000000001","declaration":"sha256:replay","generations":{"nft-chains":100},"instance":null,"record":"begin","request":"replay","timens":0}
+{"batch":"replay","boot_id":"5e000000-0000-4000-8000-000000000001","declaration":"sha256:replay","generations":{"nft-chains":598},"instance":null,"record":"begin","request":"replay","timens":0}
 {"at":1.0,"collection":"nft-chains","facts":{"BaseChain":false,"Family":"inet","Handle":1,"JumpedFrom":["input"],"Name":"dispatch","RuleCount":2,"Table":"gotolab"},"name":"inet gotolab dispatch","record":"object"}
 {"at":1.001,"collection":"nft-chains","facts":{"BaseChain":true,"Family":"inet","Handle":2,"Hook":"input","Name":"input","Policy":"drop","Priority":0,"RuleCount":2,"Table":"gotolab","Type":"filter"},"name":"inet gotolab input","record":"object"}
-{"assertions":0,"collection":"nft-chains","generation":100,"objects":2,"record":"commit","unobservable":0}
+{"assertions":0,"collection":"nft-chains","generation":598,"objects":2,"record":"commit","unobservable":0}
 {"batch":"replay","cpu_ms":0.5,"record":"end","request":"replay","wall_ms":1.0}

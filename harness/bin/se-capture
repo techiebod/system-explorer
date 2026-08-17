@@ -46,8 +46,11 @@ def capture(variant: Path) -> str:
     # generation the harness-as-collator issues, from the same deterministic
     # rule the replay tests use — so a captured pair and a replayed one are
     # judged under identical issuance, and a bare-name token (the OLD wire)
-    # is exit 2 rather than a second dialect.
-    issued = issue_generations(collections)
+    # is exit 2 rather than a second dialect. The seed is the variant's
+    # identity, spelled exactly as Variant.name spells it, because the
+    # issuance is per-variant now: a fixed base was the constant the echo
+    # guard could never catch.
+    issued = issue_generations(collections, seed=f"{meta['collector']}/{variant.name}")
     tokens = " ".join(f"{name}:{gen}" for name, gen in sorted(issued.items()))
     proc = subprocess.run(
         [sys.executable, str(REFERENCE)],

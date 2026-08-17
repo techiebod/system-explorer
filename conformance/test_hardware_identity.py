@@ -24,8 +24,12 @@ def fake_reads(monkeypatch, table):
 def test_a_single_namespace_lends_its_wwid_to_the_controller(monkeypatch):
     """The universal case on real hardware: one controller, one namespace, so
     the namespace's identity is the device's."""
-    fake_reads(monkeypatch, {"/sys/block/nvme0n1/wwid": "eui.0025385A71B0F2C6"})
-    assert hardware._nvme_wwn(["nvme0n1"]) == {"WWN": "eui.0025385A71B0F2C6"}
+    # Synthetic EUI-64: the OUI 002538 is Samsung's public vendor prefix (a
+    # `nothing`-class fact every drive of the make shares), the 40-bit body is a
+    # placeholder — a real body identifies one specific drive, and a fixture is
+    # published bytes exactly as a payload is.
+    fake_reads(monkeypatch, {"/sys/block/nvme0n1/wwid": "eui.0025380000000001"})
+    assert hardware._nvme_wwn(["nvme0n1"]) == {"WWN": "eui.0025380000000001"}
 
 
 def test_several_namespaces_agreeing_still_name_the_device(monkeypatch):

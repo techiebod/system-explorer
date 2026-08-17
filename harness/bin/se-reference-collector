@@ -93,6 +93,14 @@ SEAM = {
         "module": network,
         "adapter": network.Adapter,
         "interface": "nft",
+        # One payload, two collections: nft-chains and nft-rules are both
+        # derived from the same `nft -j list ruleset` document, and a request
+        # naming both replays them from this single redirect, deterministically
+        # — test_reference_honesty drives that request and holds each commit
+        # to its own issued generation. No COMMITTED pair carries it yet: the
+        # round-a5 fixtures are chains-only ports judged over every network
+        # pair, so a two-collection variant waits on them, and the issuance
+        # stride (base + 17*i, i > 0) stays exercised by direct request only.
         "acquisitions": {"_nft_json": "nft"},
         "instance": {},
     },

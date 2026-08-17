@@ -199,6 +199,52 @@ def test_every_commit_carries_all_three_counts_and_they_are_true(payloads: Path)
         )
 
 
+def test_a_two_collection_request_echoes_each_generation_to_its_own_commit() -> None:
+    """The per-collection half of the echo, which no single-collection
+    request can exercise. Every committed pair opens exactly one collection
+    (the round-a5 fixtures are chains-only ports judged over every network
+    pair, so a two-collection variant waits on them), which means the
+    map-shaped echo has only ever ridden a map of one entry there — a
+    collector echoing the whole map onto every commit, or crossing the two
+    values, is indistinguishable from a correct one under any committed
+    replay. This request is therefore the stride's only exercise: the same
+    payload serves both network collections, two distinct arbitrary
+    generations go on the wire, and each commit must carry its own."""
+    corpus_dir = REPO / "corpus" / "network" / "healthy"
+    env = dict(os.environ)
+    env["SE_REPLAY_DIR"] = str(corpus_dir / "payloads")
+    env["SE_REFERENCE_COLLECTOR"] = "network"
+    env["SE_REPLAY_NOW"] = json.loads(
+        (corpus_dir / "meta.json").read_text())["captured"]
+    proc = subprocess.run(
+        [sys.executable, str(REFERENCE)],
+        input="collect nft-chains:301 nft-rules:322\n",
+        capture_output=True, text=True, env=env, timeout=120)
+    records = _stream(proc)
+    begin = _only(records, "begin")
+    assert begin["generations"] == {"nft-chains": 301, "nft-rules": 322}, (
+        f"begin.generations is {begin['generations']!r}; both issued tokens "
+        "must be echoed, each under its own collection"
+    )
+    commits = {r["collection"]: r["generation"]
+               for r in records if r["record"] == "commit"}
+    assert commits == {"nft-chains": 301, "nft-rules": 322}, (
+        f"commits echoed {commits!r}; each collection's commit must carry "
+        "the generation ITS token issued — crossed or shared values would "
+        "let the collator apply one collection under the other's ordering"
+    )
+    # And the deterministic `at` stand-in keeps its structural promise
+    # across the boundary: non-decreasing within each collection.
+    for collection in ("nft-chains", "nft-rules"):
+        ats = [r["at"] for r in records
+               if r.get("record") == "object"
+               and r.get("collection") == collection]
+        assert ats and ats == sorted(ats), (
+            f"{collection}: per-object at readings {ats[:5]}… do not "
+            "advance in emission order"
+        )
+
+
 def test_the_absent_decline_path_still_counts_everything(tmp_path: Path) -> None:
     """The absent decline commits zero so it can retire objects — and its
     commit is held to the same required members as any other, because a

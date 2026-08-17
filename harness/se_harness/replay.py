@@ -32,7 +32,10 @@ import json
 import math
 import os
 import re
+import shutil
 import subprocess
+import tempfile
+import zlib
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -63,7 +66,8 @@ RULED = {
     ("begin", "batch"): "end must echo begin",
     ("begin", "boot_id"): "boot_id must be UUID-shaped",
     ("begin", "generations"): "must equal the issued generations",
-    ("object", "at"): "`at` must be a finite boot-scale reading",
+    ("object", "at"): "`at` must be a finite boot-scale reading, "
+    "non-decreasing within its collection",
     ("commit", "generation"): "a commit echoes the generation begin named",
     ("commit", "cpu_ms"): "measured cost must be a finite non-negative number",
     ("end", "request"): "end must echo begin",
@@ -110,17 +114,28 @@ class ReplayResult:
         return f"{head}\n{shown}{more}"
 
 
-def issue_generations(collections: Iterable[str]) -> dict[str, int]:
+def issue_generations(collections: Iterable[str], seed: str) -> dict[str, int]:
     """The generations the harness-as-collator issues for one request.
 
     The collator issues, the collector echoes (DESIGN 19) — so the harness
     plays the issuing side, deterministically to keep corpus pairs
-    reproducible: sorted collections, collection i gets 100 + 17*i. The
-    values are deliberately nothing a collector would mint by habit, so one
-    that invents generations instead of parsing the request line fails on
-    its first echo rather than colliding with a lucky constant.
+    reproducible: sorted collections, collection i gets base + 17*i, with the
+    base derived from `seed` (the variant's identity, in practice).
+
+    The base VARIES BY SEED because the fixed rule this replaces was the
+    subset-guard shape on the issuing side: 100 + 17*i issued the constant
+    100 to every single-collection variant, so the echo guard caught every
+    invented constant except the one it issued — the declared-RED
+    generation_zero_always adversary, its 0 changed to 100, passed every
+    channel. crc32 is not secrecy and does not need to be: the property is
+    that no constant passes EVERYWHERE, so a collector must parse the
+    request line rather than bake in a number that happens to match one
+    variant. The range 103..997 excludes 0 and 100 by construction — the
+    two constants adversaries have actually shipped — and stays boot-scale
+    small so a committed pair reads as issued, not measured.
     """
-    return {name: 100 + 17 * i for i, name in enumerate(sorted(collections))}
+    base = 103 + zlib.crc32(seed.encode()) % 895
+    return {name: base + 17 * i for i, name in enumerate(sorted(collections))}
 
 
 def normalise(records: list[dict]) -> list[dict]:
@@ -233,6 +248,33 @@ def _measured(value: object) -> bool:
         and math.isfinite(value)
         and value >= 0
     )
+
+
+def _null_paths(value: object, path: str) -> list[str]:
+    """Every path at which a null sits inside a fact value, to any depth.
+
+    Depth one was the subset guard again, on the judge's side: the rule
+    refused `"State": null` at the top of the facts dict and passed the same
+    null one level down, inside a vdev row — which is exactly where
+    marshalling a struct with nil members puts it, so the wire the rule
+    exists for was the wire it could not see. The schema's facts definition
+    recurses identically; two independent refusals, one law (DESIGN 19).
+    """
+    if value is None:
+        return [path]
+    if isinstance(value, dict):
+        return [
+            p
+            for key, inner in value.items()
+            for p in _null_paths(inner, f"{path}/{key}")
+        ]
+    if isinstance(value, list):
+        return [
+            p
+            for i, inner in enumerate(value)
+            for p in _null_paths(inner, f"{path}[{i}]")
+        ]
+    return []
 
 
 def check_stream(records: list[dict], issued: dict[str, int] | None = None) -> list[str]:
@@ -411,32 +453,63 @@ def check_stream(records: list[dict], issued: dict[str, int] | None = None) -> l
                     "must be a finite non-negative number"
                 )
 
+    last_at: dict[str, float] = {}
     for record in records:
-        if record.get("record") != "object":
+        kind = record.get("record")
+        if kind not in ("object", "relation_assertion"):
             continue
         where = f"{record.get('collection')}/{record.get('name')}"
-        at = record.get("at", _MISSING)
-        # Bounded above as well as below: a boot-scale monotonic reading is
-        # small, and epoch seconds (~1.7e9), epoch millis, NaN, Inf and the
-        # 0.0 placeholder are all real stamps a wrong port has produced.
-        if (
-            at is _MISSING
-            or isinstance(at, bool)
-            or not isinstance(at, (int, float))
-            or not math.isfinite(at)
-            or not 0 < at < 1e9
-        ):
-            problems.append(
-                f"{where}: `at` is {at!r}; `at` must be a finite boot-scale "
-                "reading — 0 < at < 1e9, monotonic seconds, stamped before "
-                "the earliest contributing read (DESIGN 09)"
-            )
-        for fact in sorted(record.get("facts") or {}):
-            if record["facts"][fact] is None:
+        if kind == "object":
+            at = record.get("at", _MISSING)
+            # Bounded above as well as below: a boot-scale monotonic reading
+            # is small, and epoch seconds (~1.7e9), epoch millis, NaN, Inf
+            # and the 0.0 placeholder are all real stamps a wrong port has
+            # produced.
+            if (
+                at is _MISSING
+                or isinstance(at, bool)
+                or not isinstance(at, (int, float))
+                or not math.isfinite(at)
+                or not 0 < at < 1e9
+            ):
                 problems.append(
-                    f"{where}: fact {fact} is null — a fact value is never "
-                    "null; value, absent and unobservable each have their own "
-                    "channel and null names none of them (DESIGN 19)"
+                    f"{where}: `at` is {at!r}; `at` must be a finite "
+                    "boot-scale reading, non-decreasing within its collection "
+                    "— 0 < at < 1e9, monotonic seconds, stamped before the "
+                    "earliest contributing read (DESIGN 09)"
+                )
+            else:
+                # The structural part of the third replay bound (DESIGN 19):
+                # within one collection, emission order is acquisition order
+                # and a clock cannot run backwards inside one acquisition
+                # pass. Only this much is judged here — a pinned clock cannot
+                # authenticate a reading's truth, which the live comparator
+                # owns. Non-decreasing, not strictly increasing: two reads
+                # inside one clock tick are legitimate. Per collection, not
+                # per stream: a collector reading two interfaces has two ages
+                # and may interleave them.
+                collection = str(record.get("collection"))
+                previous = last_at.get(collection)
+                if previous is not None and at < previous:
+                    problems.append(
+                        f"{where}: `at` {at!r} precedes the {previous!r} "
+                        "emitted before it; `at` must be a finite boot-scale "
+                        "reading, non-decreasing within its collection — a "
+                        "clock cannot run backwards inside one acquisition "
+                        "pass (DESIGN 19)"
+                    )
+                last_at[collection] = at
+        # Both fact-bearing record types, recursively: a relation's facts
+        # carry its discriminators, and a null there un-names an assertion
+        # as surely as a null on an object row un-states a fact.
+        facts = record.get("facts") or {}
+        for fact in sorted(facts):
+            for path in _null_paths(facts[fact], fact):
+                problems.append(
+                    f"{where}: fact {path} is null — a fact value is never "
+                    "null at any depth; value, absent and unobservable each "
+                    "have their own channel and null names none of them "
+                    "(DESIGN 19)"
                 )
 
     if ends:
@@ -497,17 +570,50 @@ def run_collector(
     `<collection>:<generation>` (DESIGN 18): the harness plays the issuing
     collator, and the collector parses and echoes — a token without its
     generation is a malformed request.
+
+    The request line is the collector's ONLY channel to the issued generation,
+    and the seal below is what makes that true. The seed issue_generations() is
+    keyed on is variant.name, which the variant's own payloads/ directory spells
+    in its last two path components — and the crc32 formula is public in this
+    file — while expected.jsonl, carrying begin.generations verbatim, sits one
+    level up at ../expected.jsonl. So a collector that ignored stdin could
+    reconstruct the issuance from SE_REPLAY_DIR's path or read it from the
+    adjacent file and echo the right value while proving nothing. Both channels
+    are closed by replaying every variant's payloads (only — never
+    expected.jsonl, never meta.json) from a fresh mkdtemp whose name names no
+    variant, the same sealed path the differential guard already replays
+    through. The seed stays variant.name, so issuance is unchanged and the
+    corpus pair on disk still reproduces byte for byte across two runs.
     """
-    issued = issue_generations(variant.collections()) if issued is None else issued
+    # Seeded by the variant's identity, so every variant gets its own base
+    # and the pair on disk was captured under the same issuance this replays.
+    if issued is None:
+        issued = issue_generations(variant.collections(), seed=variant.name)
     tokens = " ".join(f"{name}:{gen}" for name, gen in sorted(issued.items()))
-    return subprocess.run(
-        binary,
-        input=f"collect {tokens}\n",
-        capture_output=True,
-        text=True,
-        env=collector_env(variant, payload_dir),
-        timeout=timeout,
-    )
+
+    def _spawn(directory: Path | None) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            binary,
+            input=f"collect {tokens}\n",
+            capture_output=True,
+            text=True,
+            env=collector_env(variant, directory),
+            timeout=timeout,
+        )
+
+    # A caller that supplies its own payload_dir already controls a sealed,
+    # non-variant-naming path — the differential guard's mutated tempdir, the
+    # empty-environment test's tmp_path — so it is honoured as given.
+    if payload_dir is not None:
+        return _spawn(payload_dir)
+
+    # payload_dir is None: seal the variant's own payloads out of reach of the
+    # seed and the answer before the collector ever sees SE_REPLAY_DIR.
+    with tempfile.TemporaryDirectory(prefix="se-replay-") as sealed:
+        directory = Path(sealed)
+        for payload in sorted((variant.path / "payloads").glob("*.json")):
+            shutil.copy(payload, directory / payload.name)
+        return _spawn(directory)
 
 
 def parse_stream(text: str) -> list[dict]:
@@ -516,7 +622,7 @@ def parse_stream(text: str) -> list[dict]:
 
 def replay(binary: list[str], variant: Variant) -> ReplayResult:
     """Replay one variant and report whether the collector reproduced it."""
-    issued = issue_generations(variant.collections())
+    issued = issue_generations(variant.collections(), seed=variant.name)
     proc = run_collector(binary, variant, issued=issued)
     if proc.returncode != 0:
         return ReplayResult(
