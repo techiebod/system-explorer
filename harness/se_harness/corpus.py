@@ -77,6 +77,30 @@ _ANCHOR_FORMS = (
 )
 
 
+# Wrongness the corpus and the differential guard together cannot see, named
+# rather than left to imply absence (DESIGN 20: "the product names its net… it
+# never implies absence of holes"). Each entry is a collector defect that no
+# committed capture makes false and no mutation operator mints — so its truth
+# is owned by the venue named, not by the replay tier. These are the *unclaimed*
+# gaps: a gap inside a class an operator declares it closes (an nftables family,
+# a ZFS vdev group) is a guard defect and is closed by construction in
+# differential.py, not parked here.
+NAMED_RESIDUALS = {
+    "storage/device-resolution": (
+        "the by-id-path → kernel-name join (Device fact, names.ephemeral.kernel) "
+        "fires only for a disk leaf whose path is in a readable devlinks tree; no "
+        "committed pool carries real disks with an alias tree, and no operator "
+        "mints one. Venue: the live comparator, running beside a real pool."
+    ),
+    "network/nft-rules": (
+        "the nft-rules collection is served by the reference but captured by no "
+        "committed variant, so a port wrong about rule-level facts is unseen "
+        "here. Venue: PLAN item 7 (collection completeness) and the live "
+        "comparator."
+    ),
+}
+
+
 class CorpusError(Exception):
     """A corpus entry that cannot be trusted to prove anything."""
 
@@ -384,5 +408,9 @@ def coverage(variants: list[Variant]) -> dict:
         "unregenerable": sorted(unregenerable),
         # Regenerable, but not everywhere: the guest a re-stage needs.
         "regeneration_requires": dict(sorted(requires.items())),
+        # The net named, so absence of a hole is never implied (DESIGN 20). A
+        # shape here is wrong-detectable by neither a committed capture nor a
+        # mutation operator — it is owned by the venue named, not by this tier.
+        "named_residuals": dict(sorted(NAMED_RESIDUALS.items())),
         "variants": len(variants),
     }

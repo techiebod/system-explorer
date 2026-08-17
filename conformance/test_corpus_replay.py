@@ -131,6 +131,66 @@ def test_coverage_says_what_a_re_stage_needs_where_it_needs_anything() -> None:
     )
 
 
+def test_the_named_residuals_are_stated_with_a_venue() -> None:
+    """The net is named, so absence of a hole is never implied (DESIGN 20).
+
+    A shape the corpus and the differential guard together cannot see must be
+    stated with the venue that owns it — otherwise silence reads as coverage,
+    which is the subset guard one level up. Deny-by-default over the ledger
+    itself: an empty residual set, or one whose reason names no venue, fails
+    rather than passing quietly.
+    """
+    residuals = corpus.coverage(VARIANTS)["named_residuals"]
+    assert residuals, "no residual named — a corpus that claims to see everything"
+    for name, reason in residuals.items():
+        assert "Venue:" in reason or "venue" in reason, (
+            f"{name}: a residual names the venue that owns its truth, or it is a "
+            "hole dressed as a disclosure"
+        )
+
+
+def test_no_two_variants_issue_the_same_generation() -> None:
+    """The property the seeded issuance exists for, asserted over the corpus
+    that actually ships.
+
+    The fixed rule it replaced issued the constant 100 to every
+    single-collection variant, so the echo guard caught every invented
+    constant except the one it issued — a declared-RED adversary passed
+    every channel by changing its constant from 0 to 100, one character. The
+    guard's teeth are distinctness: a constant can match at most one variant,
+    so no baked-in number passes every pair. Distinctness alone does not make
+    the request line the ONLY source of the issuance, though — the seed is
+    variant.name, the payload directory spells it, and expected.jsonl sits
+    beside it, so a collector that reconstructed either could echo the right
+    value without ever reading stdin. What forecloses that is replay.run_collector
+    replaying every variant from a sealed tempdir that names no variant and
+    carries no expected.jsonl (see its docstring): the request line becomes
+    the collector's only channel to the issued generation, and this test
+    guards the distinctness that channel rests on. 0 and 100 — the two
+    constants adversaries have actually shipped — are excluded from the
+    issuable range by construction, and that exclusion is asserted here rather
+    than trusted to the formula.
+    """
+    issued_by: dict[str, set[int]] = {
+        v.name: set(replay.issue_generations(v.collections(), seed=v.name).values())
+        for v in VARIANTS
+    }
+    for name, values in issued_by.items():
+        assert 0 not in values and 100 not in values, (
+            f"{name}: issued {sorted(values)} — 0 and 100 are the constants "
+            "shipped adversaries echo, and the range must exclude them"
+        )
+    names = sorted(issued_by)
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            shared = issued_by[a] & issued_by[b]
+            assert not shared, (
+                f"{a} and {b} both issue {sorted(shared)} — a constant "
+                "echoing that value would pass both variants, and the "
+                "issuance exists so no constant passes more than one"
+            )
+
+
 @pytest.mark.parametrize("variant", VARIANTS, ids=lambda v: v.name)
 def test_expected_stream_validates_against_the_contract(variant) -> None:
     """The committed half of every pair is a legal stream.
@@ -150,7 +210,7 @@ def test_the_committed_half_obeys_the_stream_rules(variant) -> None:
     emits it, the pair agrees with itself, and the rule holds against
     everything except the standard the collectors are graded by.
     """
-    issued = replay.issue_generations(variant.collections())
+    issued = replay.issue_generations(variant.collections(), seed=variant.name)
     problems = replay.check_stream(variant.expected, issued)
     assert not problems, f"{variant.name} (committed) stream rules:\n" + "\n".join(
         f"  - {p}" for p in problems
@@ -200,7 +260,7 @@ def test_replay_reproduces_the_committed_stream(variant) -> None:
     # The same issuance run_collector put on the request line: begin must
     # echo it exactly, so a collector minting its own generations fails
     # here even though the byte diff deliberately cannot see the values.
-    issued = replay.issue_generations(variant.collections())
+    issued = replay.issue_generations(variant.collections(), seed=variant.name)
     problems = replay.check_stream(emitted, issued)
     assert not problems, f"{variant.name} stream rules:\n" + "\n".join(
         f"  - {p}" for p in problems
