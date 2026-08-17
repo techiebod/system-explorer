@@ -113,7 +113,7 @@ def _judge(binary: list[str], variant: corpus.Variant) -> dict[str, list[str]]:
     A subject that cannot run is fixture rot rather than a verdict, so exit
     status and emptiness are hard failures here and never a red.
     """
-    issued = replay.issue_generations(variant.collections())
+    issued = replay.issue_generations(variant.collections(), seed=variant.name)
     proc = replay.run_collector(binary, variant, issued=issued)
     assert proc.returncode == 0, (
         f"{binary[-1]} exited {proc.returncode} on {variant.name} — the "

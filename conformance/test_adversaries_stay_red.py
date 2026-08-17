@@ -31,11 +31,15 @@ So a row whose evidence is an ANCHOR must also name CONTROL variants the same
 subject passes: a subject that fails everything proves nothing about the one
 fact it was staged against.
 
-Two rows are GREEN, and each names the DESIGN 19 adjudication that makes the
-pass honest rather than an oversight; ADJUDICATED_GREEN below is the closed
-set, so a third green row fails the suite. The non-vacuity tests at the bottom
-prove each green subject really put the wrong bytes on the wire and passed by
-rule, not by accident of agreement.
+Some rows are GREEN, and each names the adjudication — one of DESIGN 19's
+replay bounds, or DESIGN 20's third trap — that makes the pass honest rather
+than an oversight; ADJUDICATED_GREEN below is the closed set, so an
+unadjudicated green row fails the suite. The non-vacuity tests at the bottom
+prove each DESIGN 19 green subject really put the wrong bytes on the wire and
+passed by rule, not by accident of agreement; the DESIGN 20 green — the
+eight-defect port — has its non-vacuity in test_differential.py instead,
+where every one of its defect classes must visibly disagree with the
+reference under mutation, or be refused.
 """
 
 from __future__ import annotations
@@ -92,6 +96,19 @@ EXPECTED = (
                 evidence=("must equal the issued generations",)),
     Expectation(A2, "generation_zero_always", "network/healthy", "RED",
                 "claims generation 0 forever, disabling newest-wins",
+                channel="rules",
+                evidence=("must equal the issued generations",)),
+    Expectation(A2, "generation_constant_100", "network/healthy", "RED",
+                "zero_always's constant changed to 100 — the base the old "
+                "fixed issuance handed every single-collection variant, so "
+                "this one character passed every channel until the issuance "
+                "was seeded per variant and 100 excluded from its range",
+                channel="rules",
+                evidence=("must equal the issued generations",)),
+    Expectation(A2, "generation_borrowed_base", "network/healthy", "RED",
+                "echoes storage/healthy's real seeded base (458) — a "
+                "constant matching one variant must fail every other, so "
+                "only parsing the request line passes everywhere",
                 channel="rules",
                 evidence=("must equal the issued generations",)),
     Expectation(A2, "batch_drift", "network/healthy", "RED",
@@ -208,14 +225,57 @@ EXPECTED = (
                 "cost is advisory by construction (DESIGN 19): the rules bound "
                 "cpu_ms/wall_ms without authenticating them, and the collator's "
                 "slice accounting is the authoritative cost of observation"),
+    # ── GREEN, adjudicated: DESIGN 20's third trap, kept executable ──
+    #
+    # The eight-defect port: wrong about the machine in eight ways, and green
+    # on EVERY committed pair — replay equivalence proves a collector right
+    # about the machines the corpus holds and nothing else, so a port whose
+    # blind spots fall outside the captured shapes passes by construction and
+    # every added variant only moves the frontier. These two rows, one per
+    # collector it serves, are the replay judge saying so honestly rather
+    # than a regression: the fixture's RED lives in test_differential.py,
+    # where each of its defect classes must visibly disagree with the
+    # reference under mutation, or be refused. If either row goes red here,
+    # the replay judge has grown a rule that can see one of the eight classes
+    # — DESIGN 20's trap statement and test_differential.py's case table must
+    # move in the same change, not this table alone.
+    Expectation("a7_replay_green_port.py", None, "network/healthy", "GREEN",
+                "family-enum and single-caller walks that no committed "
+                "ruleset can expose: every capture stays inside {ip, ip6, "
+                "inet} and no committed chain has two callers"),
+    Expectation("a7_replay_green_port.py", None, "storage/healthy", "GREEN",
+                "first-vdev redundancy, epoch-zero scan time, "
+                "spare-as-unhealthy and nested nulls that no committed pool "
+                "exhibits: the captures are single-layout, scan-finished, "
+                "spare-less and fully reported"),
+    # ── GREEN, adjudicated: DESIGN 20's third trap, the group-enum spelling ──
+    #
+    # The l2cache-blind port: it drops the whole l2cache vdev group, and every
+    # committed pool is cache-less, so under replay there is nothing to drop and
+    # the judge honestly passes it. Its RED lives in test_differential.py, where
+    # the zpool-cache-vdev operator mints an l2cache group into the seed and the
+    # closure guard proves that group is minted by an operator rather than left
+    # an orphan of the declared ZFS_GROUP_VDEVS set. If this goes red here, the
+    # replay judge has grown a rule that sees a group no committed pool holds —
+    # DESIGN 20's trap statement and test_differential.py's case table move
+    # together, not this row alone.
+    Expectation("a8_l2cache_blind.py", None, "storage/healthy", "GREEN",
+                "an l2cache group dropped whole, which no committed pool can "
+                "expose: every capture is cache-less, so the blindness is "
+                "invisible under replay and the differential guard owns its red"),
 )
 
-# The closed set of adjudicated greens, and the DESIGN 19 clause each rests
+# The closed set of adjudicated greens, and the DESIGN clause each rests
 # on. A green row absent from here is an undocumented survivor, which is the
 # thing this table exists to prevent — so this is asserted, not commented.
 ADJUDICATED_GREEN = {
     ("fabricated_cost.py", None): "advisory self-cost",
     (A2, "boot_id_constant_valid"): "single-capture physics, cross-boot deferral",
+    ("a7_replay_green_port.py", None): "the third trap: replay cannot decide "
+    "the uncovered space (DESIGN 20); the differential guard owns this red",
+    ("a8_l2cache_blind.py", None): "the third trap: replay cannot see the "
+    "l2cache group no committed pool holds (DESIGN 20); the differential "
+    "guard owns this red, under zpool-cache-vdev",
 }
 
 
@@ -253,7 +313,7 @@ def _judge(binary: list[str], variant: corpus.Variant) -> Judgement:
     itself must still RUN and emit — an adversary that crashes is a rotted
     fixture, not a caught one, so exit status and emptiness are hard failures
     here."""
-    issued = replay.issue_generations(variant.collections())
+    issued = replay.issue_generations(variant.collections(), seed=variant.name)
     proc = replay.run_collector(binary, variant, issued=issued)
     assert proc.returncode == 0, (
         f"{binary[-1]}: exited {proc.returncode} — the adversaries all wear "
@@ -286,6 +346,10 @@ def _set_defect(monkeypatch, entry: Expectation) -> None:
         monkeypatch.delenv("SE_DEFECT", raising=False)
     else:
         monkeypatch.setenv("SE_DEFECT", entry.defect)
+    # The eight-defect port's request-parse gate is differential-guard
+    # apparatus, never part of a replay verdict: leaked in from the shell it
+    # would refuse every green row's run and misattribute the red ones.
+    monkeypatch.delenv("SE_PORT_NO_REQUEST_PARSE", raising=False)
 
 
 # ── deny-by-default: the table and the directory are one set ─────────────
@@ -375,15 +439,19 @@ def test_every_row_is_bound_to_a_reason(entry: Expectation) -> None:
         )
 
 
-def test_the_green_residue_is_exactly_the_two_adjudications() -> None:
+def test_the_green_residue_is_exactly_the_adjudicated_set() -> None:
     """The complete list of adversaries this repository lets pass.
 
-    Both are DESIGN 19 bounds on what one replayed capture can authenticate:
+    Two are DESIGN 19 bounds on what one replayed capture can authenticate:
     self-reported cost is advisory by construction, and a constant VALID boot
-    id is indistinguishable from a real one without a second boot. Everything
-    else in fixtures/adversaries/ is red forever. A third green row — a new
-    deferral, or an old one quietly re-opened — fails here, because an
-    undocumented survivor is precisely what this table exists to prevent.
+    id is indistinguishable from a real one without a second boot. The third
+    is DESIGN 20's bound on what replay itself can decide: the eight-defect
+    port is green on every committed pair by construction, and the
+    differential guard (test_differential.py) is where its wrongness is
+    caught, class by class. Everything else in fixtures/adversaries/ is red
+    forever. A new green row — a new deferral, or an old one quietly
+    re-opened — fails here, because an undocumented survivor is precisely
+    what this table exists to prevent.
     """
     green = {(e.fixture, e.defect) for e in EXPECTED if e.verdict == "GREEN"}
     assert green == set(ADJUDICATED_GREEN), (
@@ -428,7 +496,10 @@ def test_the_adversary_meets_its_declared_verdict(entry, monkeypatch) -> None:
             "authenticated and DESIGN 19's advisory-cost bound must be updated "
             "in the same change; if the valid-constant boot id row is failing, "
             "the cross-boot deferral has been revoked and DESIGN 19's "
-            "two-regimes law must say so."
+            "two-regimes law must say so; if an eight-defect-port row is "
+            "failing, the replay judge has grown a rule that sees one of "
+            "DESIGN 20's mutation-owned classes, and the trap statement plus "
+            "test_differential.py's case table must move in the same change."
         )
         return
 

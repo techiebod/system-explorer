@@ -15,6 +15,15 @@ The axes, and the verdicts test_adversaries_stay_red.py holds them to:
   RED, forever
     generation_invented     mints its own generations instead of echoing issue
     generation_zero_always  every batch, forever, claims generation 0
+    generation_constant_100 zero_always's 0 changed to 100 — one character.
+                            100 was the base the old fixed issuance handed
+                            every single-collection variant, so this passed
+                            every channel; red now proves the issuance is
+                            seed-varied and excludes 100
+    generation_borrowed_base echoes another variant's real base (storage/
+                            healthy's 458) against network/healthy: a
+                            constant that matches ONE variant must still
+                            fail everywhere else, or guessing beats parsing
     batch_drift             end closes a batch begin never opened
     at_wallclock            `at` from time.Now(), not the boottime clock
     at_far_future           `at` in milliseconds against a seconds-scale rule
@@ -147,6 +156,42 @@ def generation_zero_always(records):
     return out
 
 
+def generation_constant_100(records):
+    """generation_zero_always with its constant changed from 0 to 100 — the
+    one-character exploit that reopened the echo guard. The old issuance was
+    100 + 17*i over sorted collections, and every variant opened exactly one
+    collection, so i was always 0 and 100 was what every request issued:
+    the guard caught every invented constant except the one it issued. This
+    axis stays as the permanent proof that no request issues 100 anywhere."""
+    out = []
+    for r in records:
+        if r["record"] == "begin":
+            r = dict(r, generations={k: 100 for k in r["generations"]})
+        elif r["record"] == "commit":
+            r = dict(r, generation=100)
+        out.append(r)
+    return out
+
+
+def generation_borrowed_base(records):
+    """The same defect wearing a REAL base: 458 is storage/healthy's seeded
+    base, hardcoded here the way a collector that read one lab run's request
+    line and baked the number in would carry it. Judged against
+    network/healthy (base 658), so the red proves distinctness does the
+    work: a constant matching one variant fails every other, and only
+    parsing the request line passes everywhere. If the issuance formula
+    moves and 458 collides with network/healthy's, this axis goes green and
+    its row's evidence check names the regression."""
+    out = []
+    for r in records:
+        if r["record"] == "begin":
+            r = dict(r, generations={k: 458 for k in r["generations"]})
+        elif r["record"] == "commit":
+            r = dict(r, generation=458)
+        out.append(r)
+    return out
+
+
 def go_port(records):
     """One collector, four ordinary porting mistakes at once — the shape a
     real first port has: the wall clock for `at`, a build constant for the
@@ -173,6 +218,8 @@ def go_port(records):
 MUTATIONS = {
     "generation_invented": generation_invented,
     "generation_zero_always": generation_zero_always,
+    "generation_constant_100": generation_constant_100,
+    "generation_borrowed_base": generation_borrowed_base,
     "batch_drift": batch_drift,
     "at_wallclock": at_wallclock,
     "at_far_future": at_far_future,

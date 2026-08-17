@@ -95,7 +95,7 @@ def test_probe_an_omitted_count_is_a_problem() -> None:
     it, so absence is a named problem and never a skip. Red target of the
     three-required-counts reversion below — the corpus and every fixture
     stream carry all three, so nothing else feeds check_stream the omission."""
-    issued = replay.issue_generations(["pools"])
+    issued = replay.issue_generations(["pools"], seed="guard-probe")
     assert not replay.check_stream(_control_stream(issued), issued), (
         "the control stream is not clean; the omissions below would indict "
         "the wrong thing"
