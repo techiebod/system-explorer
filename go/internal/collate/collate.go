@@ -6,6 +6,7 @@ package collate
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 
@@ -99,9 +100,50 @@ func AcquireOnce(ctx context.Context, st *store.Store, client *wire.Client) erro
 		scope = *batch.Begin.Instance
 	}
 
+	// The declaration is what makes relation targets resolvable at all: a
+	// target's KIND names the prefix a collection declared, so the collator
+	// walks the producer's own declaration rather than guessing that
+	// "block-device" probably means a collection called "block-devices"
+	// (law 3 — minted from names a collector published, never correlated).
+	prefixes := map[string]string{}
+	types := map[string]map[string]store.RelationType{}
+	for _, c := range decl.Collections {
+		prefixes[c.Name] = c.Prefix
+		table := map[string]store.RelationType{}
+		for _, r := range c.Relations {
+			table[r.Type] = store.RelationType{
+				Discriminator:     r.Discriminator,
+				InverseObservable: r.InverseObservable,
+				ConfirmedBy:       r.ConfirmedBy,
+			}
+		}
+		types[c.Name] = table
+	}
+	byKind, err := store.PrefixIndex(prefixes)
+	if err != nil {
+		recordFailure(st, "", "ambiguous-prefix", err)
+		return err
+	}
+
 	var firstErr error
 	for _, name := range names {
 		if err := applyCollection(st, name, scope, batch); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	if firstErr != nil {
+		return firstErr
+	}
+
+	// Relations are assembled AFTER every collection's objects have landed,
+	// and that ordering is the whole of collator-side resolution. The test
+	// is "does anything on this host claim the name" — so a rule asserting
+	// membership of a chain resolves only once the chains collection of the
+	// same batch has been applied. Resolving as each collection landed would
+	// make the answer depend on the order the collector happened to emit
+	// them, which is a reading of the stream rather than of the host.
+	for _, name := range names {
+		if err := applyRelations(st, name, scope, batch, byKind, types[name]); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
@@ -163,6 +205,70 @@ func applyCollection(st *store.Store, name, scope string, batch *wire.Batch) err
 	}
 	_, err := st.ApplyCommit(name, scope, gen, batch.Begin.Batch, batch.Begin.BootID, objects)
 	return err
+}
+
+// applyRelations mints one collection's assertions into relations (DESIGN
+// §13, acceptance item 6). A collection that did not commit asserts nothing,
+// for the same reason it publishes no objects: an uncommitted collection is
+// authoritative for nothing, and minting its edges would let a partial read
+// retire the relations a complete one established.
+func applyRelations(st *store.Store, name, scope string, batch *wire.Batch,
+	byKind map[string]string, types map[string]store.RelationType) error {
+	cs := batch.Collections[name]
+	if cs == nil || cs.Commit == nil {
+		return nil
+	}
+
+	assertions := make([]store.Assertion, 0, len(cs.Assertions))
+	for _, a := range cs.Assertions {
+		assertions = append(assertions, store.Assertion{
+			Collection: a.Collection,
+			SourceName: a.Name,
+			Type:       a.Type,
+			Vantage:    a.Vantage,
+			TargetKind: a.TargetKind,
+			TargetName: a.TargetName,
+			Facts:      a.Facts,
+		})
+	}
+
+	relations, err := st.ApplyAssertions(name, scope, assertions, types,
+		st.ResolverFor(byKind, scope), inverseIn(batch))
+	if err != nil {
+		// A collision or an undeclared type is a statement about the
+		// collector, recorded rather than swallowed: an edge that silently
+		// replaced another is the failure the discriminator exists to stop,
+		// and a loop that forgot it would be the founding failure again.
+		return st.RecordRejection(name, batch.Begin.Batch, "relation-assembly", err.Error())
+	}
+	_ = relations
+	return nil
+}
+
+// inverseIn answers "did some vantage in this batch assert the confirming
+// type back the other way?" — which is how an edge observed at BOTH ends
+// becomes `confirmed` rather than two independent `asserted` halves.
+//
+// Batch-scoped on purpose. Two assertions farther apart in time than the
+// tighter collection's declared freshness neither confirm nor contradict,
+// because they are two ages of the world (DESIGN §19); everything inside one
+// batch shares one acquisition, which is the only window this tier can prove
+// anything about. Cross-batch confirmation belongs to the hub, with the age
+// spread it can measure and this cannot.
+func inverseIn(batch *wire.Batch) func(relType, from, to string) (json.RawMessage, bool) {
+	index := map[[3]string]json.RawMessage{}
+	for _, cs := range batch.Collections {
+		if cs == nil || cs.Commit == nil {
+			continue
+		}
+		for _, a := range cs.Assertions {
+			index[[3]string{a.Type, a.Name, a.TargetName}] = a.Facts
+		}
+	}
+	return func(relType, from, to string) (json.RawMessage, bool) {
+		facts, ok := index[[3]string{relType, from, to}]
+		return facts, ok
+	}
 }
 
 func recordFailure(st *store.Store, collection, reason string, err error) {

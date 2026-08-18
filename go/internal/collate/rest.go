@@ -122,7 +122,75 @@ func NewHandler(st *store.Store, now func() float64, bootID string) http.Handler
 		writeJSON(w, views)
 	})
 
+	// Relations are served on their own route rather than nested inside the
+	// object, because the observability state is the thing a reader must be
+	// able to act on and burying it in a sub-member of a row is how it stops
+	// being visible (DESIGN 29: a relation renders its observability at
+	// every density, never as a footnote).
+	mux.HandleFunc("GET /v1/collections/{name}/relations", func(w http.ResponseWriter, r *http.Request) {
+		name := r.PathValue("name")
+		known, err := st.HasCollection(name)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !known {
+			http.Error(w, "unknown collection", http.StatusNotFound)
+			return
+		}
+		rows, err := st.Relations(name)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		views := make([]relationView, 0, len(rows))
+		for _, rel := range rows {
+			v := relationView{
+				ID:            rel.Key,
+				Source:        rel.SourceID,
+				Type:          rel.Type,
+				Vantage:       rel.Vantage,
+				Observability: string(rel.Observability),
+				Facts:         rel.Facts,
+			}
+			// The target always carries its name and whether it resolved.
+			// An unresolved target renders as an edge into open space, and
+			// a reader must be able to tell that from no edge at all
+			// WITHOUT reading prose — so `resolved` is always present and
+			// `id` appears only when there is one.
+			v.Target.Kind = rel.TargetKind
+			v.Target.Name = rel.TargetName
+			v.Target.Resolved = rel.Resolved
+			if rel.Resolved {
+				v.Target.ID = rel.TargetID
+			}
+			views = append(views, v)
+		}
+		writeJSON(w, views)
+	})
+
 	return mux
+}
+
+// relationView is one assembled edge as the API serves it. Observability is
+// a required member, never omitempty: `asserted` is not a degraded
+// `confirmed` and a missing state would let a consumer default it to the
+// wrong one, which is the founding failure arriving through the API.
+type relationView struct {
+	ID            string          `json:"id"`
+	Source        string          `json:"source"`
+	Type          string          `json:"type"`
+	Vantage       string          `json:"vantage"`
+	Observability string          `json:"observability"`
+	Target        relationTarget  `json:"target"`
+	Facts         json.RawMessage `json:"facts,omitempty"`
+}
+
+type relationTarget struct {
+	Kind     string `json:"kind"`
+	Name     string `json:"name"`
+	Resolved bool   `json:"resolved"`
+	ID       string `json:"id,omitempty"`
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

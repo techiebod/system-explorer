@@ -148,6 +148,34 @@ type Declaration struct {
 type DeclarationCollection struct {
 	Name      string `json:"name"`
 	Freshness string `json:"freshness"`
+	// Prefix is how a relation target's KIND finds the collection that
+	// could publish it: a collector declares the prefix its object ids
+	// carry, and a target kind naming that prefix resolves against that
+	// collection's published names. Declaration-driven on purpose — law 3
+	// mints a relation from names a collector actually published, never
+	// from values that merely resemble each other, so the collator reads
+	// the producer's own declaration rather than guessing that a kind
+	// "block-device" probably means a collection called "block-devices".
+	Prefix string `json:"prefix"`
+	// Relations is the type table: the discriminator that tells parallel
+	// instances apart, and whether the far end can confirm this type at
+	// all (DESIGN 19).
+	Relations []DeclarationRelation `json:"relations"`
+}
+
+type DeclarationRelation struct {
+	Type         string   `json:"type"`
+	CarriesFacts bool     `json:"carries_facts"`
+	// The facts that distinguish parallel instances. Absent asserts the
+	// type is at-most-singular between any pair — an assertion that is
+	// checkable, because a second instance arriving is then an error the
+	// collator reports rather than a silent overwrite (DESIGN 13).
+	Discriminator []string `json:"discriminator"`
+	// Whether this type CAN be confirmed from the far end. A type that
+	// declares it cannot is honest rather than perpetually `asserted`; a
+	// type that declares it can, and never is, is a finding.
+	InverseObservable bool   `json:"inverse_observable"`
+	ConfirmedBy       string `json:"confirmed_by"`
 }
 
 // ParseDeclaration extracts the slice above and parses each freshness.

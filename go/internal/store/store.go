@@ -99,7 +99,7 @@ func Open(path string) (*Store, error) {
 	// One connection: the apply path must never interleave with itself,
 	// and the read load (one host's REST) does not need a pool.
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(schema); err != nil {
+	if _, err := db.Exec(schema + relationSchema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("apply schema: %w", err)
 	}

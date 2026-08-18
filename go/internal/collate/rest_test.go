@@ -205,3 +205,64 @@ func TestNoMutatingRouteExists(t *testing.T) {
 		}
 	}
 }
+
+// The relations route, and the one property it exists to preserve: a reader
+// must be able to tell an edge into open space from an edge to a known object
+// WITHOUT reading prose, and must never see `asserted` wearing `confirmed`'s
+// shape. So `observability` and `target.resolved` are required members and
+// `target.id` appears only when there is one — an omitted state would let a
+// consumer default it, and the default a consumer picks is `confirmed`.
+func TestRelationsRouteRendersResolutionAndObservability(t *testing.T) {
+	st := seeded(t)
+	_, err := st.ApplyAssertions("identity", store.HostNative,
+		[]store.Assertion{
+			{Collection: "identity", SourceName: "host1", Type: "peers-with",
+				Vantage: "identity", TargetKind: "host", TargetName: "host2"},
+			{Collection: "identity", SourceName: "host1", Type: "peers-with",
+				Vantage: "identity", TargetKind: "host", TargetName: "elsewhere"},
+		},
+		map[string]store.RelationType{"peers-with": {}},
+		st.ResolverFor(map[string]string{"host": "identity"}, store.HostNative),
+		nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := get(t, NewHandler(st, func() float64 { return 26.0 }, fakeBootID),
+		"/v1/collections/identity/relations")
+	if rr.Code != http.StatusOK {
+		t.Fatal(rr.Code)
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &rows); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("both edges are served, the unresolved one included: %+v", rows)
+	}
+	byName := map[string]map[string]any{}
+	for _, row := range rows {
+		target := row["target"].(map[string]any)
+		byName[target["name"].(string)] = row
+	}
+
+	known := byName["host2"]["target"].(map[string]any)
+	if known["resolved"] != true || known["id"] != "identity:host2" {
+		t.Fatalf("a name this host published resolves and carries its id: %+v", known)
+	}
+	open := byName["elsewhere"]["target"].(map[string]any)
+	if open["resolved"] != false {
+		t.Fatalf("resolved is present and false, never absent: %+v", open)
+	}
+	if _, hasID := open["id"]; hasID {
+		t.Fatalf("an unresolved target has no id to carry: %+v", open)
+	}
+	if open["name"] != "elsewhere" {
+		t.Fatalf("it carries the bare name instead: %+v", open)
+	}
+	for name, row := range byName {
+		if row["observability"] != "asserted" {
+			t.Fatalf("%s: observability is required and stated, not inferred: %+v", name, row)
+		}
+	}
+}
