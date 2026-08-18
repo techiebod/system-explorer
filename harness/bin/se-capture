@@ -19,10 +19,13 @@ from __future__ import annotations
 
 import argparse
 import difflib
+import functools
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent.parent
@@ -31,6 +34,71 @@ REFERENCE = REPO / "harness" / "bin" / "se-reference-collector"
 sys.path.insert(0, str(REPO / "harness"))
 
 from se_harness.replay import issue_generations  # noqa: E402
+
+
+def ported_collectors() -> dict[str, str]:
+    """conformance/conftest.py's GO_COLLECTORS, read without importing it.
+
+    The retirement table lives there because two test modules resolve through
+    it, and this tool must give the SAME answer or the corpus is regenerated
+    by one reference and judged against another. By AST rather than by import
+    because conftest pulls in pytest and the adapters; reading the product's
+    own table is the pattern test_corpus_replay already uses for the SEAM.
+
+    Without this, `regenerable: true` was a claim no tool could honour:
+    se-capture hardcoded the Python shim, which has never heard of a ported
+    collector, so corpus/system/healthy shipped declaring itself re-stageable
+    while nothing committed could re-stage it — and the coverage report
+    repeated the claim.
+    """
+    import ast
+
+    source = (REPO / "conformance" / "conftest.py").read_text()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == "GO_COLLECTORS" for t in node.targets
+        ):
+            return ast.literal_eval(node.value)
+    raise SystemExit("no GO_COLLECTORS table in conformance/conftest.py")
+
+
+@functools.cache
+def reference_for(collector: str) -> list[str]:
+    """The command that IS the reference for this collector.
+
+    Exactly conftest.reference_command's rule: the Python shim until a
+    collector ports, its own binary after — "the shim retires collector by
+    collector, and this table is where a retirement lands". A ported
+    collector regenerating from the shim would ratify the shim's answer over
+    the artefact that actually ships, and for a collector with no Python
+    adapter at all the shim cannot answer at all.
+    """
+    package = ported_collectors().get(collector)
+    if package is None:
+        return [sys.executable, str(REFERENCE)]
+
+    go = shutil.which("go") or (
+        "/opt/homebrew/bin/go"
+        if Path("/opt/homebrew/bin/go").exists()
+        else None
+    )
+    if go is None:
+        raise SystemExit(
+            f"{collector} is a ported collector and no Go toolchain is on "
+            "PATH or at /opt/homebrew/bin/go, so its reference cannot be built"
+        )
+    out = Path(tempfile.mkdtemp(prefix="se-capture-build-")) / f"se-collect-{collector}"
+    build = subprocess.run(
+        [go, "build", "-o", str(out), package],
+        cwd=REPO / "go",
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    if build.returncode != 0:
+        print(build.stderr, file=sys.stderr)
+        raise SystemExit(f"go build {package} exited {build.returncode}")
+    return [str(out)]
 
 
 def capture(variant: Path) -> str:
@@ -53,7 +121,7 @@ def capture(variant: Path) -> str:
     issued = issue_generations(collections, seed=f"{meta['collector']}/{variant.name}")
     tokens = " ".join(f"{name}:{gen}" for name, gen in sorted(issued.items()))
     proc = subprocess.run(
-        [sys.executable, str(REFERENCE)],
+        reference_for(meta["collector"]),
         input=f"collect {tokens}\n",
         capture_output=True,
         text=True,

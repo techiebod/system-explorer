@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -195,6 +196,48 @@ def test_every_served_collection_is_captured_or_named() -> None:
         "the corpus never opens is a port graded on everything except the "
         "answer it exists to give. Capture a pair, or name a residual whose "
         "reason is true and whose venue owns it."
+    )
+
+
+def test_every_committed_pair_regenerates_from_the_committed_tool() -> None:
+    """The expected half is reproducible by a tool in this repository.
+
+    A corpus is a set of reference answers, and an answer nothing can
+    re-derive is an answer nobody can audit — the diff a reviewer reads
+    before a regeneration lands (corpus/README) needs a tool that can produce
+    one. `corpus/system/healthy` shipped declaring itself re-stageable while
+    `se-capture` hardcoded the Python shim, which has never heard of a ported
+    collector, so the only tool that could regenerate it did not exist and
+    the coverage report repeated the claim.
+
+    It also holds the two issuance seeds together. `se-capture` seeds from
+    `meta.collections` and the replay driver seeds from `expected.jsonl`;
+    they agree today and nothing else requires them to, so a variant whose
+    meta drifted from its stream would regenerate under a different
+    generation map and this is where that shows.
+
+    Distinct from `regenerable`, which is about re-CAPTURING the payload from
+    a machine — a hand-planted variant is regenerable: false and still has a
+    reproducible expected half.
+    """
+    binary = REPO / "harness" / "bin" / "se-capture"
+    proc = subprocess.run(
+        [sys.executable, str(binary), *[str(v.path) for v in VARIANTS]],
+        capture_output=True,
+        text=True,
+        timeout=600,
+        cwd=REPO,
+    )
+    assert proc.returncode == 0, (
+        "se-capture could not reproduce every committed pair:\n"
+        + proc.stdout[-4000:]
+        + "\n"
+        + proc.stderr[-2000:]
+    )
+    unchanged = [line for line in proc.stdout.splitlines() if line.endswith(": unchanged")]
+    assert len(unchanged) == len(VARIANTS), (
+        f"{len(unchanged)} of {len(VARIANTS)} pairs reported unchanged; the "
+        f"rest differ:\n{proc.stdout[-4000:]}"
     )
 
 
