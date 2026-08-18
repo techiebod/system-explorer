@@ -391,8 +391,14 @@ def check_stream(records: list[dict], issued: dict[str, int] | None = None) -> l
         if not isinstance(generation, int) or generation < 0:
             problems.append(f"{collection}: generation {generation!r} is not an index")
         if collection not in commits and collection not in declines:
+            # The whole-stream radius is deliberate and differs from the
+            # collator's: under a pinned corpus an incomplete emission is
+            # a broken collector, where the live collator holds only the
+            # offending collection and applies the rest (DESIGN 19).
             problems.append(
-                f"{collection}: named in begin, neither committed nor declined"
+                f"{collection}: named in begin, neither committed nor declined "
+                "— replay refuses the whole stream, where the live collator "
+                "would hold only this collection and apply the rest"
             )
         for commit in commits.get(collection, []):
             echoed = commit.get("generation")
@@ -403,14 +409,36 @@ def check_stream(records: list[dict], issued: dict[str, int] | None = None) -> l
                     "generation begin named, or the collator cannot order it"
                 )
 
+    # A decline is a statement about the whole collection, so it closes
+    # the collection to every emitting record — in BOTH orders. The wire
+    # judges the orders separately (decline-after-records, record-after-
+    # decline); over a complete stream the bag form is the same law, and
+    # the one-direction rule this replaces let records after a non-absent
+    # decline vanish without a problem.
+    emitted: Counter[str] = Counter(
+        str(r.get("collection"))
+        for r in records
+        if r.get("record") in ("object", "relation_assertion", "unobservable")
+    )
     for collection, group in sorted(declines.items()):
+        if emitted[collection]:
+            problems.append(
+                f"{collection}: {emitted[collection]} record(s) emitted for a "
+                "declined collection — a decline closes its collection to "
+                "everything except absent's zero commit (DESIGN 19)"
+            )
         for decline in group:
             if decline.get("reason") == "absent":
                 closing = commits.get(collection, [])
-                if not closing or any(c.get("objects") != 0 for c in closing):
+                if not closing or any(
+                    c.get(member) != 0
+                    for c in closing
+                    for member in ("objects", "assertions", "unobservable")
+                ):
                     problems.append(
                         f"{collection}: an absent decline is authoritative-empty "
-                        "and must commit zero objects"
+                        "and must commit zero objects (and zero assertions and "
+                        "unobservables — there is nothing to count)"
                     )
             elif collection in commits:
                 problems.append(
@@ -470,13 +498,14 @@ def check_stream(records: list[dict], issued: dict[str, int] | None = None) -> l
                 or isinstance(at, bool)
                 or not isinstance(at, (int, float))
                 or not math.isfinite(at)
-                or not 0 < at < 1e9
+                or not 0 < at <= 1e9
             ):
                 problems.append(
                     f"{where}: `at` is {at!r}; `at` must be a finite "
                     "boot-scale reading, non-decreasing within its collection "
-                    "— 0 < at < 1e9, monotonic seconds, stamped before the "
-                    "earliest contributing read (DESIGN 09)"
+                    "— 0 < at <= 1e9 (inclusive, as the contract's maximum "
+                    "is), monotonic seconds, stamped before the earliest "
+                    "contributing read (DESIGN 09)"
                 )
             else:
                 # The structural part of the third replay bound (DESIGN 19):
@@ -608,11 +637,18 @@ def run_collector(
         return _spawn(payload_dir)
 
     # payload_dir is None: seal the variant's own payloads out of reach of the
-    # seed and the answer before the collector ever sees SE_REPLAY_DIR.
+    # seed and the answer before the collector ever sees SE_REPLAY_DIR. Every
+    # payload file, not *.json: text payloads (os-release, hostname) ARE the
+    # native documents, and a glob that only carried JSON replayed the system
+    # variant against an empty directory — an honest absent decline judged
+    # against a capture that was anything but. Dotfiles stay behind: the
+    # .gitkeep marking an absent-interface variant is git plumbing, and the
+    # loader refuses to read it as a capture for the same reason.
     with tempfile.TemporaryDirectory(prefix="se-replay-") as sealed:
         directory = Path(sealed)
-        for payload in sorted((variant.path / "payloads").glob("*.json")):
-            shutil.copy(payload, directory / payload.name)
+        for payload in sorted((variant.path / "payloads").iterdir()):
+            if payload.is_file() and not payload.name.startswith("."):
+                shutil.copy(payload, directory / payload.name)
         return _spawn(directory)
 
 

@@ -17,7 +17,10 @@ language and dictates nothing about how one is built internally.
 ```
 corpus/<collector>/<variant>/
     meta.json          what this variant is, and what produced it
-    payloads/*.json    the native documents, one per acquisition
+    payloads/*         the native documents, one per acquisition — .json
+                       parses; anything else is the interface's own text
+                       (os-release, hostname), served verbatim, because the
+                       native format IS the payload (DESIGN 20)
     expected.jsonl     the stream, validated against contract/se.stream.1.json
 ```
 

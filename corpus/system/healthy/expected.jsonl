@@ -1,0 +1,4 @@
+{"record":"begin","request":"replay","batch":"replay","declaration":"sha256:7277a1be4c59dffcee2344254a1fa86dce2194dc33d117cf6cbad5c67232a494","boot_id":"5cb0362b-8f52-ed25-eaf2-87bab7c0daca","timens":0,"instance":null,"generations":{"identity":757}}
+{"record":"object","collection":"identity","name":"host-8d33ac","facts":{"Hostname":"host-8d33ac","OsId":"ubuntu","OsPrettyName":"Ubuntu 26.04 LTS","OsVersionId":"26.04"},"at":1}
+{"record":"commit","collection":"identity","generation":757,"objects":1,"assertions":0,"unobservable":0}
+{"record":"end","request":"replay","batch":"replay","cpu_ms":0.5,"wall_ms":1}

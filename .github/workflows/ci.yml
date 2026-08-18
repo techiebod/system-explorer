@@ -17,6 +17,19 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # The corpus replays ported collectors as binaries, so the conformance
+      # job needs the Go toolchain: without it the system variant would skip
+      # on a workstation and FAIL here — the resolver treats CI as the place
+      # a skip would be the subset guard (a green run that never reached the
+      # variant), so this step is load-bearing, not an optimisation.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+      # Compile check with a readable error, and it primes the build cache
+      # the in-suite session build then hits; the binary pytest runs is
+      # still the one the suite builds itself — one source, no drift.
+      - run: go build ./cmd/se-collect-system
+        working-directory: go
       - run: python -m pip install -e ".[test,mcp]"
       - run: python -m pytest -q
 

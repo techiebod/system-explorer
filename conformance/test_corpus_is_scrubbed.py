@@ -60,9 +60,22 @@ def _cases() -> list[pytest.param]:
         meta = json.loads(meta_path.read_text())
         name = f"{variant_dir.parent.name}/{variant_dir.name}"
         declares = _declares_addresses(str(meta.get("collector", "")))
-        for payload in sorted((variant_dir / "payloads").glob("*.json")):
+        for payload in sorted((variant_dir / "payloads").iterdir()):
+            if not payload.is_file() or payload.name.startswith("."):
+                continue  # .gitkeep is git plumbing, not a capture
+            if payload.suffix == ".json":
+                document: object = json.loads(payload.read_text())
+            else:
+                # Text payloads are swept as {stem: text}: a *.json glob here
+                # was the subset-guard shape — the system collector's payloads
+                # are os-release, hostname and boot_id, and every one of them
+                # escaped the sweep entirely. The stem is the document's one
+                # name, and wrapping arms the detectors' id-ish key context:
+                # a boot_id file holds a UUID that reads as an identifier
+                # precisely because of what the file is called.
+                document = {payload.stem: payload.read_text()}
             cases.append(pytest.param(
-                json.loads(payload.read_text()), declares,
+                document, declares,
                 id=f"{name}/payloads/{payload.name}",
             ))
         expected = variant_dir / "expected.jsonl"

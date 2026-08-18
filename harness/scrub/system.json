@@ -1,0 +1,8 @@
+{
+  "#": "system collector: three text documents, each classified whole — the native format IS the payload (DESIGN 20), so there are no leaves for a dotted path to name.",
+  "#os-release": "distribution constants, identical on every install of the distro, so the document travels verbatim — the same reasoning as the declaration's redaction_exemption. DELIBERATE EXCEPTION: the committed healthy variant plants a canary credential (se-canary-system-…) inside HOME_URL, a member the declaration does not serve. The canary is synthetic and identifies nobody; it exists so acceptance item 11 can prove the collector never emits what it did not declare, and scrubbing it out here would disarm the very check it is planted for.",
+  "os-release": {"payload": "os-release", "whole": {"discloses": "nothing"}},
+  "hostname": {"payload": "hostname", "whole": {"discloses": "location", "format": "hostname"}},
+  "#boot_id": "formatless on purpose: the free-text pass substitutes the UUID shape-preserved (dashed, 5cb0-marked), which is what keeps the replayed begin record carrying a plausible boot id instead of a stub.",
+  "boot_id": {"payload": "boot_id", "whole": {"discloses": "identity"}}
+}

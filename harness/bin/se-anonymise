@@ -33,6 +33,22 @@ collector, as a manifest, and this tool guesses nothing:
   entry matching the same leaf is the ordinary two-entries refusal, because
   which one governs must not depend on this file's iteration order.
 
+  A payload is not always JSON: for some interfaces the native format IS a
+  text document (os-release, the kernel hostname — DESIGN 20), and a text
+  document has no leaves for a dotted path to name. Such a payload is
+  classified WHOLE, by a payload-scoped entry whose classification sits
+  under "whole" instead of at the top level:
+
+      {"payload": "hostname", "whole": {"discloses": "location",
+                                        "format": "hostname"}}
+
+  A shaped format (hostname, mac, ipv4…) substitutes the document's one
+  token with its surrounding whitespace preserved; no format (or name/path)
+  runs the free-text pass over the whole document. A text payload with no
+  whole entry is refused exactly as an unclassified leaf is — this tool
+  used to crash on bytes it could not json.loads, and a crash is not a
+  classification.
+
   nothing   -> verbatim          identity/location/content -> substituted
   secret    -> the run is refused outright: a secret must never have been
                captured, and no amount of substitution repairs that
@@ -500,13 +516,52 @@ def scrub_text(text: str, ctx: Ctx) -> str:
 # ── the manifest, and the walk it governs ────────────────────────────────
 
 
-def load_manifest(path: Path) -> dict[tuple, dict]:
+def load_manifest(path: Path) -> tuple[dict[tuple, dict], dict[str, dict]]:
+    """(path entries, whole-document entries keyed by payload stem)."""
     raw = json.loads(path.read_text())
     entries: dict[tuple, dict] = {}
+    wholes: dict[str, dict] = {}
     problems = []
     for key, spec in raw.items():
         if key.startswith("#"):
             continue  # commentary — JSON has no other way to carry it
+        if isinstance(spec, dict) and "whole" in spec:
+            # A whole-document entry classifies one text payload in one
+            # stroke, so it must say WHICH — unscoped, it would claim every
+            # document — and it carries no top-level classification, because
+            # one entry serving both regimes would leave which one governs
+            # to this file's reader.
+            whole = spec["whole"]
+            if not isinstance(whole, dict) or whole.get("discloses") not in DISCLOSES:
+                problems.append(
+                    f"{key}: whole.discloses must be one of {sorted(DISCLOSES)}"
+                )
+                continue
+            if "format" in whole and whole["format"] not in FORMATS:
+                problems.append(
+                    f"{key}: whole.format must be one of {sorted(FORMATS)}"
+                )
+                continue
+            if not (isinstance(spec.get("payload"), str) and spec["payload"]):
+                problems.append(
+                    f"{key}: a whole-document entry must name the payload it "
+                    "classifies — unscoped, it would claim every document"
+                )
+                continue
+            if "discloses" in spec or "format" in spec:
+                problems.append(
+                    f"{key}: whole and top-level classification on one entry "
+                    "— exactly one regime must govern"
+                )
+                continue
+            if spec["payload"] in wholes:
+                problems.append(
+                    f"{key}: payload {spec['payload']!r} already has a "
+                    "whole-document entry — exactly one must"
+                )
+                continue
+            wholes[spec["payload"]] = whole
+            continue
         if not isinstance(spec, dict) or spec.get("discloses") not in DISCLOSES:
             problems.append(f"{key}: discloses must be one of {sorted(DISCLOSES)}")
             continue
@@ -524,7 +579,7 @@ def load_manifest(path: Path) -> dict[tuple, dict]:
         entries[tuple(key.split("."))] = spec
     if problems:
         raise SystemExit(f"{path}: not a usable manifest:\n  " + "\n  ".join(problems))
-    return entries
+    return entries, wholes
 
 
 def entries_for(entries: dict[tuple, dict], payload: str) -> dict[tuple, dict]:
@@ -788,27 +843,67 @@ def scrub_node(node, path: tuple, ctx: Ctx):
     return _scrub_leaf(node, entry, path, ctx)
 
 
+def scrub_whole(text: str, spec: dict, payload: str, ctx: Ctx) -> str:
+    """One text document under one classification (a `whole` entry).
+
+    Reuses _scrub_leaf so a whole document gets the same format handling,
+    the same secret refusal and the same survived-unchanged gate as any
+    leaf. The one difference is whitespace: a shaped format (hostname,
+    mac, an address) substitutes a token, and the document carries its
+    token with a trailing newline — so the token is cut out, substituted,
+    and its surroundings are kept byte-for-byte, because a replay seam
+    reads these files verbatim and a scrub must not also reformat.
+    """
+    entry = {"discloses": spec["discloses"]}
+    fmt = spec.get("format")
+    if fmt is not None:
+        entry["format"] = fmt
+    if fmt in (None, "name", "path"):
+        # free text: the pass walks the whole document, whitespace and all
+        return _scrub_leaf(text, entry, (payload,), ctx)
+    head, core, tail = re.fullmatch(r"(\s*)(.*?)(\s*)", text, re.DOTALL).groups()
+    if not core:
+        ctx.problems.append(
+            f"{payload}: classified {spec['discloses']} but the document is "
+            "blank — nothing for the format to substitute"
+        )
+        return text
+    return head + _scrub_leaf(core, entry, (payload,), ctx) + tail
+
+
 # ── entry points ─────────────────────────────────────────────────────────
 
 
-def _declares_addresses(entries: dict[tuple, dict]) -> bool:
+def _declares_addresses(entries: dict[tuple, dict], wholes: dict[str, dict]) -> bool:
+    # whole-document entries count too: a text payload classified as an
+    # address is exactly as much of an address field as any JSON leaf
     return any(
         e.get("format") in ("ipv4", "ipv6") and e["discloses"] != "nothing"
-        for e in entries.values()
+        for e in (*entries.values(), *wholes.values())
     )
 
 
-def _require_names(entries: dict[tuple, dict], hostnames: list[str]) -> None:
+def _require_names(
+    entries: dict[tuple, dict],
+    wholes: dict[str, dict],
+    hostnames: list[str],
+) -> None:
     """A format-name field is operator-chosen words, and the ONLY mechanism
     that substitutes such words is the names list the run is handed. Without
     one, every name field no-ops while the tool prints `scrubbed` — the
     demonstrated leak. format hostname is exempt on purpose: there the leaf
     value IS the name and is substituted whole, no vocabulary needed.
+    Whole-document entries answer to the same rule: a text payload classified
+    format name no-ops without a names list exactly as a leaf does.
     """
     if hostnames:
         return
     named = [
         ".".join(pat) for pat, e in entries.items()
+        if e.get("format") == "name"
+        and e["discloses"] in ("identity", "location", "content")
+    ] + [
+        payload for payload, e in wholes.items()
         if e.get("format") == "name"
         and e["discloses"] in ("identity", "location", "content")
     ]
@@ -833,15 +928,23 @@ def run_check(args, hostnames: list[str]) -> None:
 
     declares = False
     if args.manifest:
-        entries = load_manifest(args.manifest)
+        entries, wholes = load_manifest(args.manifest)
         # the check is as blind to unnamed operator words as the scrub is:
         # a manifest that declares name fields demands a names source here too
-        _require_names(entries, hostnames)
-        declares = _declares_addresses(entries)
+        _require_names(entries, wholes, hostnames)
+        declares = _declares_addresses(entries, wholes)
     dirty = False
     for path in args.payloads:
+        if path.suffix == ".json":
+            document: object = json.loads(path.read_text())
+        else:
+            # A text payload scans as {stem: text}: the stem is the one name
+            # the document has, and it is what arms the detectors' id-ish
+            # key context — a boot_id file holds a UUID that only reads as
+            # an identifier because of what the file is called.
+            document = {path.stem: path.read_text()}
         findings = detectors.scan(
-            json.loads(path.read_text()),
+            document,
             declares_address_fields=declares,
             hostnames=hostnames,
         )
@@ -886,21 +989,37 @@ def main() -> None:
             "inside a git working tree. Write it somewhere private."
         )
 
-    entries = load_manifest(args.manifest)
-    _require_names(entries, hostnames)
+    entries, wholes = load_manifest(args.manifest)
+    _require_names(entries, wholes, hostnames)
     mapping: dict[str, str] = {}
     if args.map and args.map.exists():
         mapping = json.loads(args.map.read_text())
     ctx = Ctx(_load_secret(), mapping, hostnames, entries)
 
-    scrubbed: list[tuple[Path, object]] = []
+    scrubbed: list[tuple[Path, object, bool]] = []
     for path in args.payloads:
+        if path.suffix != ".json":
+            # a text payload: the native format IS the payload (DESIGN 20),
+            # and it is classified whole or it is refused — the same
+            # deny-by-default as an unclassified leaf, because the failure
+            # mode of passing it is publication
+            spec = wholes.get(path.stem)
+            if spec is None:
+                ctx.problems.append(
+                    f"{path.stem}: no whole-document manifest entry "
+                    "classifies this text payload"
+                )
+                continue
+            scrubbed.append(
+                (path, scrub_whole(path.read_text(), spec, path.stem, ctx), True)
+            )
+            continue
         # The manifest view for THIS document, so a scoped entry cannot reach
         # a payload it was not written for. One Ctx across all of them: the
         # mapping is global by rule 2 of DESIGN 21, and the same WWN in three
         # payloads must come back as one replacement.
         ctx.entries = entries_for(entries, path.stem)
-        scrubbed.append((path, scrub_node(json.loads(path.read_text()), (), ctx)))
+        scrubbed.append((path, scrub_node(json.loads(path.read_text()), (), ctx), False))
 
     if ctx.problems:
         # nothing is written: a partial scrub looks exactly like a full one
@@ -909,8 +1028,13 @@ def main() -> None:
             + "\n  ".join(dict.fromkeys(ctx.problems))
         )
 
-    for path, document in scrubbed:
-        path.write_text(json.dumps(document, indent=2, sort_keys=False) + "\n")
+    for path, document, is_text in scrubbed:
+        if is_text:
+            # verbatim bytes but for the substitutions: the replay seam
+            # serves this file as the native document, so no reformatting
+            path.write_text(document)
+        else:
+            path.write_text(json.dumps(document, indent=2, sort_keys=False) + "\n")
         print(f"{path}: scrubbed")
 
     if args.map:

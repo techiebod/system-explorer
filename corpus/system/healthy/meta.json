@@ -1,0 +1,26 @@
+{
+  "collector": "system",
+  "collections": ["identity"],
+  "variant": "healthy",
+  "provenance": "captured-then-planted",
+  "os": "ubuntu",
+  "os_version": "26.04",
+  "source_version": "os-release-ubuntu-26.04",
+  "captured": "2026-08-18T15:57:00Z",
+  "regenerable": true,
+  "canaries": ["se-canary-system-c4a91d0f7b"],
+  "anonymised": true,
+  "note": "The first pair captured for a Go collector, and the first whose native payloads are text rather than JSON — os-release, the kernel hostname and the boot id, byte-exact from a lab guest, replayed exactly as the live seam reads them (DESIGN 20: the native format IS the payload). One plant: the canary credential sits inside HOME_URL, a member the declaration does not serve, so the canary checks prove the collector emits only what it declared rather than merely that it redacts what it read. The scrub is whole-document (harness/scrub/system.json): os-release travels verbatim because its members are distribution constants identical on every install — the canary deliberately included, since scrubbing it out would disarm the check it exists for — while the hostname is substituted via the names mechanism and the boot id is substituted shape-preserved.",
+  "anchors": [
+    {"collection": "identity", "object": "host-8d33ac",
+     "fact": "OsId", "value": "ubuntu"},
+    {"collection": "identity", "object": "host-8d33ac",
+     "fact": "OsVersionId", "value": "26.04"},
+    {"collection": "identity", "object": "host-8d33ac",
+     "fact": "OsPrettyName", "value": "Ubuntu 26.04 LTS"},
+    {"collection": "identity", "object": "host-8d33ac",
+     "fact": "Hostname", "value": "host-8d33ac"},
+    {"collection": "identity", "commit_objects": 1}
+  ],
+  "anchors_note": "Staged truth read from the payloads by hand: ID, VERSION_ID and PRETTY_NAME transcribed from the scrubbed os-release (quotes stripped per the os-release spec, spelling exact), and the object's name IS the hostname — law 1, the name observed — so the Hostname anchor and the object anchor carry the same substituted value. commit_objects pins the collection to exactly one object: this collector serves one machine identity, and a second object would mean the parse invented one."
+}

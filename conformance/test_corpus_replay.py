@@ -21,30 +21,32 @@ from __future__ import annotations
 
 import json
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 
+from conftest import reference_command
 from se_harness import corpus, replay
 
 REPO = Path(__file__).resolve().parent.parent
-REFERENCE = REPO / "harness" / "bin" / "se-reference-collector"
 
 VARIANTS = corpus.all_variants()
 
 
 def _binary_for(variant: corpus.Variant) -> list[str]:
-    """The collector under test.
+    """The collector under test, resolved per variant.meta['collector'].
 
-    Today every variant replays against the reference implementation, because
-    no Go collector exists yet. As each is ported this resolves to the ported
-    binary and the assertions below do not change — which is the point of
-    checking the outside of the process.
+    A Python-adapter variant replays against the reference shim; a ported
+    collector (conftest.GO_COLLECTORS) replays against its own binary, built
+    once per session — and the assertions below do not change as a collector
+    crosses that line, which is the point of checking the outside of the
+    process. On a machine without Go the ported variants skip with the
+    reason; under CI they fail instead, because a skip there is the system
+    variant silently leaving the gate.
     """
-    return [sys.executable, str(REFERENCE)]
+    return reference_command(variant)
 
 
 def _run(variant: corpus.Variant, payload_dir=None) -> subprocess.CompletedProcess:

@@ -247,9 +247,27 @@ def load_variant(path: Path) -> Variant:
             "not an absent interface; even a variant with nothing to replay "
             "commits the empty directory"
         )
-    payloads = {
-        p.stem: json.loads(p.read_text()) for p in sorted(payload_dir.glob("*.json"))
-    }
+    # Every file under payloads/ IS a payload: the native format is the
+    # payload (DESIGN 20), and for some interfaces that format is text —
+    # os-release, the kernel hostname — so a loader that only spoke JSON
+    # would silently drop a text capture and then reject the variant as
+    # payload-less. .json parses; anything else is the raw text, keyed by
+    # stem exactly as the replay seam names it. Dotfiles are git plumbing
+    # (the .gitkeep that makes an absent-interface payloads/ committable),
+    # never captures.
+    payloads: dict[str, object] = {}
+    for p in sorted(payload_dir.iterdir()):
+        if not p.is_file() or p.name.startswith("."):
+            continue
+        if p.stem in payloads:
+            raise CorpusError(
+                f"{path}: two payload files share the stem {p.stem!r} — the "
+                "replay seam addresses payloads by stem, so one of them "
+                "would silently shadow the other"
+            )
+        payloads[p.stem] = (
+            json.loads(p.read_text()) if p.suffix == ".json" else p.read_text()
+        )
     expected_path = path / "expected.jsonl"
     if not expected_path.exists():
         raise CorpusError(f"{path}: no expected.jsonl — half a pair is not a pair")
