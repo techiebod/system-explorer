@@ -1,0 +1,1712 @@
+{
+  "nftables": [
+    {
+      "metainfo": {
+        "version": "1.1.6",
+        "release_name": "Commodore Bullmoose #7",
+        "json_schema_version": 1
+      }
+    },
+    {
+      "table": {
+        "family": "ip",
+        "name": "filter",
+        "handle": 1
+      }
+    },
+    {
+      "chain": {
+        "family": "ip",
+        "table": "filter",
+        "name": "INPUT",
+        "handle": 20,
+        "type": "filter",
+        "hook": "input",
+        "prio": 0,
+        "policy": "accept"
+      }
+    },
+    {
+      "chain": {
+        "family": "ip",
+        "table": "filter",
+        "name": "FORWARD",
+        "handle": 27,
+        "type": "filter",
+        "hook": "forward",
+        "prio": 0,
+        "policy": "accept"
+      }
+    },
+    {
+      "chain": {
+        "family": "ip",
+        "table": "filter",
+        "name": "ts-forward",
+        "handle": 56
+      }
+    },
+    {
+      "chain": {
+        "family": "ip",
+        "table": "filter",
+        "name": "ts-input",
+        "handle": 57
+      }
+    },
+    {
+      "rule": {
+        "family": "ip",
+        "table": "filter",
+        "chain": "INPUT",
+        "handle": 58,
+        "expr": [
+          {
+            "counter": {
+              "packets": 294303,
+              "bytes": 173725410
+            }
+          },
+          {
+            "jump": {
+              "target": "ts-input"
+            }
+          }
+        ],
+        "comment": "deploy token se-canary-nft-4f21a9c7d0 do-not-log"
+      }
+    },
+    {
+      "rule": {
+        "family": "ip",
+        "table": "filter",
+        "chain": "FORWARD",
+        "handle": 59,
+        "expr": [
+          {
+            "counter": {
+              "packets": 0,
+              "bytes": 0
+            }
+          },
+          {
+            "jump": {
+              "target": "ts-forward"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "ip",
+        "table": "filter",
+        "chain": "ts-forward",
+        "handle": 61,
+        "expr": [
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "meta": {
+                  "key": "iifname"
+                }
+              },
+              "right": "tailscale0*"
+            }
+          },
+          {
+            "counter": {
+              "packets": 0,
+              "bytes": 0
+            }
+          },
+          {
+            "mangle": {
+              "key": {
+                "meta": {
+                  "key": "mark"
+                }
+              },
+              "value": {
+                "|": [
+                  {
+                    "&": [
+                      {
+                        "meta": {
+                          "key": "mark"
+                        }
+                      },
+                      4278517759
+                    ]
+                  },
+                  262144
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "ip",
+        "table": "filter",
+        "chain": "ts-forward",
+        "handle": 62,
+        "expr": [
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "&": [
+                  {
+                    "meta": {
+                      "key": "mark"
+                    }
+                  },
+                  16711680
+                ]
+              },
+              "right": 262144
+            }
+          },
+          {
+            "counter": {
+              "packets": 0,
+              "bytes": 0
+            }
+          },
+          {
+            "accept": null
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "ip",
+        "table": "filter",
+        "chain": "ts-forward",
+        "handle": 63,
+        "expr": [
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "meta": {
+                  "key": "oifname"
+                }
+              },
+              "right": "tailscale0*"
+            }
+          },
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "payload": {
+                  "protocol": "ip",
+                  "field": "saddr"
+                }
+              },
+              "right": {
+                "prefix": {
+                  "addr": "100.64.0.0",
+                  "len": 10
+                }
+              }
+            }
+          },
+          {
+            "counter": {
+              "packets": 0,
+              "bytes": 0
+            }
+          },
+          {
+            "drop": null
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "ip",
+        "table": "filter",
+        "chain": "ts-forward",
+        "handle": 64,
+        "expr": [
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "meta": {
+                  "key": "oifname"
+                }
+              },
+              "right": "tailscale0*"
+            }
+          },
+          {
+            "counter": {
+              "packets": 0,
+              "bytes": 0
+            }
+          },
+          {
+            "accept": null
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "ip",
+        "table": "filter",
+        "chain": "ts-input",
+        "handle": 66,
+        "expr": [
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "meta": {
+                  "key": "iifname"
+                }
+              },
+              "right": "lo*"
+            }
+          },
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "payload": {
+                  "protocol": "ip",
+                  "field": "saddr"
+                }
+              },
+              "right": "100.88.13.77"
+            }
+          },
+          {
+            "counter": {
+              "packets": 0,
+              "bytes": 0
+            }
+          },
+          {
+            "accept": null
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "ip",
+        "table": "filter",
+        "chain": "ts-input",
+        "handle": 60,
+        "expr": [
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "meta": {
+                  "key": "iifname"
+                }
+              },
+              "right": "tailscale0*"
+            }
+          },
+          {
+            "counter": {
+              "packets": 57392,
+              "bytes": 33028148
+            }
+          },
+          {
+            "accept": null
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "ip",
+        "table": "filter",
+        "chain": "ts-input",
+        "handle": 65,
+        "expr": [
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "payload": {
+                  "protocol": "udp",
+                  "field": "dport"
+                }
+              },
+              "right": 41641
+            }
+          },
+          {
+            "counter": {
+              "packets": 121219,
+              "bytes": 24654644
+            }
+          },
+          {
+            "accept": null
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "ip",
+        "table": "filter",
+        "chain": "ts-input",
+        "handle": 67,
+        "expr": [
+          {
+            "match": {
+              "op": "!=",
+              "left": {
+                "meta": {
+                  "key": "iifname"
+                }
+              },
+              "right": "tailscale0*"
+            }
+          },
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "payload": {
+                  "protocol": "ip",
+                  "field": "saddr"
+                }
+              },
+              "right": {
+                "prefix": {
+                  "addr": "100.74.122.0",
+                  "len": 23
+                }
+              }
+            }
+          },
+          {
+            "counter": {
+              "packets": 0,
+              "bytes": 0
+            }
+          },
+          {
+            "return": null
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "ip",
+        "table": "filter",
+        "chain": "ts-input",
+        "handle": 68,
+        "expr": [
+          {
+            "match": {
+              "op": "!=",
+              "left": {
+                "meta": {
+                  "key": "iifname"
+                }
+              },
+              "right": "tailscale0*"
+            }
+          },
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "payload": {
+                  "protocol": "ip",
+                  "field": "saddr"
+                }
+              },
+              "right": {
+                "prefix": {
+                  "addr": "100.64.0.0",
+                  "len": 10
+                }
+              }
+            }
+          },
+          {
+            "counter": {
+              "packets": 0,
+              "bytes": 0
+            }
+          },
+          {
+            "drop": null
+          }
+        ]
+      }
+    },
+    {
+      "table": {
+        "family": "ip6",
+        "name": "filter",
+        "handle": 2
+      }
+    },
+    {
+      "chain": {
+        "family": "ip6",
+        "table": "filter",
+        "name": "INPUT",
+        "handle": 23,
+        "type": "filter",
+        "hook": "input",
+        "prio": 0,
+        "policy": "accept"
+      }
+    },
+    {
+      "chain": {
+        "family": "ip6",
+        "table": "filter",
+        "name": "FORWARD",
+        "handle": 30,
+        "type": "filter",
+        "hook": "forward",
+        "prio": 0,
+        "policy": "accept"
+      }
+    },
+    {
+      "chain": {
+        "family": "ip6",
+        "table": "filter",
+        "name": "ts-forward",
+        "handle": 53
+      }
+    },
+    {
+      "chain": {
+        "family": "ip6",
+        "table": "filter",
+        "name": "ts-input",
+        "handle": 54
+      }
+    },
+    {
+      "rule": {
+        "family": "ip6",
+        "table": "filter",
+        "chain": "INPUT",
+        "handle": 55,
+        "expr": [
+          {
+            "counter": {
+              "packets": 305829,
+              "bytes": 73065936
+            }
+          },
+          {
+            "jump": {
+              "target": "ts-input"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "ip6",
+        "table": "filter",
+        "chain": "FORWARD",
+        "handle": 56,
+        "expr": [
+          {
+            "counter": {
+              "packets": 0,
+              "bytes": 0
+            }
+          },
+          {
+            "jump": {
+              "target": "ts-forward"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "ip6",
+        "table": "filter",
+        "chain": "ts-forward",
+        "handle": 58,
+        "expr": [
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "meta": {
+                  "key": "iifname"
+                }
+              },
+              "right": "tailscale0*"
+            }
+          },
+          {
+            "counter": {
+              "packets": 0,
+              "bytes": 0
+            }
+          },
+          {
+            "mangle": {
+              "key": {
+                "meta": {
+                  "key": "mark"
+                }
+              },
+              "value": {
+                "|": [
+                  {
+                    "&": [
+                      {
+                        "meta": {
+                          "key": "mark"
+                        }
+                      },
+                      4278517759
+                    ]
+                  },
+                  262144
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "ip6",
+        "table": "filter",
+        "chain": "ts-forward",
+        "handle": 59,
+        "expr": [
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "&": [
+                  {
+                    "meta": {
+                      "key": "mark"
+                    }
+                  },
+                  16711680
+                ]
+              },
+              "right": 262144
+            }
+          },
+          {
+            "counter": {
+              "packets": 0,
+              "bytes": 0
+            }
+          },
+          {
+            "accept": null
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "ip6",
+        "table": "filter",
+        "chain": "ts-forward",
+        "handle": 60,
+        "expr": [
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "meta": {
+                  "key": "oifname"
+                }
+              },
+              "right": "tailscale0*"
+            }
+          },
+          {
+            "counter": {
+              "packets": 0,
+              "bytes": 0
+            }
+          },
+          {
+            "accept": null
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "ip6",
+        "table": "filter",
+        "chain": "ts-input",
+        "handle": 62,
+        "expr": [
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "meta": {
+                  "key": "iifname"
+                }
+              },
+              "right": "lo*"
+            }
+          },
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "payload": {
+                  "protocol": "ip6",
+                  "field": "saddr"
+                }
+              },
+              "right": "fd7a:115c:a1e0::f9fc"
+            }
+          },
+          {
+            "counter": {
+              "packets": 0,
+              "bytes": 0
+            }
+          },
+          {
+            "accept": null
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "ip6",
+        "table": "filter",
+        "chain": "ts-input",
+        "handle": 57,
+        "expr": [
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "meta": {
+                  "key": "iifname"
+                }
+              },
+              "right": "tailscale0*"
+            }
+          },
+          {
+            "counter": {
+              "packets": 2152,
+              "bytes": 217438
+            }
+          },
+          {
+            "accept": null
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "ip6",
+        "table": "filter",
+        "chain": "ts-input",
+        "handle": 61,
+        "expr": [
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "payload": {
+                  "protocol": "udp",
+                  "field": "dport"
+                }
+              },
+              "right": 41641
+            }
+          },
+          {
+            "counter": {
+              "packets": 152541,
+              "bytes": 43409672
+            }
+          },
+          {
+            "accept": null
+          }
+        ]
+      }
+    },
+    {
+      "table": {
+        "family": "ip",
+        "name": "mangle",
+        "handle": 3
+      }
+    },
+    {
+      "chain": {
+        "family": "ip",
+        "table": "mangle",
+        "name": "PREROUTING",
+        "handle": 6,
+        "type": "filter",
+        "hook": "prerouting",
+        "prio": -150,
+        "policy": "accept"
+      }
+    },
+    {
+      "chain": {
+        "family": "ip",
+        "table": "mangle",
+        "name": "OUTPUT",
+        "handle": 9,
+        "type": "route",
+        "hook": "output",
+        "prio": -150,
+        "policy": "accept"
+      }
+    },
+    {
+      "rule": {
+        "family": "ip",
+        "table": "mangle",
+        "chain": "PREROUTING",
+        "handle": 13,
+        "expr": [
+          {
+            "match": {
+              "op": "in",
+              "left": {
+                "ct": {
+                  "key": "state"
+                }
+              },
+              "right": [
+                "established",
+                "related"
+              ]
+            }
+          },
+          {
+            "match": {
+              "op": "!=",
+              "left": {
+                "&": [
+                  {
+                    "ct": {
+                      "key": "mark"
+                    }
+                  },
+                  16711680
+                ]
+              },
+              "right": 0
+            }
+          },
+          {
+            "mangle": {
+              "key": {
+                "meta": {
+                  "key": "mark"
+                }
+              },
+              "value": {
+                "&": [
+                  {
+                    "ct": {
+                      "key": "mark"
+                    }
+                  },
+                  16711680
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "ip",
+        "table": "mangle",
+        "chain": "OUTPUT",
+        "handle": 14,
+        "expr": [
+          {
+            "match": {
+              "op": "in",
+              "left": {
+                "ct": {
+                  "key": "state"
+                }
+              },
+              "right": "new"
+            }
+          },
+          {
+            "match": {
+              "op": "!=",
+              "left": {
+                "&": [
+                  {
+                    "meta": {
+                      "key": "mark"
+                    }
+                  },
+                  16711680
+                ]
+              },
+              "right": 0
+            }
+          },
+          {
+            "mangle": {
+              "key": {
+                "ct": {
+                  "key": "mark"
+                }
+              },
+              "value": {
+                "&": [
+                  {
+                    "meta": {
+                      "key": "mark"
+                    }
+                  },
+                  16711680
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "table": {
+        "family": "ip6",
+        "name": "mangle",
+        "handle": 4
+      }
+    },
+    {
+      "chain": {
+        "family": "ip6",
+        "table": "mangle",
+        "name": "PREROUTING",
+        "handle": 4,
+        "type": "filter",
+        "hook": "prerouting",
+        "prio": -150,
+        "policy": "accept"
+      }
+    },
+    {
+      "chain": {
+        "family": "ip6",
+        "table": "mangle",
+        "name": "OUTPUT",
+        "handle": 7,
+        "type": "route",
+        "hook": "output",
+        "prio": -150,
+        "policy": "accept"
+      }
+    },
+    {
+      "rule": {
+        "family": "ip6",
+        "table": "mangle",
+        "chain": "PREROUTING",
+        "handle": 11,
+        "expr": [
+          {
+            "match": {
+              "op": "in",
+              "left": {
+                "ct": {
+                  "key": "state"
+                }
+              },
+              "right": [
+                "established",
+                "related"
+              ]
+            }
+          },
+          {
+            "match": {
+              "op": "!=",
+              "left": {
+                "&": [
+                  {
+                    "ct": {
+                      "key": "mark"
+                    }
+                  },
+                  16711680
+                ]
+              },
+              "right": 0
+            }
+          },
+          {
+            "mangle": {
+              "key": {
+                "meta": {
+                  "key": "mark"
+                }
+              },
+              "value": {
+                "&": [
+                  {
+                    "ct": {
+                      "key": "mark"
+                    }
+                  },
+                  16711680
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "ip6",
+        "table": "mangle",
+        "chain": "OUTPUT",
+        "handle": 12,
+        "expr": [
+          {
+            "match": {
+              "op": "in",
+              "left": {
+                "ct": {
+                  "key": "state"
+                }
+              },
+              "right": "new"
+            }
+          },
+          {
+            "match": {
+              "op": "!=",
+              "left": {
+                "&": [
+                  {
+                    "meta": {
+                      "key": "mark"
+                    }
+                  },
+                  16711680
+                ]
+              },
+              "right": 0
+            }
+          },
+          {
+            "mangle": {
+              "key": {
+                "ct": {
+                  "key": "mark"
+                }
+              },
+              "value": {
+                "&": [
+                  {
+                    "meta": {
+                      "key": "mark"
+                    }
+                  },
+                  16711680
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "table": {
+        "family": "ip",
+        "name": "nat",
+        "handle": 5
+      }
+    },
+    {
+      "chain": {
+        "family": "ip",
+        "table": "nat",
+        "name": "POSTROUTING",
+        "handle": 3,
+        "type": "nat",
+        "hook": "postrouting",
+        "prio": 100,
+        "policy": "accept"
+      }
+    },
+    {
+      "chain": {
+        "family": "ip",
+        "table": "nat",
+        "name": "ts-postrouting",
+        "handle": 11
+      }
+    },
+    {
+      "rule": {
+        "family": "ip",
+        "table": "nat",
+        "chain": "POSTROUTING",
+        "handle": 12,
+        "expr": [
+          {
+            "counter": {
+              "packets": 61402,
+              "bytes": 4756646
+            }
+          },
+          {
+            "jump": {
+              "target": "ts-postrouting"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "ip",
+        "table": "nat",
+        "chain": "ts-postrouting",
+        "handle": 15,
+        "expr": [
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "&": [
+                  {
+                    "meta": {
+                      "key": "mark"
+                    }
+                  },
+                  16711680
+                ]
+              },
+              "right": 262144
+            }
+          },
+          {
+            "counter": {
+              "packets": 0,
+              "bytes": 0
+            }
+          },
+          {
+            "masquerade": null
+          }
+        ]
+      }
+    },
+    {
+      "table": {
+        "family": "ip6",
+        "name": "nat",
+        "handle": 6
+      }
+    },
+    {
+      "chain": {
+        "family": "ip6",
+        "table": "nat",
+        "name": "POSTROUTING",
+        "handle": 3,
+        "type": "nat",
+        "hook": "postrouting",
+        "prio": 100,
+        "policy": "accept"
+      }
+    },
+    {
+      "chain": {
+        "family": "ip6",
+        "table": "nat",
+        "name": "ts-postrouting",
+        "handle": 11
+      }
+    },
+    {
+      "rule": {
+        "family": "ip6",
+        "table": "nat",
+        "chain": "POSTROUTING",
+        "handle": 12,
+        "expr": [
+          {
+            "counter": {
+              "packets": 37583,
+              "bytes": 3412847
+            }
+          },
+          {
+            "jump": {
+              "target": "ts-postrouting"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "ip6",
+        "table": "nat",
+        "chain": "ts-postrouting",
+        "handle": 13,
+        "expr": [
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "&": [
+                  {
+                    "meta": {
+                      "key": "mark"
+                    }
+                  },
+                  16711680
+                ]
+              },
+              "right": 262144
+            }
+          },
+          {
+            "counter": {
+              "packets": 0,
+              "bytes": 0
+            }
+          },
+          {
+            "masquerade": null
+          }
+        ]
+      }
+    },
+    {
+      "table": {
+        "family": "inet",
+        "name": "nixos-fw",
+        "handle": 14
+      }
+    },
+    {
+      "chain": {
+        "family": "inet",
+        "table": "nixos-fw",
+        "name": "rpfilter",
+        "handle": 1,
+        "type": "filter",
+        "hook": "prerouting",
+        "prio": -140,
+        "policy": "drop"
+      }
+    },
+    {
+      "chain": {
+        "family": "inet",
+        "table": "nixos-fw",
+        "name": "rpfilter-allow",
+        "handle": 2
+      }
+    },
+    {
+      "chain": {
+        "family": "inet",
+        "table": "nixos-fw",
+        "name": "input",
+        "handle": 3,
+        "type": "filter",
+        "hook": "input",
+        "prio": 0,
+        "policy": "drop"
+      }
+    },
+    {
+      "chain": {
+        "family": "inet",
+        "table": "nixos-fw",
+        "name": "input-allow",
+        "handle": 4
+      }
+    },
+    {
+      "set": {
+        "family": "inet",
+        "name": "temp-ports",
+        "table": "nixos-fw",
+        "type": [
+          "inet_proto",
+          "inet_service"
+        ],
+        "handle": 5,
+        "comment": "Temporarily opened ports",
+        "flags": [
+          "interval"
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "inet",
+        "table": "nixos-fw",
+        "chain": "rpfilter",
+        "handle": 7,
+        "comment": "DHCPv4 client/server",
+        "expr": [
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "meta": {
+                  "key": "nfproto"
+                }
+              },
+              "right": "ipv4"
+            }
+          },
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "concat": [
+                  {
+                    "payload": {
+                      "protocol": "udp",
+                      "field": "sport"
+                    }
+                  },
+                  {
+                    "payload": {
+                      "protocol": "udp",
+                      "field": "dport"
+                    }
+                  }
+                ]
+              },
+              "right": {
+                "set": [
+                  {
+                    "concat": [
+                      68,
+                      67
+                    ]
+                  },
+                  {
+                    "concat": [
+                      67,
+                      68
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "accept": null
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "inet",
+        "table": "nixos-fw",
+        "chain": "rpfilter",
+        "handle": 8,
+        "expr": [
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "fib": {
+                  "result": "oif",
+                  "flags": [
+                    "saddr",
+                    "mark"
+                  ]
+                }
+              },
+              "right": true
+            }
+          },
+          {
+            "accept": null
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "inet",
+        "table": "nixos-fw",
+        "chain": "rpfilter",
+        "handle": 9,
+        "expr": [
+          {
+            "jump": {
+              "target": "rpfilter-allow"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "inet",
+        "table": "nixos-fw",
+        "chain": "input",
+        "handle": 11,
+        "comment": "trusted interfaces",
+        "expr": [
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "meta": {
+                  "key": "iifname"
+                }
+              },
+              "right": {
+                "set": [
+                  "lo",
+                  "tailscale0"
+                ]
+              }
+            }
+          },
+          {
+            "accept": null
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "inet",
+        "table": "nixos-fw",
+        "chain": "input",
+        "handle": 12,
+        "expr": [
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "payload": {
+                  "protocol": "icmpv6",
+                  "field": "type"
+                }
+              },
+              "right": "echo-reply"
+            }
+          },
+          {
+            "accept": null
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "inet",
+        "table": "nixos-fw",
+        "chain": "input",
+        "handle": 14,
+        "expr": [
+          {
+            "vmap": {
+              "key": {
+                "ct": {
+                  "key": "state"
+                }
+              },
+              "data": {
+                "set": [
+                  [
+                    "invalid",
+                    {
+                      "drop": null
+                    }
+                  ],
+                  [
+                    "established",
+                    {
+                      "accept": null
+                    }
+                  ],
+                  [
+                    "related",
+                    {
+                      "accept": null
+                    }
+                  ],
+                  [
+                    "new",
+                    {
+                      "jump": {
+                        "target": "input-allow"
+                      }
+                    }
+                  ],
+                  [
+                    "untracked",
+                    {
+                      "jump": {
+                        "target": "input-allow"
+                      }
+                    }
+                  ]
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "inet",
+        "table": "nixos-fw",
+        "chain": "input-allow",
+        "handle": 16,
+        "expr": [
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "payload": {
+                  "protocol": "tcp",
+                  "field": "dport"
+                }
+              },
+              "right": {
+                "set": [
+                  22,
+                  53,
+                  8090,
+                  8091,
+                  8092
+                ]
+              }
+            }
+          },
+          {
+            "accept": null
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "inet",
+        "table": "nixos-fw",
+        "chain": "input-allow",
+        "handle": 18,
+        "expr": [
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "payload": {
+                  "protocol": "udp",
+                  "field": "dport"
+                }
+              },
+              "right": {
+                "set": [
+                  53,
+                  41641
+                ]
+              }
+            }
+          },
+          {
+            "accept": null
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "inet",
+        "table": "nixos-fw",
+        "chain": "input-allow",
+        "handle": 19,
+        "expr": [
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "concat": [
+                  {
+                    "meta": {
+                      "key": "l4proto"
+                    }
+                  },
+                  {
+                    "payload": {
+                      "protocol": "th",
+                      "field": "dport"
+                    }
+                  }
+                ]
+              },
+              "right": "@temp-ports"
+            }
+          },
+          {
+            "accept": null
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "inet",
+        "table": "nixos-fw",
+        "chain": "input-allow",
+        "handle": 20,
+        "comment": "allow ping",
+        "expr": [
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "payload": {
+                  "protocol": "icmp",
+                  "field": "type"
+                }
+              },
+              "right": "echo-request"
+            }
+          },
+          {
+            "accept": null
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "inet",
+        "table": "nixos-fw",
+        "chain": "input-allow",
+        "handle": 22,
+        "comment": "Accept all ICMPv6 messages except redirects and node information queries (type 139).  See RFC 4890, section 4.4.",
+        "expr": [
+          {
+            "match": {
+              "op": "!=",
+              "left": {
+                "payload": {
+                  "protocol": "icmpv6",
+                  "field": "type"
+                }
+              },
+              "right": {
+                "set": [
+                  "nd-redirect",
+                  139
+                ]
+              }
+            }
+          },
+          {
+            "accept": null
+          }
+        ]
+      }
+    },
+    {
+      "rule": {
+        "family": "inet",
+        "table": "nixos-fw",
+        "chain": "input-allow",
+        "handle": 23,
+        "comment": "DHCPv6 client",
+        "expr": [
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "payload": {
+                  "protocol": "ip6",
+                  "field": "daddr"
+                }
+              },
+              "right": {
+                "prefix": {
+                  "addr": "fe80::",
+                  "len": 64
+                }
+              }
+            }
+          },
+          {
+            "match": {
+              "op": "==",
+              "left": {
+                "payload": {
+                  "protocol": "udp",
+                  "field": "dport"
+                }
+              },
+              "right": 546
+            }
+          },
+          {
+            "accept": null
+          }
+        ]
+      }
+    },
+    {
+      "chain": {
+        "family": "ip",
+        "table": "filter",
+        "name": "se-canary-chain-7e19c4b2d6",
+        "handle": 99
+      }
+    }
+  ]
+}

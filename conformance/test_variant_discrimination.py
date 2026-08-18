@@ -56,6 +56,15 @@ class Case:
     evidence: tuple[str, ...]
     # One line: what this variant catches that no other variant catches.
     unique: str
+    # The collections this subject implements. Every round-a5 fixture is a
+    # chains-only port, and corpus/network/rules opens two collections — so
+    # without this the before half judges a subject on a collection it never
+    # claimed, and reports "wrong about more than one thing" about a subject
+    # that is wrong about exactly one. Narrowing is not a dodge: the excluded
+    # variants are asserted genuinely unservable below, so a `serves` shrunk
+    # to duck a real failure fails there, and one shrunk far enough to empty
+    # the before half fails here.
+    serves: frozenset[str]
 
 
 CASES = (
@@ -67,6 +76,7 @@ CASES = (
         unique="the only ruleset in which the word `jump` never appears, so it "
         "is the only one where reading one verb and reading both give "
         "different answers",
+        serves=frozenset({"nft-chains"}),
     ),
     Case(
         variant="network/asymmetric",
@@ -76,6 +86,7 @@ CASES = (
         unique="the only ruleset carrying one chain name in two families with "
         "the jump in only one of them, so it is the only one where a "
         "name-keyed walk and a (family, table, name)-keyed walk differ",
+        serves=frozenset({"nft-chains"}),
     ),
     Case(
         variant="network/named-map",
@@ -85,6 +96,7 @@ CASES = (
         unique="the only ruleset containing a named verdict map, so it is the "
         "only one where a jump is written somewhere no rule expression "
         "reaches and the rule-to-map join is load-bearing",
+        serves=frozenset({"nft-chains"}),
     ),
     Case(
         variant="storage/degraded",
@@ -95,6 +107,7 @@ CASES = (
         unique="the only pool that is not healthy, so it is the only capture "
         "about which a collector reporting the struct defaults — ONLINE, "
         "no message, no errors, empty unhealthy lists — is wrong",
+        serves=frozenset({"pools"}),
     ),
 )
 
@@ -201,14 +214,22 @@ def test_the_subject_passes_the_corpus_without_the_variant(
     A subject that is wrong about several things would fail here, and its red
     on the staged variant would stop being evidence about the staged fact.
     """
-    remaining = [
+    survivors = [
         v
         for v in _corpus_without(case.variant, tmp_path)
         if v.meta["collector"] == case.collector
     ]
+    # Scoped to what the subject implements. A chains-only port asked for
+    # nft-rules emits nothing for it, which is a real protocol violation and a
+    # real red — but it is not the defect this case stages, and counting it
+    # here would say the subject is wrong about more than one thing when it is
+    # wrong about exactly one. The exclusion is proven, not asserted, by
+    # test_an_excluded_variant_is_one_the_subject_genuinely_cannot_serve.
+    remaining = [v for v in survivors if v.collections() <= case.serves]
     assert remaining, (
-        f"{case.variant}: removing it left no {case.collector} variant at "
-        "all, so the green below would be vacuous"
+        f"{case.variant}: removing it left no {case.collector} variant this "
+        f"subject serves ({sorted(case.serves)}), so the green below would be "
+        "vacuous"
     )
     assert case.variant not in {v.name for v in remaining}
 
@@ -220,6 +241,69 @@ def test_the_subject_passes_the_corpus_without_the_variant(
             f"means its red on {case.variant} is no longer attributable to "
             "the staging:\n" + "\n".join(f"  - {p}" for p in problems[:10])
         )
+
+
+@pytest.mark.parametrize("case", CASES, ids=_ids)
+def test_an_excluded_variant_is_one_the_subject_genuinely_cannot_serve(
+    case: Case,
+) -> None:
+    """`serves` is a fact about the subject, not a convenience for the test.
+
+    Scoping the before half by a hand-written set is exactly the shape that
+    lets a failing subject be excused: narrow `serves` until the awkward
+    variant drops out and the green comes back. So the narrowing is executed.
+    For every variant of this collector that `serves` excludes, the subject is
+    run and required to DECLINE every out-of-scope collection as `unsupported`
+    — the contract's own way of saying "I do not serve this" (DESIGN 18).
+    Silence is not the test, because silence is a protocol violation in its
+    own right; and a commit is the opposite of an exclusion, since a commit
+    claims authority over the whole collection. All three chains-only subjects
+    committed here when this test was written, emitting chain rows as rules
+    over a collection they had never read, which is what the check found on
+    its first run.
+
+    Vacuous when nothing is excluded, and that is correct rather than a hole:
+    the before half is then judging the subject over the whole corpus, which
+    is the stronger claim and needs no permission from here.
+    """
+    excluded = [
+        v
+        for v in VARIANTS.values()
+        if v.meta["collector"] == case.collector
+        and not v.collections() <= case.serves
+    ]
+    for variant in excluded:
+        issued = replay.issue_generations(variant.collections(), seed=variant.name)
+        proc = replay.run_collector(_binary(case), variant, issued=issued)
+        assert proc.returncode == 0, (
+            f"{case.subject} exited {proc.returncode} on {variant.name} — a "
+            f"crash is fixture rot, not evidence of an unserved collection\n"
+            f"{proc.stderr[:1000]}"
+        )
+        emitted = replay.parse_stream(proc.stdout)
+        refused = {
+            r.get("collection")
+            for r in emitted
+            if r.get("record") == "decline" and r.get("reason") == "unsupported"
+        }
+        claimed = {
+            r.get("collection") for r in emitted if r.get("record") == "commit"
+        }
+        for collection in sorted(variant.collections() - case.serves):
+            assert collection in refused, (
+                f"{case.subject} is excluded from {variant.name} because "
+                f"{collection!r} is outside its declared {sorted(case.serves)} "
+                f"— but it does not decline {collection!r} as unsupported"
+                + (
+                    f", it COMMITS it, which claims authority over a whole "
+                    "collection it never read"
+                    if collection in claimed
+                    else ", it says nothing about it at all, which is a "
+                    "truncated stream rather than a scope statement"
+                )
+                + ". An exclusion has to be the subject's own statement, or "
+                "it is a failing subject being excused."
+            )
 
 
 # ── the after half: the variant that can ─────────────────────────────────

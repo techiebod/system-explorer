@@ -133,6 +133,71 @@ def test_coverage_says_what_a_re_stage_needs_where_it_needs_anything() -> None:
     )
 
 
+def _served_collections() -> dict[str, list[str]]:
+    """What the reference shim declares it can replay, read from its source.
+
+    By AST rather than by import: the shim imports the adapters at module
+    scope and adapters are unimportable off-host by design (conftest), so an
+    import here would make this check a macOS skip — and a skip is how a
+    coverage guard reports success about what it never reached. Reading the
+    product's own table is the same discipline test_differential.py uses for
+    CLOSED_CLASSES: never a list retyped in the test, which would drift into
+    agreement with whatever the shim actually does.
+    """
+    import ast
+
+    source = (REPO / "harness" / "bin" / "se-reference-collector").read_text()
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Assign) or not any(
+            isinstance(t, ast.Name) and t.id == "SEAM" for t in node.targets
+        ):
+            continue
+        served = {}
+        for name, spec in zip(node.value.keys, node.value.values, strict=True):
+            for key, value in zip(spec.keys, spec.values, strict=True):
+                if isinstance(key, ast.Constant) and key.value == "collections":
+                    served[name.value] = ast.literal_eval(value)
+        assert served, "the SEAM table has entries but none declares collections"
+        return served
+    raise AssertionError("no SEAM table in se-reference-collector")
+
+
+def test_every_served_collection_is_captured_or_named() -> None:
+    """A collection the reference can serve is covered, or it is a named hole.
+
+    The residual that stood here for nft-rules was found by a person reading
+    a comment, not by a check — because the coverage report named collectors,
+    variant kinds, operating systems and interface versions, and no dimension
+    a collection could go missing on. So the partition is asserted instead:
+    every collection the shim declares it replays is opened by some committed
+    variant, or carries a residual naming the venue that owns its truth.
+    Deny-by-default over the shim's own table, so adding a collection to the
+    seam without capturing it fails here rather than shipping unjudged.
+    """
+    served = _served_collections()
+    assert served, "the SEAM table declares no collections; this check is vacuous"
+    captured = corpus.coverage(VARIANTS)["collections"]
+    residuals = corpus.NAMED_RESIDUALS
+
+    orphans = []
+    for collector, collections in sorted(served.items()):
+        if collector not in captured:
+            continue  # a collector the corpus does not carry at all is phase-3 work
+        for collection in collections:
+            if collection in captured[collector]:
+                continue
+            if any(key.startswith(f"{collector}/{collection}") for key in residuals):
+                continue
+            orphans.append(f"{collector}/{collection}")
+    assert not orphans, (
+        f"served by the reference, captured by no variant, named by no "
+        f"residual: {orphans}. A collection is what a collector is FOR; one "
+        "the corpus never opens is a port graded on everything except the "
+        "answer it exists to give. Capture a pair, or name a residual whose "
+        "reason is true and whose venue owns it."
+    )
+
+
 def test_the_named_residuals_are_stated_with_a_venue() -> None:
     """The net is named, so absence of a hole is never implied (DESIGN 20).
 

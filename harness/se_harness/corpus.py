@@ -92,11 +92,17 @@ NAMED_RESIDUALS = {
         "committed pool carries real disks with an alias tree, and no operator "
         "mints one. Venue: the live comparator, running beside a real pool."
     ),
-    "network/nft-rules": (
-        "the nft-rules collection is served by the reference but captured by no "
-        "committed variant, so a port wrong about rule-level facts is unseen "
-        "here. Venue: PLAN item 7 (collection completeness) and the live "
-        "comparator."
+    # Closed 2026-08-18 by corpus/network/rules, the first committed pair to
+    # open two collections: "network/nft-rules — served by the reference but
+    # captured by no committed variant". What replaces it is narrower and
+    # true, and it is a shape rather than a collection.
+    "network/nft-rules-opaque": (
+        "every rule in every committed ruleset renders full or partial; no "
+        "capture stages an `xt` statement or a bare-string statement, so the "
+        "opaque comprehension path and both OpaqueReason spellings are "
+        "exercised by no replayed stream, and no mutation operator mints one. "
+        "Venue: a capture from a host running iptables-nft compatibility "
+        "(Docker, libvirt), and the live comparator until there is one."
     ),
 }
 
@@ -405,6 +411,7 @@ def coverage(variants: list[Variant]) -> dict:
     """
     collectors: dict[str, set[str]] = {}
     versions: dict[str, set[str]] = {}
+    opened: dict[str, set[str]] = {}
     systems: set[str] = set()
     unregenerable: list[str] = []
     requires: dict[str, str] = {}
@@ -412,6 +419,7 @@ def coverage(variants: list[Variant]) -> dict:
         collector = variant.meta["collector"]
         collectors.setdefault(collector, set()).add(variant.meta["variant"])
         versions.setdefault(collector, set()).add(variant.meta["source_version"])
+        opened.setdefault(collector, set()).update(variant.collections())
         systems.add(f"{variant.meta['os']} {variant.meta['os_version']}")
         if not variant.regenerable:
             unregenerable.append(variant.name)
@@ -420,6 +428,15 @@ def coverage(variants: list[Variant]) -> dict:
     return {
         "collectors": {k: sorted(v) for k, v in sorted(collectors.items())},
         "source_versions": {k: sorted(v) for k, v in sorted(versions.items())},
+        # The dimension whose absence hid a whole collection. Until this line
+        # existed the report named collectors, variant kinds, operating
+        # systems and interface versions — every dimension except the one a
+        # collection can go missing on — so nft-rules was served by the
+        # reference, captured by nothing, and visible only to a person who
+        # already knew to look. A collection is what a collector is FOR, and
+        # a coverage report that cannot say which ones were exercised is
+        # reporting success about what it never reached.
+        "collections": {k: sorted(v) for k, v in sorted(opened.items())},
         # The dimension interface drift actually lives on: a corpus on one OS
         # cannot show a field that a different distribution's build removed.
         "operating_systems": sorted(systems),

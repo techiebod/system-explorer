@@ -76,11 +76,21 @@ from system_explorer.agent.adapters import network, storage  # noqa: E402
 # that qualify the interface without being it (device alias links): a missing
 # one pins to its stated default so the adapter can say could-not-read,
 # rather than counting toward absence.
+# `collections` is the closed set this shim can replay: the collections
+# derived from the stubbed acquisitions and no others. It is load-bearing
+# twice. It is the SEAM's safety bound — `collect links:5` is a legal request
+# line, and without this list `acquire("links")` would run `ip -j` against the
+# machine REPLAYING the corpus, the same seam escape that once put a
+# replaying workstation's filesystem into committed facts. And it is the
+# authority the corpus coverage check reads: a collection served here and
+# captured by no variant is a hole, and until nft-rules was captured it was
+# one nothing could see, because nothing enumerated collections at all.
 SEAM = {
     "storage": {
         "module": storage,
         "adapter": storage.Adapter,
         "interface": "zpool",
+        "collections": ["pools"],
         "acquisitions": {"_zpool_status": "status", "_zpool_list": "list"},
         "auxiliary": {"_devlinks": ("devlinks", None)},
         # The capability probe asks the host whether zpool exists. Under
@@ -97,10 +107,10 @@ SEAM = {
         # derived from the same `nft -j list ruleset` document, and a request
         # naming both replays them from this single redirect, deterministically
         # — test_reference_honesty drives that request and holds each commit
-        # to its own issued generation. No COMMITTED pair carries it yet: the
-        # round-a5 fixtures are chains-only ports judged over every network
-        # pair, so a two-collection variant waits on them, and the issuance
-        # stride (base + 17*i, i > 0) stays exercised by direct request only.
+        # to its own issued generation. corpus/network/rules is the committed
+        # pair, which is what closed the named residual that stood here while
+        # the round-a5 chains-only fixtures were the only subjects.
+        "collections": ["nft-chains", "nft-rules"],
         "acquisitions": {"_nft_json": "nft"},
         "instance": {},
     },
@@ -157,6 +167,20 @@ def run(collector: str, generations: dict[str, int], payload_dir: Path) -> None:
     spec = SEAM.get(collector)
     if spec is None:
         fail(f"unknown collector {collector!r}; known: {sorted(SEAM)}")
+
+    # Refused before anything is acquired, and refused as "I could not run"
+    # rather than declined: a decline states something about a machine, and
+    # this shim observed no machine at all for a collection whose acquisition
+    # it never stubbed. The live adapter would happily answer — which is the
+    # danger, since the interface it would read belongs to whichever host is
+    # REPLAYING the corpus, not to the one captured.
+    unservable = [c for c in generations if c not in spec["collections"]]
+    if unservable:
+        fail(
+            f"{collector}: cannot replay {unservable} — this seam stubs only "
+            f"{spec['collections']}, and acquiring anything else would read "
+            "the live interface of the machine replaying the corpus"
+        )
 
     payloads = load_payloads(payload_dir)
     module = spec["module"]

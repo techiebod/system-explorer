@@ -159,6 +159,19 @@ def main() -> None:
     payload = directory / "nft.json"
     emitted = 0
     for collection, generation in generations.items():
+        if collection != "nft-chains":
+            # This subject is a chains-only port, and a collector asked for a
+            # collection it does not serve declines `unsupported` and does not
+            # commit (DESIGN 18). Until corpus/network/rules opened two
+            # collections nothing ever asked, and the loop below answered
+            # every name with the chain walk — committing chain rows as rules
+            # and claiming authority over a collection it had never read. The
+            # staged defect is untouched; what changes is a lie about scope
+            # that only a multi-collection request could expose.
+            emit({"record": "decline", "collection": collection,
+                  "reason": "unsupported",
+                  "detail": "this subject serves nft-chains only"})
+            continue
         if not payload.exists():
             emit({"record": "decline", "collection": collection,
                   "reason": "absent", "detail": "no nft on this host"})

@@ -1,0 +1,63 @@
+{
+  "collector": "network",
+  "collections": ["nft-chains", "nft-rules"],
+  "variant": "canary",
+  "provenance": "captured-then-planted",
+  "os": "nixos",
+  "os_version": "25.11",
+  "source_version": "nftables-1.1.6",
+  "captured": "2026-08-16T09:00:00Z",
+  "regenerable": false,
+  "canaries": ["se-canary-nft-4f21a9c7d0"],
+  "anonymised": true,
+  "note": "The first committed pair that opens TWO collections, and the one that closes the named residual network/nft-rules — the collection the reference has served all along while no capture judged it, so a port wrong about rule-level facts was unseen. Both collections derive from one `nft -j list ruleset` document, so this needs no new capture: the payload is byte-identical to corpus/network/canary/payloads/nft.json, deliberately, and the two must be re-scrubbed and re-staged together or they stop being the same machine.\n\nThe canary payload rather than the healthy one, because the plant is what makes the second collection worth judging. se-canary-nft-4f21a9c7d0 sits in the COMMENT of ip filter INPUT handle 58 — free text an operator can paste anything into, and the one surface a rule collection could plausibly leak, since rendering a rule means rendering what an operator wrote. nft-chains reads past comments because it never reads rules; nft-rules reads the rule and still must not carry the comment. Until this variant the canary checks ran over nft-chains alone (they iterate variant.collections(), which corpus.py derives from expected.jsonl), so they proved nothing at all about the collection that actually renders operator text. That is also the outstanding half of PLAN item 7's \"an nft-rules canary\".\n\nA separate directory rather than widening corpus/network/canary: every round-a5 adversary fixture is a chains-only port judged over the committed network pairs, and a variant that opened a second collection would turn each of their declared disagreements into a refusal — the collection named in begin and neither committed nor declined — so the cases would go red for a reason that is not theirs. The subjects stay untouched; the coverage still lands.\n\nStated bound: this pair carries no `opaque` rule. All 39 rows render full or partial; nothing here stages an `xt` statement or a bare-string statement, so OpaqueReason is exercised by no replayed stream (see the named residual network/nft-rules-opaque). A ruleset from a host running iptables-nft compatibility — Docker, libvirt — is what would stage it.",
+  "anchors": [
+    {"collection": "nft-chains", "object": "inet nixos-fw input-allow",
+     "fact": "JumpedFrom", "value": ["input"]},
+    {"collection": "nft-chains", "object": "inet nixos-fw input-allow",
+     "absent_fact": "Unreferenced"},
+    {"collection": "nft-chains", "object": "inet nixos-fw input-allow",
+     "fact": "RuleCount", "value": 6},
+    {"collection": "nft-chains", "object": "ip filter se-canary-chain-7e19c4b2d6",
+     "fact": "Unreferenced", "value": true},
+
+    {"collection": "nft-rules", "commit_objects": 39},
+
+    {"collection": "nft-rules", "object": "ip filter INPUT handle 58",
+     "fact": "Rendered", "value": "counter jump ts-input"},
+    {"collection": "nft-rules", "object": "ip filter INPUT handle 58",
+     "fact": "CounterPackets", "value": 294303},
+    {"collection": "nft-rules", "object": "ip filter INPUT handle 58",
+     "fact": "CounterBytes", "value": 173725410},
+    {"collection": "nft-rules", "object": "ip filter INPUT handle 58",
+     "fact": "JumpTarget", "value": "ts-input"},
+    {"collection": "nft-rules", "object": "ip filter INPUT handle 58",
+     "absent_fact": "Verdict"},
+
+    {"collection": "nft-rules", "object": "inet nixos-fw input-allow handle 16",
+     "fact": "Position", "value": 0},
+    {"collection": "nft-rules", "object": "inet nixos-fw input-allow handle 16",
+     "fact": "Verdict", "value": "accept"},
+    {"collection": "nft-rules", "object": "inet nixos-fw input-allow handle 16",
+     "absent_fact": "CounterPackets"},
+
+    {"collection": "nft-rules", "object": "ip filter ts-forward handle 63",
+     "fact": "CounterPackets", "value": 0},
+    {"collection": "nft-rules", "object": "ip filter ts-forward handle 63",
+     "fact": "Verdict", "value": "drop"},
+
+    {"collection": "nft-rules", "object": "ip filter ts-input handle 67",
+     "fact": "Position", "value": 3},
+    {"collection": "nft-rules", "object": "ip filter ts-input handle 67",
+     "fact": "Verdict", "value": "return"},
+
+    {"collection": "nft-rules", "object": "inet nixos-fw input handle 14",
+     "absent_fact": "Verdict"},
+    {"collection": "nft-rules", "object": "inet nixos-fw input handle 14",
+     "fact": "Comprehension", "value": "partial"},
+
+    {"collection": "nft-rules", "object": "inet nixos-fw input-allow handle 22",
+     "fact": "Position", "value": 4}
+  ],
+  "anchors_note": "Read off payloads/nft.json by hand, before any stream was generated, which is what makes them an authority the reference-generated half is not.\n\nThe nft-chains four carry over from corpus/network/canary unchanged: the plant does not touch reachability, and the canary CHAIN name must still travel intact.\n\nThe nft-rules anchors were each derived from a rule's own expr array, and each kills a specific wrong port. commit_objects=39 is the count of entries in the document carrying a `rule` key — a port that counted chains, or emitted a row per statement, gets a different number. Handle 58 carries exactly two statements, a counter and a jump, so under the collection's own invariant — every statement rendered or in residue — the rendering is those two in order and nothing else; its counters are the literal integers in the document, and jump is not a terminal verdict, so Verdict must be absent while JumpTarget is present. Handle 16 has no counter statement at all and handle 63's counter reads zero: the pair pins the two halves of the mistake that keeps being made in both directions, since a port emitting 0 for the uncounted rule and a port omitting the counted zero are each wrong about a different one. Handle 14's only statement is a verdict map, so the RULE reaches no terminal verdict of its own — a port that lifted `accept` out of the map's nested data would assert one — and the map is not rendered, so comprehension is partial rather than full. Handles 67 and 22 pin Position as per-chain document order: ts-input's fourth rule and input-allow's fifth, counted from zero, which a port numbering positions per document rather than per chain gets wrong.\n\nDeliberately not anchored: the rendering spelling of any rule beyond handle 58. The invariant fixes WHAT must appear; the syntax it appears in is the reference's convention, and an anchor transcribed from the reference's own output would prove determinism while wearing an authority's clothes."
+}
