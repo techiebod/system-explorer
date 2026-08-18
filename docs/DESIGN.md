@@ -1183,6 +1183,8 @@ Two smaller rules complete it. **Retry is always safe** — collectors are read-
 >
 > The rule of ownership generalises, and it is what keeps this harness from being asked to prove what it cannot: **the harness authenticates what varies within one stream; the collator authenticates what varies across streams; the live comparator authenticates what varies with time itself.** A rule placed at the wrong tier is not extra safety — it is a guard that cannot fail, wearing a stricter one's clothes.
 >
+> The judge and the collator apply the same stream rules with different blast radius, and the difference is deliberate: **replay refuses the whole stream** — under a pinned corpus an incomplete emission is a broken collector — while **the live collator holds only the offending collection and applies the rest**, because one bad collection must not cost the host its other facts. Two verdicts from one rulebook, scoped to what each tier owes.
+>
 > The set of run-varying members is closed, enumerated beside the rules that govern it, and the harness proves the enumeration is exhaustive — a member in neither regime fails the harness's own tests, not a code review. This was this document's most expensive lesson to date: an earlier harness dropped seven members from comparison on the promise that "something else checks them", and for five of the seven nothing did. A member the judge cannot see is a free-fire zone for every wrong value a port can put there.
 
 ## 20 · The reference corpus
@@ -2037,6 +2039,10 @@ Everything below is blocked awaiting a ruling, per the governance rule at the he
 - **`se.views/1` survives unchanged** (§29) — blocks phase 5, written proposal in place.
 - **Disclosure is declared per value as `discloses`** (§21) — settled; the vocabulary and the well-known table are in appendix A.
 - **The UI design system is the production token set, no external library** (§06) — blocks phase 5, written proposal in place.
+- **Partial verb service at the skeleton** (§18) — ruled provisionally: the system collector serves declare/probe/collect and exits 2 on the other three declared verbs; phase 3 owes object, evidence and lookup, and the acquisition-time evidence commitment arrives with the evidence verb rather than being faked without it.
+- **`timens` travels as nanoseconds** (§09/§19) — ruled provisionally: /proc/self/timens_offsets carries seconds plus nanoseconds and the wire wants one integer, so it is the full-resolution one; 0 under replay.
+- **os-release's synthetic defaults are not applied** (§18) — ratified: a manufactured value sits at no path in the evidence document, so a missing or empty key goes to the object's absent list instead of being invented.
+- **The batch and request ids are collector-minted** (§18/§19) — ruled provisionally to unblock phase 2, override open. The request-line grammar carries no token for a collator-issued id, so the schema's "collator-issued" aside on `request` was unimplementable as written. The collector authors the batch, so it mints the batch id — that is what makes a transport retry (same bytes, same id) idempotent — and `request` is set equal to `batch` until a consumer needs them distinct; the collator correlates by the connection it dialled, which needs no echo. If a collator-issued request id is ever wanted, it is a request-line grammar change and comes back through this queue.
 
 ---
 

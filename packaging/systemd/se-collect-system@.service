@@ -1,0 +1,85 @@
+# se-collect-system@.service — one instance per accepted connection on
+# se-collect-system.socket: the system-identity collector, run-and-exit
+# (DESIGN 06/18). systemd applies this collector's authority and sandbox;
+# the collator holds none of it, which is what makes the blast radius one
+# interface rather than the union of all of them.
+#
+# This collector's declared authority is read_paths /etc/os-release and
+# /usr/lib/os-release plus the hostname syscall — no groups, no
+# capabilities, no credentials — so the sandbox below grants exactly a
+# read-only view of the OS and nothing else.
+#
+# MIRRORED in nix/skeleton-module.nix (generated per configured collector).
+# Any divergence beyond the collector's name is drift — change both or
+# neither.
+
+[Unit]
+Description=System Explorer system collector (one connection)
+# Per-connection instances accumulate: a refused request exits 2 ("I could
+# not run", DESIGN 18) and would linger as a failed unit forever on a unit
+# type that is born and dies by the thousand. Garbage-collect either way —
+# the journal keeps the stderr line, which is the record that matters.
+CollectMode=inactive-or-failed
+
+[Service]
+Slice=system-explorer.slice
+
+# The accepted connection is fd 0 and fd 1; stderr goes to the journal,
+# which is the one channel that bypasses redaction — the contract's answer
+# is behavioural (diagnostics only, never payload content, DESIGN 19) and
+# the corpus's canary credentials police it, not this unit.
+ExecStart=/opt/system-explorer-skeleton/bin/se-collect-system
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal
+
+# No stable identity needed: the collector mints nothing, owns no files,
+# and exists for milliseconds. A throwaway uid per connection is the
+# cheapest possible statement that it accumulates nothing.
+DynamicUser=yes
+
+# The collector half of the two-level budget (DESIGN 06): each connection
+# scope dies at 32M, far below the slice's 128M and beside the collator's
+# protected 64M — so a runaway collector kills itself, never the observer
+# whose job is to report it.
+MemoryMax=32M
+
+# Backstop for a hung collector (DESIGN 18). Above the collator's 30s wire
+# deadline on purpose: the collator must time out first and record the
+# failure as an acquisition fact; systemd's kill is for a collector wedged
+# with no collator attached (a person's terminal test through the socket).
+RuntimeMaxSec=1min
+
+# A collector never opens a socket — enforced, not promised: no network
+# namespace to reach and no address family to create. The inherited
+# connection fds are unaffected; both lines govern creation only.
+PrivateNetwork=yes
+RestrictAddressFamilies=none
+
+# Hardening: everything below is the absence this collector declared.
+CapabilityBoundingSet=
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectClock=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+# Other processes' /proc entries are invisible; deliberately NOT
+# ProcSubset=pid — the stream's begin record reads
+# /proc/sys/kernel/random/boot_id and /proc/self/timens_offsets (DESIGN
+# 09/19), and ProcSubset=pid would hide the first of those.
+ProtectProc=invisible
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+# Pure Go: no JIT, no W+X mapping to lose.
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+UMask=0077
+
+# No [Install]: instances exist only through the socket's Accept=yes.

@@ -1,0 +1,95 @@
+# se-collate.service — the collator: the one long-lived process per host
+# (DESIGN 06). It is the validating party of the collector contract (DESIGN
+# 18) and the batch authority of DESIGN 19; it holds no group, capability or
+# credential belonging to the observed system, which is why the sandbox
+# below can be this tight on the component that talks to everything.
+#
+# MIRRORED in nix/skeleton-module.nix. The module generates these exact
+# directives with only the ExecStart path and the SE_* values substituted;
+# any other divergence is drift — change both or neither.
+
+[Unit]
+Description=System Explorer collator (read API, batch authority)
+# The collator dials the collector socket on start; if the socket is not up
+# yet the first acquisition fails and retries a minute later — Wants/After
+# spends that minute at boot instead.
+Wants=se-collect-system.socket
+After=network.target se-collect-system.socket
+
+[Service]
+Slice=system-explorer.slice
+
+# A dedicated user, not DynamicUser: the collector socket is mode 0600 owned
+# by the collator's user (DESIGN 18), and ownership needs a name that exists
+# before the service runs and stays stable across restarts. The user comes
+# from sysusers.d (system-explorer-skeleton.sysusers.conf).
+User=system-explorer
+Group=system-explorer
+
+ExecStart=/opt/system-explorer-skeleton/bin/se-collate
+
+# The collator's config is the "reach" kind (DESIGN 08): environment, owned
+# by the deployment, world-readable, no secrets.
+Environment=SE_STATE_DIR=/var/lib/system-explorer
+Environment=SE_COLLECTORS=system=/run/system-explorer/collect-system.sock
+# Loopback: the read API is unauthenticated by design, so the network it
+# binds to is the trust boundary and widening it is a per-host decision.
+Environment=SE_LISTEN=127.0.0.1:8095
+
+Restart=on-failure
+RestartSec=2
+
+# /var/lib/system-explorer for the durable store (the applied-generation
+# transaction of DESIGN 19 lives in it) and /run/system-explorer for the
+# collector sockets. Preserve= because removal on stop would unlink the
+# socket path out from under the still-running socket unit, and every dial
+# after a collator restart would fail on a path that no longer exists. Boot
+# and install-time creation belong to tmpfiles.d
+# (system-explorer-skeleton.tmpfiles.conf): the socket unit binds before
+# this service has ever started.
+StateDirectory=system-explorer
+RuntimeDirectory=system-explorer
+RuntimeDirectoryPreserve=yes
+
+# The two-level budget (DESIGN 06): this is the protected control-plane
+# reservation. MemoryMax bounds the collator's own appetite well under the
+# slice's 128M; MemoryLow is the reservation proper — under slice-wide
+# pressure the kernel reclaims from the collectors (which carry no
+# MemoryLow) first, so the observer is the last thing in the slice to die.
+# Collectors additionally die at their own 32M MemoryMax before they can
+# squeeze this far: 64M + 32M leaves headroom inside 128M by arithmetic,
+# and by enforcement when the arithmetic is wrong.
+MemoryMax=64M
+MemoryLow=64M
+
+# Hardening. Each line is a capability the collator structurally does not
+# need; absence enforced is absence auditable.
+NoNewPrivileges=true
+# Read-only OS; the two writable paths are exactly the directories above.
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectClock=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+# AF_UNIX to dial collector sockets, AF_INET for the loopback listener —
+# and nothing else, so SE_LISTEN here is IPv4 by construction; widening to
+# an IPv6 bind means widening this line with it, deliberately.
+RestrictAddressFamilies=AF_UNIX AF_INET
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+# Pure Go: no JIT, no W+X mapping to lose.
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+# Empty set: the collator holds no credential of the observed system
+# (DESIGN 06) — everything privileged happens in a collector unit.
+CapabilityBoundingSet=
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

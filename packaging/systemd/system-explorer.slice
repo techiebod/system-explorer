@@ -1,0 +1,41 @@
+# system-explorer.slice — the kernel-enforced ceiling over everything the
+# product runs on a host (DESIGN 06). Putting every unit in one slice makes
+# the budget a promise the kernel keeps rather than an arithmetic our own
+# scheduler performs: the product cannot exceed its declared share even when
+# our code is wrong about its own cost. The slice is also a cgroup, so what
+# System Explorer costs the host is a fact the product can publish about
+# itself, measured the same way it measures everything else.
+#
+# MIRRORED in nix/skeleton-module.nix. The module generates these exact
+# directives; a change here that does not land there (or vice versa) is
+# drift, and drift here is a resource-envelope divergence between install
+# paths — change both or neither.
+
+[Unit]
+Description=System Explorer resource envelope (kernel-enforced ceiling)
+
+[Slice]
+# Explicit even though the caps below imply them: accounting is what makes
+# the slice observable (systemctl show, and the product's own cgroup
+# reading), and it must survive somebody loosening a cap later.
+CPUAccounting=yes
+MemoryAccounting=yes
+TasksAccounting=yes
+
+# The envelope target is <=1% of a core steady-state (DESIGN 05); 10% is the
+# hard cap, an order of magnitude above target, so hitting it is already a
+# defect worth a finding. Under quota the failure mode is specific: work runs
+# late and collections miss their declared freshness — a ceiling is not a
+# guarantee, and staleness is the stated symptom (DESIGN 06/15).
+CPUQuota=10%
+
+# The whole product, hard. The two-level split beneath it lives in the
+# member units: 64M control-plane reservation on se-collate.service, 32M per
+# collector connection on se-collect-*@.service — because a single MemoryMax
+# over the slice would let one runaway collector kill the collator, the one
+# component whose job is to notice and report that a collector went wrong.
+MemoryMax=128M
+
+# Threads are tasks and Go runtimes carry a couple of dozen; the bound is
+# against a fork runaway inside the envelope, not a working figure.
+TasksMax=128

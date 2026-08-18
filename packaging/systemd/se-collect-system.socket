@@ -1,0 +1,44 @@
+# se-collect-system.socket — the per-collector socket (DESIGN 06/18). The
+# collator connects here; systemd accepts the connection and spawns one
+# se-collect-system@.service instance with the connection as its stdin and
+# stdout. The collector therefore never opens a socket, never links a socket
+# library, and never contains daemon code — the wire contract and the
+# command-line contract stay the same contract.
+#
+# MIRRORED in nix/skeleton-module.nix (generated per configured collector).
+# Any divergence beyond the collector's name is drift — change both or
+# neither.
+
+[Unit]
+Description=System Explorer system collector socket (per-connection activation)
+
+[Socket]
+# Inside the collator's runtime directory. The directory itself comes from
+# tmpfiles.d (system-explorer-skeleton.tmpfiles.conf): this socket binds at
+# sockets.target, before se-collate.service has ever run, so it cannot rely
+# on that service's RuntimeDirectory= to have created the path.
+ListenStream=/run/system-explorer/collect-system.sock
+# One connection, one collector process, reaped on exit (DESIGN 06).
+Accept=yes
+
+# DESIGN 18: mode 0600, owned by the collator's user, stated rather than
+# defaulted — a too-permissive socket behaves identically until it is
+# abused. connect() on an AF_UNIX socket needs write permission on the
+# inode, so 0600 + this owner IS the access control: only the collator
+# (and root) can reach a collector.
+SocketUser=system-explorer
+SocketGroup=system-explorer
+SocketMode=0600
+
+# The default (64) would let 64 collector scopes exist at once — 64 x 32M
+# dwarfs the 128M slice and turns the per-unit budget back into the single
+# ceiling DESIGN 06 rejects. The collator runs single-flight per collector,
+# so a small bound costs nothing and caps the arithmetic.
+MaxConnections=4
+
+# The socket unit's own (trivial) cgroup lives in the envelope too:
+# everything the product runs is under the slice, no exceptions to audit.
+Slice=system-explorer.slice
+
+[Install]
+WantedBy=sockets.target
