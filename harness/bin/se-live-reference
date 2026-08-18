@@ -56,6 +56,7 @@ if os.environ.get("SE_REPLAY_DIR"):
         "must never be confused for one another."
     )
 
+from system_explorer.agent import envelope as env  # noqa: E402
 from system_explorer.agent.adapters import network, storage  # noqa: E402
 
 # The collections each adapter serves live, and the capability attributes the
@@ -64,9 +65,9 @@ from system_explorer.agent.adapters import network, storage  # noqa: E402
 # redirect, because nothing is redirected.
 LIVE = {
     "storage": {"module": storage, "adapter": storage.Adapter,
-                "collections": ["pools"]},
+                "interface": "zpool", "collections": ["pools"]},
     "network": {"module": network, "adapter": network.Adapter,
-                "collections": ["nft-chains", "nft-rules"]},
+                "interface": "nft", "collections": ["nft-chains", "nft-rules"]},
 }
 
 
@@ -166,13 +167,36 @@ def run(collector: str, generations: dict[str, int]) -> None:
         at = time.clock_gettime(time.CLOCK_BOOTTIME)
         try:
             items = asyncio.run(adapter.acquire(collection))
+        except env.UnknownCollection:
+            # The adapter's capability gate said it does not serve this
+            # collection here — for storage that is `self._zfs`, which is
+            # false exactly when the host has no OpenZFS. Over the shipping
+            # agent's HTTP contract that becomes a 404; over the COLLECTOR
+            # contract the same reading is an absent decline, because "there
+            # are none" is a successful reading that must be able to retire
+            # what a previous batch published (DESIGN 19).
+            #
+            # Bridged here rather than in the adapter because the two
+            # contracts genuinely differ, and because leaving it as an
+            # exception made the reference exit 2 on every ZFS-less host —
+            # which read as "the comparator cannot run here" when the truth
+            # was "this host has no pools, and both implementations should
+            # say so".
+            # The interface's own name, not the collector's: the port and the
+            # replay shim both say "no zpool on this host", and a decline
+            # detail travels to a hub and out over MCP, so three spellings of
+            # one reading would reach an operator as three conditions.
+            out.decline(collection, "absent",
+                        f"no {spec['interface']} on this host")
+            out.commit(collection, objects=0, assertions=0, unobservable=0)
+            continue
         except Exception as exc:  # noqa: BLE001
-            # The live interface genuinely was not there. The comparator is
-            # not the place to guess which decline reason that maps to — the
-            # three non-absent reasons are unmapped in both implementations
-            # and that is an open item in the queue — so this says "I could
-            # not run" and lets the operator see the exception rather than
-            # inventing an authority-bearing decline.
+            # Any other failure is not a statement about this machine that
+            # the reference is entitled to make. The three non-absent decline
+            # reasons are unmapped in the shipping adapter — an open item in
+            # the queue — so this says "I could not run" and shows the
+            # operator the exception rather than inventing an
+            # authority-bearing decline.
             fail(
                 f"{collector}/{collection}: acquisition raised "
                 f"{type(exc).__name__}: {exc}"

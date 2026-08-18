@@ -1,0 +1,19 @@
+{
+  "collector": "storage",
+  "collections": ["pools"],
+  "variant": "absent",
+  "provenance": "captured",
+  "os": "debian",
+  "os_version": "13",
+  "source_version": "none",
+  "captured": "2026-08-18T21:58:00Z",
+  "regenerable": true,
+  "regenerable_on": "any host with no OpenZFS userspace on PATH — the payload directory is empty because the interface is what is missing",
+  "anonymised": true,
+  "note": "A host with no ZFS at all, and the variant that should have existed from the first day this collector was written.\n\nIts absence is why the storage collector answered one question two opposite ways for as long as it has existed. The replay path declined `absent` — committing zero, retiring pools a previous batch published — and the live path declined `unsupported`, which commits nothing and leaves prior pools standing forever, marked stale. Both spellings sat in one file, each under a confident comment arguing against the other, and every tier was green over the pair: replay exercised only the replay half, and no committed variant staged a host without ZFS.\n\nThe network collector had this variant from the start (corpus/network/debian-absent) and has been consistently right about the same shape the whole time. That is the argument for the ruling as much as DESIGN is: two sibling collectors facing one condition — the interface binary is not installed — must not answer differently, and one of them was already pinned.\n\nWhy `absent` and not one of the three that leave prior state: the OpenZFS userspace and its kernel module ship together, and a pool cannot be imported without them, so no zpool on PATH means no imported pools. That is a successful reading of the interface which establishes something, which is DESIGN 19's own test and its own worked example — \"there are no md devices\" is `absent`, and it commits zero precisely so it can retire the arrays a previous batch published. The old live reading's argument, that a ZFS-less host \"is not an empty pool list\", proves too much: it would take the md case and the nft case with it, and the design makes both `absent`.\n\nStated bound: this variant pins the reading for a host where zpool is not installed. It says NOTHING about a host where zpool IS installed and cannot answer — OpenZFS 2.2.2 has no `zpool status -j` at all, and that host may hold an imported pool right now, so committing zero there would retire a real pool. That case declines `unsupported` and is the reason the two are separate readings rather than one.",
+  "anchors": [
+    {"collection": "pools", "decline_reason": "absent"},
+    {"collection": "pools", "commit_objects": 0}
+  ],
+  "anchors_note": "Both halves of the statement, because either alone is satisfiable by a collector that is wrong in the other direction.\n\nThe decline reason alone would pass a collector that declined `absent` and then never committed — which retires nothing, and is the exact behaviour being corrected. The zero commit alone would pass a collector that committed empty with no decline at all, which is a collection claiming authority over a reading it never took. `absent` is authoritative-empty, and it is the decline AND the commit together that say so."
+}

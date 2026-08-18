@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -94,5 +96,52 @@ func TestAnOversizedRequestLineIsRefusedWhole(t *testing.T) {
 	code, _, stderr := runWith(t, "collect "+strings.Repeat("a", requestBound)+":1\n", nil)
 	if code != exitRequest || !strings.Contains(stderr, "bound") {
 		t.Fatalf("exit %d, stderr %q", code, stderr)
+	}
+}
+
+// One condition, one answer, both paths. The storage collector answered "the
+// zpool interface is not on this host" two opposite ways for as long as it
+// existed: the live path declined `unsupported`, which never commits and
+// leaves prior pools standing stale forever, and the replay path declined
+// `absent`, which commits zero and retires them. Each carried a confident
+// comment arguing against the other, in the same file.
+//
+// Nothing caught it. Replay exercises only the replay half; no committed
+// variant staged a ZFS-less host; and the live half is reachable only on a
+// real machine, which is where the comparator found it. This test is the
+// structural half of that fix — corpus/storage/absent pins the VALUE, and
+// this pins that both paths take the same one.
+func TestBothSourcesGiveTheInterfaceMissingOneAnswer(t *testing.T) {
+	// An empty replay directory is a staged ZFS-less host.
+	_, err := replaySource{dir: t.TempDir()}.zpool()
+	var fromReplay *declined
+	if !errors.As(err, &fromReplay) {
+		t.Fatalf("an empty replay directory is a host with no zpool: %v", err)
+	}
+	if fromReplay.reason != declineNoZpool.reason ||
+		fromReplay.detail != declineNoZpool.detail {
+		t.Fatalf("the replay path must take the shared reading, got %+v", fromReplay)
+	}
+	// absent is the only decline that commits, and that is the whole point:
+	// it must be able to retire the pools a previous batch published.
+	if declineNoZpool.reason != "absent" {
+		t.Fatalf("no zpool on the host is a successful reading that establishes "+
+			"there are no pools, so it must be the reason that commits and "+
+			"retires; got %q", declineNoZpool.reason)
+	}
+	// And the live path, on any machine without zpool — which every CI runner
+	// is. Skipped rather than faked where zpool exists, because a faked
+	// LookPath would be testing the fake.
+	if _, err := exec.LookPath("zpool"); err != nil {
+		_, err := liveSource{}.zpool()
+		var fromLive *declined
+		if !errors.As(err, &fromLive) {
+			t.Fatalf("a live host with no zpool declines: %v", err)
+		}
+		if fromLive.reason != fromReplay.reason || fromLive.detail != fromReplay.detail {
+			t.Fatalf("the two paths disagree about one condition: live %+v, "+
+				"replay %+v — which is the defect this test exists for",
+				fromLive, fromReplay)
+		}
 	}
 }

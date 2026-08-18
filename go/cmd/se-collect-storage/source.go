@@ -129,6 +129,16 @@ func (s liveSource) costs() (float64, float64) {
 	return cpu, float64(time.Since(s.started)) / float64(time.Millisecond)
 }
 
+// The interface-is-not-here reading, named ONCE and used by both the live
+// source and the replay source. It is a constant because those two paths gave
+// this condition two different answers for as long as the collector existed —
+// live said `unsupported`, replay said `absent` — and each carried a confident
+// comment arguing against the other. Nothing caught it: replay exercises only
+// the replay half, and no committed variant staged a ZFS-less host until
+// corpus/storage/absent. A shared constant is what makes the disagreement
+// unspellable rather than merely currently-absent.
+var declineNoZpool = declined{"absent", "no zpool on this host"}
+
 // The two live acquisitions, written as literal argv so a reader can run
 // them by hand and get the same document (SPEC section 11, rule 5).
 //
@@ -148,20 +158,53 @@ var (
 
 func (liveSource) zpool() (zpoolReading, error) {
 	if _, err := exec.LookPath("zpool"); err != nil {
-		// A host with no OpenZFS is not an empty pool list — it is a
-		// question this collector cannot answer here. unsupported states
-		// that without retiring pools some other batch published, which is
-		// what an absent decline would do.
-		return zpoolReading{}, &declined{"unsupported", "zpool is not installed on this host"}
+		// No OpenZFS userspace means no imported pools — the tool and the
+		// kernel module ship together, and a pool cannot be imported
+		// without them. So this is a successful reading of the interface
+		// that establishes there are none, which is exactly DESIGN 19's
+		// worked example ("there are no md devices"): absent, committing
+		// zero, retiring whatever a previous batch published.
+		//
+		// This said `unsupported` until the live comparator ran it on a
+		// host without ZFS. The argument in the comment there — "a host
+		// with no OpenZFS is not an empty pool list" — proves too much: by
+		// it, the md case and the nft case would not be absent either, and
+		// DESIGN makes both absent. The cost of the old reading was that a
+		// host which HAD ZFS and then lost it kept serving pool objects
+		// forever, stale and never retired, which is this product's
+		// founding failure with the sign flipped.
+		//
+		// The replay path of this same file already said absent, with its
+		// own confident comment. One collector, one condition, two opposite
+		// rulings — and nothing caught it, because replay exercised only
+		// the replay half and no committed variant staged a ZFS-less host.
+		// corpus/storage/absent now does, and the reason is a shared
+		// constant so the two paths cannot spell it differently again.
+		reason := declineNoZpool
+		return zpoolReading{}, &reason
 	}
 	status, err := runJSON(zpoolStatusJSONInt)
 	if err != nil {
 		status, err = runJSON(zpoolStatusPlain)
 	}
 	if err != nil {
-		// zpool on PATH says nothing about /dev/zfs permissions or a
-		// pool-less host. Nothing was established, so this must not commit.
-		return zpoolReading{}, &declined{"unavailable", "zpool is installed but did not answer"}
+		// zpool IS here and could not give us this reading. That must never
+		// be absent: this host may hold a pool right now — Ubuntu 24.04
+		// carries OpenZFS 2.2.2, which has no `status -j` at all, and the
+		// guest this was found on had a DEGRADED pool at the time — so
+		// committing zero would retire a real pool with a real problem.
+		//
+		// unsupported rather than unavailable, because the distinction is
+		// what an operator does next. `-j` missing is permanent on this
+		// release: no retry helps and the answer is to upgrade or read it
+		// another way. unavailable would suggest a transient failure and
+		// send somebody to look for one that is not there. Neither commits,
+		// so prior pools stand and are served marked stale either way.
+		return zpoolReading{}, &declined{
+			"unsupported",
+			"zpool is installed but cannot report status as JSON; " +
+				"`zpool status -j` needs OpenZFS 2.3 or newer",
+		}
 	}
 	// The listing is enrichment and degrades to the unobservable channel;
 	// only the fact source can refuse the reading.
@@ -279,8 +322,10 @@ func (r replaySource) zpool() (zpoolReading, error) {
 		// Neither interface document was captured: the variant records a
 		// host with no zpool. absent is authoritative-empty and the only
 		// decline reason that commits, because it must retire pools a
-		// previous batch published.
-		return zpoolReading{}, &declined{"absent", "no zpool on this host"}
+		// previous batch published — the same reading the live path takes,
+		// through the same constant, so the two cannot drift apart again.
+		reason := declineNoZpool
+		return zpoolReading{}, &reason
 	}
 	if statusErr != nil {
 		// A variant staging the enrichment but not the fact source is a

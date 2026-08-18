@@ -42,3 +42,10 @@ scrub-map*.json
 **/scrub/*.json
 !harness/scrub/*.json
 **/scrub/secret
+
+# Built collector binaries. se-compare looks for them at go/bin/se-collect-*
+# because the comparator must measure what would actually deploy, and a build
+# step hidden inside a measurement is how a stale binary gets measured twice —
+# so the path is a convention the tool depends on, and the 4.6 MB artefacts at
+# it are not history.
+/go/bin/

@@ -88,10 +88,16 @@ def run_one(argv: list[str], collector: str, collections: list[str],
     after = time.clock_gettime(time.CLOCK_BOOTTIME)
 
     if proc.returncode != 0:
-        raise SystemExit(
-            f"{' '.join(argv)} exited {proc.returncode} — non-zero means 'I "
-            f"could not run', which is not a reading:\n{proc.stderr[:2000]}"
-        )
+        # "I could not run" is a real outcome and one side of a real
+        # comparison, so it is REPORTED rather than fatal. The first version
+        # of this tool raised here, and on a host carrying OpenZFS 2.2.2 —
+        # where `zpool status -j` does not exist, the shipping adapter throws,
+        # and the port declines `unsupported` correctly — it killed the run
+        # instead of printing the most interesting result the comparator has
+        # produced: the two implementations differ about what this host is.
+        # A comparator that dies on the asymmetry it exists to find is a
+        # comparator with a blind spot exactly where it matters.
+        raise CouldNotRun(argv, proc.returncode, proc.stderr)
     return (
         replay.parse_stream(proc.stdout),
         live.Window(boot_id=boot, before=before, after=after, wall_ms=wall_ms),
@@ -99,17 +105,31 @@ def run_one(argv: list[str], collector: str, collections: list[str],
     )
 
 
+class CouldNotRun(Exception):
+    """One side of the comparison did not produce a reading at all."""
+
+    def __init__(self, argv: list[str], code: int, stderr: str) -> None:
+        self.argv, self.code, self.stderr = argv, code, stderr
+        super().__init__(f"{argv[-1]} exited {code}")
+
+
 def compare(collector: str, twice: bool) -> dict:
     collections = SERVES[collector]
     result: dict = {"collector": collector, "collections": collections}
 
-    reference, ref_window, ref_stderr = run_one(
-        [sys.executable, str(REFERENCE)], collector, collections,
-        {"SE_REFERENCE_COLLECTOR": collector},
-    )
-    port, port_window, port_stderr = run_one(
-        [str(port_binary(collector))], collector, collections,
-    )
+    try:
+        reference, ref_window, ref_stderr = run_one(
+            [sys.executable, str(REFERENCE)], collector, collections,
+            {"SE_REFERENCE_COLLECTOR": collector},
+        )
+    except CouldNotRun as exc:
+        return _one_sided(result, "reference", exc, collector, collections)
+    try:
+        port, port_window, port_stderr = run_one(
+            [str(port_binary(collector))], collector, collections,
+        )
+    except CouldNotRun as exc:
+        return _one_sided(result, "port", exc, collector, collections)
 
     # The corpus's own comparator, so parity here means exactly what replay
     # equivalence means: records compared by identity, run-varying members
@@ -171,6 +191,38 @@ def compare(collector: str, twice: bool) -> dict:
     return result
 
 
+def _one_sided(result: dict, who: str, exc: CouldNotRun,
+               collector: str, collections: list[str]) -> dict:
+    """One side produced no reading. Report what the OTHER side said anyway.
+
+    This is an adjudication, not a verdict (DESIGN 20): the reference can
+    lose, and "the shipping product cannot read this host and the port can"
+    is a finding worth more than either stream alone. So the surviving side
+    is still run and shown, and the failure is named with its exit status and
+    its stderr rather than reduced to a crash.
+    """
+    other = "port" if who == "reference" else "reference"
+    result["could_not_run"] = {
+        "side": who,
+        "exit": exc.code,
+        "stderr": exc.stderr.strip()[:1500],
+    }
+    try:
+        argv = ([sys.executable, str(REFERENCE)] if other == "reference"
+                else [str(port_binary(collector))])
+        env = {"SE_REFERENCE_COLLECTOR": collector} if other == "reference" else None
+        records, _, _ = run_one(argv, collector, collections, env)
+        result["surviving_side"] = {other: _counts(records)}
+        result["surviving_statement"] = [
+            f"{r.get('record')} {r.get('collection')}: {r.get('reason')}"
+            for r in records if r.get("record") == "decline"
+        ] or [f"{other} committed {sum(1 for r in records if r.get('record') == 'object')} objects"]
+    except CouldNotRun as also:
+        result["surviving_side"] = {other: f"also could not run (exit {also.code})"}
+    result["clean"] = False
+    return result
+
+
 def _counts(records: list[dict]) -> dict[str, int]:
     out: dict[str, int] = {}
     for record in records:
@@ -181,6 +233,18 @@ def _counts(records: list[dict]) -> dict[str, int]:
 
 def render(result: dict) -> str:
     lines = [f"── {result['collector']} ({', '.join(result['collections'])})"]
+    if "could_not_run" in result:
+        failed = result["could_not_run"]
+        lines.append(f"  ✗ the {failed['side']} could not run (exit {failed['exit']})")
+        for text in failed["stderr"].splitlines()[-3:]:
+            lines.append(f"      {text[:160]}")
+        for side, what in result.get("surviving_side", {}).items():
+            lines.append(f"  · the {side} DID read this host: {what}")
+        for statement in result.get("surviving_statement", []):
+            lines.append(f"      {statement}")
+        lines.append("  · adjudication: the two implementations disagree about "
+                     "what this host is, which is a finding and not a crash")
+        return "\n".join(lines)
     ref, port = result["counts"]["reference"], result["counts"]["port"]
     for kind in sorted(set(ref) | set(port)):
         mark = " " if ref.get(kind) == port.get(kind) else "!"
