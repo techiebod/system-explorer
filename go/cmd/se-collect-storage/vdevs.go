@@ -76,6 +76,7 @@ type vdevRow struct {
 	fields *value // the emitted row, in the reference's member order
 
 	isDisk bool   // Type == "disk", the gate on Names, Device and the sweep
+	parent string // the vdev this row sits directly inside, "" at the top
 	kind   string // lower(str(Type or "")) — the redundancy walk's reading
 	state  *value // nil when the document reported none
 	group  string // "" for a data vdev
@@ -105,12 +106,14 @@ type vdevRow struct {
 // unhealthy list while a spare sits AVAIL; both rules already read Group and
 // neither needed changing.
 func flattenPoolVdevs(pool *value, out *[]*vdevRow, links *aliasTree) {
-	flattenVdevs(pool.get("vdevs"), out, links, "data", 1)
+	flattenVdevs(pool.get("vdevs"), out, links, "data", 1, "")
 	// Sorted, so the rows are ordered by the same rule on every host rather
-	// than by whatever order the document happened to carry.
+	// than by whatever order the document happened to carry. The group KEY
+	// is the parent its members sit under: there is no vdev node named
+	// "spares", the key itself is what zpool calls the container.
 	for _, group := range sortedGroupVdevs {
 		if members := pool.get(group); members.object() != nil {
-			flattenVdevs(members, out, links, group, 1)
+			flattenVdevs(members, out, links, group, 1, group)
 		}
 	}
 }
@@ -129,7 +132,7 @@ var sortedGroupVdevs = []string{"l2cache", "logs", "spares"}
 // A container does not advance depth, so the pool's root is transparent and
 // its children are Depth 1. Depth is therefore "emitted ancestors + 1", not
 // tree depth.
-func flattenVdevs(nodes *value, out *[]*vdevRow, links *aliasTree, group string, depth int) {
+func flattenVdevs(nodes *value, out *[]*vdevRow, links *aliasTree, group string, depth int, parent string) {
 	tree := nodes.object()
 	if tree == nil {
 		return
@@ -143,14 +146,14 @@ func flattenVdevs(nodes *value, out *[]*vdevRow, links *aliasTree, group string,
 		}
 		childDepth := depth
 		if !isContainer {
-			*out = append(*out, buildRow(name, node, links, nextGroup, depth))
+			*out = append(*out, buildRow(name, node, links, nextGroup, depth, parent))
 			childDepth = depth + 1
 		}
-		flattenVdevs(node.get("vdevs"), out, links, nextGroup, childDepth)
+		flattenVdevs(node.get("vdevs"), out, links, nextGroup, childDepth, name)
 	}
 }
 
-func buildRow(name string, node *value, links *aliasTree, group string, depth int) *vdevRow {
+func buildRow(name string, node *value, links *aliasTree, group string, depth int, parent string) *vdevRow {
 	// Stripe pools omit vdev_type (and state) on their leaves entirely; a
 	// childless vdev under a non-group parent is a plain disk in zpool's own
 	// semantics, so it resolves a Device like a typed leaf. A node that HAS
@@ -167,6 +170,7 @@ func buildRow(name string, node *value, links *aliasTree, group string, depth in
 	row := &vdevRow{
 		name:   name,
 		depth:  depth,
+		parent: parent,
 		fields: newObject(),
 		isDisk: vdevType.equalsString("disk"),
 		state:  node.get("state"),

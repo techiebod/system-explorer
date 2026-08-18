@@ -38,6 +38,30 @@ type objectRecord struct {
 	At     float64  `json:"at"`
 }
 
+// relationAssertionRecord is one vantage's directed claim about an edge.
+// Two members the contract refuses are absent by construction rather than
+// by omitempty: there is no observability field, because whether the far end
+// was seen is a fact about another collector's output that only the collator
+// holds; and the target carries a name, never an id, because resolution is a
+// property that changes and a key that changed with it would reset the
+// relation's lifecycle every time the estate learned something (DESIGN 13).
+type relationAssertionRecord struct {
+	Record     string          `json:"record"`
+	Collection string          `json:"collection"`
+	Name       string          `json:"name"`
+	Type       string          `json:"type"`
+	Vantage    string          `json:"vantage"`
+	Target     assertionTarget `json:"target"`
+	// Omitted entirely for a type declaring carries_facts false: an empty
+	// object would be a fact channel opened for a relation that has none.
+	Facts json.RawMessage `json:"facts,omitempty"`
+}
+
+type assertionTarget struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
+}
+
 type unobservableRecord struct {
 	Record     string `json:"record"`
 	Collection string `json:"collection"`

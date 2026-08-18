@@ -267,6 +267,7 @@ func renderRule(expr jsonValue) renderedRule {
 type ruleRow struct {
 	name  string
 	facts map[string]any
+	edges []relationAssertionRecord
 }
 
 // nftRules derives one row per `rule` entry, in document order.
@@ -344,9 +345,39 @@ func nftRules(doc jsonValue) []ruleRow {
 		if rendered.hasBytes {
 			facts["CounterBytes"] = rendered.byteCount
 		}
+		// Two assertions, and the pair is the point (DESIGN 13). member-of
+		// names the chain this rule sits in — a name nft-chains publishes,
+		// so it RESOLVES when both collections are collected in one batch
+		// and is `asserted` when only nft-rules was asked for. Nothing here
+		// can tell the difference, and nothing here should: whether the far
+		// end was seen is a fact about another collector's output, which
+		// only the collator holds.
+		//
+		// dispatches-to carries the declared discriminator, because one
+		// chain legitimately jumps to the same target from several rules.
+		// Handle is the rule's own identity in nftables; Position would not
+		// do, because deleting a rule above renumbers every rule below it
+		// and a discriminator that moves resets a relation's lifecycle for
+		// a change it had nothing to do with.
+		edges := []relationAssertionRecord{{
+			Type:   "member-of",
+			Target: assertionTarget{Kind: "nft-chain", Name: family + " " + table + " " + chain},
+		}}
+		if rendered.hasJump {
+			jumpFacts := map[string]any{"Handle": facts["Handle"]}
+			edges = append(edges, relationAssertionRecord{
+				Type: "dispatches-to",
+				Target: assertionTarget{
+					Kind: "nft-chain",
+					Name: family + " " + table + " " + pythonStr(rendered.jumpTarget),
+				},
+				Facts: jumpFacts,
+			})
+		}
 		rows = append(rows, ruleRow{
 			name:  family + " " + table + " " + chain + " handle " + pythonStr(handle),
 			facts: facts,
+			edges: edges,
 		})
 	}
 	return rows

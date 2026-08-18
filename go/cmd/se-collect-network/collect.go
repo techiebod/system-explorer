@@ -36,6 +36,30 @@ type objectRecord struct {
 	At         float64        `json:"at"`
 }
 
+// relationAssertionRecord is one vantage's directed claim about an edge.
+// Two members the contract refuses are absent by construction rather than by
+// omitempty: there is no observability field, because whether the far end was
+// seen is a fact about another collector's output that only the collator
+// holds; and the target carries a name, never an id, because resolution is a
+// property that changes and a key that changed with it would reset the
+// relation's lifecycle every time the estate learned something (DESIGN 13).
+type relationAssertionRecord struct {
+	Record     string          `json:"record"`
+	Collection string          `json:"collection"`
+	Name       string          `json:"name"`
+	Type       string          `json:"type"`
+	Vantage    string          `json:"vantage"`
+	Target     assertionTarget `json:"target"`
+	// Omitted entirely for a type declaring carries_facts false: an empty
+	// object would be a fact channel opened for a relation that has none.
+	Facts map[string]any `json:"facts,omitempty"`
+}
+
+type assertionTarget struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
+}
+
 type declineRecord struct {
 	Record     string `json:"record"`
 	Collection string `json:"collection"`
@@ -147,17 +171,18 @@ func collect(stdout, stderr io.Writer, src source, order []string, generations m
 				declineAcquisition(out, collection, generations[collection], acqErr)
 				continue
 			}
-			var rows int
+			var rows, edges int
 			if collection == collectionChains {
-				rows = emitChains(out, src, collection, doc, &objects)
+				rows, edges = emitChains(out, src, collection, doc, &objects)
 			} else {
-				rows = emitRules(out, src, collection, doc, &objects)
+				rows, edges = emitRules(out, src, collection, doc, &objects)
 			}
 			out.emit(commitRecord{
 				Record:     "commit",
 				Collection: collection,
 				Generation: generations[collection],
 				Objects:    rows,
+				Assertions: edges,
 			})
 		default:
 			// A name this collector never published is declined, not
@@ -184,26 +209,30 @@ func collect(stdout, stderr io.Writer, src source, order []string, generations m
 	return exitOK
 }
 
-func emitChains(out *emitter, src source, collection string, doc jsonValue, objects *int) int {
+func emitChains(out *emitter, src source, collection string, doc jsonValue, objects *int) (int, int) {
 	rows := nftChains(doc)
+	edges := 0
 	for _, row := range rows {
+		name := row.key.streamName()
 		out.emit(objectRecord{
 			Record:     "object",
 			Collection: collection,
 			// The chain's own three-part native name, spaces between: the
 			// same chain name in ip and ip6 is two chains, and a rule
 			// admitting a port in one says nothing about the other.
-			Name:  row.key.streamName(),
+			Name:  name,
 			Facts: row.facts,
 			At:    src.stamp(*objects),
 		})
 		*objects++
+		edges += emitAssertions(out, collection, name, row.edges)
 	}
-	return len(rows)
+	return len(rows), edges
 }
 
-func emitRules(out *emitter, src source, collection string, doc jsonValue, objects *int) int {
+func emitRules(out *emitter, src source, collection string, doc jsonValue, objects *int) (int, int) {
 	rows := nftRules(doc)
+	edges := 0
 	for _, row := range rows {
 		out.emit(objectRecord{
 			Record:     "object",
@@ -215,8 +244,27 @@ func emitRules(out *emitter, src source, collection string, doc jsonValue, objec
 			At:    src.stamp(*objects),
 		})
 		*objects++
+		edges += emitAssertions(out, collection, row.name, row.edges)
 	}
-	return len(rows)
+	return len(rows), edges
+}
+
+// emitAssertions completes each edge with the three members a row cannot
+// supply and puts it on the wire. The source NAME is the one the object
+// record was published under and nothing else: a relation's key derives from
+// the source object's id and the target's name as published (DESIGN 13), so
+// an assertion naming its source any other way keys against an object that
+// does not exist. The vantage is the collection this reading came from, which
+// is what makes the assertion directed.
+func emitAssertions(out *emitter, collection, name string, edges []relationAssertionRecord) int {
+	for _, edge := range edges {
+		edge.Record = "relation_assertion"
+		edge.Collection = collection
+		edge.Name = name
+		edge.Vantage = collection
+		out.emit(edge)
+	}
+	return len(edges)
 }
 
 // declineAcquisition maps an acquisition failure onto the decline vocabulary.

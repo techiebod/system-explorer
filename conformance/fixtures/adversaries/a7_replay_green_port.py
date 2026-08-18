@@ -186,7 +186,17 @@ def nft_chains(doc: dict) -> list[dict]:
             facts["JumpedFrom"] = [caller]
         elif not base:
             facts["Unreferenced"] = True
-        items.append({"native_id": f"{family} {table} {name}", "facts": facts})
+        items.append({
+            "native_id": f"{family} {table} {name}", "facts": facts,
+            # The chain's table edge. This subject's declared defects are
+            # about family enums and caller sets, not about relations, so it
+            # asserts the edge faithfully — otherwise it would fail replay
+            # for a ninth reason and stop testing the other eight.
+            "assertions": [{
+                "type": "member-of",
+                "target": {"kind": "nft-table", "name": f"{family} {table}"},
+            }],
+        })
     return items
 
 
@@ -209,7 +219,7 @@ def _epoch_iso(raw):
     )
 
 
-def _flatten(nodes, out, links, group="data", depth=1):
+def _flatten(nodes, out, links, group="data", depth=1, parent=None, edges=None):
     for name, vdev in (nodes or {}).items():
         container = vdev.get("vdev_type") == "root" or name in GROUP_VDEVS
         next_group = name if name in GROUP_VDEVS else group
@@ -265,8 +275,20 @@ def _flatten(nodes, out, links, group="data", depth=1):
             # DESIGN 19 forbids it at any depth; these nulls live one level
             # down, inside the Vdevs rows.
             out.append(entry)
+            # The pool's backed-by edge per disk leaf, discriminated by the
+            # vdev it sits in. Emitted so this subject stays a faithful port
+            # apart from its EIGHT DECLARED DEFECTS: a subject that simply
+            # stopped asserting relations would fail replay for a ninth
+            # reason and stop testing the other eight.
+            if edges is not None and vtype == "disk" and parent:
+                edges.append({
+                    "type": "backed-by",
+                    "target": {"kind": "block-device", "name": str(name)},
+                    "facts": {"VdevPath": str(parent)},
+                })
             child_depth = depth + 1
-        _flatten(vdev.get("vdevs"), out, links, next_group, child_depth)
+        _flatten(vdev.get("vdevs"), out, links, next_group, child_depth,
+                 str(name), edges)
 
 
 def _redundancy(vdevs):
@@ -306,7 +328,8 @@ def pools(status: dict, listing, links):
         absent: list[str] = []
         unobservable: list[dict] = []
         vdevs: list[dict] = []
-        _flatten(pool.get("vdevs"), vdevs, links)
+        edges = []
+        _flatten(pool.get("vdevs"), vdevs, links, edges=edges)
         if links is None:
             for entry in vdevs:
                 if entry.get("Type") == "disk":
@@ -414,6 +437,8 @@ def pools(status: dict, listing, links):
             item["absent"] = sorted(absent)
         if unobservable:
             item["unobservable"] = sorted(unobservable, key=lambda u: u["fact"])
+        if edges:
+            item["assertions"] = edges
         items.append(item)
     return items
 
@@ -529,6 +554,7 @@ def main() -> None:
                 payloads.get("devlinks"),
             )
         unobservable = 0
+        assertions = 0
         for item in items:
             record = {
                 "record": "object",
@@ -542,6 +568,15 @@ def main() -> None:
             if item.get("absent"):
                 record["absent"] = item["absent"]
             emit(record)
+            for assertion in item.get("assertions", []):
+                emit({
+                    "record": "relation_assertion",
+                    "collection": collection,
+                    "name": item["native_id"],
+                    "vantage": collection,
+                    **assertion,
+                })
+                assertions += 1
             for missing in item.get("unobservable", []):
                 emit(
                     {
@@ -558,7 +593,7 @@ def main() -> None:
                 "collection": collection,
                 "generation": generations[collection],
                 "objects": len(items),
-                "assertions": 0,
+                "assertions": assertions,
                 "unobservable": unobservable,
             }
         )

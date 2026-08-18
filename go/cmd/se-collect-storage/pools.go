@@ -127,14 +127,14 @@ func collectPools(out *emitter, stderr io.Writer, src source, collection string,
 	}
 
 	pools := reading.status.get("pools").object()
-	emitted, unobservable := 0, 0
+	emitted, assertions, unobservable := 0, 0, 0
 	for _, name := range keysOf(pools) {
 		at, err := src.stamp(*objects)
 		if err != nil {
 			fmt.Fprintln(stderr, err)
 			return exitRuntime
 		}
-		record, missing, err := buildPool(name, pools.byKey[name], listing, reading.links, now, at)
+		record, missing, edges, err := buildPool(name, pools.byKey[name], listing, reading.links, now, at)
 		if err != nil {
 			fmt.Fprintf(stderr, "pool: %v\n", err)
 			return exitRuntime
@@ -143,6 +143,19 @@ func collectPools(out *emitter, stderr io.Writer, src source, collection string,
 		out.emit(record)
 		*objects++
 		emitted++
+		// Emitted after the object and before the unobservables, matching
+		// the reference's order. Order inside a collection is not
+		// significant to the collator — it buffers until commit — but the
+		// corpus compares two streams, and matching order keeps a real
+		// difference from arriving buried in a reordering.
+		for _, edge := range edges {
+			edge.Record = "relation_assertion"
+			edge.Collection = collection
+			edge.Name = name
+			edge.Vantage = collection
+			out.emit(edge)
+			assertions++
+		}
 		for _, entry := range missing {
 			out.emit(unobservableRecord{
 				Record:     "unobservable",
@@ -160,6 +173,7 @@ func collectPools(out *emitter, stderr io.Writer, src source, collection string,
 		Collection:   collection,
 		Generation:   generation,
 		Objects:      emitted,
+		Assertions:   assertions,
 		Unobservable: unobservable,
 	})
 	return exitOK
@@ -168,7 +182,7 @@ func collectPools(out *emitter, stderr io.Writer, src source, collection string,
 // buildPool is storage.py:861-1002 for one entry of the status document's
 // pools map. The object's NAME is that map key — not the pool's own `name`
 // member, which nothing reads, and not the guid.
-func buildPool(name string, pool *value, listing *value, links *aliasTree, now, at float64) (objectRecord, []unobservableFact, error) {
+func buildPool(name string, pool *value, listing *value, links *aliasTree, now, at float64) (objectRecord, []unobservableFact, []relationAssertionRecord, error) {
 	var rows []*vdevRow
 	flattenPoolVdevs(pool, &rows, links)
 
@@ -198,14 +212,14 @@ func buildPool(name string, pool *value, listing *value, links *aliasTree, now, 
 
 	scan, err := computeScanFacts(pool.get("scan_stats"), now)
 	if err != nil {
-		return objectRecord{}, nil, err
+		return objectRecord{}, nil, nil, err
 	}
 
 	facts := newFactSet()
 	facts.put("State", nilIfNone(pool.get("state")))
 	message, err := statusMessage(pool.get("status"))
 	if err != nil {
-		return objectRecord{}, nil, err
+		return objectRecord{}, nil, nil, err
 	}
 	facts.put("StatusMessage", message)
 	// Known data ERRORS, raw: the degraded capture reads 0 beside a member
@@ -289,7 +303,38 @@ func buildPool(name string, pool *value, listing *value, links *aliasTree, now, 
 		Names:  poolNames(pool, rows),
 		Absent: absent,
 		At:     at,
-	}, unobservable, nil
+	}, unobservable, backedBy(rows), nil
+}
+
+// backedBy is one assertion per disk leaf: the pool is backed by that member,
+// and VdevPath — the declared discriminator — says which vdev it sits in.
+//
+// The discriminator is what makes an engaged spare expressible. A spare that
+// has been pulled in appears TWICE under one pool, once inside the spare-N
+// pseudo-vdev where it is doing the work and once under the `spares` key
+// where it is accounted for, and those are two different statements about
+// one device. Keyed on endpoints and type alone the second would silently
+// overwrite the first, and the pool would report a spare that is either
+// standing by or working, never the truth that it is both (DESIGN 13).
+//
+// A leaf with no parent asserts nothing: it sits directly under no vdev the
+// document named, so there is no VdevPath to discriminate on, and an
+// assertion carrying an empty discriminator is worse than no assertion.
+func backedBy(rows []*vdevRow) []relationAssertionRecord {
+	var edges []relationAssertionRecord
+	for _, row := range rows {
+		if !row.isDisk || row.parent == "" {
+			continue
+		}
+		facts := newObject()
+		facts.set("VdevPath", stringValue(row.parent))
+		edges = append(edges, relationAssertionRecord{
+			Type:   "backed-by",
+			Target: assertionTarget{Kind: "block-device", Name: row.name},
+			Facts:  facts.encode(),
+		})
+	}
+	return edges
 }
 
 // statusMessage is `(pool.get("status") or "").strip() or None`: a key that

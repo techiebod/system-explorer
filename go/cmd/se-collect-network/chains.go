@@ -133,6 +133,7 @@ func mapReferences(node jsonValue) stringSet {
 type chainRow struct {
 	key   chainKey
 	facts map[string]any
+	edges []relationAssertionRecord
 }
 
 // nftChains derives one row per chain from the whole `nft -j list ruleset`
@@ -262,7 +263,27 @@ func nftChains(doc jsonValue) []chainRow {
 			// jumps to an input hook and nothing needs to.
 			facts["Unreferenced"] = true
 		}
-		rows = append(rows, chainRow{key: key, facts: facts})
+		// One assertion: the table this chain belongs to. Nothing this
+		// collector serves publishes an nft-table object, so the target
+		// resolves against nothing on this host and the collator mints the
+		// relation `asserted` — the condition DESIGN 13 exists for, and not
+		// a dangling pointer.
+		//
+		// Inbound dispatch is NOT asserted here even though JumpedFrom holds
+		// it. A relation is directed because observation has a vantage, and
+		// the vantage that saw a jump is the RULE that writes it; asserting
+		// the same edge from this end would put two directed claims about
+		// one edge on the wire from ONE reading of ONE document, which is
+		// not the bilateral observation `confirmed` is supposed to mean.
+		// JumpedFrom stays a derived fact, which is what it is.
+		rows = append(rows, chainRow{
+			key:   key,
+			facts: facts,
+			edges: []relationAssertionRecord{{
+				Type:   "member-of",
+				Target: assertionTarget{Kind: "nft-table", Name: key.family + " " + key.table},
+			}},
+		})
 	}
 	return rows
 }

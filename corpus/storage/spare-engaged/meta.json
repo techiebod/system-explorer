@@ -1,6 +1,8 @@
 {
   "collector": "storage",
-  "collections": ["pools"],
+  "collections": [
+    "pools"
+  ],
   "variant": "degraded",
   "provenance": "captured",
   "os": "ubuntu",
@@ -12,24 +14,133 @@
   "anonymised": true,
   "note": "The first capture this product has ever taken of a pool with a spare in it, and the shape that found four layers of the same blindness at once.\n\nA five-wide raidz1 on real virtio block devices with by-id aliases, plus a hot spare, a log device and a cache device. One member was then made to DISAPPEAR — the virtio driver unbound inside the guest, so the block device genuinely stopped existing rather than being softly offlined — and ZFS pulled the spare in by itself. What the payload holds is therefore the whole failure story in one document: a REMOVED leaf, the spare-3 pseudo-vdev the replacement creates inside the raidz group, the spare ONLINE at depth 3 doing the work and INUSE at pool level being accounted for, a resilver that has overwritten the scrub record, and a pool DEGRADED with Errors 0 because parity and the spare between them lost nothing.\n\nWhy no capture held this before: `zpool status -j` carries spares, logs and l2cache as TOP-LEVEL keys on the pool object rather than inside its vdevs tree, and every layer of this repository read only the tree. The adapter emitted no rows for them. The two mutation operators claiming to cover the class minted them nested, a shape zpool does not produce. The closure guard's extractor walked the tree too, so a real payload reported no group members present at all. And the scrub manifest classified only the tree, so the scrubber REFUSED to classify a payload holding a group vdev — which is why this capture could not have been taken until the manifest was extended. Each layer hid the next; the pair is committed so that none of them can go back.\n\nStated bound: the members are virtio disks, so `path` is a by-id alias and every leaf resolves to a kernel name. A pool on plain /dev/sdX with no alias tree resolves differently and is covered by corpus/storage/healthy, whose five unobservable Device records are the other half of that question.",
   "anchors": [
-    {"collection": "pools", "object": "host-2768d1",
-     "fact": "State", "value": "DEGRADED"},
-    {"collection": "pools", "object": "host-2768d1",
-     "fact": "Errors", "value": 0},
-    {"collection": "pools", "object": "host-2768d1",
-     "fact": "Redundancy", "value": "raidz1"},
-    {"collection": "pools", "object": "host-2768d1",
-     "fact": "DeviceFailuresTolerated", "value": 1},
-    {"collection": "pools", "object": "host-2768d1",
-     "fact": "ScanFunction", "value": "RESILVER"},
-    {"collection": "pools", "object": "host-2768d1",
-     "absent_fact": "LastScrubEndTime"},
-    {"collection": "pools", "object": "host-2768d1",
-     "fact": "UnhealthyVdevs",
-     "value": ["raidz1-0", "spare-3", "host-6f342f"]},
-    {"collection": "pools", "object": "host-2768d1",
-     "fact": "VdevsWithErrors", "value": []},
-    {"collection": "pools", "commit_objects": 1}
+    {
+      "collection": "pools",
+      "object": "host-2768d1",
+      "fact": "State",
+      "value": "DEGRADED"
+    },
+    {
+      "collection": "pools",
+      "object": "host-2768d1",
+      "fact": "Errors",
+      "value": 0
+    },
+    {
+      "collection": "pools",
+      "object": "host-2768d1",
+      "fact": "Redundancy",
+      "value": "raidz1"
+    },
+    {
+      "collection": "pools",
+      "object": "host-2768d1",
+      "fact": "DeviceFailuresTolerated",
+      "value": 1
+    },
+    {
+      "collection": "pools",
+      "object": "host-2768d1",
+      "fact": "ScanFunction",
+      "value": "RESILVER"
+    },
+    {
+      "collection": "pools",
+      "object": "host-2768d1",
+      "absent_fact": "LastScrubEndTime"
+    },
+    {
+      "collection": "pools",
+      "object": "host-2768d1",
+      "fact": "UnhealthyVdevs",
+      "value": [
+        "raidz1-0",
+        "spare-3",
+        "host-6f342f"
+      ]
+    },
+    {
+      "collection": "pools",
+      "object": "host-2768d1",
+      "fact": "VdevsWithErrors",
+      "value": []
+    },
+    {
+      "collection": "pools",
+      "commit_objects": 1
+    },
+    {
+      "collection": "pools",
+      "object": "host-2768d1",
+      "relation": "backed-by",
+      "target": {
+        "kind": "block-device",
+        "name": "host-6f342f"
+      },
+      "assertion_facts": {
+        "VdevPath": "spare-3"
+      }
+    },
+    {
+      "collection": "pools",
+      "object": "host-2768d1",
+      "relation": "backed-by",
+      "target": {
+        "kind": "block-device",
+        "name": "host-a3bb7d"
+      },
+      "assertion_facts": {
+        "VdevPath": "spare-3"
+      }
+    },
+    {
+      "collection": "pools",
+      "object": "host-2768d1",
+      "relation": "backed-by",
+      "target": {
+        "kind": "block-device",
+        "name": "host-a3bb7d"
+      },
+      "assertion_facts": {
+        "VdevPath": "spares"
+      }
+    },
+    {
+      "collection": "pools",
+      "object": "host-2768d1",
+      "relation": "backed-by",
+      "target": {
+        "kind": "block-device",
+        "name": "host-4601db"
+      },
+      "assertion_facts": {
+        "VdevPath": "logs"
+      }
+    },
+    {
+      "collection": "pools",
+      "object": "host-2768d1",
+      "relation": "backed-by",
+      "target": {
+        "kind": "block-device",
+        "name": "host-6d5e51"
+      },
+      "assertion_facts": {
+        "VdevPath": "l2cache"
+      }
+    },
+    {
+      "collection": "pools",
+      "object": "host-2768d1",
+      "relation": "backed-by",
+      "target": {
+        "kind": "block-device",
+        "name": "host-b21790"
+      },
+      "assertion_facts": {
+        "VdevPath": "raidz1-0"
+      }
+    }
   ],
-  "anchors_note": "Read off payloads/status.json by hand, before any stream was generated.\n\nState DEGRADED and Errors 0 are the pair that must not be conflated: the pool lost a device and lost no data, because raidz1 parity plus the spare covered it. Redundancy raidz1 tolerating 1 is anchored because the spare-3 pseudo-vdev sits at depth 2 inside the raidz group and a redundancy walk that counted members there — the shape the queue's open item is about — would grade this pool differently. ScanFunction RESILVER with LastScrubEndTime asserted ABSENT from the facts is the incident this product carries a fact pair for: ZFS keeps one scan record, the resilver overwrote the scrub's, and the time since the last real scrub is a value that exists and cannot be read, so it belongs on the unobservable channel and NOT among the facts. UnhealthyVdevs holds exactly three: the raidz group, the pseudo-vdev, and the leaf that vanished. It does NOT hold the spare — the spare is INUSE, which is to say it is doing its job, and a collector that listed it here would be raising an alarm about the device doing the saving. That omission is the anchor's whole point; it was the shipping behaviour until this capture was taken."
+  "anchors_note": "Read off payloads/status.json by hand, before any stream was generated.\n\nState DEGRADED and Errors 0 are the pair that must not be conflated: the pool lost a device and lost no data, because raidz1 parity plus the spare covered it. Redundancy raidz1 tolerating 1 is anchored because the spare-3 pseudo-vdev sits at depth 2 inside the raidz group and a redundancy walk that counted members there — the shape the queue's open item is about — would grade this pool differently. ScanFunction RESILVER with LastScrubEndTime asserted ABSENT from the facts is the incident this product carries a fact pair for: ZFS keeps one scan record, the resilver overwrote the scrub's, and the time since the last real scrub is a value that exists and cannot be read, so it belongs on the unobservable channel and NOT among the facts. UnhealthyVdevs holds exactly three: the raidz group, the pseudo-vdev, and the leaf that vanished. It does NOT hold the spare — the spare is INUSE, which is to say it is doing its job, and a collector that listed it here would be raising an alarm about the device doing the saving. That omission is the anchor's whole point; it was the shipping behaviour until this capture was taken.\n\nThe six relation anchors are the edge half of the same incident, and the middle two are why the form exists. host-a3bb7d is asserted TWICE from one pool in one reading — once with VdevPath spare-3, where it is doing the work in place of the device that vanished, and once with VdevPath spares, where it is accounted for as the pool's hot spare. Those are two true statements about one device, and DESIGN 13's parallel-instance rule is what lets both stand: keyed on source, type and target alone the second would overwrite the first, and the pool would report a spare that is either standing by or working, never the truth that it is both. host-6f342f is anchored because the REMOVED leaf still asserts its edge — the endpoint is a name zpool published and nothing observed its absence, so the relation is minted and carried, not dropped. logs and l2cache are anchored because their VdevPath is the group KEY rather than a vdev node: there is no vdev named 'logs' anywhere in the document, and the walk that could not see them at all is the one this capture was taken to close."
 }

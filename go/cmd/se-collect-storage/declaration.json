@@ -9,7 +9,9 @@
       "/dev/mapper",
       "/dev/zfs"
     ],
-    "commands": ["zpool"]
+    "commands": [
+      "zpool"
+    ]
   },
   "probe": "zpool is installed and `zpool status -j` answers; a host carrying zpool with no imported pool still answers, and that is a reading of zero pools rather than a probe failure",
   "collections": [
@@ -19,8 +21,16 @@
       "prefix": "pool",
       "freshness": "60s",
       "perishability": "sampled",
-      "answer": ["State", "Redundancy", "CapacityPercent", "UnhealthyVdevs"],
-      "ceiling": { "records": 5000, "bytes": 4194304 },
+      "answer": [
+        "State",
+        "Redundancy",
+        "CapacityPercent",
+        "UnhealthyVdevs"
+      ],
+      "ceiling": {
+        "records": 5000,
+        "bytes": 4194304
+      },
       "names": {
         "guid": {
           "class": "stable",
@@ -28,7 +38,7 @@
         },
         "devices": {
           "class": "stable",
-          "sentence": "Every disk member, named as `zpool status` keys it — a by-id link on most hosts, a bare kernel name on a pool imported as one. Group members (log, cache, spare) are included: they are devices this pool holds open."
+          "sentence": "Every disk member, named as `zpool status` keys it \u2014 a by-id link on most hosts, a bare kernel name on a pool imported as one. Group members (log, cache, spare) are included: they are devices this pool holds open."
         },
         "kernel": {
           "class": "ephemeral",
@@ -42,7 +52,7 @@
           "kind": "observed",
           "discloses": "nothing",
           "from": "/status/pools/*/state",
-          "sentence": "The pool's overall verdict, in ZFS's own word for it — ONLINE, DEGRADED, FAULTED, SUSPENDED. Passed through exactly as the document spells it rather than mapped onto a set this reading would have to keep closed."
+          "sentence": "The pool's overall verdict, in ZFS's own word for it \u2014 ONLINE, DEGRADED, FAULTED, SUSPENDED. Passed through exactly as the document spells it rather than mapped onto a set this reading would have to keep closed."
         },
         "StatusMessage": {
           "type": "string",
@@ -67,7 +77,7 @@
           "kind": "observed",
           "discloses": "nothing",
           "from": "/status/pools/*/scan_stats/function",
-          "sentence": "What kind of scan the pool's single scan record describes — SCRUB or RESILVER. ZFS keeps only the most recent, so a resilver replaces the scrub's record entirely."
+          "sentence": "What kind of scan the pool's single scan record describes \u2014 SCRUB or RESILVER. ZFS keeps only the most recent, so a resilver replaces the scrub's record entirely."
         },
         "ScanState": {
           "type": "string",
@@ -89,16 +99,18 @@
           "type": "integer",
           "temperament": "gauge",
           "kind": "derived",
-          "derived_from": ["ScanEndTime"],
+          "derived_from": [
+            "ScanEndTime"
+          ],
           "discloses": "nothing",
-          "sentence": "Whole days since the recorded scan finished — the SCAN, not necessarily the scrub: after a resilver this counts from the resilver, which is what LastScrubEndTime exists to say out loud."
+          "sentence": "Whole days since the recorded scan finished \u2014 the SCAN, not necessarily the scrub: after a resilver this counts from the resilver, which is what LastScrubEndTime exists to say out loud."
         },
         "LastScrubEndTime": {
           "type": "timestamp",
           "temperament": "state",
           "kind": "observed",
           "discloses": "nothing",
-          "sentence": "When the last completed SCRUB finished. ZFS keeps one scan record, so where a later resilver overwrote it this fact is an unobservable record rather than a value — the time exists and this pool cannot report it."
+          "sentence": "When the last completed SCRUB finished. ZFS keeps one scan record, so where a later resilver overwrote it this fact is an unobservable record rather than a value \u2014 the time exists and this pool cannot report it."
         },
         "LastScrubEndTimeUnobservable": {
           "type": "string",
@@ -158,13 +170,15 @@
           "kind": "observed",
           "discloses": "identity",
           "from": "/status/pools/*/vdevs",
-          "sentence": "The vdev tree flattened to one row per device, in the order zpool reports it, each row carrying its depth, type, state, error counters, its own stable names, and — where the alias trees resolved it — the kernel block device it is. A row whose Device could not be resolved because no alias tree was readable says so on its own unobservable record, at Vdevs/<name>/Device."
+          "sentence": "The vdev tree flattened to one row per device, in the order zpool reports it, each row carrying its depth, type, state, error counters, its own stable names, and \u2014 where the alias trees resolved it \u2014 the kernel block device it is. A row whose Device could not be resolved because no alias tree was readable says so on its own unobservable record, at Vdevs/<name>/Device."
         },
         "UnhealthyVdevs": {
           "type": "list",
           "temperament": "state",
           "kind": "derived",
-          "derived_from": ["Vdevs"],
+          "derived_from": [
+            "Vdevs"
+          ],
           "discloses": "identity",
           "sentence": "Every member whose state is neither ONLINE nor AVAIL, groups included, in tree order. A spare sitting AVAIL is standing by and protecting nothing yet, which is not a fault; a member that reported no state at all made no statement to disagree with."
         },
@@ -172,7 +186,9 @@
           "type": "list",
           "temperament": "state",
           "kind": "derived",
-          "derived_from": ["Vdevs"],
+          "derived_from": [
+            "Vdevs"
+          ],
           "discloses": "identity",
           "sentence": "Every member carrying a non-zero read, write or checksum counter, in tree order. Membership overlaps UnhealthyVdevs only by coincidence: a member can be OFFLINE with no errors, or ONLINE having had every bad block repaired."
         },
@@ -180,33 +196,78 @@
           "type": "string",
           "temperament": "configuration",
           "kind": "derived",
-          "derived_from": ["Vdevs"],
+          "derived_from": [
+            "Vdevs"
+          ],
           "discloses": "nothing",
-          "sentence": "How this pool's data vdevs are laid out, in zpool's own words — stripe, mirror, raidz1. A pool is only as redundant as its weakest data vdev, because losing any one of them loses the pool, so a mixed layout is named in full (\"raidz1 + stripe\") rather than summarised to its best part. Where the walk meets a top-level shape it cannot read it claims nothing at all, on the unobservable channel."
+          "sentence": "How this pool's data vdevs are laid out, in zpool's own words \u2014 stripe, mirror, raidz1. A pool is only as redundant as its weakest data vdev, because losing any one of them loses the pool, so a mixed layout is named in full (\"raidz1 + stripe\") rather than summarised to its best part. Where the walk meets a top-level shape it cannot read it claims nothing at all, on the unobservable channel."
         },
         "DeviceFailuresTolerated": {
           "type": "integer",
           "unit": "count",
           "temperament": "configuration",
           "kind": "derived",
-          "derived_from": ["Vdevs", "Redundancy"],
+          "derived_from": [
+            "Vdevs",
+            "Redundancy"
+          ],
           "discloses": "nothing",
-          "sentence": "How many whole devices this pool survives losing, read from the layout above; 0 means the next disk to fail takes the pool with it. Stated and graded by nothing here — whether that is a problem depends on what lives on the pool, which this reading cannot see."
+          "sentence": "How many whole devices this pool survives losing, read from the layout above; 0 means the next disk to fail takes the pool with it. Stated and graded by nothing here \u2014 whether that is a problem depends on what lives on the pool, which this reading cannot see."
         }
       },
-      "redaction_exemption": "zpool status and zpool list have no credential surface: every member is a device name, a state word, a counter, a capacity figure or a scan statistic. The identifiers this collection publishes verbatim — pool guid, vdev names, devid and wwn — are the join keys it exists to provide, and each is declared as disclosing identity on its own fact rather than withheld from the evidence that proves it was read.",
+      "relations": [
+        {
+          "type": "backed-by",
+          "carries_facts": true,
+          "discriminator": [
+            "VdevPath"
+          ],
+          "inverse_observable": true,
+          "confirmed_by": "member-of",
+          "facts": {
+            "VdevPath": {
+              "type": "string",
+              "temperament": "configuration",
+              "kind": "observed",
+              "discloses": "identity",
+              "from": "/status/pools/*/vdevs",
+              "sentence": "The vdev this member sits directly inside, as zpool names it \u2014 a raidz or mirror group, the spare-N pseudo-vdev a replacement creates, the group key a log, cache or spare arrived under, or the pool's own root vdev for a stripe member. It is the discriminator because an engaged spare is genuinely two members of one pool at once: standing in `spares` and working inside spare-N."
+            }
+          }
+        }
+      ],
+      "redaction_exemption": "zpool status and zpool list have no credential surface: every member is a device name, a state word, a counter, a capacity figure or a scan statistic. The identifiers this collection publishes verbatim \u2014 pool guid, vdev names, devid and wwn \u2014 are the join keys it exists to provide, and each is declared as disclosing identity on its own fact rather than withheld from the evidence that proves it was read.",
       "reference_commands": [
         {
           "purpose": "the same verdict, by hand",
-          "argv": ["zpool", "status", "-j", "--json-int"]
+          "argv": [
+            "zpool",
+            "status",
+            "-j",
+            "--json-int"
+          ]
         },
         {
           "purpose": "capacity as ZFS reports it",
-          "argv": ["zpool", "list", "-j", "-p", "-v", "-o", "name,size,alloc,free,cap,frag,health"]
+          "argv": [
+            "zpool",
+            "list",
+            "-j",
+            "-p",
+            "-v",
+            "-o",
+            "name,size,alloc,free,cap,frag,health"
+          ]
         },
         {
           "purpose": "the alias trees Device resolves through",
-          "argv": ["ls", "-l", "/dev/disk/by-id", "/dev/disk/by-partuuid", "/dev/mapper"]
+          "argv": [
+            "ls",
+            "-l",
+            "/dev/disk/by-id",
+            "/dev/disk/by-partuuid",
+            "/dev/mapper"
+          ]
         }
       ]
     }

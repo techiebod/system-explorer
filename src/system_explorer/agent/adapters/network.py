@@ -2082,10 +2082,26 @@ class Adapter:
                 facts["JumpedFrom"] = callers
             elif not base:
                 facts["Unreferenced"] = True
-            items.append(env.item_summary(
+            # One assertion per chain: the table it belongs to (DESIGN 13/19).
+            # Inbound dispatch is NOT asserted here even though JumpedFrom
+            # holds it — a relation is directed because observation has a
+            # vantage, and the vantage that saw the jump is the RULE that
+            # writes it. Asserting it from this end too would put two
+            # directed claims about one edge on the wire from one reading,
+            # and the collator would have to decide which vantage it came
+            # from. JumpedFrom stays a derived fact, which is what it is.
+            item = env.item_summary(
                 f"nft-chain:{family}/{table}/{name}", "chain",
                 f"{family} {table} {name}", facts,
-                opinions=[], healthy=None))
+                opinions=[], healthy=None)
+            # No facts member: the type declares carries_facts false, and an
+            # empty object on the wire would be a fact channel opened for a
+            # relation that has none.
+            item["assertions"] = [{
+                "type": "member-of",
+                "target": {"kind": "nft-table", "name": f"{family} {table}"},
+            }]
+            items.append(item)
         return items
 
     # ── nftables rules ───────────────────────────────────────
@@ -2139,10 +2155,37 @@ class Adapter:
                 facts["CounterPackets"] = rendered["packets"]
             if rendered["bytes"] is not None:
                 facts["CounterBytes"] = rendered["bytes"]
-            items.append(env.item_summary(
+            item = env.item_summary(
                 f"nft-rule:{family}/{table}/{chain}/{handle}", "rule",
                 f"{family} {table} {chain} handle {handle}", facts,
-                opinions=[], healthy=None))
+                opinions=[], healthy=None)
+            # Two assertions, and the pair is the point. member-of names the
+            # chain this rule sits in — a name nft-chains publishes, so it
+            # RESOLVES whenever both collections are collected in one batch,
+            # and is `asserted` when only nft-rules was asked for. Nothing
+            # here can tell the difference, and nothing here should: whether
+            # the far end was seen is a fact about another collector's
+            # output, which only the collator holds (DESIGN 19).
+            #
+            # dispatches-to names the jump target, and it carries the
+            # discriminator because a chain can jump to the same target from
+            # several rules — Handle is what tells those apart, and it is
+            # the rule's own identity in nftables rather than a position
+            # that shifts when a rule above it is deleted.
+            assertions = [{
+                "type": "member-of",
+                "target": {"kind": "nft-chain",
+                           "name": f"{family} {table} {chain}"},
+            }]
+            if facts.get("JumpTarget"):
+                assertions.append({
+                    "type": "dispatches-to",
+                    "target": {"kind": "nft-chain",
+                               "name": f"{family} {table} {facts['JumpTarget']}"},
+                    "facts": {"Handle": handle},
+                })
+            item["assertions"] = assertions
+            items.append(item)
         return items
 
     # ── port exposure ────────────────────────────────────────

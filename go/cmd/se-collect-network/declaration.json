@@ -3,8 +3,12 @@
   "collector": "network",
   "version": "0.7.0",
   "authority": {
-    "commands": ["nft"],
-    "capabilities": ["CAP_NET_ADMIN"]
+    "commands": [
+      "nft"
+    ],
+    "capabilities": [
+      "CAP_NET_ADMIN"
+    ]
   },
   "probe": "nft runs and `nft -j list ruleset` parses; an empty ruleset is a successful read and an authoritative-empty commit, never a probe failure",
   "collections": [
@@ -14,8 +18,16 @@
       "prefix": "nft-chain",
       "freshness": "5m",
       "perishability": "reconstructible",
-      "answer": ["BaseChain", "Hook", "RuleCount", "JumpedFrom"],
-      "ceiling": { "records": 4096, "bytes": 4194304 },
+      "answer": [
+        "BaseChain",
+        "Hook",
+        "RuleCount",
+        "JumpedFrom"
+      ],
+      "ceiling": {
+        "records": 4096,
+        "bytes": 4194304
+      },
       "facts": {
         "Family": {
           "type": "string",
@@ -23,7 +35,7 @@
           "kind": "observed",
           "discloses": "nothing",
           "from": "/nftables/*/chain/family",
-          "sentence": "The address family this chain's table belongs to — ip, ip6, inet, arp, bridge or netdev. The same chain name in ip and ip6 is two chains, and a rule admitting a port in one says nothing about the other."
+          "sentence": "The address family this chain's table belongs to \u2014 ip, ip6, inet, arp, bridge or netdev. The same chain name in ip and ip6 is two chains, and a rule admitting a port in one says nothing about the other."
         },
         "Table": {
           "type": "string",
@@ -51,10 +63,15 @@
         },
         "BaseChain": {
           "type": "boolean",
-          "labels": ["base", "regular"],
+          "labels": [
+            "base",
+            "regular"
+          ],
           "temperament": "configuration",
           "kind": "derived",
-          "derived_from": ["Hook"],
+          "derived_from": [
+            "Hook"
+          ],
           "discloses": "nothing",
           "sentence": "Whether the kernel calls this chain directly. A base chain is registered against a hook and every packet on that path enters it; a regular chain runs only when something jumps to it, which is why the two need telling apart before any rule in either is read."
         },
@@ -64,7 +81,7 @@
           "kind": "observed",
           "discloses": "nothing",
           "from": "/nftables/*/chain/hook",
-          "sentence": "The netfilter hook this base chain is registered against — prerouting, input, forward, output or postrouting. It is WHERE in the packet's journey this chain runs, and absent on a regular chain because nothing calls it directly."
+          "sentence": "The netfilter hook this base chain is registered against \u2014 prerouting, input, forward, output or postrouting. It is WHERE in the packet's journey this chain runs, and absent on a regular chain because nothing calls it directly."
         },
         "Type": {
           "type": "string",
@@ -88,7 +105,7 @@
           "kind": "observed",
           "discloses": "nothing",
           "from": "/nftables/*/chain/policy",
-          "sentence": "What happens to a packet that reaches the end of this base chain matching nothing — accept or drop. It is the verdict the whole chain falls back to, so a chain of narrow accepts under an accept policy admits everything the rules did not mention. Absent on a regular chain, which returns to its caller instead."
+          "sentence": "What happens to a packet that reaches the end of this base chain matching nothing \u2014 accept or drop. It is the verdict the whole chain falls back to, so a chain of narrow accepts under an accept policy admits everything the rules did not mention. Absent on a regular chain, which returns to its caller instead."
         },
         "RuleCount": {
           "type": "integer",
@@ -102,29 +119,55 @@
           "type": "list",
           "temperament": "configuration",
           "kind": "derived",
-          "derived_from": ["Family", "Table", "Name"],
+          "derived_from": [
+            "Family",
+            "Table",
+            "Name"
+          ],
           "discloses": "nothing",
-          "sentence": "Every chain that transfers control here, by jump or goto — how a packet reaches this chain at all. Derived by reading every rule's target across the whole ruleset, and the elements of every named verdict map some rule uses, so it is the answer to 'what runs this' that no single chain's own document contains."
+          "sentence": "Every chain that transfers control here, by jump or goto \u2014 how a packet reaches this chain at all. Derived by reading every rule's target across the whole ruleset, and the elements of every named verdict map some rule uses, so it is the answer to 'what runs this' that no single chain's own document contains."
         },
         "Unreferenced": {
           "type": "boolean",
-          "labels": ["unreferenced", "reachable"],
+          "labels": [
+            "unreferenced",
+            "reachable"
+          ],
           "temperament": "configuration",
           "kind": "derived",
-          "derived_from": ["JumpedFrom", "BaseChain"],
+          "derived_from": [
+            "JumpedFrom",
+            "BaseChain"
+          ],
           "discloses": "nothing",
           "sentence": "Stated only when true, and only for a regular chain: no rule, and no named verdict map any rule uses, jumps or gotos here, and the kernel does not call it, so no packet can reach any rule in it. Usually a leftover; occasionally a rule that was meant to be reachable and is not."
         }
       },
-      "redaction_exemption": "every served fact is a chain's own structural member — family, table, chain name, handle, hook, type, priority, policy — or a count or caller list derived from them. Table and chain names are distribution conventions, the rest are protocol constants, and no rule body and no comment is read by this collection at all.",
+      "relations": [
+        {
+          "type": "member-of",
+          "carries_facts": false,
+          "inverse_observable": false
+        }
+      ],
+      "redaction_exemption": "every served fact is a chain's own structural member \u2014 family, table, chain name, handle, hook, type, priority, policy \u2014 or a count or caller list derived from them. Table and chain names are distribution conventions, the rest are protocol constants, and no rule body and no comment is read by this collection at all.",
       "reference_commands": [
         {
           "purpose": "the chains this collection rows, by hand",
-          "argv": ["nft", "list", "chains"]
+          "argv": [
+            "nft",
+            "list",
+            "chains"
+          ]
         },
         {
           "purpose": "the same ruleset with chain handles and hooks",
-          "argv": ["nft", "-a", "list", "ruleset"]
+          "argv": [
+            "nft",
+            "-a",
+            "list",
+            "ruleset"
+          ]
         }
       ]
     },
@@ -134,8 +177,15 @@
       "prefix": "nft-rule",
       "freshness": "5m",
       "perishability": "reconstructible",
-      "answer": ["Rendered", "Verdict", "Comprehension"],
-      "ceiling": { "records": 16384, "bytes": 16777216 },
+      "answer": [
+        "Rendered",
+        "Verdict",
+        "Comprehension"
+      ],
+      "ceiling": {
+        "records": 16384,
+        "bytes": 16777216
+      },
       "facts": {
         "Family": {
           "type": "string",
@@ -143,7 +193,7 @@
           "kind": "observed",
           "discloses": "nothing",
           "from": "/nftables/*/rule/family",
-          "sentence": "The address family this rule's table belongs to — ip, ip6, inet, arp, bridge or netdev."
+          "sentence": "The address family this rule's table belongs to \u2014 ip, ip6, inet, arp, bridge or netdev."
         },
         "Table": {
           "type": "string",
@@ -173,7 +223,11 @@
           "type": "integer",
           "temperament": "configuration",
           "kind": "derived",
-          "derived_from": ["Family", "Table", "Chain"],
+          "derived_from": [
+            "Family",
+            "Table",
+            "Chain"
+          ],
           "discloses": "nothing",
           "sentence": "This rule's ordinal within its chain. Evaluation is ordered and first-match-wins, so position is meaning, not presentation."
         },
@@ -181,17 +235,26 @@
           "type": "string",
           "temperament": "configuration",
           "kind": "derived",
-          "derived_from": ["Residue"],
+          "derived_from": [
+            "Residue"
+          ],
           "discloses": "location",
-          "sentence": "What this rule says, in nft's own vocabulary, with every term present. A term whose meaning could not be expanded appears at its position as a placeholder rather than being dropped — omission would turn a narrow rule into a permissive-looking one."
+          "sentence": "What this rule says, in nft's own vocabulary, with every term present. A term whose meaning could not be expanded appears at its position as a placeholder rather than being dropped \u2014 omission would turn a narrow rule into a permissive-looking one."
         },
         "Verdict": {
           "type": "enum",
-          "values": ["accept", "drop", "reject", "return", "continue", "queue"],
+          "values": [
+            "accept",
+            "drop",
+            "reject",
+            "return",
+            "continue",
+            "queue"
+          ],
           "temperament": "configuration",
           "kind": "observed",
           "discloses": "nothing",
-          "sentence": "How this rule ends — accept, drop, reject, return, continue or queue — or absent where the rule ends in no verdict at all, which is what a pure counter or logging rule does."
+          "sentence": "How this rule ends \u2014 accept, drop, reject, return, continue or queue \u2014 or absent where the rule ends in no verdict at all, which is what a pure counter or logging rule does."
         },
         "JumpTarget": {
           "type": "string",
@@ -202,19 +265,31 @@
         },
         "Comprehension": {
           "type": "enum",
-          "values": ["full", "partial", "opaque"],
+          "values": [
+            "full",
+            "partial",
+            "opaque"
+          ],
           "temperament": "configuration",
           "kind": "derived",
-          "derived_from": ["Residue", "OpaqueReason"],
+          "derived_from": [
+            "Residue",
+            "OpaqueReason"
+          ],
           "discloses": "nothing",
           "sentence": "How much of this rule the renderer could state: full where every statement was rendered, partial where some were not, opaque where the rule's conditions are absent from the source document entirely. Computed by subtracting what the renderer consumed from the rule's own expression list, never assumed."
         },
         "OpaqueReason": {
           "type": "enum",
-          "values": ["xt", "text-fallback"],
+          "values": [
+            "xt",
+            "text-fallback"
+          ],
           "temperament": "configuration",
           "kind": "derived",
-          "derived_from": ["Rendered"],
+          "derived_from": [
+            "Rendered"
+          ],
           "discloses": "nothing",
           "sentence": "Why a rule's conditions could not be read: xt where it calls an xtables extension whose parameters nft's JSON does not carry, text-fallback where nft emitted a bare string because it had no JSON encoder for the expression."
         },
@@ -222,7 +297,9 @@
           "type": "list",
           "temperament": "configuration",
           "kind": "derived",
-          "derived_from": ["Rendered"],
+          "derived_from": [
+            "Rendered"
+          ],
           "discloses": "location",
           "sentence": "The expressions in this rule the renderer did not consume, verbatim. This is the measured extent of what the row above does not say."
         },
@@ -232,7 +309,7 @@
           "temperament": "counter",
           "kind": "observed",
           "discloses": "nothing",
-          "sentence": "Packets this rule has matched, where the rule carries a counter. nftables has no implicit per-rule counters, so absence here means the rule was written without one — never that nothing has matched."
+          "sentence": "Packets this rule has matched, where the rule carries a counter. nftables has no implicit per-rule counters, so absence here means the rule was written without one \u2014 never that nothing has matched."
         },
         "CounterBytes": {
           "type": "integer",
@@ -243,6 +320,31 @@
           "sentence": "Bytes this rule has matched, where the rule carries a counter. Absent means no counter was written, not zero traffic."
         }
       },
+      "relations": [
+        {
+          "type": "member-of",
+          "carries_facts": false,
+          "inverse_observable": false
+        },
+        {
+          "type": "dispatches-to",
+          "carries_facts": true,
+          "discriminator": [
+            "Handle"
+          ],
+          "inverse_observable": false,
+          "facts": {
+            "Handle": {
+              "type": "integer",
+              "temperament": "configuration",
+              "kind": "observed",
+              "discloses": "nothing",
+              "from": "/nftables/*/rule/handle",
+              "sentence": "The handle of the rule that transfers control, which is what tells apart several jumps from one chain to the same target. Position would not: deleting a rule above renumbers every rule below it, and a discriminator that moves is a key that resets a relation's lifecycle for a change it had nothing to do with."
+            }
+          }
+        }
+      ],
       "redactions": [
         {
           "path": "nftables.*.rule.expr.*.match.right",
@@ -260,15 +362,28 @@
       "reference_commands": [
         {
           "purpose": "the same rules with '# handle N', as nft prints them",
-          "argv": ["nft", "-a", "list", "ruleset"]
+          "argv": [
+            "nft",
+            "-a",
+            "list",
+            "ruleset"
+          ]
         },
         {
           "purpose": "the document this collection reads",
-          "argv": ["nft", "-j", "list", "ruleset"]
+          "argv": [
+            "nft",
+            "-j",
+            "list",
+            "ruleset"
+          ]
         },
         {
           "purpose": "renders the xt rules this collection cannot",
-          "argv": ["iptables-nft", "-S"]
+          "argv": [
+            "iptables-nft",
+            "-S"
+          ]
         }
       ]
     }

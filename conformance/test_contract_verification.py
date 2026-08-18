@@ -118,6 +118,14 @@ def _declared_facts(declaration: dict) -> dict[str, dict]:
     }
 
 
+def _declared_relations(declaration: dict) -> dict[str, dict[str, dict]]:
+    """collection -> {relation type -> its declared spec}."""
+    return {
+        collection["name"]: {r["type"]: r for r in collection.get("relations", [])}
+        for collection in declaration["collections"]
+    }
+
+
 def _root_fact(reference: str) -> str:
     """The declared fact a fact REFERENCE names.
 
@@ -263,6 +271,53 @@ def test_every_emitted_fact_was_declared(variant: corpus.Variant) -> None:
                     f"{collection}: unobservable names {record.get('fact')!r}, "
                     f"whose root {root!r} is not a declared fact"
                 )
+        elif record.get("record") == "relation_assertion":
+            # DESIGN 18: "every relation type and discriminator was declared".
+            # An undeclared type has no discriminator and no confirmation
+            # rule, so the collator can neither key it nor judge it — and the
+            # collator refuses the batch when it arrives. Catching it here
+            # means the collector is wrong at build time rather than the
+            # host losing a collection at run time.
+            relations = _declared_relations(declaration).get(collection, {})
+            rel_type = record.get("type")
+            if rel_type not in relations:
+                problems.append(
+                    f"{collection}: asserted undeclared relation type {rel_type!r}"
+                )
+                continue
+            spec = relations[rel_type]
+            emitted_facts = record.get("facts") or {}
+            for name in spec.get("discriminator") or []:
+                if name not in emitted_facts:
+                    problems.append(
+                        f"{collection}/{rel_type}: declares {name!r} as its "
+                        "discriminator and the assertion does not carry it — "
+                        "parallel instances would collide on a key missing "
+                        "the value that tells them apart"
+                    )
+            # carries_facts is a claim, and both directions of breaking it
+            # matter: a type that says it carries none and does is smuggling
+            # an unreviewed fact channel; one that says it carries facts and
+            # emits none has a declaration nothing holds it to.
+            if not spec.get("carries_facts") and emitted_facts:
+                problems.append(
+                    f"{collection}/{rel_type}: declares carries_facts false "
+                    f"and emitted {sorted(emitted_facts)}"
+                )
+            for name, value in emitted_facts.items():
+                declared_fact = (spec.get("facts") or {}).get(name)
+                if declared_fact is None:
+                    problems.append(
+                        f"{collection}/{rel_type}: emitted undeclared relation "
+                        f"fact {name!r}"
+                    )
+                    continue
+                check = _TYPE_CHECKS.get(declared_fact["type"])
+                if check and not check(value):
+                    problems.append(
+                        f"{collection}/{rel_type}/{name}: declared "
+                        f"{declared_fact['type']!r}, emitted {value!r}"
+                    )
 
     assert not problems, f"{variant.name}:\n" + "\n".join(f"  - {p}" for p in problems)
 

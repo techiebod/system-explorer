@@ -65,15 +65,25 @@ VALID_VARIANTS = frozenset(
     }
 )
 
-# The three anchor forms of DESIGN 20, as exact key sets — exact, because an
-# anchor with a misspelt or extra key would otherwise be silently reshaped
-# into whichever form its surviving keys resemble. The count form has two
+# The anchor forms of DESIGN 20, as exact key sets — exact, because an anchor
+# with a misspelt or extra key would otherwise be silently reshaped into
+# whichever form its surviving keys resemble. The count form has two
 # spellings: a committed size, or a decline with a stated reason.
+#
+# The relation form asserts one directed edge and what discriminates it. A
+# variant staging a spare, a jump or a mount is staging an EDGE, and until
+# this form existed the only anchorable half of that truth was a fact on a
+# row — so "the pool is backed by this device twice, once inside spare-3 and
+# once under spares" was a thing the corpus could regenerate and nobody could
+# assert. `assertion_facts` is the whole fact dict, not a subset, so an
+# anchor cannot pass by naming the discriminator and ignoring a wrong value
+# beside it; {} asserts a type that carries none.
 _ANCHOR_FORMS = (
     frozenset({"collection", "object", "fact", "value"}),
     frozenset({"collection", "object", "absent_fact"}),
     frozenset({"collection", "commit_objects"}),
     frozenset({"collection", "decline_reason"}),
+    frozenset({"collection", "object", "relation", "target", "assertion_facts"}),
 )
 
 
@@ -203,9 +213,28 @@ def _anchor_shape_problem(anchor: object) -> str | None:
             "key sets, so an extra or misspelt key is rejected rather than "
             "reshaped into whichever form the rest resembles"
         )
-    for key in ("collection", "object", "fact", "absent_fact", "decline_reason"):
+    for key in ("collection", "object", "fact", "absent_fact", "decline_reason",
+                "relation"):
         if key in anchor and (not isinstance(anchor[key], str) or not anchor[key]):
             return f"{key} must be a non-empty string, not {anchor[key]!r}"
+    if "target" in anchor:
+        target = anchor["target"]
+        if not isinstance(target, dict) or frozenset(target) != frozenset(
+            {"kind", "name"}
+        ):
+            return (
+                f"target must be exactly {{kind, name}}, not {target!r} — a "
+                "target carries a name and never an id, because resolution is "
+                "a property that changes (DESIGN 13)"
+            )
+        for key in ("kind", "name"):
+            if not isinstance(target[key], str) or not target[key]:
+                return f"target.{key} must be a non-empty string, not {target[key]!r}"
+    if "assertion_facts" in anchor and not isinstance(anchor["assertion_facts"], dict):
+        return (
+            f"assertion_facts must be an object, not {anchor['assertion_facts']!r} "
+            "— {} asserts a relation type that carries no facts"
+        )
     if "commit_objects" in anchor and (
         isinstance(anchor["commit_objects"], bool)
         or not isinstance(anchor["commit_objects"], int)
@@ -327,6 +356,29 @@ def validate_anchors(variant: Variant, records: list[dict]) -> list[str]:
     problems: list[str] = []
     for anchor in variant.meta.get("anchors", []):
         collection = anchor.get("collection")
+        if "relation" in anchor:
+            # Every copy, and the facts compared WHOLE. A relation is keyed on
+            # source, type, target name and the declared discriminator, so two
+            # assertions differing only in a fact value are two edges — which
+            # is exactly the engaged-spare shape — and an anchor that matched
+            # on the first three would certify either of them.
+            matches = [
+                r
+                for r in records
+                if r.get("record") == "relation_assertion"
+                and r.get("collection") == collection
+                and r.get("name") == anchor["object"]
+                and r.get("type") == anchor["relation"]
+                and r.get("target") == anchor["target"]
+                and typed_equal(r.get("facts", {}), anchor["assertion_facts"])
+            ]
+            if not matches:
+                problems.append(
+                    f"anchor {anchor!r}: no {anchor['relation']!r} assertion "
+                    f"from {anchor['object']!r} to {anchor['target']!r} with "
+                    f"those facts in {collection!r}"
+                )
+            continue
         if "object" in anchor:
             # every copy, not the first: a corrupted duplicate hiding behind
             # a good one is the exact shape diff() was once blind to

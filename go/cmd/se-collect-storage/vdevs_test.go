@@ -17,7 +17,7 @@ func mustDecode(t *testing.T, raw string) *value {
 func walk(t *testing.T, raw string, links *aliasTree) []*vdevRow {
 	t.Helper()
 	var rows []*vdevRow
-	flattenVdevs(mustDecode(t, raw), &rows, links, "data", 1)
+	flattenVdevs(mustDecode(t, raw), &rows, links, "data", 1, "")
 	return rows
 }
 

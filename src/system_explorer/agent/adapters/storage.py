@@ -336,7 +336,8 @@ def _resolve_kname(ref: str, links: dict[str, str]) -> str | None:
 
 
 def _flatten_pool_vdevs(pool: dict, out: list[dict],
-                        links: dict[str, str] | None) -> None:
+                        links: dict[str, str] | None,
+                        assertions: list[dict] | None = None) -> None:
     """Every vdev the pool has, from BOTH places zpool reports them.
 
     `zpool status -j` does not nest the group vdevs under the root. Spares,
@@ -363,18 +364,22 @@ def _flatten_pool_vdevs(pool: dict, out: list[dict],
     those rules already read Group and needed no change, which is the
     evidence that the model was right and only the reading was wrong.
     """
-    _flatten_vdevs(pool.get("vdevs"), out, links)
+    _flatten_vdevs(pool.get("vdevs"), out, links, assertions=assertions)
     # Sorted, so a pool's rows are ordered by the same rule on every host
-    # rather than by whatever order the JSON happened to carry.
+    # rather than by whatever order the JSON happened to carry. The group
+    # KEY is the parent a group member sits under — there is no vdev node
+    # named "spares", the key itself is what zpool calls the container.
     for group in sorted(ZFS_GROUP_VDEVS):
         members = pool.get(group)
         if isinstance(members, dict):
-            _flatten_vdevs(members, out, links, group=group, depth=1)
+            _flatten_vdevs(members, out, links, group=group, depth=1,
+                           parent=group, assertions=assertions)
 
 
 def _flatten_vdevs(nodes: dict | None, out: list[dict],
                    links: dict[str, str] | None, group: str = "data",
-                   depth: int = 1) -> None:
+                   depth: int = 1, parent: str | None = None,
+                   assertions: list[dict] | None = None) -> None:
     """Depth-first vdev walk. Group vdevs (logs, l2cache, spares) label their
     subtree; the root vdev is namespace, not a device. Depth drives the UI's
     tree indentation; Device is the resolved, linkable kernel block name,
@@ -387,6 +392,17 @@ def _flatten_vdevs(nodes: dict | None, out: list[dict],
     never. It rides the row: a stream object's names channel holds flat
     scalar families (the contract's name_scalar), so a PER-LEAF set can only
     live where the leaf itself does.
+
+    When an `assertions` accumulator is passed, each disk leaf also yields
+    one backed-by relation assertion (DESIGN 13/19): target kind
+    block-device, target name the leaf as zpool names it — the same string
+    the pool publishes in names.stable.devices — and VdevPath the leaf's
+    immediate parent as the document names it (raidz1-0, spare-3, a group
+    key, or the root vdev's own name for a stripe leaf). VdevPath is the
+    declared discriminator: it is what tells apart the two instances a real
+    engaged spare produces, sitting in `spares` as INUSE and inside spare-N
+    doing the work. The parent rides as a walk parameter, never on the row,
+    because the row dicts ARE the emitted Vdevs fact.
     """
     for name, vdev in (nodes or {}).items():
         is_container = vdev.get("vdev_type") == "root" or name in ZFS_GROUP_VDEVS
@@ -451,8 +467,15 @@ def _flatten_vdevs(nodes: dict | None, out: list[dict],
             # position is not worth a value that names none of the three
             # statements a reader could take from it.
             out.append({k: v for k, v in entry.items() if v is not None})
+            if assertions is not None and vdev_type == "disk" and parent:
+                assertions.append({
+                    "type": "backed-by",
+                    "target": {"kind": "block-device", "name": str(name)},
+                    "facts": {"VdevPath": str(parent)},
+                })
             child_depth = depth + 1
-        _flatten_vdevs(vdev.get("vdevs"), out, links, next_group, child_depth)
+        _flatten_vdevs(vdev.get("vdevs"), out, links, next_group, child_depth,
+                       parent=str(name), assertions=assertions)
 
 
 def _split_absent(facts: dict) -> tuple[dict, list[str]]:
@@ -468,15 +491,23 @@ def _split_absent(facts: dict) -> tuple[dict, list[str]]:
 
 
 def _attach_channels(item: dict, absent: list[str] | None = None,
-                     unobservable: list[dict] | None = None) -> dict:
+                     unobservable: list[dict] | None = None,
+                     assertions: list[dict] | None = None) -> dict:
     """The stream channels, riding the item beside its facts. Additive on the
     live API's row shape (the way `depth` already is) and lifted verbatim by
     the reference collector — one representation, so the API and the stream
-    cannot tell two different stories about the same reading."""
+    cannot tell two different stories about the same reading.
+
+    `assertions` are relation assertions in DESIGN 19's wire shape minus the
+    three members only the emitter can supply — record, collection and the
+    source object's name — because an item does not know which collection is
+    being served or under what name it will be published."""
     if absent:
         item["absent"] = absent
     if unobservable:
         item["unobservable"] = sorted(unobservable, key=lambda u: u["fact"])
+    if assertions:
+        item["assertions"] = assertions
     return item
 
 
@@ -899,7 +930,8 @@ class Adapter:
             absent: list[str] = []
             unobservable: list[dict] = []
             vdevs: list[dict] = []
-            _flatten_pool_vdevs(pool, vdevs, links)
+            assertions: list[dict] = []
+            _flatten_pool_vdevs(pool, vdevs, links, assertions)
             if links is None:
                 # The alias trees could not be read (live) or no devlinks
                 # payload was captured (replay). Every leaf's Device is a
@@ -1044,7 +1076,8 @@ class Adapter:
                 item["names"] = {"stable": stable}
                 if kernels:
                     item["names"]["ephemeral"] = {"kernel": kernels}
-            items.append(_attach_channels(item, absent, unobservable))
+            items.append(_attach_channels(item, absent, unobservable,
+                                          assertions))
         return items
 
     async def _dataset_items(self) -> list[dict]:

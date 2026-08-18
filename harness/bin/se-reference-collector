@@ -289,6 +289,7 @@ def run(collector: str, generations: dict[str, int], payload_dir: Path) -> None:
             )
 
         unobservable_count = 0
+        assertion_count = 0
         for item in items:
             record = {
                 "record": "object",
@@ -309,6 +310,25 @@ def run(collector: str, generations: dict[str, int], payload_dir: Path) -> None:
             if item.get("absent"):
                 record["absent"] = item["absent"]
             emit(record)
+            # The three members an item cannot supply, added here: record,
+            # collection, and the source object's NAME — which is the same
+            # native_id the object record was published under, because a
+            # relation's key derives from the source object's id and the
+            # target's name AS PUBLISHED (DESIGN 13). An assertion naming its
+            # source by anything else would key against an object that does
+            # not exist. `vantage` is the collection this reading came from,
+            # which is what makes the assertion directed.
+            for assertion in item.get("assertions", []):
+                emit(
+                    {
+                        "record": "relation_assertion",
+                        "collection": collection,
+                        "name": item["native_id"],
+                        "vantage": collection,
+                        **assertion,
+                    }
+                )
+                assertion_count += 1
             for missing in item.get("unobservable", []):
                 emit(
                     {
@@ -319,7 +339,7 @@ def run(collector: str, generations: dict[str, int], payload_dir: Path) -> None:
                     }
                 )
                 unobservable_count += 1
-        commit(collection, objects=len(items), assertions=0,
+        commit(collection, objects=len(items), assertions=assertion_count,
                unobservable=unobservable_count)
 
     end()

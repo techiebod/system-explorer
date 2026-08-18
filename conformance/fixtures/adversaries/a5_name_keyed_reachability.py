@@ -208,13 +208,25 @@ def main() -> None:
                   "unobservable": 0})
             continue
         items = chains(json.loads(payload.read_text()))
+        edges = 0
         for name, facts in items:
             emit({"record": "object", "collection": collection, "name": name,
                   "facts": facts, "at": round(1.0 + 0.001 * emitted, 3)})
             emitted += 1
+            # The chain's table edge, which every chains vantage asserts
+            # (DESIGN 13). Derived from the row's own facts, as the real
+            # collector derives it — this subject's staged defect is about
+            # reachability, and a subject that simply stopped emitting
+            # relations would be failing the corpus for a second reason and
+            # stop testing the first.
+            emit({"record": "relation_assertion", "collection": collection,
+                  "name": name, "type": "member-of", "vantage": collection,
+                  "target": {"kind": "nft-table",
+                             "name": f"{facts['Family']} {facts['Table']}"}})
+            edges += 1
         emit({"record": "commit", "collection": collection,
-              "generation": generation, "objects": len(items), "assertions": 0,
-              "unobservable": 0})
+              "generation": generation, "objects": len(items),
+              "assertions": edges, "unobservable": 0})
     emit({"record": "end", "request": "replay", "batch": "replay",
           "cpu_ms": 0.5, "wall_ms": 1.0})
 
