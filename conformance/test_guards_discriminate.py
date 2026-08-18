@@ -321,7 +321,7 @@ ENTRIES = (
         guard="detector-armed-check",
         file="harness/bin/se-anonymise",
         old="""        findings = detectors.scan(
-            json.loads(path.read_text()),
+            document,
             declares_address_fields=declares,
             hostnames=hostnames,
         )

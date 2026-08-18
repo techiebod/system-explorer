@@ -1,0 +1,124 @@
+{
+  "name": "equal-different-protocol-error",
+  "acceptance_item": 4,
+  "note": "equal generation, different content means somebody reused a generation: a protocol error, never a merge. One fact differs between the two readings; the second must NOT be applied, the error must be recorded, and the first reading stands.",
+  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"pools\",\"freshness\":\"1h\"}]}",
+  "streams": [
+    {
+      "records": [
+        {
+          "record": "begin",
+          "request": "batch-1",
+          "batch": "batch-1",
+          "declaration": "sha256:8e656604f17878845d33006b5006ace4aa821c059c189fa84eec034b48903478",
+          "boot_id": "5e000000-0000-4000-8000-000000000001",
+          "timens": 0,
+          "instance": null,
+          "generations": {
+            "pools": 1
+          }
+        },
+        {
+          "record": "object",
+          "collection": "pools",
+          "name": "tank",
+          "facts": {
+            "Health": "ONLINE"
+          },
+          "at": 10.5
+        },
+        {
+          "record": "commit",
+          "collection": "pools",
+          "generation": 1,
+          "objects": 1,
+          "assertions": 0,
+          "unobservable": 0,
+          "cpu_ms": 0.5
+        },
+        {
+          "record": "end",
+          "request": "batch-1",
+          "batch": "batch-1",
+          "cpu_ms": 0.5,
+          "wall_ms": 1.0
+        }
+      ]
+    },
+    {
+      "records": [
+        {
+          "record": "begin",
+          "request": "batch-2",
+          "batch": "batch-2",
+          "declaration": "sha256:8e656604f17878845d33006b5006ace4aa821c059c189fa84eec034b48903478",
+          "boot_id": "5e000000-0000-4000-8000-000000000001",
+          "timens": 0,
+          "instance": null,
+          "generations": {
+            "pools": 1
+          }
+        },
+        {
+          "record": "object",
+          "collection": "pools",
+          "name": "tank",
+          "facts": {
+            "Health": "DEGRADED"
+          },
+          "at": 10.5
+        },
+        {
+          "record": "commit",
+          "collection": "pools",
+          "generation": 1,
+          "objects": 1,
+          "assertions": 0,
+          "unobservable": 0,
+          "cpu_ms": 0.5
+        },
+        {
+          "record": "end",
+          "request": "batch-2",
+          "batch": "batch-2",
+          "cpu_ms": 0.5,
+          "wall_ms": 1.0
+        }
+      ],
+      "wind_issued": {
+        "pools": 0
+      }
+    }
+  ],
+  "expect": {
+    "objects": [
+      {
+        "collection": "pools",
+        "id": "pools:tank",
+        "name": "tank",
+        "facts": {
+          "Health": "ONLINE"
+        },
+        "at": 10.5
+      }
+    ],
+    "collections": [
+      {
+        "name": "pools",
+        "generation": 1,
+        "stale": false
+      }
+    ],
+    "rejected": [
+      {
+        "collection": "pools",
+        "reason": "generation-reused-different-content",
+        "batch": "batch-2"
+      }
+    ],
+    "acked": [
+      "batch-1",
+      "batch-2"
+    ]
+  }
+}

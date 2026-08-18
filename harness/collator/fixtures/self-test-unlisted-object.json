@@ -1,0 +1,83 @@
+{
+  "name": "self-test-unlisted-object",
+  "acceptance_item": 0,
+  "note": "the judge's own reversion: the stream mints two objects and expect lists one. A judge that only checked what it expected would pass this \u2014 and would never catch an invented object. It must fail.",
+  "must_fail": "the collator mints pools:spare, which expect does not list \u2014 the exhaustiveness rule must refuse it",
+  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"pools\",\"freshness\":\"1h\"}]}",
+  "streams": [
+    {
+      "records": [
+        {
+          "record": "begin",
+          "request": "batch-1",
+          "batch": "batch-1",
+          "declaration": "sha256:8e656604f17878845d33006b5006ace4aa821c059c189fa84eec034b48903478",
+          "boot_id": "5e000000-0000-4000-8000-000000000001",
+          "timens": 0,
+          "instance": null,
+          "generations": {
+            "pools": 1
+          }
+        },
+        {
+          "record": "object",
+          "collection": "pools",
+          "name": "tank",
+          "facts": {
+            "Health": "ONLINE"
+          },
+          "at": 10.5
+        },
+        {
+          "record": "object",
+          "collection": "pools",
+          "name": "spare",
+          "facts": {
+            "Health": "ONLINE"
+          },
+          "at": 10.5
+        },
+        {
+          "record": "commit",
+          "collection": "pools",
+          "generation": 1,
+          "objects": 2,
+          "assertions": 0,
+          "unobservable": 0,
+          "cpu_ms": 0.5
+        },
+        {
+          "record": "end",
+          "request": "batch-1",
+          "batch": "batch-1",
+          "cpu_ms": 0.5,
+          "wall_ms": 1.0
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "objects": [
+      {
+        "collection": "pools",
+        "id": "pools:tank",
+        "name": "tank",
+        "facts": {
+          "Health": "ONLINE"
+        },
+        "at": 10.5
+      }
+    ],
+    "collections": [
+      {
+        "name": "pools",
+        "generation": 1,
+        "stale": false
+      }
+    ],
+    "rejected": [],
+    "acked": [
+      "batch-1"
+    ]
+  }
+}

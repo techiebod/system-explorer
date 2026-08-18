@@ -218,6 +218,62 @@ def test_only_an_absent_decline_may_commit() -> None:
     assert replay.check_stream(stream("unavailable", commit=True))
 
 
+def test_a_decline_closes_its_collection_in_both_directions() -> None:
+    """A decline is a statement about the whole collection, so it closes the
+    collection to every emitting record — before it (a collection that
+    emitted cannot also decline) and after it (the direction that was
+    guarded nowhere: the wire refused records-then-decline while
+    decline-then-records sailed through with the records silently dropped,
+    and an assertion could even ride under an absent decline's commit).
+    check_stream judges the completed stream, so one bag rule holds both
+    orders; the wire refuses each order by name."""
+
+    def stream(middle: list[dict]) -> list[dict]:
+        return [
+            {"record": "begin", "request": "rq", "batch": "b1",
+             "boot_id": "5e000000-0000-4000-8000-000000000001",
+             "generations": {"pools": 1}},
+            *middle,
+            {"record": "end", "request": "rq", "batch": "b1"},
+        ]
+
+    obj = {"record": "object", "collection": "pools", "name": "tank",
+           "facts": {"Health": "ONLINE"}, "at": 1.0}
+    decline = {"record": "decline", "collection": "pools", "reason": "unavailable"}
+    rule = "declined collection"
+
+    after = replay.check_stream(stream([decline, obj]))
+    assert any(rule in p for p in after), (
+        f"a record AFTER a decline raised nothing — the record would vanish "
+        f"silently at the collator: {after}"
+    )
+    before = replay.check_stream(stream([obj, decline]))
+    assert any(rule in p for p in before), (
+        f"records BEFORE a decline raised nothing: {before}"
+    )
+
+    # The F4 demonstration: an assertion committed under an absent decline,
+    # counts reconciling — accepted by all three artifacts before the rule.
+    assertion = {"record": "relation_assertion", "collection": "pools",
+                 "name": "tank", "type": "backed-by", "vantage": "pools",
+                 "target": {"kind": "block-device", "name": "sda"}}
+    absent = {"record": "decline", "collection": "pools", "reason": "absent"}
+    zero_commit_but_assertion = {"record": "commit", "collection": "pools",
+                                 "generation": 1, "objects": 0,
+                                 "assertions": 1, "unobservable": 0}
+    smuggled = replay.check_stream(
+        stream([absent, assertion, zero_commit_but_assertion]))
+    assert any(rule in p for p in smuggled), (
+        f"an assertion under an absent decline raised nothing: {smuggled}"
+    )
+
+    # And the closure costs nothing it should not: absent plus its zero
+    # commit, with no emitting records, stays clean.
+    clean_commit = {"record": "commit", "collection": "pools", "generation": 1,
+                    "objects": 0, "assertions": 0, "unobservable": 0}
+    assert not replay.check_stream(stream([absent, clean_commit]))
+
+
 def test_an_object_without_a_monotonic_reading_is_caught() -> None:
     """`at` is dropped from the diff because it genuinely varies, so its
     presence and sanity are held here instead."""

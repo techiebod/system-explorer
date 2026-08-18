@@ -1,0 +1,118 @@
+{
+  "name": "equal-same-noop",
+  "acceptance_item": 4,
+  "note": "equal generation, identical content is the transport retry and must be a no-op: applied once, no rejection recorded. The acked list is what keeps this judgeable \u2014 a collator that silently skipped the retry round would never have acknowledged its batch.",
+  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"pools\",\"freshness\":\"1h\"}]}",
+  "streams": [
+    {
+      "records": [
+        {
+          "record": "begin",
+          "request": "batch-1",
+          "batch": "batch-1",
+          "declaration": "sha256:8e656604f17878845d33006b5006ace4aa821c059c189fa84eec034b48903478",
+          "boot_id": "5e000000-0000-4000-8000-000000000001",
+          "timens": 0,
+          "instance": null,
+          "generations": {
+            "pools": 1
+          }
+        },
+        {
+          "record": "object",
+          "collection": "pools",
+          "name": "tank",
+          "facts": {
+            "Health": "ONLINE"
+          },
+          "at": 10.5
+        },
+        {
+          "record": "commit",
+          "collection": "pools",
+          "generation": 1,
+          "objects": 1,
+          "assertions": 0,
+          "unobservable": 0,
+          "cpu_ms": 0.5
+        },
+        {
+          "record": "end",
+          "request": "batch-1",
+          "batch": "batch-1",
+          "cpu_ms": 0.5,
+          "wall_ms": 1.0
+        }
+      ]
+    },
+    {
+      "records": [
+        {
+          "record": "begin",
+          "request": "batch-1-retry",
+          "batch": "batch-1-retry",
+          "declaration": "sha256:8e656604f17878845d33006b5006ace4aa821c059c189fa84eec034b48903478",
+          "boot_id": "5e000000-0000-4000-8000-000000000001",
+          "timens": 0,
+          "instance": null,
+          "generations": {
+            "pools": 1
+          }
+        },
+        {
+          "record": "object",
+          "collection": "pools",
+          "name": "tank",
+          "facts": {
+            "Health": "ONLINE"
+          },
+          "at": 10.5
+        },
+        {
+          "record": "commit",
+          "collection": "pools",
+          "generation": 1,
+          "objects": 1,
+          "assertions": 0,
+          "unobservable": 0,
+          "cpu_ms": 0.5
+        },
+        {
+          "record": "end",
+          "request": "batch-1-retry",
+          "batch": "batch-1-retry",
+          "cpu_ms": 0.5,
+          "wall_ms": 1.0
+        }
+      ],
+      "wind_issued": {
+        "pools": 0
+      }
+    }
+  ],
+  "expect": {
+    "objects": [
+      {
+        "collection": "pools",
+        "id": "pools:tank",
+        "name": "tank",
+        "facts": {
+          "Health": "ONLINE"
+        },
+        "at": 10.5
+      }
+    ],
+    "collections": [
+      {
+        "name": "pools",
+        "generation": 1,
+        "stale": false
+      }
+    ],
+    "rejected": [],
+    "acked": [
+      "batch-1",
+      "batch-1-retry"
+    ]
+  }
+}

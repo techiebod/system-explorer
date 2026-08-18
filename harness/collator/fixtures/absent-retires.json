@@ -1,0 +1,111 @@
+{
+  "name": "absent-retires",
+  "acceptance_item": 2,
+  "note": "absent is authoritative-empty: the decline plus its zero-object commit is a successful reading of the interface, so it must retire BOTH objects a previous batch published \u2014 not one, not mark them stale, gone. Regression here is the founding failure: stale arrays displayed forever.",
+  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"pools\",\"freshness\":\"1h\"}]}",
+  "streams": [
+    {
+      "records": [
+        {
+          "record": "begin",
+          "request": "batch-1",
+          "batch": "batch-1",
+          "declaration": "sha256:8e656604f17878845d33006b5006ace4aa821c059c189fa84eec034b48903478",
+          "boot_id": "5e000000-0000-4000-8000-000000000001",
+          "timens": 0,
+          "instance": null,
+          "generations": {
+            "pools": 1
+          }
+        },
+        {
+          "record": "object",
+          "collection": "pools",
+          "name": "tank",
+          "facts": {
+            "Health": "ONLINE"
+          },
+          "at": 10.5
+        },
+        {
+          "record": "object",
+          "collection": "pools",
+          "name": "spare",
+          "facts": {
+            "Health": "ONLINE"
+          },
+          "at": 10.5
+        },
+        {
+          "record": "commit",
+          "collection": "pools",
+          "generation": 1,
+          "objects": 2,
+          "assertions": 0,
+          "unobservable": 0,
+          "cpu_ms": 0.5
+        },
+        {
+          "record": "end",
+          "request": "batch-1",
+          "batch": "batch-1",
+          "cpu_ms": 0.5,
+          "wall_ms": 1.0
+        }
+      ]
+    },
+    {
+      "records": [
+        {
+          "record": "begin",
+          "request": "batch-2",
+          "batch": "batch-2",
+          "declaration": "sha256:8e656604f17878845d33006b5006ace4aa821c059c189fa84eec034b48903478",
+          "boot_id": "5e000000-0000-4000-8000-000000000001",
+          "timens": 0,
+          "instance": null,
+          "generations": {
+            "pools": 2
+          }
+        },
+        {
+          "record": "decline",
+          "collection": "pools",
+          "reason": "absent",
+          "detail": "no pools on this host"
+        },
+        {
+          "record": "commit",
+          "collection": "pools",
+          "generation": 2,
+          "objects": 0,
+          "assertions": 0,
+          "unobservable": 0,
+          "cpu_ms": 0.5
+        },
+        {
+          "record": "end",
+          "request": "batch-2",
+          "batch": "batch-2",
+          "cpu_ms": 0.5,
+          "wall_ms": 1.0
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "objects": [],
+    "collections": [
+      {
+        "name": "pools",
+        "generation": 2,
+        "stale": false
+      }
+    ],
+    "rejected": [],
+    "acked": [
+      "batch-1",
+      "batch-2"
+    ]
+  }
+}

@@ -21,12 +21,25 @@ Recorded streams in, assertions out. One fixture is one scenario:
 ```
 
 `streams` are fed in order; where a scenario is about concurrency the fixture
-says so and the driver interleaves them. `expect` is exhaustive for the keys it
-names — an object the collator minted that the fixture does not list is a
-failure, because a harness that only checked what it expected would never catch
-an invented object.
+says so (`concurrent`) and the driver interleaves them: generations are issued
+in stream order, responses delivered in reverse, each held until the later
+batch is acknowledged — the watch-fires/schedule-fires hazard of DESIGN 19,
+driven through the real daemon. `expect` is exhaustive for the keys it names —
+an object the collator minted that the fixture does not list is a failure,
+because a harness that only checked what it expected would never catch an
+invented object.
 
-**No driver exists yet.** The collator is phase 2; this format and its loader
-are committed now so that phase has something to satisfy rather than something
-to invent. The loader is self-tested against a fixture that must fail, so the
+**The driver is `driver.py`**, run by `conformance/test_collator_fixtures.py`.
+The subject is the real se-collate binary against a fake collector on a real
+unix socket; the judge reads the durable store, and the read API where a
+fixture says so. Its docstring is the authority on the members this format
+grew when the driver arrived — `declaration` (the exact bytes `declare`
+serves, hash-checked against every begin), `wind_issued` (the declared
+simulation that re-mints a used generation, the only outside route to the
+authority's below/equal branches), `expect.acked`, `expect.age_from_oldest`,
+`expect.cross_boot` (the served statement that a stored stamp belongs to
+another boot's clock, judged with the daemon's own boot id injected), and
+`must_fail` — and on the stricter rule that `objects`, `collections`,
+`rejected` and `acked` are always stated, even when empty, so no surface goes
+unjudged. The loader is self-tested against fixtures that must fail, so the
 judge is known to discriminate before it judges anything real.
