@@ -40,7 +40,11 @@ def example(request):
 GO_DIR = Path(__file__).resolve().parent.parent / "go"
 
 # collector name -> package path under go/, one entry per ported collector
-GO_COLLECTORS = {"system": "./cmd/se-collect-system"}
+GO_COLLECTORS = {
+    "system": "./cmd/se-collect-system",
+    "storage": "./cmd/se-collect-storage",
+    "network": "./cmd/se-collect-network",
+}
 
 
 def _find_go() -> str | None:

@@ -10,7 +10,7 @@ on:
 
 jobs:
   python:
-    name: conformance (2,085 tests incl. contract package)
+    name: conformance (2,713 tests incl. three ported collectors)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,7 +28,10 @@ jobs:
       # Compile check with a readable error, and it primes the build cache
       # the in-suite session build then hits; the binary pytest runs is
       # still the one the suite builds itself — one source, no drift.
-      - run: go build ./cmd/se-collect-system
+      # ./cmd/... rather than a named list: a collector added to
+      # GO_COLLECTORS and forgotten here would compile only inside pytest,
+      # where the failure arrives as a fixture error rather than a build one.
+      - run: go build ./cmd/...
         working-directory: go
       - run: python -m pip install -e ".[test,mcp]"
       - run: python -m pytest -q

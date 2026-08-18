@@ -537,6 +537,38 @@ def _scan_running_now(payloads: dict) -> dict:
     return payloads
 
 
+def _resilver_overwrote_the_scrub(payloads: dict) -> dict:
+    """CLASS scan-function-blind: a collector that reads the pool's single
+    scan record without asking WHICH scan it is. ZFS keeps only the most
+    recent, so a resilver REPLACES the scrub's record — and a port that
+    reports ScanAgeDays from it says the pool was scrubbed however many days
+    ago the resilver finished. That is not hypothetical: it was observed on a
+    foreign host whose shelf read ScanAgeDays 9 from a resilver while its last
+    real scrub was months old, and the stale-scrub rule guarded on
+    ScanFunction and simply went silent — absence-as-health, beside the
+    figure that looked reassuring.
+
+    So the reference publishes LastScrubEndTime as an unobservable record with
+    the reason in its sibling fact: the value exists and this pool cannot
+    report it (DESIGN 19's third channel). Both facts were declared,
+    implemented and reachable by NO committed capture and no operator until
+    this one — found by the contract-verification check asking which declared
+    facts a corpus never produces. Turn the healthy pool's scan record into a
+    finished resilver; a scan-function-blind port emits neither the
+    unobservable nor the reason, and its commit's unobservable count is short
+    by one.
+    """
+    scan = _first_pool(payloads["status"]).setdefault("scan_stats", {})
+    scan["function"] = "RESILVER"
+    scan["state"] = "FINISHED"
+    # A plausible finish inside the corpus's pinned clock, so the reading is a
+    # resilver that completed rather than one still running — this operator's
+    # subject is which scan the record describes, and a running scan would
+    # entangle it with zpool-scan-running's zero-end-time case.
+    scan["end_time"] = 1786550000
+    return payloads
+
+
 def _add_spares_and_logs(payloads: dict) -> dict:
     """CLASS spare-as-unhealthy: a spare sits AVAIL — attached to nothing,
     protecting nothing yet — and a log device is a data-path helper, not a
@@ -663,6 +695,8 @@ OPERATORS: tuple[Operator, ...] = (
              _append_stripe_vdev),
     Operator("zpool-scan-running", "storage", "epoch-zero-scan",
              _scan_running_now),
+    Operator("zpool-resilver-overwrote-scrub", "storage", "scan-function-blind",
+             _resilver_overwrote_the_scrub),
     Operator("zpool-spares-and-logs", "storage", "spare-as-unhealthy",
              _add_spares_and_logs),
     Operator("zpool-cache-vdev", "storage", "group-enum", _add_cache_vdev),

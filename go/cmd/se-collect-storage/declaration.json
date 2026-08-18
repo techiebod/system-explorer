@@ -1,0 +1,214 @@
+{
+  "schema": "se.declaration/1",
+  "collector": "storage",
+  "version": "0.7.0",
+  "authority": {
+    "read_paths": [
+      "/dev/disk/by-id",
+      "/dev/disk/by-partuuid",
+      "/dev/mapper",
+      "/dev/zfs"
+    ],
+    "commands": ["zpool"]
+  },
+  "probe": "zpool is installed and `zpool status -j` answers; a host carrying zpool with no imported pool still answers, and that is a reading of zero pools rather than a probe failure",
+  "collections": [
+    {
+      "name": "pools",
+      "question": "are my pools healthy, what does each one survive losing, and when was one last scrubbed?",
+      "prefix": "pool",
+      "freshness": "60s",
+      "perishability": "sampled",
+      "answer": ["State", "Redundancy", "CapacityPercent", "UnhealthyVdevs"],
+      "ceiling": { "records": 5000, "bytes": 4194304 },
+      "names": {
+        "guid": {
+          "class": "stable",
+          "sentence": "The pool GUID, which survives rename and import. Carried as a decimal STRING because it is a full unsigned 64-bit value: routed through a float or a signed integer it comes back as a different pool, and a join key that changes value in transit is not a key."
+        },
+        "devices": {
+          "class": "stable",
+          "sentence": "Every disk member, named as `zpool status` keys it — a by-id link on most hosts, a bare kernel name on a pool imported as one. Group members (log, cache, spare) are included: they are devices this pool holds open."
+        },
+        "kernel": {
+          "class": "ephemeral",
+          "sentence": "The kernel device paths those members resolve to today, through the device alias trees. Reassigned on rescan; carried because a person searches for /dev/sdc, and joined on never."
+        }
+      },
+      "facts": {
+        "State": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/status/pools/*/state",
+          "sentence": "The pool's overall verdict, in ZFS's own word for it — ONLINE, DEGRADED, FAULTED, SUSPENDED. Passed through exactly as the document spells it rather than mapped onto a set this reading would have to keep closed."
+        },
+        "StatusMessage": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/status/pools/*/status",
+          "sentence": "The catalogue prose zpool prints when something is wrong, trimmed of surrounding whitespace and otherwise verbatim. A healthy pool has none, and says so through the absent list."
+        },
+        "Errors": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/status/pools/*/error_count",
+          "sentence": "Known DATA errors: blocks ZFS could not reconstruct. Zero beside a non-zero member counter means parity repaired every bad block, so this and the per-vdev counters answer different questions and neither substitutes for the other."
+        },
+        "ScanFunction": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/status/pools/*/scan_stats/function",
+          "sentence": "What kind of scan the pool's single scan record describes — SCRUB or RESILVER. ZFS keeps only the most recent, so a resilver replaces the scrub's record entirely."
+        },
+        "ScanState": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/status/pools/*/scan_stats/state",
+          "sentence": "Where that scan stands: SCANNING while in progress, FINISHED when complete. A scan in progress has no end time yet, which is why ScanEndTime and ScanAgeDays are absent mid-scrub."
+        },
+        "ScanEndTime": {
+          "type": "timestamp",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/status/pools/*/scan_stats/end_time",
+          "sentence": "When the recorded scan finished, in UTC to the second. On the absent list while a scan is running, because an end time of zero means it has not ended and not the epoch; on an OpenZFS too old to render epochs it is the prose date verbatim, and then no age is derived from it."
+        },
+        "ScanAgeDays": {
+          "type": "integer",
+          "temperament": "gauge",
+          "kind": "derived",
+          "derived_from": ["ScanEndTime"],
+          "discloses": "nothing",
+          "sentence": "Whole days since the recorded scan finished — the SCAN, not necessarily the scrub: after a resilver this counts from the resilver, which is what LastScrubEndTime exists to say out loud."
+        },
+        "LastScrubEndTime": {
+          "type": "timestamp",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "When the last completed SCRUB finished. ZFS keeps one scan record, so where a later resilver overwrote it this fact is an unobservable record rather than a value — the time exists and this pool cannot report it."
+        },
+        "LastScrubEndTimeUnobservable": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Why the last scrub's end time cannot be read from this pool. Present only in that state, so a stale-scrub rule can cite the stated unknown instead of going silent beside a months-old scrub."
+        },
+        "SizeBytes": {
+          "type": "integer",
+          "unit": "bytes",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/list/pools/*/properties/size/value",
+          "sentence": "Total raw capacity, before parity and before compression."
+        },
+        "AllocatedBytes": {
+          "type": "integer",
+          "unit": "bytes",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/list/pools/*/properties/allocated/value",
+          "sentence": "Raw bytes ZFS has allocated, parity included."
+        },
+        "FreeBytes": {
+          "type": "integer",
+          "unit": "bytes",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/list/pools/*/properties/free/value",
+          "sentence": "Raw bytes unallocated. Not a promise about how much a dataset can still be written, which parity and compression both move."
+        },
+        "CapacityPercent": {
+          "type": "integer",
+          "unit": "percent",
+          "denominator": "SizeBytes",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/list/pools/*/properties/capacity/value",
+          "sentence": "Allocated over size, as whole percent, exactly as ZFS reports it rather than recomputed here."
+        },
+        "FragmentationPercent": {
+          "type": "integer",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/list/pools/*/properties/fragmentation/value",
+          "sentence": "ZFS's own whole-percent measure of free-space fragmentation. Deliberately carries no unit: it is not a fraction of any figure published here, and declaring it a percentage would demand a denominator that does not exist."
+        },
+        "Vdevs": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "identity",
+          "from": "/status/pools/*/vdevs",
+          "sentence": "The vdev tree flattened to one row per device, in the order zpool reports it, each row carrying its depth, type, state, error counters, its own stable names, and — where the alias trees resolved it — the kernel block device it is. A row whose Device could not be resolved because no alias tree was readable says so on its own unobservable record, at Vdevs/<name>/Device."
+        },
+        "UnhealthyVdevs": {
+          "type": "list",
+          "temperament": "state",
+          "kind": "derived",
+          "derived_from": ["Vdevs"],
+          "discloses": "identity",
+          "sentence": "Every member whose state is neither ONLINE nor AVAIL, groups included, in tree order. A spare sitting AVAIL is standing by and protecting nothing yet, which is not a fault; a member that reported no state at all made no statement to disagree with."
+        },
+        "VdevsWithErrors": {
+          "type": "list",
+          "temperament": "state",
+          "kind": "derived",
+          "derived_from": ["Vdevs"],
+          "discloses": "identity",
+          "sentence": "Every member carrying a non-zero read, write or checksum counter, in tree order. Membership overlaps UnhealthyVdevs only by coincidence: a member can be OFFLINE with no errors, or ONLINE having had every bad block repaired."
+        },
+        "Redundancy": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": ["Vdevs"],
+          "discloses": "nothing",
+          "sentence": "How this pool's data vdevs are laid out, in zpool's own words — stripe, mirror, raidz1. A pool is only as redundant as its weakest data vdev, because losing any one of them loses the pool, so a mixed layout is named in full (\"raidz1 + stripe\") rather than summarised to its best part. Where the walk meets a top-level shape it cannot read it claims nothing at all, on the unobservable channel."
+        },
+        "DeviceFailuresTolerated": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": ["Vdevs", "Redundancy"],
+          "discloses": "nothing",
+          "sentence": "How many whole devices this pool survives losing, read from the layout above; 0 means the next disk to fail takes the pool with it. Stated and graded by nothing here — whether that is a problem depends on what lives on the pool, which this reading cannot see."
+        }
+      },
+      "redaction_exemption": "zpool status and zpool list have no credential surface: every member is a device name, a state word, a counter, a capacity figure or a scan statistic. The identifiers this collection publishes verbatim — pool guid, vdev names, devid and wwn — are the join keys it exists to provide, and each is declared as disclosing identity on its own fact rather than withheld from the evidence that proves it was read.",
+      "reference_commands": [
+        {
+          "purpose": "the same verdict, by hand",
+          "argv": ["zpool", "status", "-j", "--json-int"]
+        },
+        {
+          "purpose": "capacity as ZFS reports it",
+          "argv": ["zpool", "list", "-j", "-p", "-v", "-o", "name,size,alloc,free,cap,frag,health"]
+        },
+        {
+          "purpose": "the alias trees Device resolves through",
+          "argv": ["ls", "-l", "/dev/disk/by-id", "/dev/disk/by-partuuid", "/dev/mapper"]
+        }
+      ]
+    }
+  ]
+}

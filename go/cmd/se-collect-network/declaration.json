@@ -1,0 +1,276 @@
+{
+  "schema": "se.declaration/1",
+  "collector": "network",
+  "version": "0.7.0",
+  "authority": {
+    "commands": ["nft"],
+    "capabilities": ["CAP_NET_ADMIN"]
+  },
+  "probe": "nft runs and `nft -j list ruleset` parses; an empty ruleset is a successful read and an authoritative-empty commit, never a probe failure",
+  "collections": [
+    {
+      "name": "nft-chains",
+      "question": "where does the kernel enter this ruleset, and what runs what?",
+      "prefix": "nft-chain",
+      "freshness": "5m",
+      "perishability": "reconstructible",
+      "answer": ["BaseChain", "Hook", "RuleCount", "JumpedFrom"],
+      "ceiling": { "records": 4096, "bytes": 4194304 },
+      "facts": {
+        "Family": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/nftables/*/chain/family",
+          "sentence": "The address family this chain's table belongs to — ip, ip6, inet, arp, bridge or netdev. The same chain name in ip and ip6 is two chains, and a rule admitting a port in one says nothing about the other."
+        },
+        "Table": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/nftables/*/chain/table",
+          "sentence": "The table holding this chain. On a real host the table name is an ownership label: docker, libvirt, firewalld and nixos-fw were each written by something different."
+        },
+        "Name": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/nftables/*/chain/name",
+          "sentence": "The chain's name, as its author wrote it."
+        },
+        "Handle": {
+          "type": "integer",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/nftables/*/chain/handle",
+          "sentence": "The kernel's own identifier for this chain object."
+        },
+        "BaseChain": {
+          "type": "boolean",
+          "labels": ["base", "regular"],
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": ["Hook"],
+          "discloses": "nothing",
+          "sentence": "Whether the kernel calls this chain directly. A base chain is registered against a hook and every packet on that path enters it; a regular chain runs only when something jumps to it, which is why the two need telling apart before any rule in either is read."
+        },
+        "Hook": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/nftables/*/chain/hook",
+          "sentence": "The netfilter hook this base chain is registered against — prerouting, input, forward, output or postrouting. It is WHERE in the packet's journey this chain runs, and absent on a regular chain because nothing calls it directly."
+        },
+        "Type": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/nftables/*/chain/type",
+          "sentence": "What the kernel lets this base chain do: filter chains decide, nat chains translate, route chains can re-run the routing decision. Absent on a regular chain."
+        },
+        "Priority": {
+          "type": "integer",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/nftables/*/chain/prio",
+          "sentence": "The order this base chain runs in relative to others on the same hook, lowest first. Two chains on one hook are both traversed; this says which sees the packet first, and a negative number is normal."
+        },
+        "Policy": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/nftables/*/chain/policy",
+          "sentence": "What happens to a packet that reaches the end of this base chain matching nothing — accept or drop. It is the verdict the whole chain falls back to, so a chain of narrow accepts under an accept policy admits everything the rules did not mention. Absent on a regular chain, which returns to its caller instead."
+        },
+        "RuleCount": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "How many rules this chain holds. Counted, never read: this says nothing about what any of them permits."
+        },
+        "JumpedFrom": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": ["Family", "Table", "Name"],
+          "discloses": "nothing",
+          "sentence": "Every chain that transfers control here, by jump or goto — how a packet reaches this chain at all. Derived by reading every rule's target across the whole ruleset, and the elements of every named verdict map some rule uses, so it is the answer to 'what runs this' that no single chain's own document contains."
+        },
+        "Unreferenced": {
+          "type": "boolean",
+          "labels": ["unreferenced", "reachable"],
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": ["JumpedFrom", "BaseChain"],
+          "discloses": "nothing",
+          "sentence": "Stated only when true, and only for a regular chain: no rule, and no named verdict map any rule uses, jumps or gotos here, and the kernel does not call it, so no packet can reach any rule in it. Usually a leftover; occasionally a rule that was meant to be reachable and is not."
+        }
+      },
+      "redaction_exemption": "every served fact is a chain's own structural member — family, table, chain name, handle, hook, type, priority, policy — or a count or caller list derived from them. Table and chain names are distribution conventions, the rest are protocol constants, and no rule body and no comment is read by this collection at all.",
+      "reference_commands": [
+        {
+          "purpose": "the chains this collection rows, by hand",
+          "argv": ["nft", "list", "chains"]
+        },
+        {
+          "purpose": "the same ruleset with chain handles and hooks",
+          "argv": ["nft", "-a", "list", "ruleset"]
+        }
+      ]
+    },
+    {
+      "name": "nft-rules",
+      "question": "what does each rule in this ruleset actually say?",
+      "prefix": "nft-rule",
+      "freshness": "5m",
+      "perishability": "reconstructible",
+      "answer": ["Rendered", "Verdict", "Comprehension"],
+      "ceiling": { "records": 16384, "bytes": 16777216 },
+      "facts": {
+        "Family": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/nftables/*/rule/family",
+          "sentence": "The address family this rule's table belongs to — ip, ip6, inet, arp, bridge or netdev."
+        },
+        "Table": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/nftables/*/rule/table",
+          "sentence": "The table holding this rule. On a real host the table name is an ownership label: docker, libvirt, firewalld and nixos-fw were each written by something different, and this observer sees all of them at once where a manager's own UI sees only its own."
+        },
+        "Chain": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/nftables/*/rule/chain",
+          "sentence": "The chain holding this rule."
+        },
+        "Handle": {
+          "type": "integer",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/nftables/*/rule/handle",
+          "sentence": "The kernel's own identifier for this rule, and the join key to `nft -a list ruleset`. Stable while the rule object lives; a flush-and-restore reassigns handles, so it is not durable across a reload."
+        },
+        "Position": {
+          "type": "integer",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": ["Family", "Table", "Chain"],
+          "discloses": "nothing",
+          "sentence": "This rule's ordinal within its chain. Evaluation is ordered and first-match-wins, so position is meaning, not presentation."
+        },
+        "Rendered": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": ["Residue"],
+          "discloses": "location",
+          "sentence": "What this rule says, in nft's own vocabulary, with every term present. A term whose meaning could not be expanded appears at its position as a placeholder rather than being dropped — omission would turn a narrow rule into a permissive-looking one."
+        },
+        "Verdict": {
+          "type": "enum",
+          "values": ["accept", "drop", "reject", "return", "continue", "queue"],
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "How this rule ends — accept, drop, reject, return, continue or queue — or absent where the rule ends in no verdict at all, which is what a pure counter or logging rule does."
+        },
+        "JumpTarget": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The chain this rule transfers control to. A jump is not a decision: what happens is decided by the chain it goes to."
+        },
+        "Comprehension": {
+          "type": "enum",
+          "values": ["full", "partial", "opaque"],
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": ["Residue", "OpaqueReason"],
+          "discloses": "nothing",
+          "sentence": "How much of this rule the renderer could state: full where every statement was rendered, partial where some were not, opaque where the rule's conditions are absent from the source document entirely. Computed by subtracting what the renderer consumed from the rule's own expression list, never assumed."
+        },
+        "OpaqueReason": {
+          "type": "enum",
+          "values": ["xt", "text-fallback"],
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": ["Rendered"],
+          "discloses": "nothing",
+          "sentence": "Why a rule's conditions could not be read: xt where it calls an xtables extension whose parameters nft's JSON does not carry, text-fallback where nft emitted a bare string because it had no JSON encoder for the expression."
+        },
+        "Residue": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": ["Rendered"],
+          "discloses": "location",
+          "sentence": "The expressions in this rule the renderer did not consume, verbatim. This is the measured extent of what the row above does not say."
+        },
+        "CounterPackets": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Packets this rule has matched, where the rule carries a counter. nftables has no implicit per-rule counters, so absence here means the rule was written without one — never that nothing has matched."
+        },
+        "CounterBytes": {
+          "type": "integer",
+          "unit": "bytes",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Bytes this rule has matched, where the rule carries a counter. Absent means no counter was written, not zero traffic."
+        }
+      },
+      "redactions": [
+        {
+          "path": "nftables.*.rule.expr.*.match.right",
+          "discloses": "location"
+        },
+        {
+          "path": "nftables.*.rule.expr.*.match.right.prefix.addr",
+          "discloses": "location"
+        },
+        {
+          "path": "nftables.*.rule.comment",
+          "discloses": "content"
+        }
+      ],
+      "reference_commands": [
+        {
+          "purpose": "the same rules with '# handle N', as nft prints them",
+          "argv": ["nft", "-a", "list", "ruleset"]
+        },
+        {
+          "purpose": "the document this collection reads",
+          "argv": ["nft", "-j", "list", "ruleset"]
+        },
+        {
+          "purpose": "renders the xt rules this collection cannot",
+          "argv": ["iptables-nft", "-S"]
+        }
+      ]
+    }
+  ]
+}

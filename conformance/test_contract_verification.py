@@ -37,6 +37,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -44,7 +45,7 @@ from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 
 from conftest import GO_COLLECTORS, go_collector_binary
-from se_harness import corpus, replay
+from se_harness import corpus, differential, replay
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -292,6 +293,21 @@ def test_the_begin_digest_is_the_digest_of_the_declared_bytes(collector: str) ->
         )
 
 
+def _observe(binary: list[str], variant, observed: dict[str, set[str]],
+             payload_dir=None) -> None:
+    """Fold one run's fact references into the observed set, all channels."""
+    proc = replay.run_collector(binary, variant, payload_dir=payload_dir)
+    for record in replay.parse_stream(proc.stdout):
+        collection = record.get("collection")
+        if collection not in observed:
+            continue
+        if record.get("record") == "object":
+            observed[collection].update(record.get("facts") or {})
+            observed[collection].update(record.get("absent") or [])
+        elif record.get("record") == "unobservable":
+            observed[collection].add(_root_fact(str(record.get("fact"))))
+
+
 @pytest.mark.parametrize("collector", PORTED)
 def test_every_declared_fact_is_observed_somewhere_or_named(collector: str) -> None:
     """Declared implies observed, or named in the residual ledger.
@@ -302,28 +318,42 @@ def test_every_declared_fact_is_observed_somewhere_or_named(collector: str) -> N
     all. Any of the three channels counts as observation — a fact declared
     absent, or reported unobservable, has still been exercised.
 
-    The escape is the corpus's own ledger rather than silence, which keeps
-    one list of what this product cannot see: `storage/device-resolution` is
-    a declared fact reachable only through an alias tree no committed pool
-    has, and it is already named there with the live comparator as its venue.
+    Ownership is the same three-way partition the mutation guard uses over its
+    closed classes: a fact is reached by a committed capture, or minted by a
+    mutation operator, or named in the residual ledger with the venue that
+    owns it. All three are real coverage and the ledger is the only one that
+    is a statement of absence.
+
+    The operator arm is not a formality. It is how this check found
+    LastScrubEndTime and its Unobservable sibling — two facts the shipping
+    adapter emits only where a resilver has overwritten the scrub record,
+    declared and implemented and reached by no capture at all, existing
+    because a live host once read ScanAgeDays 9 off a resilver beside a
+    months-old scrub. Mintable, therefore an operator rather than a residual,
+    per the guard's own rule that a residual is only for what cannot be
+    staged.
     """
     _, declaration = _declaration(collector)
     declared = _declared_facts(declaration)
     variants = [v for v in VARIANTS if v.meta["collector"] == collector]
     assert variants, f"{collector}: no corpus variant to observe anything in"
 
+    binary = [go_collector_binary(collector)]
     observed: dict[str, set[str]] = {name: set() for name in declared}
     for variant in variants:
-        proc = replay.run_collector([go_collector_binary(collector)], variant)
-        for record in replay.parse_stream(proc.stdout):
-            collection = record.get("collection")
-            if collection not in observed:
+        _observe(binary, variant, observed)
+
+    seed_name = differential.SEEDS.get(collector)
+    if seed_name:
+        seed = next(v for v in VARIANTS if v.name == seed_name)
+        for operator in differential.OPERATORS:
+            if operator.collector != collector:
                 continue
-            if record.get("record") == "object":
-                observed[collection].update(record.get("facts") or {})
-                observed[collection].update(record.get("absent") or [])
-            elif record.get("record") == "unobservable":
-                observed[collection].add(_root_fact(str(record.get("fact"))))
+            payloads = differential.mutated_payloads(operator, seed)
+            with tempfile.TemporaryDirectory(prefix="se-declared-") as tmp:
+                directory = Path(tmp)
+                differential.write_payloads(payloads, directory)
+                _observe(binary, seed, observed, payload_dir=directory)
 
     orphans = []
     for collection, facts in sorted(declared.items()):

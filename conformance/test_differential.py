@@ -123,6 +123,14 @@ CASES = (
          # The discriminating bytes: the epoch rendered as a date, and the
          # derived age that only exists if 0 was read as an end time.
          ("1970-01-01", "ScanAgeDays")),
+    Case("scan-function-blind", "zpool-resilver-overwrote-scrub", PORT,
+         differential.DISAGREE, "differences",
+         # The third channel, missing: the reference says the scrub time
+         # exists and cannot be read, and the port says nothing at all — so
+         # the fact is bound here beside the commit count that betrays the
+         # dropped record, since a port that emitted the record and miscounted
+         # would not satisfy this row.
+         ("LastScrubEndTime", "unobservable")),
     Case("spare-as-unhealthy", "zpool-spares-and-logs", PORT,
          differential.DISAGREE, "differences",
          # The AVAIL spare, by WWN, inside the unhealthy list it does not
