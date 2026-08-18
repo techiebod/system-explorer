@@ -110,6 +110,17 @@ The smallest honest slice of the architecture, end to end: the collator core in 
 
 One collector per shipping adapter, each by the same loop: **capture its corpus first**, write the collector until replay equivalence holds, then live decline-correctness across the other lab OSes, then the comparator parity report against the old agent on the same guest. The collator's joins, identity walk, relations and opinion ladders grow alongside, fed by the collator harness. The old behavioural fixtures (8,600 lines, already fixture-shaped) convert to corpus expectations as each collector ports — converted, never deleted, since the old suite still guards the shipping product.
 
+**Storage and network are the exemplars, and they go first** — not because they are easy but because they are the only two whose corpora were captured in phase 1, so their loop starts at step two, and the only two the mutation guard has operators for. They set the pattern the fleet copies.
+
+The judge needed work before it could judge them, and that work is scope, not preamble:
+
+1. **A collection is a coverage dimension.** *Done.* The coverage report named collectors, variant kinds, operating systems and interface versions and no dimension a collection could vanish on, which is how `nft-rules` stayed served-but-uncaptured behind a residual only a reader would find. `corpus/network/rules` closes it — the first pair to open two collections, built on the canary payload so the plant in a rule comment finally judges the collection that renders operator text. The seam now declares what it can replay and refuses the rest, closing a live escape where `collect links:5` read the interface of the machine *replaying* the corpus.
+2. **The mutation guard points at ported collectors.** *Done.* Every call site passed a fixture or the reference; nothing passed a port, so the tier's demands on the artefacts this phase ships were enforced by nothing. Now a partition over the ported set: judged under every operator, or named with the venue that owns it.
+3. **`se-capture` cannot regenerate a ported collector's pair.** It hardcodes the Python shim as the reference and never consults the ported table, so how a Go collector's expected half is produced is recorded in no committed tool. It also seeds issuance from `meta.collections` where the replay driver seeds from `expected.jsonl` — two sources that agree today and are held to agree by nothing.
+4. **Nothing exercises `declare` or `probe`.** The contract has three verbs and the harness drives one. A new collector's declaration is validated against its own schema by no conformance test, so "every fact emitted was declared" — the check §18 calls cheap and generic — does not yet exist.
+5. **The differential guard cannot carry a text-payload collector.** `write_payloads` writes every stem as `.json`, so a collector whose native documents are text could never be handed a directory its own seam can read. That is why the system collector is a named residual rather than a judged one.
+6. **A scrub manifest is required of no collector.** Its absence silently means "declares no address fields" — deny-by-default in the safe direction, but nothing asserts that a collector present in the corpus has one at all.
+
 > **Gate 3 opens when**
 >
 > every first-party collector passes replay and lab-live checks · items 1, 6, 7 · the parity report per collection is clean or its diffs are named and accepted.
