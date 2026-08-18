@@ -398,7 +398,9 @@
           "minimum": 0
         },
         "cpu_ms": {
-          "type": "number"
+          "type": "number",
+          "minimum": 0,
+          "description": "Measured cost is advisory, never authenticated (DESIGN 19) — but bounded to what a clock can read: non-negative, and JSON itself excludes the non-finite."
         }
       },
       "not": {
@@ -427,10 +429,14 @@
           "$ref": "#/$defs/identity"
         },
         "cpu_ms": {
-          "type": "number"
+          "type": "number",
+          "minimum": 0,
+          "description": "Bounded like commit.cpu_ms: a cost below zero came off no clock."
         },
         "wall_ms": {
-          "type": "number"
+          "type": "number",
+          "minimum": 0,
+          "description": "Bounded like cpu_ms; positivity when objects were emitted is the stream rule, checked where the whole batch is visible."
         }
       }
     }
