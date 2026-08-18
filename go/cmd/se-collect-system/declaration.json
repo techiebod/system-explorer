@@ -1,0 +1,69 @@
+{
+  "schema": "se.declaration/1",
+  "collector": "system",
+  "version": "0.7.0",
+  "authority": {
+    "read_paths": [
+      "/etc/os-release",
+      "/usr/lib/os-release",
+      "/proc/sys/kernel/random/boot_id",
+      "/proc/self/timens_offsets"
+    ]
+  },
+  "probe": "the kernel hostname and the boot id are readable; os-release may still be honestly missing, which is an absent decline, never a probe failure",
+  "collections": [
+    {
+      "name": "identity",
+      "question": "what machine is this, and what operating system is it running?",
+      "prefix": "host",
+      "freshness": "1h",
+      "perishability": "reconstructible",
+      "answer": ["Hostname", "OsPrettyName"],
+      "ceiling": { "records": 4, "bytes": 65536 },
+      "facts": {
+        "OsId": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/ID",
+          "sentence": "The distribution's machine-readable identifier, identical on every install of the distro."
+        },
+        "OsVersionId": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/VERSION_ID",
+          "sentence": "The release this install tracks; rolling distributions genuinely have none, and say so through the absent list rather than a placeholder."
+        },
+        "OsPrettyName": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/PRETTY_NAME",
+          "sentence": "The distribution's own display name for this release, printed as it wrote it."
+        },
+        "Hostname": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "location",
+          "sentence": "The kernel hostname, which is also this object's native name: the name observed, never a minted id."
+        }
+      },
+      "redaction_exemption": "every served fact is a single declared scalar; the evidence document is os-release verbatim, whose remaining members are distribution constants that disclose nothing",
+      "reference_commands": [
+        {
+          "purpose": "the same identity document, by hand",
+          "argv": ["cat", "/etc/os-release"]
+        },
+        {
+          "purpose": "the hostname as the kernel reports it",
+          "argv": ["uname", "-n"]
+        }
+      ]
+    }
+  ]
+}
