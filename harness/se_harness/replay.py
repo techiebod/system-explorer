@@ -50,7 +50,7 @@ from .corpus import Variant, typed_equal
 # free-fire zone for every wrong value a port can put there, and
 # test_member_regimes.py fails if one appears.
 RUN_VARYING = {
-    "begin": ("request", "batch", "boot_id", "generations"),
+    "begin": ("request", "batch", "boot_id", "generations", "declaration"),
     "object": ("at",),
     "commit": ("cpu_ms", "generation"),
     "end": ("request", "batch", "cpu_ms", "wall_ms"),
@@ -65,6 +65,8 @@ RULED = {
     ("begin", "request"): "end must echo begin",
     ("begin", "batch"): "end must echo begin",
     ("begin", "boot_id"): "boot_id must be UUID-shaped",
+    ("begin", "declaration"): "the declaration digest identifies the collector's "
+    "own declaration",
     ("begin", "generations"): "must equal the issued generations",
     ("object", "at"): "`at` must be a finite boot-scale reading, "
     "non-decreasing within its collection",
@@ -315,6 +317,30 @@ def check_stream(records: list[dict], issued: dict[str, int] | None = None) -> l
             "meaningless without knowing which boot's clock they came from "
             "(DESIGN 09), and nil is the plausible stub every runtime hands "
             "out for free (DESIGN 19)"
+        )
+
+    # The declaration digest identifies the collector's OWN declaration, which
+    # is why it cannot be byte-compared here. The judge's whole job is running
+    # a port against an expectation another implementation generated, and two
+    # correct implementations necessarily hold different declarations — so the
+    # committed halves carry whatever the party that generated them published,
+    # and comparing that byte-for-byte does not test a reading of the machine,
+    # it tests whether the port copied somebody else's identity. It forced
+    # exactly that: both ports shipped a constant matching the corpus answer,
+    # each flagged it as the one value it could not derive, and each was right
+    # to. Shape here, truth at the tier that can see it — the ownership law
+    # again (DESIGN 19). test_contract_verification holds a ported collector's
+    # digest to the bytes its own `declare` emits, which is the claim that
+    # actually matters and the only tier that can make it.
+    declaration = begin.get("declaration")
+    if not isinstance(declaration, str) or not declaration.startswith("sha256:") \
+            or len(declaration) <= len("sha256:"):
+        problems.append(
+            f"begin: declaration is {declaration!r}; the declaration digest "
+            "identifies the collector's own declaration and travels as "
+            "'sha256:<digest>' — a collator that cannot tell which contract a "
+            "batch was produced under has to refetch on every collect or "
+            "trust one it never saw (DESIGN 19)"
         )
 
     # end closes exactly the batch and request begin opened. Both values are

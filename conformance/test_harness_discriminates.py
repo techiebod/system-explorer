@@ -195,6 +195,7 @@ def test_only_an_absent_decline_may_commit() -> None:
         # boot_id, the begin/end echo, and all three commit counts.
         records = [
             {"record": "begin", "request": "rq", "batch": "b1",
+             "declaration": "sha256:replay",
              "boot_id": "5e000000-0000-4000-8000-000000000001",
              "generations": {"pools": 1}},
             {"record": "decline", "collection": "pools", "reason": reason},
@@ -231,6 +232,7 @@ def test_a_decline_closes_its_collection_in_both_directions() -> None:
     def stream(middle: list[dict]) -> list[dict]:
         return [
             {"record": "begin", "request": "rq", "batch": "b1",
+             "declaration": "sha256:replay",
              "boot_id": "5e000000-0000-4000-8000-000000000001",
              "generations": {"pools": 1}},
             *middle,

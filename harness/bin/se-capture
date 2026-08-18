@@ -101,6 +101,21 @@ def reference_for(collector: str) -> list[str]:
     return [str(out)]
 
 
+def stream_changed(committed: str, produced: str) -> bool:
+    """Do these two streams differ in anything a consumer would read?
+
+    The judge's own comparison, reused rather than restated: replay.diff
+    normalises the run-varying members and compares records by identity, so
+    "changed" here means a claim moved. A file that decodes to nothing on
+    either side is a change by definition — a first capture, or a truncation.
+    """
+    from se_harness.replay import diff, parse_stream
+
+    if not committed.strip() or not produced.strip():
+        return committed.strip() != produced.strip()
+    return bool(diff(parse_stream(committed), parse_stream(produced)))
+
+
 def capture(variant: Path) -> str:
     meta = json.loads((variant / "meta.json").read_text())
     collections = meta.get("collections") or []
@@ -156,7 +171,15 @@ def main() -> None:
         produced = capture(variant)
         target = variant / "expected.jsonl"
         current = target.read_text() if target.exists() else ""
-        if produced == current:
+        # Equal as RECORDS, not as bytes. The corpus's own notion of equality
+        # is the judge's — records compared by identity, run-varying members
+        # rule-governed, and a pretty-printed file legal (corpus/README) — so
+        # a byte comparison here would report a change whenever the party
+        # generating the half changed its key order or its float spelling.
+        # That is not hypothetical: a ported collector regenerating a pair the
+        # Python shim wrote differs on every line and on no claim, and a
+        # reviewer handed that diff learns nothing from it.
+        if not stream_changed(current, produced):
             print(f"{variant}: unchanged")
             continue
         changed += 1

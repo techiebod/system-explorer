@@ -145,6 +145,10 @@ VIOLATIONS = {
     ("begin", "request"): lambda s: s[0].__setitem__("request", ""),
     ("begin", "batch"): lambda s: s[0].__setitem__("batch", ""),
     ("begin", "boot_id"): lambda s: s[0].__setitem__("boot_id", ""),
+    # the declaration a collector never published: a batch whose contract
+    # cannot be named leaves the collator refetching on every collect or
+    # trusting one it never saw
+    ("begin", "declaration"): lambda s: s[0].__setitem__("declaration", None),
     # minted, not echoed — the numbers a collector invents instead of parsing
     ("begin", "generations"): lambda s: (
         s[0].__setitem__("generations", {"pools": 1}),
