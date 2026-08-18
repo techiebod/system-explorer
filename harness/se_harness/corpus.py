@@ -96,20 +96,30 @@ _ANCHOR_FORMS = (
 # a ZFS vdev group) is a guard defect and is closed by construction in
 # differential.py, not parked here.
 #
-# A venue that does not exist yet is stated as owed, not as owned. "Venue: the
-# live comparator" reads to any reader as "there is a place this gets caught",
-# and the live comparator is PLAN phase-3 work that has not been written — it
-# is also the named venue for all three of DESIGN 19's replay bounds, so a
-# quiet reading of these entries would have one unbuilt tool holding up five
-# separate deferrals. Naming the net is worth nothing if the net is a promise.
+# A venue that does not exist yet is stated as owed, not as owned. Naming the
+# net is worth nothing if the net is a promise, and for a while this list had
+# one unbuilt tool holding up five separate deferrals — "Venue: the live
+# comparator" reads to any reader as "there is a place this gets caught".
+#
+# The comparator was built on 2026-08-18 (harness/bin/se-compare) and run
+# beside a real degraded pool, so the entries below now say what is true of a
+# tool that exists. An entry whose venue is still unbuilt keeps saying so.
 NAMED_RESIDUALS = {
+    # Kept, and narrowed, rather than deleted. The comparator now exercises
+    # this join on every run — a five-wide raidz1 on virtio disks resolved
+    # every by-id member to its kernel name, and the REMOVED member resolved
+    # to nothing, which is the honest answer and the other half of the shape.
+    # What replay still cannot do is judge it: no committed pool carries real
+    # disks with an alias tree and no operator mints one, so the corpus would
+    # pass a port that had lost the join entirely. The truth is now OWNED, by
+    # a venue that runs; it is simply owned somewhere other than here.
     "storage/device-resolution": (
         "the by-id-path → kernel-name join (Device fact, names.ephemeral.kernel) "
         "fires only for a disk leaf whose path is in a readable devlinks tree; no "
         "committed pool carries real disks with an alias tree, and no operator "
-        "mints one. Venue: the live comparator, running beside a real pool — "
-        "which is phase-3 work and NOT YET BUILT, so this truth is owed rather "
-        "than owned."
+        "mints one. Venue: the live comparator (harness/bin/se-compare), which "
+        "exists and is run beside a real pool — so this truth is owned, and "
+        "owned OUTSIDE the replay tier rather than owed."
     ),
     # Closed 2026-08-18 by corpus/network/rules, the first committed pair to
     # open two collections: "network/nft-rules — served by the reference but
@@ -121,8 +131,10 @@ NAMED_RESIDUALS = {
         "opaque comprehension path and both OpaqueReason spellings are "
         "exercised by no replayed stream, and no mutation operator mints one. "
         "Venue: a capture from a host running iptables-nft compatibility "
-        "(Docker, libvirt), and the live comparator until there is one — "
-        "neither exists yet, so this truth is owed rather than owned."
+        "(Docker, libvirt); the live comparator now exists and would surface a "
+        "disagreement on such a host, but no lab guest runs that compatibility "
+        "layer yet — so the tool is real and the SHAPE is still unvisited, and "
+        "this truth stays owed."
     ),
 }
 

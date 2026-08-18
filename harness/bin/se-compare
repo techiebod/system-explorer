@@ -1,0 +1,244 @@
+#!/usr/bin/env python3
+"""The live comparator: the reference and the port, one machine, one moment.
+
+PLAN phase 3 named this five times as a venue before it existed, which is how
+a reader of the residual ledger could have taken five deferrals for coverage.
+It is where DESIGN 19 sends all three replay bounds, where both named residuals
+send their truth, and it is gate 3's parity report.
+
+What it does that no other tier can:
+
+  **Parity.** The shipping adapter and the ported collector read the same live
+  interfaces at the same moment and their streams are diffed by the corpus's
+  own comparator. Replay proves a port reproduces a CAPTURE; this proves it
+  reproduces the reference on shapes nobody captured — which is where the
+  group-vdev blindness was found, after four layers had agreed it was fine.
+
+  **Clock truth.** Replay pins the clock, so replay can never authenticate a
+  clock reading. Here the boot id is read from the machine and compared, and
+  every `at` must land inside the CLOCK_BOOTTIME window measured around the
+  run. With --twice, a second run must show the stamps advance.
+
+A disagreement is an ADJUDICATION, not a verdict (DESIGN 20). The reference can
+lose: it has, three times, on a pool with a spare in it. So this prints both
+sides and names the difference rather than declaring a winner.
+
+    se-compare storage                  # parity + clock truth
+    se-compare storage network --twice  # and prove the clock moves
+    se-compare --json storage           # for a machine, e.g. gate 3's report
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(REPO / "harness"))
+
+from se_harness import live, replay  # noqa: E402
+
+# Which collections each collector is asked for. The comparator drives the
+# WHOLE served set rather than one collection, because a two-collection request
+# is the only shape that exercises cross-collection resolution — and because a
+# collection served but never compared is the hole `nft-rules` sat in.
+SERVES = {
+    "storage": ["pools"],
+    "network": ["nft-chains", "nft-rules"],
+}
+
+REFERENCE = REPO / "harness" / "bin" / "se-live-reference"
+
+
+def port_binary(collector: str) -> Path:
+    """The built Go collector. Built, not built-here: the comparator must
+    compare what would actually be deployed, and a build step hidden inside a
+    measurement is how a stale binary gets measured twice."""
+    path = REPO / "go" / "bin" / f"se-collect-{collector}"
+    if not path.exists():
+        raise SystemExit(
+            f"{path} does not exist. Build it first:\n"
+            f"  cd {REPO / 'go'} && go build -o bin/se-collect-{collector} "
+            f"./cmd/se-collect-{collector}"
+        )
+    return path
+
+
+def run_one(argv: list[str], collector: str, collections: list[str],
+            env_extra: dict[str, str] | None = None) -> tuple[list[dict], live.Window, str]:
+    """One collector process, with the clock read either side of it."""
+    import os
+
+    request = "collect " + " ".join(f"{c}:{i + 1}" for i, c in enumerate(collections))
+    env = dict(os.environ)
+    env.pop("SE_REPLAY_DIR", None)  # the live tools refuse it; be explicit
+    if env_extra:
+        env.update(env_extra)
+
+    boot = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+    before = time.clock_gettime(time.CLOCK_BOOTTIME)
+    started = time.monotonic()
+    proc = subprocess.run(argv, input=request + "\n", capture_output=True,
+                          text=True, env=env)
+    wall_ms = (time.monotonic() - started) * 1000
+    after = time.clock_gettime(time.CLOCK_BOOTTIME)
+
+    if proc.returncode != 0:
+        raise SystemExit(
+            f"{' '.join(argv)} exited {proc.returncode} — non-zero means 'I "
+            f"could not run', which is not a reading:\n{proc.stderr[:2000]}"
+        )
+    return (
+        replay.parse_stream(proc.stdout),
+        live.Window(boot_id=boot, before=before, after=after, wall_ms=wall_ms),
+        proc.stderr,
+    )
+
+
+def compare(collector: str, twice: bool) -> dict:
+    collections = SERVES[collector]
+    result: dict = {"collector": collector, "collections": collections}
+
+    reference, ref_window, ref_stderr = run_one(
+        [sys.executable, str(REFERENCE)], collector, collections,
+        {"SE_REFERENCE_COLLECTOR": collector},
+    )
+    port, port_window, port_stderr = run_one(
+        [str(port_binary(collector))], collector, collections,
+    )
+
+    # The corpus's own comparator, so parity here means exactly what replay
+    # equivalence means: records compared by identity, run-varying members
+    # governed by their named rules rather than by bytes (DESIGN 19).
+    result["differences"] = replay.diff(reference, port)
+
+    # Clock truth, per side. The REFERENCE is judged too — it is the thing
+    # every corpus pair is generated from, and a reference that had stopped
+    # reading the clock would teach every port to do the same.
+    result["reference_clock"] = live.authenticate(reference, ref_window)
+    result["port_clock"] = live.authenticate(port, port_window)
+
+    # The port is a shipping artefact, so it is held to the stream laws too.
+    # The reference is not: it emits no declaration document, and check_stream
+    # asks for things only a declared collector can promise.
+    result["port_stream"] = replay.check_stream(
+        port, {c: i + 1 for i, c in enumerate(collections)}
+    )
+
+    result["boot_id"] = ref_window.boot_id
+    result["counts"] = {
+        "reference": _counts(reference),
+        "port": _counts(port),
+    }
+    for name, text in (("reference", ref_stderr), ("port", port_stderr)):
+        if text.strip():
+            result.setdefault("stderr", {})[name] = text[:2000]
+
+    if twice:
+        # Far enough apart that a real clock has visibly moved, and short
+        # enough that nobody waits. The point is not the duration — it is that
+        # a cached or derived stamp cannot follow.
+        time.sleep(1.5)
+        second_ref, _, _ = run_one(
+            [sys.executable, str(REFERENCE)], collector, collections,
+            {"SE_REFERENCE_COLLECTOR": collector},
+        )
+        second_port, second_window, _ = run_one(
+            [str(port_binary(collector))], collector, collections,
+        )
+        result["reference_advanced"] = live.advanced(reference, second_ref)
+        result["port_advanced"] = live.advanced(port, second_port)
+        # Two runs on one boot: the boot id must NOT have changed, and saying
+        # so is what keeps the cross-boot claim from being quietly assumed.
+        result["cross_boot"] = (
+            "untested on one boot — run either side of a reboot and compare "
+            f"boot_id, which is {ref_window.boot_id!r} here"
+            if second_window.boot_id == ref_window.boot_id
+            else f"the machine rebooted mid-run ({ref_window.boot_id} → "
+                 f"{second_window.boot_id}); rerun"
+        )
+
+    result["clean"] = not any(
+        result.get(key) for key in (
+            "differences", "reference_clock", "port_clock", "port_stream",
+            "reference_advanced", "port_advanced",
+        )
+    )
+    return result
+
+
+def _counts(records: list[dict]) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for record in records:
+        kind = str(record.get("record"))
+        out[kind] = out.get(kind, 0) + 1
+    return out
+
+
+def render(result: dict) -> str:
+    lines = [f"── {result['collector']} ({', '.join(result['collections'])})"]
+    ref, port = result["counts"]["reference"], result["counts"]["port"]
+    for kind in sorted(set(ref) | set(port)):
+        mark = " " if ref.get(kind) == port.get(kind) else "!"
+        lines.append(f"  {mark} {kind:<20} reference {ref.get(kind, 0):>5}"
+                     f"   port {port.get(kind, 0):>5}")
+    for label, key in (
+        ("parity", "differences"),
+        ("reference clock", "reference_clock"),
+        ("port clock", "port_clock"),
+        ("port stream", "port_stream"),
+        ("reference advanced", "reference_advanced"),
+        ("port advanced", "port_advanced"),
+    ):
+        problems = result.get(key)
+        if problems is None:
+            continue
+        if not problems:
+            lines.append(f"  ✓ {label}")
+            continue
+        lines.append(f"  ✗ {label}: {len(problems)}")
+        for problem in problems[:20]:
+            lines.append(f"      - {problem}")
+        if len(problems) > 20:
+            lines.append(f"      … {len(problems) - 20} more")
+    if "cross_boot" in result:
+        lines.append(f"  · cross-boot: {result['cross_boot']}")
+    if "stderr" in result:
+        for who, text in result["stderr"].items():
+            lines.append(f"  · {who} stderr: {text.strip().splitlines()[0][:160]}")
+    return "\n".join(lines)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("collectors", nargs="*", default=None,
+                        help=f"which to compare; default all of {sorted(SERVES)}")
+    parser.add_argument("--twice", action="store_true",
+                        help="run each twice and prove the stamps advance")
+    parser.add_argument("--json", action="store_true", help="machine-readable report")
+    args = parser.parse_args()
+
+    chosen = args.collectors or sorted(SERVES)
+    unknown = [c for c in chosen if c not in SERVES]
+    if unknown:
+        raise SystemExit(f"unknown collector(s) {unknown}; known: {sorted(SERVES)}")
+
+    results = [compare(collector, args.twice) for collector in chosen]
+    if args.json:
+        print(json.dumps(results, indent=2, sort_keys=True))
+    else:
+        for result in results:
+            print(render(result))
+
+    # Non-zero when anything disagreed: this is a gate check, and a report
+    # nobody's CI can fail on is a report.
+    raise SystemExit(0 if all(r["clean"] for r in results) else 1)
+
+
+if __name__ == "__main__":
+    main()

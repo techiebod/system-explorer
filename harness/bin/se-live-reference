@@ -1,0 +1,204 @@
+#!/usr/bin/env python3
+"""The reference implementation against a REAL machine, for the comparator.
+
+``se-reference-collector`` is the same adapters over captured payloads, and it
+refuses to touch a live interface on purpose: under replay, the only host it
+could read is whichever machine happens to be replaying the corpus, and that
+seam escape once put a workstation's filesystem into committed facts.
+
+This is the other half, and it is a different tool rather than a flag on that
+one because the danger runs the opposite way. Here reading the host IS the
+point — the comparator exists to put the reference and the port beside each
+other on one machine, observing one system, at one moment — and the thing that
+must never happen is this being mistaken for a replay. So:
+
+  * it takes no payload directory and honours no SE_REPLAY_DIR;
+  * it does not pin the clock, because the clock is what it is here to read;
+  * every run-varying member is a genuine reading — the machine's boot id, a
+    CLOCK_BOOTTIME stamp, measured cost — and none of them is a constant.
+
+That last point is the whole reason the comparator can retire deferrals replay
+cannot. A constant-but-plausible boot id is indistinguishable inside any single
+capture, because a boot id is *supposed* to vary only across boots. Beside a
+real machine it is distinguishable immediately: you read /proc and compare.
+
+This is a development tool. It retires when the last collector is ported.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import inspect
+import os
+import sys
+import time
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(REPO / "src"))
+sys.path.insert(0, str(REPO / "harness"))
+
+from se_harness.emission import Emitter, parse_generations  # noqa: E402
+
+
+def fail(message: str) -> None:
+    """Non-zero means 'I could not run' — never a decline (DESIGN 18)."""
+    print(message, file=sys.stderr)
+    raise SystemExit(2)
+
+
+if os.environ.get("SE_REPLAY_DIR"):
+    fail(
+        "SE_REPLAY_DIR is set and this tool reads the live host: refusing "
+        "rather than silently ignoring it. A replay wants "
+        "se-reference-collector; this is its live counterpart, and the two "
+        "must never be confused for one another."
+    )
+
+from system_explorer.agent.adapters import network, storage  # noqa: E402
+
+# The collections each adapter serves live, and the capability attributes the
+# comparator may need to set. Deliberately the same shape as the replay seam's
+# table so a reader can hold both in one head — but with no acquisitions to
+# redirect, because nothing is redirected.
+LIVE = {
+    "storage": {"module": storage, "adapter": storage.Adapter,
+                "collections": ["pools"]},
+    "network": {"module": network, "adapter": network.Adapter,
+                "collections": ["nft-chains", "nft-rules"]},
+}
+
+
+def boot_id() -> str:
+    """The machine's own boot id, read rather than invented.
+
+    Required, not defaulted: a comparator run whose reference could not name
+    the boot it observed cannot authenticate the port's claim about it, and a
+    fabricated stand-in here would defeat the one check this tool exists to
+    make possible.
+    """
+    try:
+        return Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+    except OSError as exc:
+        fail(f"cannot read the boot id, so nothing here can authenticate one: {exc}")
+    return ""  # unreachable; fail() exits
+
+
+def timens() -> int:
+    """The time-namespace offset in nanoseconds (DESIGN 09/19).
+
+    Zero outside a namespace, which is the honest reading and not a default:
+    a host with no offset genuinely has an offset of zero.
+    """
+    try:
+        for line in Path("/proc/self/timens_offsets").read_text().splitlines():
+            clock, seconds, nanos = line.split()
+            if clock == "monotonic":
+                return int(seconds) * 1_000_000_000 + int(nanos)
+    except (OSError, ValueError):
+        return 0
+    return 0
+
+
+def declaration_digest(*modules) -> str:
+    """A digest over the source that decides this reference's behaviour.
+
+    The shipping adapters have no declaration document — that is a thing the
+    ported collectors have and this predates — so `begin.declaration` cannot
+    name one. What it CAN do honestly is identify the build: hash the source
+    of the modules whose code produces every record below, so two comparator
+    runs against different working trees are distinguishable, and a reader who
+    sees a digest is not being told a declaration exists when none does.
+    """
+    digest = hashlib.sha256()
+    for module in modules:
+        digest.update(inspect.getsource(module).encode())
+    return "sha256:" + digest.hexdigest()
+
+
+def run(collector: str, generations: dict[str, int]) -> None:
+    spec = LIVE.get(collector)
+    if spec is None:
+        fail(f"unknown collector {collector!r}; known: {sorted(LIVE)}")
+
+    unservable = [c for c in generations if c not in spec["collections"]]
+    if unservable:
+        # Declining would be the collector contract's answer, and this is not
+        # a collector — it is the reference one is measured against. A request
+        # naming a collection it does not serve is a comparator misconfigured,
+        # and answering it would silently compare nothing.
+        fail(
+            f"{collector}: serves {spec['collections']}, asked for {unservable}"
+        )
+
+    started_cpu, started_wall = time.process_time(), time.monotonic()
+
+    # One stamp per COLLECTION, taken before its acquisition rather than at
+    # emission (DESIGN 19): `at` is stamped immediately before the earliest
+    # native read that contributes to the object, because the tie must break
+    # toward older — a six-second acquisition stamped at completion reports
+    # itself up to six seconds fresher than its oldest contributing byte.
+    stamps: dict[int, float] = {}
+
+    out = Emitter(
+        sys.stdout,
+        generations,
+        {
+            "request": f"live-{os.getpid()}",
+            "batch": f"live-{os.getpid()}",
+            "declaration": declaration_digest(spec["module"]),
+            "boot_id": boot_id(),
+            "timens": timens(),
+            "instance": None,
+        },
+        stamp=lambda i: stamps[i],
+        costs=lambda: (
+            round((time.process_time() - started_cpu) * 1000, 3),
+            round((time.monotonic() - started_wall) * 1000, 3),
+        ),
+    )
+    out.begin()
+
+    adapter = spec["adapter"]()
+    emitted = 0
+    for collection in generations:
+        at = time.clock_gettime(time.CLOCK_BOOTTIME)
+        try:
+            items = asyncio.run(adapter.acquire(collection))
+        except Exception as exc:  # noqa: BLE001
+            # The live interface genuinely was not there. The comparator is
+            # not the place to guess which decline reason that maps to — the
+            # three non-absent reasons are unmapped in both implementations
+            # and that is an open item in the queue — so this says "I could
+            # not run" and lets the operator see the exception rather than
+            # inventing an authority-bearing decline.
+            fail(
+                f"{collector}/{collection}: acquisition raised "
+                f"{type(exc).__name__}: {exc}"
+            )
+        for index in range(emitted, emitted + len(items)):
+            stamps[index] = at
+        emitted += len(items)
+        out.commit(collection, *out.items(collection, items))
+
+    out.end()
+
+
+def main() -> None:
+    line = sys.stdin.readline().strip()
+    if not line:
+        fail("no request line on stdin")
+    parts = line.split()
+    if parts[0] != "collect":
+        fail(f"this tool serves collect only, not {parts[0]!r}")
+
+    collector = os.environ.get("SE_REFERENCE_COLLECTOR")
+    if not collector:
+        fail("SE_REFERENCE_COLLECTOR must name which adapter to run")
+
+    run(collector, parse_generations(parts[1:], fail))
+
+
+if __name__ == "__main__":
+    main()

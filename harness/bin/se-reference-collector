@@ -23,6 +23,9 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO / "src"))
+sys.path.insert(0, str(REPO / "harness"))
+
+from se_harness.emission import Emitter, parse_generations  # noqa: E402
 
 
 def fail(message: str) -> None:
@@ -121,31 +124,6 @@ def load_payloads(directory: Path) -> dict[str, object]:
     return {p.stem: json.loads(p.read_text()) for p in sorted(directory.glob("*.json"))}
 
 
-def emit(record: dict) -> None:
-    print(json.dumps(record, sort_keys=True, separators=(",", ":")))
-
-
-def parse_generations(tokens: list[str]) -> dict[str, int]:
-    """collect <collection>:<generation>… (DESIGN 18).
-
-    The generation is everything after the LAST colon, because names in this
-    product legitimately contain colons. The collator issued it and this side
-    only echoes it — in begin's map and on the collection's commit — which is
-    the whole of the newest-wins mechanism (DESIGN 19). A token without an
-    integer generation is a malformed request: exit 2 is "I could not run",
-    and a request this side cannot parse genuinely was not.
-    """
-    if not tokens:
-        fail("empty collect: the request line is 'collect <collection>:<generation>…'")
-    generations: dict[str, int] = {}
-    for token in tokens:
-        name, _, generation = token.rpartition(":")
-        if not name or not generation.isdigit():
-            fail(f"malformed token {token!r}: expected <collection>:<generation>")
-        generations[name] = int(generation)
-    return generations
-
-
 def uncaptured(payload_name: str):
     """An acquisition whose payload the variant did not capture.
 
@@ -204,81 +182,52 @@ def run(collector: str, generations: dict[str, int], payload_dir: Path) -> None:
         value = payloads.get(payload_name, default)
         setattr(module, attribute, lambda _v=value, *a, **k: _v)
 
-    begin = {
-        "record": "begin",
-        "request": "replay",
-        "batch": "replay",
-        "declaration": "sha256:replay",
-        # A replay has no boot, so this is a fixed v4-shaped id, "5e" up
-        # front so no reader mistakes it for a capture. The old "replay" stub
-        # is what the shape rule now refuses; that the constant itself still
-        # passes is DESIGN 19's named deferral — one capture cannot tell a
-        # constant valid id from a real one, only a cross-boot variant can.
-        "boot_id": "5e000000-0000-4000-8000-000000000001",
-        "timens": 0,
-        "instance": None,
-        "generations": generations,
-    }
-    emit(begin)
-
-    def commit(collection: str, objects: int, assertions: int,
-               unobservable: int) -> None:
-        # All three counts, always, zero when zero (DESIGN 19): they are
-        # required members precisely so a subject cannot disable the
-        # truncation check by omitting the count.
-        emit(
-            {
-                "record": "commit",
-                "collection": collection,
-                "generation": generations[collection],
-                "objects": objects,
-                "assertions": assertions,
-                "unobservable": unobservable,
-            }
-        )
-
-    def end() -> None:
-        # end closes the batch and request begin opened — echoed from begin,
-        # never restated, so the two cannot drift. The costs are the
-        # reference's deterministic stand-ins: run-varying members are
+    out = Emitter(
+        sys.stdout,
+        generations,
+        {
+            "request": "replay",
+            "batch": "replay",
+            "declaration": "sha256:replay",
+            # A replay has no boot, so this is a fixed v4-shaped id, "5e" up
+            # front so no reader mistakes it for a capture. The old "replay"
+            # stub is what the shape rule now refuses; that the constant
+            # itself still passes is DESIGN 19's named deferral, and the
+            # venue that closes it is the live comparator — which reads the
+            # machine's real boot id and compares, so a constant valid id
+            # fails there in a single run rather than needing a cross-boot
+            # capture nobody has taken.
+            "boot_id": "5e000000-0000-4000-8000-000000000001",
+            "timens": 0,
+            "instance": None,
+        },
+        # `at` is a monotonic reading in production; under replay it is the
+        # reference constant 1.0 + 0.001*i in emission order — finite,
+        # positive, boot-scale and strictly advancing, so the structural rule
+        # that governs it is exercised by the corpus instead of being
+        # satisfied by a hardcoded zero. Whether a LIVE reading is a real
+        # clock reading is the comparator's to say, not this one's.
+        stamp=lambda i: round(1.0 + 0.001 * i, 3),
+        # The reference's deterministic stand-ins: run-varying members are
         # rule-governed rather than byte-compared (DESIGN 19), and the rule
         # wants a batch that ran to report positive measured cost.
-        emit(
-            {
-                "record": "end",
-                "request": begin["request"],
-                "batch": begin["batch"],
-                "cpu_ms": 0.5,
-                "wall_ms": 1.0,
-            }
-        )
+        costs=lambda: (0.5, 1.0),
+    )
+    out.begin()
 
     if absent:
         # absent is authoritative-empty (DESIGN 19): it must be able to retire
         # objects a previous batch published, so it declines AND commits zero.
         for collection in generations:
-            emit(
-                {
-                    "record": "decline",
-                    "collection": collection,
-                    "reason": "absent",
-                    "detail": f"no {spec['interface']} on this host",
-                }
-            )
-            commit(collection, objects=0, assertions=0, unobservable=0)
-        end()
+            out.decline(collection, "absent", f"no {spec['interface']} on this host")
+            out.commit(collection, objects=0, assertions=0, unobservable=0)
+        out.end()
         return
 
     adapter = spec["adapter"]()
     for attribute, value in spec.get("instance", {}).items():
         setattr(adapter, attribute, value)
 
-    # `at` is a monotonic reading in production; under replay it is the
-    # reference constant 1.0 + 0.001*i in emission order — finite, positive,
-    # boot-scale and strictly advancing, so the structural rule that governs
-    # it (DESIGN 19's run-varying regime) is exercised by the corpus instead
-    # of being satisfied by a hardcoded zero.
-    emitted_objects = 0
     for collection in generations:
         try:
             items = asyncio.run(adapter.acquire(collection))
@@ -287,62 +236,9 @@ def run(collector: str, generations: dict[str, int], payload_dir: Path) -> None:
                 f"{collector}/{collection}: acquisition raised "
                 f"{type(exc).__name__}: {exc}"
             )
+        out.commit(collection, *out.items(collection, items))
 
-        unobservable_count = 0
-        assertion_count = 0
-        for item in items:
-            record = {
-                "record": "object",
-                "collection": collection,
-                "name": item["native_id"],
-                "facts": item["facts"],
-                "at": round(1.0 + 0.001 * emitted_objects, 3),
-            }
-            emitted_objects += 1
-            # The adapter's own channels, passed through verbatim: names is
-            # law 1's obligation and absent/unobservable are DESIGN 19's two
-            # non-value statements. Lifting facts back out of the facts dict
-            # here is what the old hardcoded key list did, and no storage
-            # item ever carried those keys — so no committed object had
-            # names at all.
-            if item.get("names"):
-                record["names"] = item["names"]
-            if item.get("absent"):
-                record["absent"] = item["absent"]
-            emit(record)
-            # The three members an item cannot supply, added here: record,
-            # collection, and the source object's NAME — which is the same
-            # native_id the object record was published under, because a
-            # relation's key derives from the source object's id and the
-            # target's name AS PUBLISHED (DESIGN 13). An assertion naming its
-            # source by anything else would key against an object that does
-            # not exist. `vantage` is the collection this reading came from,
-            # which is what makes the assertion directed.
-            for assertion in item.get("assertions", []):
-                emit(
-                    {
-                        "record": "relation_assertion",
-                        "collection": collection,
-                        "name": item["native_id"],
-                        "vantage": collection,
-                        **assertion,
-                    }
-                )
-                assertion_count += 1
-            for missing in item.get("unobservable", []):
-                emit(
-                    {
-                        "record": "unobservable",
-                        "collection": collection,
-                        "name": item["native_id"],
-                        **missing,
-                    }
-                )
-                unobservable_count += 1
-        commit(collection, objects=len(items), assertions=assertion_count,
-               unobservable=unobservable_count)
-
-    end()
+    out.end()
 
 
 def main() -> None:
@@ -364,7 +260,7 @@ def main() -> None:
     if not collector:
         fail("SE_REFERENCE_COLLECTOR must name which adapter to replay")
 
-    run(collector, parse_generations(parts[1:]), directory)
+    run(collector, parse_generations(parts[1:], fail), directory)
 
 
 if __name__ == "__main__":
