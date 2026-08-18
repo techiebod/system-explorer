@@ -163,6 +163,15 @@ KEEP_UNCHANGED_TOKENS = {
     # loopback, and tailscaled's one device. They teach which daemon runs,
     # not which machine — an operator-named bridge is exactly not here.
     "lo", "lo*", "tailscale0", "tailscale0*",
+    # zpool's group-vdev container words. They sit at the same position as a
+    # vdev NAME — `zpool list -j -v` nests them inside `vdevs` — so the ~key
+    # entry that classifies vdev names as identity classifies these too, and
+    # a substituting class that hands back a word unchanged is a refusal by
+    # design. These three are structure, spelled identically on every pool
+    # on earth: the numbered forms (spare-3, log-0) were already covered by
+    # the shape below, and the bare container words were not, because until
+    # a pool with a spare was captured nothing had ever carried one.
+    "spares", "logs", "l2cache",
 }
 KEEP_UNCHANGED_SHAPES = (
     # Bus topology: positional all the way down, identical on every machine

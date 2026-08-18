@@ -1,0 +1,217 @@
+{
+  "output_version": {
+    "command": "zpool status",
+    "vers_major": 0,
+    "vers_minor": 1
+  },
+  "pools": {
+    "host-2768d1": {
+      "name": "host-2768d1",
+      "state": "DEGRADED",
+      "pool_guid": 184427312811406485,
+      "txg": 413,
+      "spa_version": 5000,
+      "zpl_version": 5,
+      "status": "One or more devices have been removed.\n\tSufficient replicas exist for the pool to continue functioning in a\n\tdegraded state.\n",
+      "action": "Online the device using zpool online' or replace the device with\n\t'zpool replace'.\n",
+      "scan_stats": {
+        "function": "RESILVER",
+        "state": "FINISHED",
+        "start_time": 1787085373,
+        "end_time": 1787085374,
+        "to_examine": 157724672,
+        "examined": 157724672,
+        "skipped": 171008,
+        "processed": 31593472,
+        "errors": 0,
+        "bytes_per_scan": 0,
+        "pass_start": 1787085373,
+        "scrub_pause": 0,
+        "scrub_spent_paused": 0,
+        "issued_bytes_per_scan": 157553664,
+        "issued": 157553664
+      },
+      "vdevs": {
+        "host-2768d1": {
+          "name": "host-2768d1",
+          "vdev_type": "root",
+          "guid": 184427312811406485,
+          "class": "normal",
+          "state": "DEGRADED",
+          "alloc_space": 197080064,
+          "total_space": 4831838208,
+          "def_space": 3859808256,
+          "read_errors": 0,
+          "write_errors": 0,
+          "checksum_errors": 0,
+          "vdevs": {
+            "raidz1-0": {
+              "name": "raidz1-0",
+              "vdev_type": "raidz",
+              "guid": 18441744092387388176,
+              "class": "normal",
+              "state": "DEGRADED",
+              "alloc_space": 197080064,
+              "total_space": 4831838208,
+              "def_space": 3859808256,
+              "rep_dev_size": 4831838208,
+              "read_errors": 0,
+              "write_errors": 0,
+              "checksum_errors": 0,
+              "scan_processed": 240640,
+              "vdevs": {
+                "host-b21790": {
+                  "name": "host-b21790",
+                  "vdev_type": "disk",
+                  "guid": 184445704276703740,
+                  "path": "/dev/disk/by-id/host-b21790-part1",
+                  "class": "normal",
+                  "state": "ONLINE",
+                  "rep_dev_size": 971086234,
+                  "phys_space": 1063256064,
+                  "read_errors": 0,
+                  "write_errors": 0,
+                  "checksum_errors": 0,
+                  "slow_ios": 0
+                },
+                "host-55f5b7": {
+                  "name": "host-55f5b7",
+                  "vdev_type": "disk",
+                  "guid": 18442412286153995278,
+                  "path": "/dev/disk/by-id/host-55f5b7-part1",
+                  "class": "normal",
+                  "state": "ONLINE",
+                  "rep_dev_size": 971086234,
+                  "phys_space": 1063256064,
+                  "read_errors": 0,
+                  "write_errors": 0,
+                  "checksum_errors": 0,
+                  "slow_ios": 0
+                },
+                "host-ed9122": {
+                  "name": "host-ed9122",
+                  "vdev_type": "disk",
+                  "guid": 18441215684940862517,
+                  "path": "/dev/disk/by-id/host-ed9122-part1",
+                  "class": "normal",
+                  "state": "ONLINE",
+                  "rep_dev_size": 971086234,
+                  "phys_space": 1063256064,
+                  "read_errors": 0,
+                  "write_errors": 0,
+                  "checksum_errors": 0,
+                  "slow_ios": 0
+                },
+                "spare-3": {
+                  "name": "spare-3",
+                  "vdev_type": "spare",
+                  "guid": 18443411524526318392,
+                  "class": "normal",
+                  "state": "DEGRADED",
+                  "rep_dev_size": 966367642,
+                  "read_errors": 0,
+                  "write_errors": 0,
+                  "checksum_errors": 0,
+                  "scan_processed": 31597568,
+                  "vdevs": {
+                    "host-6f342f": {
+                      "name": "host-6f342f",
+                      "vdev_type": "disk",
+                      "guid": 1844774145469845806,
+                      "path": "/dev/disk/by-id/host-6f342f-part1",
+                      "class": "normal",
+                      "state": "REMOVED",
+                      "rep_dev_size": 971086234,
+                      "phys_space": 1063256064,
+                      "read_errors": 0,
+                      "write_errors": 0,
+                      "checksum_errors": 0,
+                      "slow_ios": 0
+                    },
+                    "host-a3bb7d": {
+                      "name": "host-a3bb7d",
+                      "vdev_type": "disk",
+                      "guid": 18446426639104038092,
+                      "path": "/dev/disk/by-id/host-a3bb7d-part1",
+                      "class": "spare",
+                      "state": "ONLINE",
+                      "rep_dev_size": 971086234,
+                      "phys_space": 1063256064,
+                      "read_errors": 0,
+                      "write_errors": 0,
+                      "checksum_errors": 0,
+                      "scan_processed": 31593472,
+                      "slow_ios": 0
+                    }
+                  }
+                },
+                "host-431b38": {
+                  "name": "host-431b38",
+                  "vdev_type": "disk",
+                  "guid": 18440238150425258653,
+                  "path": "/dev/disk/by-id/host-431b38-part1",
+                  "class": "normal",
+                  "state": "ONLINE",
+                  "rep_dev_size": 971086234,
+                  "phys_space": 1063256064,
+                  "read_errors": 0,
+                  "write_errors": 0,
+                  "checksum_errors": 0,
+                  "slow_ios": 0
+                }
+              }
+            }
+          }
+        }
+      },
+      "logs": {
+        "host-4601db": {
+          "name": "host-4601db",
+          "vdev_type": "disk",
+          "guid": 1844402729526980462,
+          "path": "/dev/disk/by-id/host-4601db-part1",
+          "class": "log",
+          "state": "ONLINE",
+          "total_space": 1006632960,
+          "def_space": 1006632960,
+          "rep_dev_size": 1011351552,
+          "phys_space": 1063256064,
+          "read_errors": 0,
+          "write_errors": 0,
+          "checksum_errors": 0,
+          "slow_ios": 0
+        }
+      },
+      "l2cache": {
+        "host-6d5e51": {
+          "name": "host-6d5e51",
+          "vdev_type": "disk",
+          "guid": 18440862445593123630,
+          "path": "/dev/disk/by-id/host-6d5e51-part1",
+          "class": "l2cache",
+          "state": "ONLINE",
+          "alloc_space": 151973376,
+          "total_space": 1058536960,
+          "rep_dev_size": 1063256064,
+          "phys_space": 1063256064,
+          "read_errors": 0,
+          "write_errors": 0,
+          "checksum_errors": 0,
+          "slow_ios": 0
+        }
+      },
+      "spares": {
+        "host-a3bb7d": {
+          "name": "host-a3bb7d",
+          "vdev_type": "disk",
+          "guid": 18446426639104038092,
+          "path": "/dev/disk/by-id/host-a3bb7d-part1",
+          "class": "spare",
+          "state": "INUSE",
+          "aux": "SPARED"
+        }
+      },
+      "error_count": 0
+    }
+  }
+}

@@ -65,6 +65,14 @@ class Case:
     # to duck a real failure fails there, and one shrunk far enough to empty
     # the before half fails here.
     serves: frozenset[str]
+    # Other variants that ALSO catch this subject. The before half deletes
+    # every one of them, because "delete this variant and the subject looks
+    # correct" stops being true the moment a second pair stages the same
+    # defect — and the useful claim is the one about the set: before ANY of
+    # these existed, nothing could say the subject was wrong. Each name is
+    # proved to catch the subject below, so this cannot be used to hide a
+    # second, unrelated failure.
+    shared_with: frozenset[str] = frozenset()
 
 
 CASES = (
@@ -104,10 +112,11 @@ CASES = (
         collector="storage",
         evidence=("State", "DEGRADED", "StatusMessage", "UnhealthyVdevs",
                   "VdevsWithErrors"),
-        unique="the only pool that is not healthy, so it is the only capture "
-        "about which a collector reporting the struct defaults — ONLINE, "
-        "no message, no errors, empty unhealthy lists — is wrong",
+        unique="the only pool whose members carry errors ZFS repaired — a "
+        "non-zero checksum counter beside Errors 0 — so it is the only "
+        "capture that separates a repaired fault from a lost one",
         serves=frozenset({"pools"}),
+        shared_with=frozenset({"storage/spare-engaged"}),
     ),
 )
 
@@ -225,7 +234,8 @@ def test_the_subject_passes_the_corpus_without_the_variant(
     # here would say the subject is wrong about more than one thing when it is
     # wrong about exactly one. The exclusion is proven, not asserted, by
     # test_an_excluded_variant_is_one_the_subject_genuinely_cannot_serve.
-    remaining = [v for v in survivors if v.collections() <= case.serves]
+    remaining = [v for v in survivors
+                 if v.collections() <= case.serves and v.name not in case.shared_with]
     assert remaining, (
         f"{case.variant}: removing it left no {case.collector} variant this "
         f"subject serves ({sorted(case.serves)}), so the green below would be "
@@ -240,6 +250,34 @@ def test_the_subject_passes_the_corpus_without_the_variant(
             f"defect. It is meant to be wrong in exactly one way; a red here "
             f"means its red on {case.variant} is no longer attributable to "
             "the staging:\n" + "\n".join(f"  - {p}" for p in problems[:10])
+        )
+
+
+@pytest.mark.parametrize("case", CASES, ids=_ids)
+def test_every_shared_coverage_claim_is_true(case: Case) -> None:
+    """A variant named as sharing this case's coverage really does catch it.
+
+    `shared_with` removes pairs from the before half, which is precisely the
+    lever that could excuse a subject that has started failing something
+    unrelated: name the awkward variant a sharer and it stops being judged.
+    So each name is executed — the subject is run against it and required to
+    go red — and a name that catches nothing fails here instead of quietly
+    shrinking the before set.
+
+    Vacuous where nothing is shared, which is correct: the before half is
+    then judging the whole corpus, the stronger claim.
+    """
+    for name in sorted(case.shared_with):
+        assert name in VARIANTS, (
+            f"{case.variant} names {name!r} as sharing its coverage, and no "
+            "such variant exists"
+        )
+        problems = _problems(_judge(_binary(case), VARIANTS[name]))
+        assert problems, (
+            f"{case.variant} names {name!r} as also catching {case.subject}, "
+            f"but {case.subject} passes it cleanly. A sharer that catches "
+            "nothing is a variant removed from the before half for no reason "
+            "— drop the claim, and face whatever the before half then says."
         )
 
 

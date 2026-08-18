@@ -658,5 +658,193 @@
   },
   "pools.*.spares.*.vdevs.*.slow_ios": {
     "discloses": "nothing"
+  },
+  "#spares-aux": "`aux` is zpool's auxiliary state word on a spare \u2014 SPARED when it has been pulled in. A fixed vocabulary word, identifying nothing.",
+  "pools.*.spares.*.aux": {
+    "discloses": "nothing"
+  },
+  "pools.*.l2cache.*.phys_space": {
+    "discloses": "nothing"
+  },
+  "pools.*.l2cache.*.slow_ios": {
+    "discloses": "nothing"
+  },
+  "pools.*.logs.*.phys_space": {
+    "discloses": "nothing"
+  },
+  "pools.*.logs.*.slow_ios": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.l2cache.*.class": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.l2cache.*.guid": {
+    "discloses": "identity",
+    "format": "guid_u64"
+  },
+  "pools.*.vdevs.l2cache.*.name": {
+    "discloses": "identity",
+    "format": "name"
+  },
+  "pools.*.vdevs.l2cache.*.path": {
+    "discloses": "identity",
+    "format": "path"
+  },
+  "pools.*.vdevs.l2cache.*.properties.*.source.data": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.l2cache.*.properties.*.source.type": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.l2cache.*.properties.*.value": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.l2cache.*.state": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.l2cache.*.vdev_type": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.*.vdevs.*.scan_processed": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.checksum_errors": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.class": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.guid": {
+    "discloses": "identity",
+    "format": "guid_u64"
+  },
+  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.name": {
+    "discloses": "identity",
+    "format": "name"
+  },
+  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.path": {
+    "discloses": "identity",
+    "format": "path"
+  },
+  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.phys_space": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.read_errors": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.rep_dev_size": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.slow_ios": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.state": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.vdev_type": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.write_errors": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.scan_processed": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.logs.*.class": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.logs.*.guid": {
+    "discloses": "identity",
+    "format": "guid_u64"
+  },
+  "pools.*.vdevs.logs.*.name": {
+    "discloses": "identity",
+    "format": "name"
+  },
+  "pools.*.vdevs.logs.*.path": {
+    "discloses": "identity",
+    "format": "path"
+  },
+  "pools.*.vdevs.logs.*.properties.*.source.data": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.logs.*.properties.*.source.type": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.logs.*.properties.*.value": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.logs.*.state": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.logs.*.vdev_type": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.*.vdevs.*.vdevs.*.properties.*.source.data": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.*.vdevs.*.vdevs.*.properties.*.source.type": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.*.vdevs.*.vdevs.*.properties.*.value": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.spares.*.class": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.spares.*.guid": {
+    "discloses": "identity",
+    "format": "guid_u64"
+  },
+  "pools.*.vdevs.spares.*.name": {
+    "discloses": "identity",
+    "format": "name"
+  },
+  "pools.*.vdevs.spares.*.path": {
+    "discloses": "identity",
+    "format": "path"
+  },
+  "pools.*.vdevs.spares.*.properties.*.source.data": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.spares.*.properties.*.source.type": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.spares.*.properties.*.value": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.spares.*.state": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.spares.*.vdev_type": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.l2cache.*.properties.~key": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.l2cache.~key": {
+    "discloses": "identity",
+    "format": "name"
+  },
+  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.~key": {
+    "discloses": "identity",
+    "format": "name"
+  },
+  "pools.*.vdevs.logs.*.properties.~key": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.logs.~key": {
+    "discloses": "identity",
+    "format": "name"
+  },
+  "pools.*.vdevs.*.vdevs.*.vdevs.*.properties.~key": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.spares.*.properties.~key": {
+    "discloses": "nothing"
+  },
+  "pools.*.vdevs.spares.~key": {
+    "discloses": "identity",
+    "format": "name"
   }
 }
