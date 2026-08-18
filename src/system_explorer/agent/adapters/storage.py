@@ -335,6 +335,43 @@ def _resolve_kname(ref: str, links: dict[str, str]) -> str | None:
     return ref if ref in links.values() else None
 
 
+def _flatten_pool_vdevs(pool: dict, out: list[dict],
+                        links: dict[str, str] | None) -> None:
+    """Every vdev the pool has, from BOTH places zpool reports them.
+
+    `zpool status -j` does not nest the group vdevs under the root. Spares,
+    log devices and cache devices are TOP-LEVEL KEYS on the pool object —
+    pool["spares"], pool["logs"], pool["l2cache"] — beside "vdevs" rather
+    than inside it. A walk that descended pool["vdevs"] alone therefore
+    reported none of them, and for as long as that stood, a hot spare, a
+    SLOG and an L2ARC device attached to a live pool appeared nowhere in
+    this collection: not as rows, not in the pool's device names, nowhere.
+    "Do I have a spare" was unanswerable by the thing whose job is answering
+    it, and a pool with a failed SLOG looked exactly like a pool without one.
+
+    Found by running this adapter and its Go port side by side against a
+    real five-wide raidz1 with a spare, a log and a cache attached, which is
+    the only place it could be found: no committed capture held a group
+    vdev, and the two mutation operators that claimed to cover them minted
+    them INSIDE the root tree — a shape zpool does not produce, so the guard
+    was closing the class against a placement that does not exist.
+
+    Depth 1, because that is what they are: top-level vdevs of the pool,
+    siblings of the raidz group, not children of it. Group is set from the
+    key they arrived under, which is what keeps them out of the redundancy
+    grading and out of the unhealthy list when a spare sits AVAIL — both of
+    those rules already read Group and needed no change, which is the
+    evidence that the model was right and only the reading was wrong.
+    """
+    _flatten_vdevs(pool.get("vdevs"), out, links)
+    # Sorted, so a pool's rows are ordered by the same rule on every host
+    # rather than by whatever order the JSON happened to carry.
+    for group in sorted(ZFS_GROUP_VDEVS):
+        members = pool.get(group)
+        if isinstance(members, dict):
+            _flatten_vdevs(members, out, links, group=group, depth=1)
+
+
 def _flatten_vdevs(nodes: dict | None, out: list[dict],
                    links: dict[str, str] | None, group: str = "data",
                    depth: int = 1) -> None:
@@ -754,7 +791,7 @@ class Adapter:
         out: dict[str, str] = {}
         for pool_name, pool in (status.get("pools") or {}).items():
             vdevs: list[dict] = []
-            _flatten_vdevs(pool.get("vdevs"), vdevs, links)
+            _flatten_pool_vdevs(pool, vdevs, links)
             for kname in _leaf_device_knames(vdevs).values():
                 out[kname] = pool_name
         return out
@@ -862,7 +899,7 @@ class Adapter:
             absent: list[str] = []
             unobservable: list[dict] = []
             vdevs: list[dict] = []
-            _flatten_vdevs(pool.get("vdevs"), vdevs, links)
+            _flatten_pool_vdevs(pool, vdevs, links)
             if links is None:
                 # The alias trees could not be read (live) or no devlinks
                 # payload was captured (replay). Every leaf's Device is a
@@ -907,8 +944,16 @@ class Adapter:
                     # cap members can be None (leaves report '-'): the same
                     # null-is-no-statement rule as the walk's own members.
                     entry.update({k: v for k, v in cap.items() if v is not None})
+            # AVAIL is a spare standing by; INUSE is a spare that has been
+            # pulled in and is protecting the pool right now. INUSE was
+            # missing, so a pool whose spare had taken over — a pool that is
+            # WORKING — listed the spare among its unhealthy devices and
+            # raised an alarm about the thing doing the saving. No capture
+            # and no operator ever staged a spare in use, so the class was
+            # closed for the resting spare and open for the working one.
             unhealthy = [vdev["Name"] for vdev in vdevs
-                         if vdev.get("State") not in (None, "ONLINE", "AVAIL")]
+                         if vdev.get("State") not in
+                         (None, "ONLINE", "AVAIL", "INUSE")]
             vdev_errors = [vdev["Name"] for vdev in vdevs
                            if any((vdev.get(key) or 0) for key in
                                   ("ReadErrors", "WriteErrors", "ChecksumErrors"))]

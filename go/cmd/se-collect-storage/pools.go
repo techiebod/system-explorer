@@ -170,7 +170,7 @@ func collectPools(out *emitter, stderr io.Writer, src source, collection string,
 // member, which nothing reads, and not the guid.
 func buildPool(name string, pool *value, listing *value, links *aliasTree, now, at float64) (objectRecord, []unobservableFact, error) {
 	var rows []*vdevRow
-	flattenVdevs(pool.get("vdevs"), &rows, links, "data", 1)
+	flattenPoolVdevs(pool, &rows, links)
 
 	var unobservable []unobservableFact
 	if links == nil {

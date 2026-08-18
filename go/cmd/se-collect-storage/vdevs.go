@@ -86,6 +86,39 @@ type vdevRow struct {
 	checksumErrors *big.Int
 }
 
+// flattenPoolVdevs is every vdev the pool has, from BOTH places zpool
+// reports them (storage.py's _flatten_pool_vdevs).
+//
+// `zpool status -j` does not nest the group vdevs under the root: spares,
+// log devices and cache devices are TOP-LEVEL KEYS on the pool object,
+// beside "vdevs" rather than inside it. Walking only pool["vdevs"] reported
+// none of them, so a hot spare, a SLOG and an L2ARC attached to a live pool
+// appeared nowhere — not as rows, not in the pool's device names. Both
+// implementations were blind together, which is why replay equivalence and
+// the mutation guard were green over it: the two operators that claimed to
+// cover the class minted their groups INSIDE the root tree, a shape zpool
+// does not produce. It took the live comparator, on a real pool.
+//
+// Depth 1, because that is what they are — top-level vdevs of the pool,
+// siblings of the raidz group. Group comes from the key they arrived under,
+// which is what keeps them out of redundancy grading and out of the
+// unhealthy list while a spare sits AVAIL; both rules already read Group and
+// neither needed changing.
+func flattenPoolVdevs(pool *value, out *[]*vdevRow, links *aliasTree) {
+	flattenVdevs(pool.get("vdevs"), out, links, "data", 1)
+	// Sorted, so the rows are ordered by the same rule on every host rather
+	// than by whatever order the document happened to carry.
+	for _, group := range sortedGroupVdevs {
+		if members := pool.get(group); members.object() != nil {
+			flattenVdevs(members, out, links, group, 1)
+		}
+	}
+}
+
+// The group keys in a fixed order, so two hosts with the same pool emit the
+// same rows in the same sequence.
+var sortedGroupVdevs = []string{"l2cache", "logs", "spares"}
+
 // flattenVdevs is the depth-first walk of storage.py:338-418, in document
 // order. Two rules carry all the weight:
 //
@@ -320,15 +353,25 @@ func mergeCaps(rows []*vdevRow, caps map[string]vdevCap) {
 
 // ── health ──────────────────────────────────────────────────────────────
 
-// unhealthyVdevs lists every row whose state is neither ONLINE nor AVAIL nor
-// absent, in walk order. Each exclusion is deliberate: AVAIL is a spare
-// standing by and protecting nothing yet, and a row that reported no state
-// at all made no statement to disagree with. Group members are included —
-// a faulted cache disk is still a faulted device.
+// unhealthyVdevs lists every row whose state says something is wrong with
+// it, in walk order. Each exclusion is deliberate: AVAIL is a spare standing
+// by and protecting nothing yet, INUSE is a spare that has been pulled in
+// and is protecting the pool right now, and a row that reported no state at
+// all made no statement to disagree with. Group members are otherwise
+// included — a faulted cache disk is still a faulted device.
+//
+// INUSE was missing, and the shape it fails on is the one that matters most:
+// a pool whose spare has taken over is a pool that is WORKING, and listing
+// the spare as unhealthy raises an alarm about the device doing the saving.
+// AVAIL was allowed because a committed operator stages an idle spare; no
+// capture and no operator ever staged a spare in use, so the class the guard
+// calls spare-as-unhealthy was closed for the resting case and open for the
+// working one. Found by replacing a member with the spare on a live pool.
 func unhealthyVdevs(rows []*vdevRow) *value {
 	out := newArray()
 	for _, row := range rows {
-		if row.state == nil || row.state.equalsString("ONLINE") || row.state.equalsString("AVAIL") {
+		if row.state == nil || row.state.equalsString("ONLINE") ||
+			row.state.equalsString("AVAIL") || row.state.equalsString("INUSE") {
 			continue
 		}
 		out.append(stringValue(row.name))

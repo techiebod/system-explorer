@@ -576,16 +576,16 @@ def _add_spares_and_logs(payloads: dict) -> dict:
     AVAIL spare as an unhealthy member of a pool it is merely standing by
     for; a port whose redundancy walk counts group members would grade the
     layout by devices that hold no pool data. The reference does neither."""
-    children = _root_children(_first_pool(payloads["status"]))
-    children["logs"] = {
-        "name": "logs",
-        "vdevs": {LOG_DISK: _leaf_disk(LOG_DISK, 5151515151515151)},
-    }
-    children["spares"] = {
-        "name": "spares",
-        "vdevs": {
-            SPARE_DISK: _leaf_disk(SPARE_DISK, 6161616161616161, state="AVAIL")
-        },
+    pool = _first_pool(payloads["status"])
+    # TOP-LEVEL keys on the pool, beside "vdevs" and not inside it, because
+    # that is where zpool status -j actually puts them — measured on a live
+    # pool with a spare, a log and a cache attached. This operator minted
+    # them nested under the root until then, a shape zpool does not produce,
+    # so the class it claims to close was closed against a placement that
+    # does not exist while both implementations were blind to the real one.
+    pool["logs"] = {LOG_DISK: _leaf_disk(LOG_DISK, 5151515151515151)}
+    pool["spares"] = {
+        SPARE_DISK: _leaf_disk(SPARE_DISK, 6161616161616161, state="AVAIL")
     }
     return payloads
 
@@ -602,11 +602,9 @@ def _add_cache_vdev(payloads: dict) -> dict:
     disk — a member the reference labels Group=l2cache like any other, and a
     groups-by-enum port emits no row for. One disk, ONLINE, so the disagreement
     is the dropped GROUP and nothing about health rides along to blur it."""
-    children = _root_children(_first_pool(payloads["status"]))
-    children["l2cache"] = {
-        "name": "l2cache",
-        "vdevs": {CACHE_DISK: _leaf_disk(CACHE_DISK, 7171717171717171)},
-    }
+    # Top-level, like the other two groups — see _add_spares_and_logs.
+    pool = _first_pool(payloads["status"])
+    pool["l2cache"] = {CACHE_DISK: _leaf_disk(CACHE_DISK, 7171717171717171)}
     return payloads
 
 
@@ -755,10 +753,19 @@ def nft_families_in(payloads: dict) -> frozenset[str]:
 
 def zpool_vdev_names_in(payloads: dict) -> frozenset[str]:
     """Every vdev name anywhere in a storage status payload — the raw tokens
-    the closure guard intersects with storage.py's ZFS_GROUP_VDEVS. A group
-    vdev is told from a data vdev by its NAME and nothing else (storage.py's
-    _flatten_vdevs keys `name in ZFS_GROUP_VDEVS`), so the name is exactly what
-    is collected, descending the vdevs tree the way that walk does."""
+    the closure guard intersects with storage.py's ZFS_GROUP_VDEVS.
+
+    Both places, because zpool uses both. A group vdev is named by the KEY it
+    sits under, and `zpool status -j` carries spares, logs and l2cache as
+    TOP-LEVEL keys on the pool object rather than as nodes inside its vdevs
+    tree — so this walked pool["vdevs"] alone and, handed a real payload
+    holding all three, reported that none of them were present. The closure
+    guard over `group-enum` was therefore vacuous against reality and
+    substantive only against the fabricated placement the operators minted,
+    which is the subset-guard shape reading the wrong address: the extractor
+    that decides what a payload contains was looking where the defect was,
+    not where the data is.
+    """
     names: set[str] = set()
 
     def _walk(nodes: object) -> None:
@@ -770,9 +777,24 @@ def zpool_vdev_names_in(payloads: dict) -> frozenset[str]:
                 _walk(vdev.get("vdevs"))
 
     for pool in (payloads.get("status") or {}).get("pools", {}).values():
-        if isinstance(pool, dict):
-            _walk(pool.get("vdevs"))
+        if not isinstance(pool, dict):
+            continue
+        _walk(pool.get("vdevs"))
+        # The group keys themselves are the members of the declared set, so
+        # their presence is the key's presence — the nodes beneath are the
+        # devices, whose names are not group names.
+        for group in ZFS_GROUP_KEYS:
+            if isinstance(pool.get(group), dict):
+                names.add(group)
+                _walk(pool[group])
     return frozenset(names)
+
+
+# The group keys as zpool spells them at pool level. Not retyped from the
+# product's ZFS_GROUP_VDEVS by accident: the conformance test reads the
+# product's set as the authority and this is only where to LOOK for them, so
+# a set that drifted would be caught by the closure test rather than hidden.
+ZFS_GROUP_KEYS = ("logs", "l2cache", "spares")
 
 
 @dataclass(frozen=True)
