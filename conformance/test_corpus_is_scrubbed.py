@@ -47,6 +47,38 @@ def _declares_addresses(collector: str) -> bool:
     )
 
 
+def test_every_collector_in_the_corpus_has_a_scrub_manifest() -> None:
+    """A collector whose corpus was committed without one is unswept.
+
+    The scrubber is deny-by-default twice over — it refuses to run without a
+    manifest, and its walk fails on any leaf no entry classifies — so a
+    manifest is what makes a capture publishable at all. But nothing required
+    one to EXIST. A collector whose payloads reached the tree by another
+    route would be a corpus nobody classified, and the one boolean the
+    detectors read from the manifest (`_declares_addresses`) would quietly
+    answer False for it, which reads as "declares no address fields" rather
+    than "was never classified".
+
+    The manifest may legitimately declare that a payload discloses nothing —
+    the system collector's os-release entry does — but that is a decision
+    somebody wrote down, which is the whole difference.
+    """
+    collectors = {
+        json.loads(p.read_text()).get("collector")
+        for p in sorted(CORPUS.rglob("meta.json"))
+    }
+    assert collectors, "no corpus collectors; this check grades nothing"
+    missing = sorted(
+        c for c in collectors if not (SCRUB_MANIFESTS / f"{c}.json").exists()
+    )
+    assert not missing, (
+        f"{missing} ship corpus payloads with no scrub manifest at "
+        f"harness/scrub/<collector>.json. Absence of a manifest is not "
+        "absence of a credential surface — it is absence of anyone having "
+        "looked, and the detectors' address rule reads it as the former."
+    )
+
+
 def _cases() -> list[pytest.param]:
     # The variant directories are walked directly, not through
     # corpus.load_variant(): this gate judges what is COMMITTED, and a file

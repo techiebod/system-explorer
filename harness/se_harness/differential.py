@@ -785,9 +785,28 @@ def mutated_payloads(operator: Operator, variant: Variant) -> dict:
 
 
 def write_payloads(payloads: dict, directory: Path) -> None:
+    """Write a mutated payload set back out the way the loader reads it.
+
+    Keyed by stem, and the extension follows the value's type exactly as
+    corpus.load_variant decides it going the other way: a decoded document
+    round-trips through `<stem>.json`, and a text payload — os-release, a
+    hostname, a boot id — is written back as raw bytes under its bare stem,
+    because the native format IS the payload (DESIGN 20).
+
+    Writing every stem as `.json` was silent and total: a text-payload
+    collector routed through this guard would be handed `os-release.json`
+    holding a JSON-quoted string, a directory its own replay seam cannot
+    read, and the run would report REFUSED about the collector rather than
+    about the harness. Nothing hit it because the two collectors with
+    operators both capture JSON — the defect was waiting for the first port
+    whose interface speaks text.
+    """
     directory.mkdir(parents=True, exist_ok=True)
     for stem, document in payloads.items():
-        (directory / f"{stem}.json").write_text(json.dumps(document, indent=1))
+        if isinstance(document, str):
+            (directory / stem).write_text(document)
+        else:
+            (directory / f"{stem}.json").write_text(json.dumps(document, indent=1))
 
 
 @dataclass
