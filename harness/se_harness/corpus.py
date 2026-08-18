@@ -85,12 +85,21 @@ _ANCHOR_FORMS = (
 # gaps: a gap inside a class an operator declares it closes (an nftables family,
 # a ZFS vdev group) is a guard defect and is closed by construction in
 # differential.py, not parked here.
+#
+# A venue that does not exist yet is stated as owed, not as owned. "Venue: the
+# live comparator" reads to any reader as "there is a place this gets caught",
+# and the live comparator is PLAN phase-3 work that has not been written — it
+# is also the named venue for all three of DESIGN 19's replay bounds, so a
+# quiet reading of these entries would have one unbuilt tool holding up five
+# separate deferrals. Naming the net is worth nothing if the net is a promise.
 NAMED_RESIDUALS = {
     "storage/device-resolution": (
         "the by-id-path → kernel-name join (Device fact, names.ephemeral.kernel) "
         "fires only for a disk leaf whose path is in a readable devlinks tree; no "
         "committed pool carries real disks with an alias tree, and no operator "
-        "mints one. Venue: the live comparator, running beside a real pool."
+        "mints one. Venue: the live comparator, running beside a real pool — "
+        "which is phase-3 work and NOT YET BUILT, so this truth is owed rather "
+        "than owned."
     ),
     # Closed 2026-08-18 by corpus/network/rules, the first committed pair to
     # open two collections: "network/nft-rules — served by the reference but
@@ -102,7 +111,8 @@ NAMED_RESIDUALS = {
         "opaque comprehension path and both OpaqueReason spellings are "
         "exercised by no replayed stream, and no mutation operator mints one. "
         "Venue: a capture from a host running iptables-nft compatibility "
-        "(Docker, libvirt), and the live comparator until there is one."
+        "(Docker, libvirt), and the live comparator until there is one — "
+        "neither exists yet, so this truth is owed rather than owned."
     ),
 }
 
