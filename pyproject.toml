@@ -83,6 +83,10 @@ system_explorer = ["ui/*"]
 # conformance/ so `from common import ...` keeps working from any cwd.
 pythonpath = ["src", "conformance", "harness"]
 testpaths = ["conformance"]
+markers = [
+    "differential: reference-vs-challenger mutation runs (CI may schedule separately)",
+    "reversion: guard-reversion meta-suite (CI may schedule separately)",
+]
 
 # ── static checks ─────────────────────────────────────────────────────────
 # ruff formalises conventions the code already carried informally — noqa

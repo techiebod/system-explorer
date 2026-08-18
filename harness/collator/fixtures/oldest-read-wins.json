@@ -1,7 +1,7 @@
 {
   "name": "oldest-read-wins",
   "acceptance_item": 5,
-  "note": "a six-second acquisition never reports itself fresher than its oldest contributing read: spanning's objects carry at values six seconds apart, anchor's single object sits at the newest of them. The served age must derive from oldest_at \u2014 age_s + oldest_at reconstructs the same now on both rows \u2014 and oldest_at must be the MINIMUM at, not the newest and not arrival time.",
+  "note": "a six-second acquisition never reports itself fresher than its oldest contributing read: spanning's objects carry at values six seconds apart, anchor's single object sits at the newest of them. The served age must derive from oldest_at \u2014 age_s + oldest_at reconstructs the same now on both rows \u2014 and oldest_at must be the MINIMUM at, not the newest and not arrival time. The stamps are single-digit seconds on purpose: the daemon serves age against its own live boot clock, and a CI runner is a freshly booted VM \u2014 stamps around 100s sat in the runner's future, the age went negative, and the F2 rule correctly refused to serve it. A serving host older than ten seconds is the one assumption a booted daemon cannot violate.",
   "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"anchor\",\"freshness\":\"1h\"},{\"name\":\"spanning\",\"freshness\":\"1h\"}]}",
   "streams": [
     {
@@ -26,7 +26,7 @@
           "facts": {
             "Role": "oldest-read"
           },
-          "at": 100.0
+          "at": 4.0
         },
         {
           "record": "object",
@@ -35,7 +35,7 @@
           "facts": {
             "Role": "middle-read"
           },
-          "at": 103.0
+          "at": 7.0
         },
         {
           "record": "object",
@@ -44,7 +44,7 @@
           "facts": {
             "Role": "newest-read"
           },
-          "at": 106.0
+          "at": 10.0
         },
         {
           "record": "commit",
@@ -62,7 +62,7 @@
           "facts": {
             "Role": "reference"
           },
-          "at": 106.0
+          "at": 10.0
         },
         {
           "record": "commit",
@@ -92,7 +92,7 @@
         "facts": {
           "Role": "reference"
         },
-        "at": 106.0
+        "at": 10.0
       },
       {
         "collection": "spanning",
@@ -101,7 +101,7 @@
         "facts": {
           "Role": "oldest-read"
         },
-        "at": 100.0
+        "at": 4.0
       },
       {
         "collection": "spanning",
@@ -110,7 +110,7 @@
         "facts": {
           "Role": "middle-read"
         },
-        "at": 103.0
+        "at": 7.0
       },
       {
         "collection": "spanning",
@@ -119,7 +119,7 @@
         "facts": {
           "Role": "newest-read"
         },
-        "at": 106.0
+        "at": 10.0
       }
     ],
     "collections": [
@@ -127,13 +127,13 @@
         "name": "anchor",
         "generation": 1,
         "stale": false,
-        "oldest_at": 106.0
+        "oldest_at": 10.0
       },
       {
         "name": "spanning",
         "generation": 1,
         "stale": false,
-        "oldest_at": 100.0
+        "oldest_at": 4.0
       }
     ],
     "rejected": [],
