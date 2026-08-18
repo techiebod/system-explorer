@@ -543,6 +543,123 @@ def test_the_name_keyed_exemption_is_true() -> None:
         )
 
 
+# ── the ported collectors, judged by the guard that judges the fixtures ──
+#
+# Everything above this line points the mutation guard at a committed wrong
+# fixture. Nothing pointed it at a PORTED COLLECTOR — every call site passed a
+# fixture path or the reference itself — so the tier's demands on the artefacts
+# the port actually ships were aspirational, stated in prose and enforced by
+# nothing. That is the subset guard one level up: an apparatus that closes a
+# class against the subjects it was written with, and never against the subject
+# it exists for.
+#
+# The partition below is therefore deny-by-default over conftest.GO_COLLECTORS,
+# in every direction: a ported collector is judged under every operator its
+# collector has, or it is named here with the venue that owns its truth; a name
+# here that IS judged is a stale excuse and fails; a name here that is not a
+# ported collector at all fails.
+
+PORTED_WITHOUT_A_REFERENCE = {
+    "system": (
+        "the differential guard's reference half is replay.reference_binary() "
+        "— the Python shim — and no Python adapter serves the system "
+        "collector, so there is no reference to disagree with and a seed would "
+        "only produce REFUSED through no fault of the challenger. Its payloads "
+        "are text (os-release, hostname, boot_id) and differential.write_payloads "
+        "writes every stem as JSON, so the guard could not hand it a readable "
+        "directory even with a reference. Venue: the live comparator, and a "
+        "second independent implementation of the collector if one is ever "
+        "written — an agreement guard needs two parties and this collector has "
+        "one."
+    ),
+}
+
+
+def _ported_cases() -> list[tuple[str, differential.Operator]]:
+    from conftest import GO_COLLECTORS
+
+    return [
+        (collector, operator)
+        for collector in sorted(GO_COLLECTORS)
+        for operator in differential.OPERATORS
+        if operator.collector == collector
+    ]
+
+
+@pytest.mark.parametrize(
+    "collector,operator", _ported_cases(), ids=lambda v: getattr(v, "name", v)
+)
+def test_a_ported_collector_agrees_with_the_reference_under_mutation(
+    collector: str, operator: differential.Operator
+) -> None:
+    """The port, the reference, the same mutated payload: AGREE.
+
+    This is the check replay equivalence cannot make. A port that hardcodes
+    its way through the committed captures is green by construction on every
+    pair — a7_replay_green_port.py is the committed proof — and stops being
+    green the moment the payload grows a shape its author never met. Each
+    operator names the defect class it exposes; a DISAGREE here says which.
+
+    Agreement proves consistency with the reference, never truth: truth rests
+    on the corpus anchors, and a mismatch is an adjudication (PLAN standing
+    rule 6), so read the diff before assuming the port is the wrong half.
+    """
+    from conftest import go_collector_binary
+
+    binary = [go_collector_binary(collector)]
+    run = differential.run_differential(binary, _seed(operator), operator)
+    assert not run.reference_problems, (
+        f"{collector} × {operator.name}: the reference half is unlawful, so "
+        f"this run proves nothing about the port:\n{run.report()}"
+    )
+    assert run.verdict == differential.AGREE, (
+        f"{collector} × {operator.name}: {run.verdict}. This operator exposes "
+        f"the {operator.exposes!r} class — a shape no committed capture holds, "
+        f"which is why replay equivalence passed it:\n{run.report()}"
+    )
+
+
+def test_every_ported_collector_is_mutation_judged_or_named() -> None:
+    """The partition over the ported set, asserted rather than assumed.
+
+    A collector can leave this guard three ways, and only one of them is
+    honest: by being judged. So the other two are closed here — an unjudged
+    collector with no entry fails, and an entry that has become untrue fails
+    whether it went stale (the collector is judged now) or was never true (it
+    names something that is not a ported collector).
+    """
+    from conftest import GO_COLLECTORS
+
+    ported = set(GO_COLLECTORS)
+    assert ported, "GO_COLLECTORS is empty; this whole arm is vacuous"
+    judged = {op.collector for op in differential.OPERATORS} & ported
+
+    orphans = sorted(ported - judged - set(PORTED_WITHOUT_A_REFERENCE))
+    assert not orphans, (
+        f"ported and unjudged by the mutation guard, named by nothing: "
+        f"{orphans}. Replay equivalence alone cannot see a hardcoded port, so "
+        "a collector with neither operators nor a named residual is graded "
+        "only on the machines that happen to be in the corpus. Add a seed and "
+        "operators, or name the venue that owns its truth instead."
+    )
+    stale = sorted(set(PORTED_WITHOUT_A_REFERENCE) & judged)
+    assert not stale, (
+        f"{stale} carry an excuse from the guard AND are judged by it — a "
+        "residual that has come true is an excuse nobody withdrew, and the "
+        "next reader will believe it"
+    )
+    unknown = sorted(set(PORTED_WITHOUT_A_REFERENCE) - ported)
+    assert not unknown, (
+        f"{unknown} are excused from the mutation guard but are not ported "
+        "collectors at all — an entry about nothing reads as coverage"
+    )
+    for name, reason in PORTED_WITHOUT_A_REFERENCE.items():
+        assert "Venue:" in reason, (
+            f"{name}: a residual names the venue that owns its truth, or it "
+            "is a hole dressed as a disclosure"
+        )
+
+
 # ── the control: the reference against itself, every operator ────────────
 
 
