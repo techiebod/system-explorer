@@ -49,3 +49,9 @@ scrub-map*.json
 # so the path is a convention the tool depends on, and the 4.6 MB artefacts at
 # it are not history.
 /go/bin/
+
+# Agent worktrees. Each is a full checkout of this repository, created for an
+# isolated task and removed after — 74 MB across eleven of them while a fleet
+# port was running. They are working copies of tracked content, so committing
+# one would duplicate the whole tree inside itself.
+/.claude/
