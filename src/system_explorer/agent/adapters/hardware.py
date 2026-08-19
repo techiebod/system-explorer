@@ -1170,7 +1170,17 @@ class Adapter:
         for item in items:
             namespaces = item["facts"].get("Namespaces") or []
             self._merge_health(item, health, namespaces[0] if namespaces else None)
-            item["facts"].setdefault("SmartTemperatureC", hwmon.get(item["native_id"]))
+            # setdefault(key, None) WRITES the key, and this runs after
+            # item_summary has already stripped nulls — so a device with no
+            # hwmon reading published `SmartTemperatureC: null`, which names
+            # none of DESIGN 19's three channels. Found live on 2026-08-19 by
+            # the NixOS guest: no smartctl, no udisks2, a SCSI disk, and the
+            # port omitting the fact where this emitted a null. The 38th site
+            # of the family the null sweep closed 37 of, and it survived
+            # precisely because it is written after the sweep.
+            temperature = hwmon.get(item["native_id"])
+            if temperature is not None:
+                item["facts"].setdefault("SmartTemperatureC", temperature)
             self._merge_deep(item, deep.get(item["native_id"]))
             self._apply_severity("nvme", item)
         return items
@@ -1186,7 +1196,9 @@ class Adapter:
             block = item["facts"].get("Block")
             self._merge_health(item, health, block)
             if block:
-                item["facts"].setdefault("SmartTemperatureC", hwmon.get(block))
+                temperature = hwmon.get(block)
+                if temperature is not None:
+                    item["facts"].setdefault("SmartTemperatureC", temperature)
                 self._merge_deep(item, deep.get(block))
             self._apply_severity("scsi", item)
         return items

@@ -13,9 +13,17 @@ import (
 // which under replay is a document value, so echoing it would be a redaction
 // path nobody reviewed. The three sources it names are the three
 // `_interface_addresses` asks, in order.
-const addressUnobservable = "no address source could answer for this running guest: " +
-	"the guest agent is refused on a read-only libvirt connection, libvirt holds " +
-	"no DHCP lease for it, and the host ARP table has no entry for it"
+// VERBATIM from adapters/vms.py's _interface_addresses, and it must stay so.
+// The sentence is the collector's OWN — no interface produces it — so both
+// implementations author it, and two authors of one declared fact value must
+// write the same string. They did not until 2026-08-19: the live comparator
+// found them composing different sentences on the first running guest either
+// had seen, and replay could never have found it because the only captured
+// domain is shut off and omits the fact entirely.
+const addressUnobservable = "No address source answered: the guest agent is " +
+	"unavailable on a read-only libvirt connection, no DHCP lease is held for " +
+	"this guest, and the host ARP table has no entry for it (an idle guest's " +
+	"entry expires)."
 
 // domainRow is one domain, reduced to what the collection publishes.
 type domainRow struct {

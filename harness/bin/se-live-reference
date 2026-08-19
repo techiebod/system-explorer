@@ -31,6 +31,7 @@ import asyncio
 import hashlib
 import inspect
 import os
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -77,8 +78,21 @@ LIVE = {
                   "interface": "cgroup v2 hierarchy",
                   "collections": ["workloads"]},
     "network": {"module": network, "adapter": network.Adapter,
+                # No `nft` on PATH is the closed storage reading exactly: the
+                # userspace tool and the kernel tables ship together, so a host
+                # without it has no ruleset, which is a successful reading that
+                # must commit zero — or a host that loses nftables serves its
+                # old chains for ever.
+                "not_applicable": lambda a: shutil.which("nft") is None,
                 "interface": "nft", "collections": ["nft-chains", "nft-rules"]},
     "vms": {"module": vms, "adapter": vms.Adapter,
+            # The read-only socket, which is what the PORT tests and the only
+            # thing either implementation opens. A host with no libvirt socket
+            # runs no libvirt and defines no domains. The python binding being
+            # absent is deliberately NOT this reading: that is a deployment
+            # gap in the agent, not a statement about the machine, and it must
+            # not retire a hypervisor's domains.
+            "not_applicable": lambda a: not os.path.exists(vms.SOCKET_RO),
             "interface": "libvirt", "collections": ["domains"]},
     "packages": {"module": packages, "adapter": packages.Adapter,
                  "interface": "package manager", "collections": ["packages"]},
@@ -89,8 +103,29 @@ LIVE = {
     # divergence instead, which keeps every other fact in the collection
     # under the comparison it exists for.
     "nix": {"module": nix, "adapter": nix.Adapter,
-            "interface": "nix profile", "collections": ["generations"]},
+            # A host that activated no nix closure is not a host with no
+            # generations to report — it is a host this collection does not
+            # apply to, and the reading is `absent`: successful, establishing
+            # something, and committing zero so a machine that WAS NixOS and
+            # was rebuilt as something else does not serve its old generations
+            # for ever. Bridged per case and after adjudication, which is what
+            # the decline-vocabulary ruling permits: the condition is the one
+            # the closed storage item already ruled on — the interface is not
+            # here — and the comparator surfaced it on the Ubuntu guest, where
+            # the port declined and the reference said nothing at all.
+            "not_applicable": lambda a: not nix.nx.is_nixos(),
+            # "nix system closure" and not "nix profile", because this string
+            # is composed into the decline DETAIL and the port's own constant
+            # spells it that way. Decline detail travels to a hub and out over
+            # MCP; two implementations answering one condition with two
+            # sentences is the same defect as the vms address note, found in
+            # the same run.
+            "interface": "nix system closure", "collections": ["generations"]},
     "docker": {"module": docker, "adapter": docker.Adapter,
+               # The socket's ABSENCE only. A socket that exists and refuses is
+               # a different reading — permission, or a daemon that is down —
+               # and neither may retire anything, so neither reaches here.
+               "not_applicable": lambda a: not os.path.exists(docker.SOCKET),
                "interface": "docker socket",
                "collections": ["containers", "volumes", "networks"]},
     "traefik": {"module": traefik, "adapter": traefik.Adapter,
@@ -136,6 +171,11 @@ LIVE = {
     # protection spans several, and only a run beside the real files can say
     # whether the ownerHost join still holds.
     "protection": {"module": protection, "adapter": protection.Adapter,
+                   # No manifest is a host that declares no protection
+                   # inventory — nothing to protect, read successfully — where
+                   # a manifest that exists and will not parse is a reading
+                   # nobody took and stays out of this branch.
+                   "not_applicable": lambda a: not os.path.exists(protection.MANIFEST),
                    "interface": "homelab protection surfaces",
                    "collections": ["targets", "jobs", "destinations"]},
     "kea": {"module": kea, "adapter": kea.Adapter,
@@ -352,6 +392,26 @@ def run(collector: str, generations: dict[str, int]) -> None:
             gate = await adapter.capability()
         except Exception:  # noqa: BLE001 - a gate that raises is not a reading
             gate = {}
+        # A collection this host does not APPLY to, which is a different
+        # statement from one it could not read. `absent` is the only decline
+        # that commits, because it establishes something: no nix closure on
+        # this machine means no generations, exactly as no `zpool` on PATH
+        # means no imported pools. It must commit zero or a host that WAS
+        # NixOS and was rebuilt as something else serves its old generations
+        # for ever, stale and never retired — the storage ruling, applied to
+        # the second collector to meet it.
+        #
+        # Separate from the receipts bridge below and not folded into it: that
+        # one is for a configuration gap, which must NOT retire anything, and
+        # the two answers differ in exactly the direction that matters.
+        not_applicable = spec.get("not_applicable")
+        if not_applicable and not_applicable(adapter):
+            for collection in generations:
+                out.decline(collection, "absent",
+                            f"no {spec['interface']} on this host")
+                out.commit(collection, 0, 0, 0)
+            return
+
         unconfigured = spec.get("receipts")
         if not gate.get("available", True) and unconfigured:
             # Two branches, two details, and both are TRUE — which is the whole
