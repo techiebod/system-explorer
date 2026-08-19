@@ -205,7 +205,8 @@ def _key(record: dict) -> tuple:
     )
 
 
-def diff(expected: list[dict], emitted: list[dict]) -> list[str]:
+def diff(expected: list[dict], emitted: list[dict],
+         moving: frozenset[str] = frozenset()) -> list[str]:
     """Differences between two streams, named so a reader can act on them.
 
     Ordering inside a stream is not significant (DESIGN 19 — the collator
@@ -213,6 +214,24 @@ def diff(expected: list[dict], emitted: list[dict]) -> list[str]:
     rather than by position; a reordering is not a defect and must not read
     as one. Multiplicity IS significant: emitting one object twice is a real
     collector bug, so counts are compared, not just key sets.
+
+    `moving` names facts whose VALUE may legitimately differ between the two
+    streams, and it defaults to empty so the corpus judge is unchanged: there,
+    both sides read the same frozen payload and any difference is a defect.
+
+    It exists for the live comparator, which cannot freeze anything. That tool
+    runs the reference and then the port against the same machine, and between
+    the two the machine keeps running — so every advancing counter differs by
+    however long that took. Before this, `resources` reported four differing
+    rows on every single run and not one was a defect, which is worse than
+    reporting none: a real disagreement would have arrived buried in noise
+    everybody had learned to scroll past.
+
+    A moving fact is still compared for PRESENCE and for TYPE. Only its value
+    is exempt — a port that dropped the fact, or that started emitting a string
+    where the reference emits an integer, still fails. And the set is built
+    from the collector's own committed declaration rather than from anything
+    observed at run time, so widening it is a reviewed diff.
     """
     want_records, got_records = normalise(expected), normalise(emitted)
     want_counts = Counter(_key(r) for r in want_records)
@@ -250,9 +269,47 @@ def diff(expected: list[dict], emitted: list[dict]) -> list[str]:
                 # typed_equal, not ==: Python thinks True == 1 and 20 == 20.0,
                 # and a port that made either swap would emit a wrong value on
                 # the wire that a typed consumer sees and == never would.
+                elif member == "facts" and moving:
+                    differences.extend(
+                        _fact_differences(key, a, b, moving))
                 elif not typed_equal(a, b):
                     differences.append(f"{key}: {member}: expected {a!r}, got {b!r}")
     return differences
+
+
+def _fact_differences(key: tuple, want: object, got: object,
+                      moving: frozenset[str]) -> list[str]:
+    """One row's facts, with declared counters and gauges exempt by VALUE only.
+
+    Compared fact by fact rather than dict against dict, because the whole
+    point is that one member may move while its neighbours may not — a
+    wholesale comparison can only pass or fail the entire row, which is how a
+    live counter took four correct rows down with it.
+    """
+    if not (isinstance(want, dict) and isinstance(got, dict)):
+        return ([] if typed_equal(want, got)
+                else [f"{key}: facts: expected {want!r}, got {got!r}"])
+    out: list[str] = []
+    for name in sorted(set(want) | set(got)):
+        a = want.get(name, _MISSING)
+        b = got.get(name, _MISSING)
+        if a is _MISSING:
+            out.append(f"{key}: facts.{name}: emitted but not expected")
+        elif b is _MISSING:
+            out.append(f"{key}: facts.{name}: expected but not emitted")
+        elif name in moving:
+            # Presence and type still hold. A counter that became a string, or
+            # a gauge the port stopped emitting, is a defect whatever its value
+            # was going to be.
+            if type(a) is not type(b):
+                out.append(
+                    f"{key}: facts.{name}: declared a moving reading, so its "
+                    f"value is not compared — but its TYPE changed, "
+                    f"{type(a).__name__} to {type(b).__name__}"
+                )
+        elif not typed_equal(a, b):
+            out.append(f"{key}: facts.{name}: expected {a!r}, got {b!r}")
+    return out
 
 
 def _measured(value: object) -> bool:

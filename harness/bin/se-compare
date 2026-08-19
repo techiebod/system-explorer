@@ -70,6 +70,44 @@ SERVES = {
 REFERENCE = REPO / "harness" / "bin" / "se-live-reference"
 
 
+MOVING_TEMPERAMENTS = frozenset({"counter", "gauge"})
+
+
+def moving_facts(collector: str) -> frozenset[str]:
+    """Facts this collector declares as readings that do not hold still.
+
+    A `counter` advances and a `gauge` is an instantaneous level, so both
+    legitimately differ between the reference run and the port run — this tool
+    runs them one after the other against a machine that keeps working, and
+    before this every one of them read as a defect. `resources` reported four
+    differing rows on EVERY run and not one was real; two consecutive runs gave
+    different values and different deltas, which is drift and not logic.
+
+    Read from the collector's own COMMITTED declaration, never from `declare`
+    run at the time of comparison. That distinction is the whole safety of it:
+    a port asked at run time what to exempt could exempt everything, and the
+    comparison would agree with itself. Widening this set is a diff in
+    go/cmd/se-collect-<name>/declaration.json that somebody reviews.
+
+    A collector with no committed declaration exempts nothing, which is the
+    deny-by-default reading — an unreadable declaration must not silently turn
+    into a permissive one.
+    """
+    path = REPO / "go" / "cmd" / f"se-collect-{collector}" / "declaration.json"
+    if not path.is_file():
+        return frozenset()
+    try:
+        declaration = json.loads(path.read_text())
+    except ValueError:
+        return frozenset()
+    names: set[str] = set()
+    for collection in declaration.get("collections") or []:
+        for name, fact in (collection.get("facts") or {}).items():
+            if isinstance(fact, dict) and fact.get("temperament") in MOVING_TEMPERAMENTS:
+                names.add(name)
+    return frozenset(names)
+
+
 def port_binary(collector: str) -> Path:
     """The built Go collector. Built, not built-here: the comparator must
     compare what would actually be deployed, and a build step hidden inside a
@@ -165,7 +203,14 @@ def compare(collector: str, twice: bool) -> dict:
     # The corpus's own comparator, so parity here means exactly what replay
     # equivalence means: records compared by identity, run-varying members
     # governed by their named rules rather than by bytes (DESIGN 19).
-    result["differences"] = replay.diff(reference, port)
+    #
+    # With one addition replay does not need and this tier cannot do without:
+    # the facts the collector declares as counters and gauges are compared for
+    # presence and type but not for value, because nothing here can freeze the
+    # machine between the two runs.
+    moving = moving_facts(collector)
+    result["moving_facts"] = sorted(moving)
+    result["differences"] = replay.diff(reference, port, moving)
 
     # Clock truth, per side. The REFERENCE is judged too — it is the thing
     # every corpus pair is generated from, and a reference that had stopped

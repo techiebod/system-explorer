@@ -290,3 +290,70 @@ def test_the_live_reference_refuses_to_be_used_as_a_replay() -> None:
     )
     assert proc.returncode == 2, proc
     assert "refusing" in proc.stderr, proc.stderr
+
+
+# ── the live tier's one exemption, and its four bounds ───────────────────
+
+
+def test_a_moving_fact_is_exempt_by_value_and_by_nothing_else():
+    """The live comparator runs the reference and then the port, so anything
+    the machine advances in between differs — and every one of those read as a
+    defect until 2026-08-19.
+
+    `resources` reported four differing rows on EVERY run and not one was real:
+    monotonic CPU counters and instantaneous memory, moving because time
+    passed. That is worse than reporting nothing, because a real disagreement
+    arrives buried in noise a reader has been trained to scroll past.
+
+    The exemption is narrow on purpose and this test is what keeps it narrow. A
+    fact the collector declares `counter` or `gauge` has its VALUE excused. It
+    is still compared for presence and for type, and every fact that is not so
+    declared is still compared by value — which is why the exemption cannot be
+    used to make a broken port agree with itself.
+    """
+    from se_harness import replay
+
+    def stream(facts):
+        return [{"record": "object", "collection": "workloads",
+                 "name": "-.slice", "facts": facts, "at": 1.0}]
+
+    moving = frozenset({"CpuUsageUsec"})
+
+    # 1. the value moved — the whole point, and the only thing excused
+    assert not replay.diff(stream({"CpuUsageUsec": 10, "Name": "a"}),
+                           stream({"CpuUsageUsec": 99, "Name": "a"}),
+                           moving), "a declared counter's value must not be compared"
+
+    # 2. the same difference with NO declaration is still a defect, which is
+    #    what proves the exemption is doing the work rather than the diff
+    #    having gone blind
+    assert replay.diff(stream({"CpuUsageUsec": 10}),
+                       stream({"CpuUsageUsec": 99}),
+                       frozenset()), (
+        "with nothing declared moving, a changed value must still be reported "
+        "— otherwise this exemption is not what made case 1 pass"
+    )
+
+    # 3. the TYPE changed under it: a port emitting a string where the
+    #    reference emits an integer is wrong whatever the number was
+    typed = replay.diff(stream({"CpuUsageUsec": 10}),
+                        stream({"CpuUsageUsec": "10"}),
+                        moving)
+    assert typed and "TYPE" in " ".join(typed), (
+        f"a moving fact that changed type must still be reported: {typed}"
+    )
+
+    # 4. the fact went missing: an exemption from comparison is not an
+    #    exemption from being emitted
+    assert replay.diff(stream({"CpuUsageUsec": 10}), stream({}), moving), (
+        "a moving fact the port stopped emitting must still be reported"
+    )
+
+    # 5. a fact BESIDE a moving one is untouched — the row is compared fact by
+    #    fact, so one member moving must not excuse its neighbours
+    assert replay.diff(stream({"CpuUsageUsec": 10, "Name": "a"}),
+                       stream({"CpuUsageUsec": 99, "Name": "b"}),
+                       moving), (
+        "a non-moving fact must still be compared even when a moving one "
+        "shares the row"
+    )
