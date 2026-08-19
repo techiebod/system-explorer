@@ -25,6 +25,57 @@ emit() { printf 'export %s=%s\n' "$1" "$2" >>"$RECEIPTS"; }
 # receipt rather than appending a second one that a later `source` would win.
 forget() { sed -i "/^export $1=/d" "$RECEIPTS"; }
 
+# ---------------------------------------------------------------- zfs pool
+# The storage collector's venue, and specifically the one shape the reference
+# has lost on three times: a pool carrying a mirror AND a spare, where the
+# group-vdev blindness was found after four layers had agreed it was fine.
+# File-backed vdevs, because the collector reads the POOL and this guest has
+# one disk.
+#
+# The vdev files live under /var/tmp and not /tmp deliberately: /tmp is cleared
+# on boot, so a pool built there would come back after every guest restart as a
+# set of missing devices rather than as an importable pool.
+if ! command -v zpool >/dev/null 2>&1; then
+    say "installing zfsutils-linux"
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q zfsutils-linux \
+        >/dev/null 2>&1 || say "zfs install failed"
+fi
+if command -v zpool >/dev/null 2>&1; then
+    VDEVS=/var/tmp/vdevs
+    sudo mkdir -p "$VDEVS"
+    if sudo zpool list tank >/dev/null 2>&1; then
+        say "tank already imported"
+    elif sudo zpool import -d "$VDEVS" tank >/dev/null 2>&1; then
+        # The ordinary state after a guest reboot, and the step this script did
+        # not used to take: the pool exists on disk and nothing imported it.
+        say "tank imported from $VDEVS"
+    else
+        for disk in d1 d2 d3; do
+            [ -f "$VDEVS/$disk" ] || sudo truncate -s 512M "$VDEVS/$disk"
+        done
+        sudo zpool create -f tank \
+            mirror "$VDEVS/d1" "$VDEVS/d2" \
+            spare "$VDEVS/d3" \
+            && say "tank created: one mirror, one spare"
+    fi
+    # Without the pool in the cache nothing imports it at boot, so every guest
+    # restart silently loses the storage venue and the collector reads a host
+    # with no pools — a truthful reading of a broken lab, and indistinguishable
+    # from a deliberate absence variant.
+    #
+    # Do NOT verify this by reading the property back: `zpool get cachefile`
+    # answers `-` on success, because `-` MEANS the default location and the
+    # default is the path set here. The signal is the cache file itself naming
+    # the pool, which is what is checked.
+    sudo zpool set cachefile=/etc/zfs/zpool.cache tank
+    if sudo grep -qa tank /etc/zfs/zpool.cache 2>/dev/null; then
+        say "tank is in the boot cache ($(systemctl is-enabled zfs-import-cache.service 2>&1))"
+    else
+        say "tank is NOT in /etc/zfs/zpool.cache — it will not survive a reboot"
+    fi
+    say "tank: $(sudo zpool list -H -o health tank)"
+fi
+
 # ---------------------------------------------------------------- unbound
 # A unix control socket, not the TCP interface: over TCP unbound-control wants
 # a key pair, and the adapter connects to a socket path.
