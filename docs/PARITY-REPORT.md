@@ -121,22 +121,25 @@ differences: `temperament` is already a closed vocabulary carrying `counter` and
 rather than `declare` at run time — a port asked at run time what to exempt
 could exempt everything. Value is excused; presence and type are not.
 
-## Class 1 — the reference raises where the port declines
+## Class 1 — RULED and implemented; kept because it is how the evidence was built
 
-Every collector that used to sit here now has a receipt and compares clean, so
-the **symptom** is gone from this host. The **ruling is still owed**, and the
-run sharpened it rather than settling it.
+This class is closed. It is retained rather than deleted because the ruling was
+taken on the evidence below, and a reader who meets only the outcome cannot
+judge whether it was the right one.
 
-The asymmetry is deliberate: bridging arbitrary exceptions into decline reasons
-inside the live reference would make the two agree *by construction* and destroy
+The asymmetry was deliberate while it stood: bridging arbitrary exceptions into
+decline reasons wholesale would make the two agree *by construction* and destroy
 the comparator's independence on exactly the cases it exists to adjudicate.
+That property is preserved by the shape of the ruling rather than abandoned —
+bridges are per case and after adjudication, and everything unjudged still
+exits 2.
 
-What needs deciding is what the ports decline. All of them decline **`absent`**
-— and `absent` commits zero and **retires**. The trigger is usually a missing
-**receipt**, not a missing interface: before this run unbound was installed and
-running on this host and the adapter still raised, because `SE_UNBOUND_SOCKET`
-was unset. "This process was not told where to look" and "the thing is not here"
-are different statements, and only one of them should retire a row.
+What needed deciding was what the ports decline. All of them declined
+**`absent`** — and `absent` commits zero and **retires**. The trigger is usually
+a missing **receipt**, not a missing interface: unbound was installed and running
+on this host and the adapter still raised, because `SE_UNBOUND_SOCKET` was unset.
+"This process was not told where to look" and "the thing is not here" are
+different statements, and only one of them may retire a row.
 
 Nothing is harmed today, because a host that never had the receipts never
 published the objects. The shape that bites is a host that **loses** its
@@ -330,20 +333,86 @@ both jobs while the reference said nothing. **A venue that misrepresents the
 corpus produces a diff that looks exactly like a port defect.** The staging now
 skips a null payload, and the two sides agree on all 16 objects.
 
+## The rulings, and what they changed
+
+Four rulings were taken on 2026-08-19 and three of them are implemented. They
+moved the report from "the two implementations disagree about what this host
+is" to agreement on every case anybody has judged.
+
+**A configuration gap must never retire an object.** Eight ports declined
+`absent` when a deployment receipt was unset, and `absent` commits zero and
+RETIRES — so an unset variable proposed to delete every row the collector had
+published. Measured on the collector it bites hardest: unbound `active`, socket
+present, `SE_UNBOUND_SOCKET` never set, and the port declined `absent` over it.
+All eight now decline `unavailable` and commit nothing. Two collectors keep
+`absent` and the line between them is principled: `packages` (no dpkg, rpm or
+nix is a probe of the machine, the same reading `zpool` not on PATH already has)
+and `protection` (its manifest sits at a fixed path nobody had to configure, so
+its absence *is* the answer).
+
+**`packages` retired the whole inventory on a manager it could not read.** It
+dispatched through nix, dpkg and rpm and fell through all three returning `[]`,
+which `acquire` handed on as a successful reading. Against a staged `pacman`:
+before, exit 0 and `commit objects:0`; after, exit 2 and no commit.
+
+**`plex` retired every library on an unset token.** The adapter declares
+`libraries` and `sessions` unavailable per collection when the token is missing;
+the HTTP path honours that and the reference driver did not — it acquired them,
+got `[]`, and committed it.
+
+**The reference declines instead of exiting 2, per case and after adjudication.**
+This is the class-1 asymmetry that has been in every version of this report.
+Three triggers, all measured:
+
+| trigger | before | after |
+|---|---|---|
+| a receipt nobody set | reference exits 2, port declines | **8 collectors agree exactly** |
+| an interface that answers *no* (kea's unloaded hook) | reference loses **all four** collections | **commit 3, decline 1** — the port's shape |
+| a service that is simply down | reference exits 2, loses every collection | **declines each**, where the adapter can tell |
+
+The bridge is in the reference SHIM, following the `UnknownCollection` precedent
+already there: over the HTTP contract an exception is correctly an error
+envelope, and only the collector contract wants a decline. The shipping agent is
+unchanged.
+
+**Three things are deliberately not done**, each for a stated reason. The prose
+reason an adapter gives is never parsed — distinguishing not-configured from
+permission-denied structurally means a field on the published capability
+contract, which is a schema change and a ruling of its own. The port's decline
+DETAIL is better than the reference's on three collectors and is not copied
+across, because it is per-collector text and importing it would give one fact
+two homes. And the dark-service trigger only bridges for `traefik`, `unbound`
+and `kea`, because only those three probe their interface inside `capability()`
+— the other five cannot know until they ask, and that split is now its own queue
+item.
+
+**Every one of these fixes over-reached on its first attempt**, and the pattern
+is worth naming because it was the same mistake three times: a rule that is true
+of the case in front of you, applied to every case that looks like it. The
+receipt bridge said "not configured" about a stopped traefik. The
+per-collection bridge declined `hardware`'s `nvme`, where "there are no NVMe
+controllers here" is a genuine reading that must commit zero and retire — and
+that one took full parity from 17 clean to 16 on the next run. And a single
+reason for every gated collection would have told an operator to retry
+something permanent. Each was caught by a measurement rather than by review.
+
 ## What gate 3 still needs
 
-1. **The `vms` ruling** — the only collector not clean, and the measurement is
-   in hand.
-2. **A ruling on class 1** — whether a missing *receipt* may decline `absent`,
-   given that `absent` retires. The symptom is provisioned away on this host;
-   the question is not.
-3. **A ruling on the reference's missing decline vocabulary**, which `kea` made
-   concrete: one unsupported optional command costs the reference four
-   collections where the port loses one.
-4. **A ruling on `units`' could-not-read channel** — see above.
+1. **The `vms` port**, which is the only collector not clean. Its ruling is
+   taken — port it over `virsh`, whose `domstats` answers `state.state=1`, the
+   enum the objection assumed only the C API had — and the work is outstanding.
+2. **`units`' could-not-read channel**, ruled and not yet implemented: route a
+   failed property read to the structural `unobservable` record, and migrate
+   `MissingReferenceUnobservable` with it.
+3. **Whether `capability()` probes as a rule**, which is new and which decides
+   how much of the dark-service trigger can be bridged at all: three adapters
+   probe their interface there and five do not.
+4. **Whether the reference should adopt the port's decline DETAIL** on the
+   three collectors where the port's sentence is better. Not done here, because
+   that text is per-collector and copying it would give one fact two homes.
 
-5. **A ruling on the empty commit**, which `plex` turned from a `packages`
-   curiosity into what a key rotation does.
+Class 1, the empty commit, and the decline vocabulary are **ruled and
+implemented** — see the rulings section above.
 
 Item 4 of the previous report, *"receipts for the app collectors"*, is **done**:
 `traefik`, `paperless`, `plex`, `servarr` and `bazarr` all compare on readings
@@ -365,5 +434,6 @@ be sourced **inside** the privileged shell: `sudo -E` does not carry them past
 `env_reset`, and the app collectors then decline for want of a receipt while
 looking exactly like a host that has no apps.
 
-Parity is **established for seventeen collectors, owed a ruling on one, and
-unavailable for one**.
+Parity is **established for seventeen collectors, owed a PORT on one, and
+unavailable for one**. That last change of word is the round's result: `vms` was
+waiting on a decision this morning and is waiting on work tonight.
