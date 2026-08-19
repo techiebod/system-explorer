@@ -136,6 +136,21 @@ Six of eight clean; the two adjudications are one finding, not two — **the shi
 
 The run also found the defect the lab was for: **storage spelled its absent reading two ways** — `absent` under replay, `unsupported` live — so a host that lost ZFS would have served stale pool objects forever. Closed, with `corpus/storage/absent` (the variant that should have existed from day one, and whose absence is the whole reason the two halves drifted) and a shared constant that makes the disagreement unspellable.
 
+**The lab, provisioned for the fleet, 2026-08-19.** The fleet was blocked on two things and neither was code. The first was interfaces: three of the four guests had almost nothing installed, so most collectors had nothing to capture and their negative case was the only case reachable. The guests now carry, deliberately unevenly:
+
+| Guest | Interfaces | What it is FOR |
+|---|---|---|
+| ubuntu 26.04 | zpool 2.4.1, nft, docker (6 containers), libvirt, unbound, kea, restic, smartctl, busctl, dpkg | the positive case for nearly everything |
+| ubuntu 24.04 | zpool **2.2.2**, nft, restic, smartctl, busctl, dpkg | old interface versions — where `status -j` does not exist |
+| debian 13 | restic, busctl, dpkg | the sparse host: most collectors must decline here |
+| fedora 44 | nft, podman-docker, unbound, restic, smartctl, busctl, **rpm** | the other package manager, and a docker-compatible socket that is not docker |
+
+The unevenness is the design. A lab where every guest had everything would test the positive path four times and the decline path never, and decline-correctness is the half that retires objects.
+
+The second blocker was the seam, and it was the real one: **ten of the seventeen unported adapters have no module-level acquisition at all**, so the monkeypatch the harness had could not reach them. Three seam kinds now cover the fleet — argument-dispatched module readers, instance methods, and instance methods returning an HTTP response — all deny-by-default, all proven on real captures.
+
+**Captured and replaying: `vms`, `packages`, `docker`, `traefik`.** traefik's pair is committed — the first capture this product has taken from an HTTP interface, and it found a null fact value on three of three services the moment it ran. `docker`'s payloads are captured and held OUT of the tree until its scrub manifest classifies them: its documents carry real MACs and host mount paths, and the deny-by-default walk is refusing an imperfect manifest, which is the gate working rather than an obstacle to route around.
+
 > **Gate 3 opens when**
 >
 > every first-party collector passes replay and lab-live checks · items 1, 6, 7, 8 · the parity report per collection is clean or its diffs are named and accepted.
