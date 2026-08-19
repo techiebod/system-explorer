@@ -160,6 +160,52 @@ class Emitter:
         return objects, assertions, unobservable
 
 
+async def materialise(adapter, collection: str, page: dict | None = None) -> list[dict]:
+    """One collection's rows, through whichever verb the adapter actually has.
+
+    Sixteen adapters materialise a whole collection with ``acquire()``, and the
+    two reference drivers called it directly. ``logs`` has no ``acquire()`` at
+    all, and that is the design rather than an omission: a bounded journal
+    query has no "all items" to hand over — the journal is unbounded and the
+    adapter's whole job is to bound it — so its only materialising verb is
+    ``collect(collection, query, limit, cursor)``.
+
+    Driving ``collect()`` there is a second DISPATCH SHAPE, not an
+    inconsistency, and the distinction is worth stating because it looks like
+    one. The shim asks each adapter the question that adapter can answer:
+    calling ``acquire()`` on ``logs`` is an AttributeError, and driving a page
+    against ``storage`` would put THIS module's choice of limit and cursor
+    between the reference and the corpus — the pagination would become part of
+    the captured answer, and every ported collector would have to reproduce a
+    harness decision rather than a reading of the machine. Which shape a
+    collector takes is therefore declared in the seam table beside it, not
+    inferred here from whether an attribute happens to exist: an adapter that
+    lost ``acquire()`` to a refactor would otherwise be silently re-driven as a
+    page and the corpus would move under it.
+
+    It lives here, in the module both drivers share, for the reason this file
+    exists at all — a second copy would drift, and the first thing it would
+    drift on is which rows a collection contains.
+    """
+    if page is None:
+        return await adapter.acquire(collection)
+    result = await adapter.collect(
+        collection, dict(page["query"]), page["limit"], page["cursor"]
+    )
+    # An error envelope carries items=[] and status="error", and committing
+    # that would be authoritative-empty (DESIGN 19) — a batch that retires
+    # every object over a request THIS side composed. The page driven here has
+    # no filters and no cursor, so a refusal means the seam and the adapter
+    # disagree about what is askable, which is "I could not run".
+    if result.get("status") != "ok":
+        raise RuntimeError(
+            f"{collection}: the adapter refused the filterless page this shim "
+            f"drives ({result.get('errors')}), and an error envelope's empty "
+            "item list must never be committed as an authoritative emptiness"
+        )
+    return result["items"]
+
+
 def parse_generations(tokens: list[str], fail: Callable[[str], None]) -> dict[str, int]:
     """collect <collection>:<generation>… (DESIGN 18).
 

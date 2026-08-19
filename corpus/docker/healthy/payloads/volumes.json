@@ -1,0 +1,19 @@
+{
+  "Volumes": [
+    {
+      "CreatedAt": "2026-08-19T08:29:31Z",
+      "Driver": "local",
+      "Labels": {
+        "com.docker.compose.config-hash": "b806504829bfd9ca28c27afb7e8ae7901b1ad415413c73dbd1105d70d04f5c36",
+        "com.docker.compose.project": "labstack",
+        "com.docker.compose.version": "2.40.3",
+        "com.docker.compose.volume": "state"
+      },
+      "Mountpoint": "/var/lib/docker/volumes/labstack_state/_data",
+      "Name": "labstack_state",
+      "Options": null,
+      "Scope": "local"
+    }
+  ],
+  "Warnings": null
+}

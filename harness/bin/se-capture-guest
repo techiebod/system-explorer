@@ -39,8 +39,15 @@ ssh_opts=(-o BatchMode=yes)
 payload_dir="$variant/payloads"
 mkdir -p "$payload_dir"
 
-# What each collector reads, and under which payload name the replay seam
+# What each collector reads, and under which payload FILE the replay seam
 # expects to find it. Keep in step with SEAM in se-reference-collector.
+#
+# The left-hand side carries its extension because the extension is a
+# decision: the native format IS the payload (DESIGN 20), and unbound's
+# control socket answers in a line protocol, so its documents are .txt and
+# only the .json ones are held to being JSON. Spelling it out beats inferring
+# it — a stem that happened to contain a dot would otherwise silently opt out
+# of the JSON check.
 #
 # devlinks is the storage adapter's _devlinks() acquisition, captured as the
 # same {alias path: kernel name} map it builds live: vdev resolution goes
@@ -79,17 +86,33 @@ sys.path.insert(0, "/tmp/secmp/src")
 from system_explorer.agent.adapters.packages import _dpkg_rows
 print(json.dumps(_dpkg_rows()))
 '
+# The journal reader, called with the exact argument list the adapter builds
+# for a filterless first page: `-r` because pages run newest-first, and the
+# adapter'"'"'s own DEFAULT_LIMIT because the collector contract has no limit
+# token — the bound belongs to the collector, and taking it from logs.py is
+# what stops a number here disagreeing with the one the port ships.
+#
+# Privileged: an unprivileged journalctl answers only for the caller'"'"'s own
+# uid (measured on the lab guest: 200 of 200 entries _UID=1000, no kernel
+# transport at all), so an unprivileged capture would be a specimen of one
+# user'"'"'s session rather than of a machine'"'"'s journal.
+logs_py='
+import json, sys
+sys.path.insert(0, "/tmp/secmp/src")
+from system_explorer.agent.adapters.logs import DEFAULT_LIMIT, _run_journalctl
+print(json.dumps(_run_journalctl(["-r", "-n", str(DEFAULT_LIMIT)])))
+'
 declare -a acquisitions
 case "$collector" in
     storage)
         acquisitions=(
-            "status|zpool status -j --json-int"
-            "list|zpool list -j -p -v -o name,size,alloc,free,cap,frag,health"
-            "devlinks|python3 -c '$devlinks_py'"
+            "status.json|zpool status -j --json-int"
+            "list.json|zpool list -j -p -v -o name,size,alloc,free,cap,frag,health"
+            "devlinks.json|python3 -c '$devlinks_py'"
         )
         ;;
     network)
-        acquisitions=("nft|nft -j list ruleset")
+        acquisitions=("nft.json|nft -j list ruleset")
         ;;
     vms)
         # The adapter's own acquisition, run on the guest. _domains_raw is one
@@ -97,30 +120,52 @@ case "$collector" in
         # plain dicts — including each domain's XML as a string — so the
         # payload is exactly what the seam hands back, and `virsh dumpxml` is
         # the by-hand command that reproduces its interesting half.
-        acquisitions=("domains|python3 -c '$vms_py'")
+        acquisitions=("domains.json|python3 -c '$vms_py'")
         ;;
     packages)
         acquisitions=(
-            "manager|python3 -c '$manager_py'"
-            "dpkg|python3 -c '$dpkg_py'"
+            "manager.json|python3 -c '$manager_py'"
+            "dpkg.json|python3 -c '$dpkg_py'"
         )
         ;;
     docker)
         # The engine API IS the native interface, so each path's response
         # document is the payload, named by the path it answers.
         acquisitions=(
-            "containers-json-all-1|sudo curl -s --unix-socket /var/run/docker.sock http://docker/containers/json?all=1"
-            "volumes|sudo curl -s --unix-socket /var/run/docker.sock http://docker/volumes"
-            "networks|sudo curl -s --unix-socket /var/run/docker.sock http://docker/networks"
+            "containers-json-all-1.json|sudo curl -s --unix-socket /var/run/docker.sock http://docker/containers/json?all=1"
+            "volumes.json|sudo curl -s --unix-socket /var/run/docker.sock http://docker/volumes"
+            "networks.json|sudo curl -s --unix-socket /var/run/docker.sock http://docker/networks"
         )
         ;;
     traefik)
         acquisitions=(
-            "api-overview|curl -s \"\$SE_TRAEFIK_URL/api/overview\""
-            "api-version|curl -s \"\$SE_TRAEFIK_URL/api/version\""
-            "api-entrypoints|curl -s \"\$SE_TRAEFIK_URL/api/entrypoints?page=1&per_page=100\""
-            "api-http-routers|curl -s \"\$SE_TRAEFIK_URL/api/http/routers?page=1&per_page=100\""
-            "api-http-services|curl -s \"\$SE_TRAEFIK_URL/api/http/services?page=1&per_page=100\""
+            "api-overview.json|curl -s \"\$SE_TRAEFIK_URL/api/overview\""
+            "api-version.json|curl -s \"\$SE_TRAEFIK_URL/api/version\""
+            "api-entrypoints.json|curl -s \"\$SE_TRAEFIK_URL/api/entrypoints?page=1&per_page=100\""
+            "api-http-routers.json|curl -s \"\$SE_TRAEFIK_URL/api/http/routers?page=1&per_page=100\""
+            "api-http-services.json|curl -s \"\$SE_TRAEFIK_URL/api/http/services?page=1&per_page=100\""
+        )
+        ;;
+    logs)
+        # The payload name is the seam's own addressing, not a label somebody
+        # chose: _run_journalctl is dispatched on its ARGUMENT, so
+        # se-reference-collector keys the document on slug(["-r","-n","100"])
+        # — `r---n--100` — and a reviewer reading the file name is reading the
+        # argv it answers. Renaming it to something prettier would make the
+        # replay seam raise "not captured in this variant" against a file
+        # sitting right beside it.
+        acquisitions=("r---n--100.json|sudo python3 -c '$logs_py'")
+        ;;
+    unbound)
+        # unbound-control speaks the control socket for us, and prints the
+        # reply verbatim — which is exactly what the adapter's _command
+        # returns, so the captured bytes are the document the parser sees.
+        # stats_noreset and never stats: the plain command zeroes every
+        # counter it reports, so capturing with it would destroy the reading
+        # on the guest it came from.
+        acquisitions=(
+            "status.txt|sudo unbound-control status"
+            "stats_noreset.txt|sudo unbound-control stats_noreset"
         )
         ;;
     *)
@@ -136,6 +181,14 @@ case "$collector" in
     vms) version_probe="virsh --version" ;;
     packages) version_probe="dpkg-query --version 2>/dev/null | head -1 || rpm --version" ;;
     docker) version_probe="sudo docker --version" ;;
+    # journalctl is systemd's own binary and reports systemd's version, which
+    # is the version the FIELD SET is a fact about — a journal entry's members
+    # are decided by the systemd that wrote it, not by any separate tool.
+    logs) version_probe="journalctl --version | head -1" ;;
+    # The daemon reporting on itself, which is the version that actually
+    # answered the socket — `unbound -V` reads the binary on PATH and can name
+    # a different build from the one running.
+    unbound) version_probe="sudo unbound-control status | sed -n '1s/^version: /unbound /p'" ;;
     traefik) version_probe="curl -s \"\$SE_TRAEFIK_URL/api/version\" | head -c 120" ;;
 esac
 
@@ -158,18 +211,29 @@ done < <(env)
 
 echo "capturing $collector from $target"
 for entry in "${acquisitions[@]}"; do
-    name="${entry%%|*}"
+    file="${entry%%|*}"
     command="${entry#*|}"
-    echo "  $name  <-  $command"
-    if ! ssh "${ssh_opts[@]}" -- "$target" "$remote_env$command" > "$payload_dir/$name.json"; then
+    echo "  $file  <-  $command"
+    if ! ssh "${ssh_opts[@]}" -- "$target" "$remote_env$command" > "$payload_dir/$file"; then
         echo "  FAILED: $command" >&2
         echo "  A collector that cannot read its interface on this guest is a" >&2
         echo "  finding about the guest, not a payload to commit." >&2
-        rm -f "$payload_dir/$name.json"
+        rm -f "$payload_dir/$file"
         exit 1
     fi
-    if ! python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$payload_dir/$name.json"; then
-        echo "  FAILED: $name is not JSON — text-scraping is forbidden (DESIGN 18)" >&2
+    if [[ $file == *.json ]]; then
+        if ! python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$payload_dir/$file"; then
+            echo "  FAILED: $file is not JSON — text-scraping is forbidden (DESIGN 18)" >&2
+            exit 1
+        fi
+    # A .txt payload is a line protocol or a kernel file, and it is held to
+    # being NON-EMPTY rather than to a grammar: an interface that answered
+    # with nothing produced no document, and committing zero bytes would
+    # replay as an absent interface on a guest where it was present.
+    elif [[ ! -s $payload_dir/$file ]]; then
+        echo "  FAILED: $file came back empty — an interface that answered" >&2
+        echo "  with nothing is a finding about the guest, not a payload." >&2
+        rm -f "$payload_dir/$file"
         exit 1
     fi
 done
@@ -192,9 +256,12 @@ captured to $payload_dir
 Next:
   1. scrub the payloads — serials, WWNs, MACs, hostnames, paths — preserving
      structural consistency across every file in this variant
-  2. harness/bin/se-anonymise --hostnames <real,names> \\
-       --map ~/.local/state/se/scrub/<variant>.json $payload_dir/*.json
-     (the map de-anonymises every specimen; it is refused inside the repo)
+  2. harness/bin/se-anonymise --manifest harness/scrub/$collector.json \\
+       --hostnames <real,names> \\
+       --map ~/.local/state/se/scrub/<variant>.json $payload_dir/*
+     (the manifest is required — the scrubber no longer guesses a value's
+      class from its shape; the map de-anonymises every specimen it keyed,
+      and is refused anywhere inside a git working tree)
   3. write $variant/meta.json with the values above, the variant name, whether
      the lab can re-stage it, and any planted canaries
   4. harness/bin/se-capture --write $variant

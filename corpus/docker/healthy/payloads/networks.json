@@ -1,0 +1,118 @@
+[
+  {
+    "Name": "none",
+    "Id": "6c635af02351ea8e1dca629b0b31fc93b99fb13688b4eb1ff0838ce8bd12a7b7",
+    "Created": "2026-08-19T07:31:49.117098138Z",
+    "Scope": "local",
+    "Driver": "null",
+    "EnableIPv4": true,
+    "EnableIPv6": false,
+    "IPAM": {
+      "Driver": "default",
+      "Options": null,
+      "Config": null
+    },
+    "Internal": false,
+    "Attachable": false,
+    "Ingress": false,
+    "ConfigFrom": {
+      "Network": ""
+    },
+    "ConfigOnly": false,
+    "Options": {},
+    "Labels": {}
+  },
+  {
+    "Name": "host",
+    "Id": "7d947b07bcfc813d7f3abc591030804f3f0e3a4595747707ca3824f7077a9664",
+    "Created": "2026-08-19T07:31:49.129861859Z",
+    "Scope": "local",
+    "Driver": "host",
+    "EnableIPv4": true,
+    "EnableIPv6": false,
+    "IPAM": {
+      "Driver": "default",
+      "Options": null,
+      "Config": null
+    },
+    "Internal": false,
+    "Attachable": false,
+    "Ingress": false,
+    "ConfigFrom": {
+      "Network": ""
+    },
+    "ConfigOnly": false,
+    "Options": {},
+    "Labels": {}
+  },
+  {
+    "Name": "bridge",
+    "Id": "b76f2a0af19dfb0f1e495a462b3cc64d579e30232a14fb0692316b845f8fafe0",
+    "Created": "2026-08-19T07:31:49.139803777Z",
+    "Scope": "local",
+    "Driver": "bridge",
+    "EnableIPv4": true,
+    "EnableIPv6": false,
+    "IPAM": {
+      "Driver": "default",
+      "Options": null,
+      "Config": [
+        {
+          "Subnet": "172.31.0.0/16",
+          "IPRange": "",
+          "Gateway": "172.23.241.236"
+        }
+      ]
+    },
+    "Internal": false,
+    "Attachable": false,
+    "Ingress": false,
+    "ConfigFrom": {
+      "Network": ""
+    },
+    "ConfigOnly": false,
+    "Options": {
+      "com.docker.network.bridge.default_bridge": "true",
+      "com.docker.network.bridge.enable_icc": "true",
+      "com.docker.network.bridge.enable_ip_masquerade": "true",
+      "com.docker.network.bridge.host_binding_ipv4": "0.0.0.0",
+      "com.docker.network.bridge.name": "docker0",
+      "com.docker.network.driver.mtu": "1500"
+    },
+    "Labels": {}
+  },
+  {
+    "Name": "labstack_default",
+    "Id": "2a0990979cde990478e957534806660c47feee926a3a3bf6a3f9d152cca9e696",
+    "Created": "2026-08-19T08:29:31.779784091Z",
+    "Scope": "local",
+    "Driver": "bridge",
+    "EnableIPv4": true,
+    "EnableIPv6": false,
+    "IPAM": {
+      "Driver": "default",
+      "Options": null,
+      "Config": [
+        {
+          "Subnet": "172.16.0.0/16",
+          "IPRange": "",
+          "Gateway": "172.24.108.3"
+        }
+      ]
+    },
+    "Internal": false,
+    "Attachable": false,
+    "Ingress": false,
+    "ConfigFrom": {
+      "Network": ""
+    },
+    "ConfigOnly": false,
+    "Options": {},
+    "Labels": {
+      "com.docker.compose.config-hash": "1ba0229b47ae4aee568eee1e6c925e11b40466e8ff23285b748cd6183718e091",
+      "com.docker.compose.network": "default",
+      "com.docker.compose.project": "labstack",
+      "com.docker.compose.version": "2.40.3"
+    }
+  }
+]

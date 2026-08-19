@@ -1,0 +1,176 @@
+{
+  "collector": "docker",
+  "collections": [
+    "containers",
+    "volumes",
+    "networks"
+  ],
+  "variant": "healthy",
+  "provenance": "captured",
+  "os": "ubuntu",
+  "os_version": "26.04",
+  "source_version": "Docker version 29.1.3, build 29.1.3-0ubuntu4.1",
+  "captured": "2026-08-19T08:31:00Z",
+  "regenerable": true,
+  "regenerable_on": "any guest running dockerd with the compose plugin, staged as harness/bin/se-capture-guest's docker case expects: a compose project (which is what mints a user-defined bridge network, a named volume and the com.docker.compose.project label in one act), one host-networked service, and one container that has run and exited. A guest with only the three default networks and no compose file regenerates a payload that exercises one of the three collections and the trivial half of the third.",
+  "canaries": [],
+  "anonymised": true,
+  "note": "Nine containers, four networks and one volume on a lab guest's dockerd, scrubbed against harness/scrub/docker.json. Every container, image, network and endpoint id is published verbatim — a docker id is minted from randomness at create time and denotes nothing outside the daemon that minted it — and what IS substituted is the twenty values that do denote something: seven interface MACs and thirteen addresses, each within its own space so a 172.16/12 address stays one.\n\nWhat this variant exists to teach is that a docker row is mostly about what it does NOT say. Six of the nine containers carry no ComposeProject because no compose file created them; the exited one carries no ScopeUnit because systemd deleted the scope with its last process; the host-networked one carries no Ports because there is nothing to publish when every port the process binds is already open on the host's own addresses. All three used to be published as null, on every row, which is unlawful twice over (the contract's recursive fact_value and the replay judge) — the first real capture is what found it, and it is why the anchors below assert five absences and not only values.\n\nThe two BridgeInterface branches are both here, and they are the reason network/links is not a wall of anonymous plumbing. `bridge` gets docker0 from the daemon's own com.docker.network.bridge.name option; `labstack_default` has no such option and gets br-2a0990979cde, derived as br- plus the first twelve characters of the network id. That derivation was verified against the guest's own `ip link` at staging, where br-2a0990979cde is a real device. The host and null drivers plumb no interface and claim none.\n\nStated bounds, because a specimen shows one machine on one day. Every container is bridge-, host- or project-networked and none is restarting, paused, dead or created, so of the seven states _scope_unit discriminates on only running and exited are exercised — the restarting and paused arms, which DO keep a scope, are reached by nothing here. No image declares a healthcheck that fails, so Health only ever reads \"none\" or \"healthy\" and the unhealthy opinion is unreached (opinions do not travel the collector stream in any case). No network is internal and none is IPv6-enabled, so Internal is false on all four rows and the GlobalIPv6Address and IPv6Gateway members are only ever seen holding docker's empty-string sentinel. And the scrubber substitutes each address independently of the prefix it belongs to, so the bridge network's Gateway no longer falls inside its own scrubbed Subnet; nothing this collector publishes reads either member, but a reader comparing them should know the relation was lost in the scrub rather than absent from the daemon.",
+  "anchors": [
+    {
+      "collection": "containers",
+      "object": "lab-oneshot",
+      "fact": "State",
+      "value": "exited"
+    },
+    {
+      "collection": "containers",
+      "object": "lab-oneshot",
+      "fact": "Created",
+      "value": "2026-08-19T08:29:38Z"
+    },
+    {
+      "collection": "containers",
+      "object": "lab-oneshot",
+      "absent_fact": "ScopeUnit"
+    },
+    {
+      "collection": "containers",
+      "object": "lab-oneshot",
+      "absent_fact": "ComposeProject"
+    },
+    {
+      "collection": "containers",
+      "object": "labstack-worker-1",
+      "fact": "NetworkMode",
+      "value": "host"
+    },
+    {
+      "collection": "containers",
+      "object": "labstack-worker-1",
+      "fact": "ScopeUnit",
+      "value": "docker-abca102c682048799d799d8209cf73f0a25da4c7989edec3dc58a5aac788d5ef.scope"
+    },
+    {
+      "collection": "containers",
+      "object": "labstack-worker-1",
+      "absent_fact": "Ports"
+    },
+    {
+      "collection": "containers",
+      "object": "labstack-cache-1",
+      "fact": "ComposeProject",
+      "value": "labstack"
+    },
+    {
+      "collection": "containers",
+      "object": "labstack-cache-1",
+      "fact": "NetworkMode",
+      "value": "labstack_default"
+    },
+    {
+      "collection": "containers",
+      "object": "labstack-cache-1",
+      "fact": "Ports",
+      "value": [
+        "0.0.0.0:18080->8080/tcp"
+      ]
+    },
+    {
+      "collection": "containers",
+      "object": "traefik",
+      "fact": "ContainerID",
+      "value": "b95be65d4b8b"
+    },
+    {
+      "collection": "containers",
+      "object": "traefik",
+      "fact": "Ports",
+      "value": [
+        "0.0.0.0:8081->80/tcp",
+        "0.0.0.0:8080->8080/tcp"
+      ]
+    },
+    {
+      "collection": "containers",
+      "object": "transmission",
+      "fact": "Ports",
+      "value": [
+        "0.0.0.0:9091->9091/tcp",
+        "51413/tcp (exposed)",
+        "51413/udp (exposed)"
+      ]
+    },
+    {
+      "collection": "containers",
+      "commit_objects": 9
+    },
+    {
+      "collection": "networks",
+      "object": "bridge",
+      "fact": "BridgeInterface",
+      "value": "docker0"
+    },
+    {
+      "collection": "networks",
+      "object": "labstack_default",
+      "fact": "BridgeInterface",
+      "value": "br-2a0990979cde"
+    },
+    {
+      "collection": "networks",
+      "object": "labstack_default",
+      "fact": "ComposeProject",
+      "value": "labstack"
+    },
+    {
+      "collection": "networks",
+      "object": "host",
+      "absent_fact": "BridgeInterface"
+    },
+    {
+      "collection": "networks",
+      "object": "none",
+      "fact": "Driver",
+      "value": "null"
+    },
+    {
+      "collection": "networks",
+      "object": "none",
+      "fact": "Internal",
+      "value": false
+    },
+    {
+      "collection": "networks",
+      "commit_objects": 4
+    },
+    {
+      "collection": "volumes",
+      "object": "labstack_state",
+      "fact": "Driver",
+      "value": "local"
+    },
+    {
+      "collection": "volumes",
+      "object": "labstack_state",
+      "fact": "Mountpoint",
+      "value": "/var/lib/docker/volumes/labstack_state/_data"
+    },
+    {
+      "collection": "volumes",
+      "object": "labstack_state",
+      "fact": "ComposeProject",
+      "value": "labstack"
+    },
+    {
+      "collection": "volumes",
+      "commit_objects": 1
+    },
+    {
+      "collection": "networks",
+      "object": "none",
+      "absent_fact": "BridgeInterface"
+    }
+  ],
+  "anchors_note": "Read off payloads/ by hand at staging, before any stream was generated, which is what makes them an authority the reference-generated half is not. Every value is the scrubbed spelling, because that is what the committed payload carries.\n\nThe five absences are the half a value anchor cannot state, and each names a different reason a fact does not apply. lab-oneshot has no ScopeUnit because it has exited and systemd deleted the transient scope — a port that derived docker-<id>.scope from the id alone, without asking whether the container still has processes, publishes a unit `systemctl status` answers \"could not be found\" for, and fails here. lab-oneshot has no ComposeProject because nothing labelled it; labstack-worker-1 has no Ports because it shares the host's network namespace. Both of those members are PRESENT in the document — Labels is a dict without the key, Ports is a literal [] — so the anchor discriminates between omission and the two wrong spellings a port reaches for, null and [].\n\nThe port renderings are the densest anchors and each was chosen for the rewrite it refuses. labstack-cache-1's single entry is the dual-stack collapse: the document lists 18080->8080 twice, once for 0.0.0.0 and once for ::, and they are one binding — a port that published both emits two entries and fails. traefik's pair is the ORDER: the document lists 80->8081 before 8080->8080, and the rendering sorts by CONTAINER port, so 8081->80 comes first even though its host port is the larger. A port sorting on the host port emits the same two strings the other way round and fails, which is what makes this anchor about the rule rather than about the values. transmission's three carry the exposed-but-unpublished shape: 51413 has no PublicPort in the document and renders marked rather than being dropped, because the admin asking why they cannot reach it is told the port exists and was never published — and published entries sort before exposed ones.\n\nBridgeInterface is anchored on both branches because they come from different authorities and a port implementing one would pass a corpus holding only the other. docker0 is READ, from the daemon's com.docker.network.bridge.name option; br-2a0990979cde is DERIVED, br- plus the first twelve characters of 2a0990979cde990478e957534806660c47feee926a3a3bf6a3f9d152cca9e696. The guest's own `ip link` carried br-2a0990979cde at staging, which is the independent check that the derivation is docker's real naming and not a plausible guess.\n\nDriver \"null\" on the `none` network is a typed anchor wearing a trap: the value is the four-character STRING null, which is how docker names the driver that plumbs nothing, and the corpus judge compares under typed equality — so a port whose decoder turned it into a JSON null fails, and so does one that dropped the fact for looking empty. Internal false is a BOOLEAN for the same reason: \"false\" and 0 are different answers to a typed consumer.\n\nThe three commit counts are anchored because absence is not the only way to lose a collection. containers is 9 and the request asks for all states, so a port that listed only running containers commits 8 and every fact anchor above still passes; networks is 4 and volumes is 1, and each is the length of the list the payload carries.\n\nDeliberately not anchored: the container ids in full, the image digests, and every address and MAC in the payload. The ids reach the row only as their first twelve characters (anchored once, on traefik) and as the ScopeUnit name (anchored once, on labstack-worker-1); the rest are members this collection does not publish, and the addresses and MACs are substitutions, which would make an anchor an authority about the scrubber rather than about the machine.\n\nTwo corrections from an independent audit of this pair, kept here rather than quietly applied, because a note offered as hand-read authority has to say when it was not. The `none` network had no absence anchor even though the paragraph above argues for one — 'the host and null drivers plumb no interface and claim none' — so a port that derived a BridgeInterface for the null driver was caught on `host` alone and the argument covered a case the anchors did not. It is anchored now, which is what makes the count five. And the labstack_default id quoted above was copied out of go/cmd/se-collect-docker/replay_test.go rather than read off payloads/networks.json: the last eight hex characters differed, nothing derived changed because only the first twelve reach a br- name, and that is exactly why it survived reading. It now matches the capture."
+}

@@ -25,7 +25,7 @@ REPO = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(REPO / "harness"))
 
-from se_harness.emission import Emitter, parse_generations  # noqa: E402
+from se_harness.emission import Emitter, materialise, parse_generations  # noqa: E402
 
 
 def fail(message: str) -> None:
@@ -69,7 +69,7 @@ if os.environ.get("SE_REPLAY_NOW"):
     pin_clock(os.environ["SE_REPLAY_NOW"])
 
 from system_explorer.agent.adapters import (  # noqa: E402
-    docker, network, packages, storage, traefik, vms,
+    docker, logs, network, packages, storage, traefik, unbound, vms,
 )
 
 # Which module-level acquisition each collector redirects, and what payload
@@ -157,6 +157,60 @@ SEAM = {
         # whatever URL the replaying machine has in its environment.
         "methods": ["_get", "_get_list"],
         "instance": {"url": "http://replay.invalid"},
+    },
+    "unbound": {
+        "module": unbound,
+        "adapter": unbound.Adapter,
+        "interface": "unbound control socket",
+        "collections": ["daemon"],
+        # One command, one connection, one document — so the payload is keyed
+        # on the command, and the two on the acquisition path are `status` and
+        # `stats_noreset`. The _noreset suffix is load-bearing rather than
+        # decorative: plain `stats` ZEROES the counters as a side effect of
+        # reporting them, so a capture taken with it would both lie about this
+        # host and destroy the reading it came from.
+        #
+        # The payloads are .txt, not .json: the control socket answers in a
+        # line protocol and the native format IS the payload (DESIGN 20), so
+        # load_payloads hands the exact bytes to the same parser the live
+        # adapter runs. Wrapping them in a JSON string would put a
+        # transcription between the capture and the code under test.
+        "methods": ["_command"],
+        # Pinned rather than left alone. The adapter reads SE_UNBOUND_SOCKET
+        # in __init__, so an unpinned replay would carry whatever the machine
+        # REPLAYING the corpus has in its environment — nothing dials it once
+        # _command is stubbed, but a replay whose adapter state depends on the
+        # ambient environment is one seam edit away from dialling it.
+        "instance": {"socket_path": "/replay.invalid/unbound.ctl"},
+    },
+    # ── the one collector with no acquire(), and the shape that follows ──
+    "logs": {
+        "module": logs,
+        "adapter": logs.Adapter,
+        "interface": "systemd journal",
+        "collections": ["journal"],
+        # _run_journalctl(args) is module-level and returns the parsed entries,
+        # but WHICH entries depends entirely on the argument list — so it takes
+        # the dispatched module seam and the payload is keyed on slug(args):
+        # `-r -n 100` becomes `r---n--100.json`, which is the argv a reviewer
+        # can re-run by hand against the guest it came from.
+        "arg_acquisitions": ["_run_journalctl"],
+        # logs has NO acquire() method. That is by design and not an omission:
+        # a bounded journal query has no "all items" to materialise, so the
+        # adapter's only materialising verb is collect(). Declaring the page
+        # here is what makes that a second dispatch shape rather than an
+        # inconsistency — see se_harness.emission.materialise, which explains
+        # why the choice is declared beside the collector instead of inferred
+        # from whether acquire() happens to exist.
+        #
+        # The page itself is the plainest the contract admits: no filters, no
+        # cursor, and limit=None so the bound is logs.DEFAULT_LIMIT rather than
+        # a number chosen here. The collector contract carries no limit token
+        # (DESIGN 18), so the bound belongs to the collector — and taking it
+        # from the adapter is what stops this table, se-capture-guest and the
+        # ported binary from each holding their own copy of it.
+        "page": {"query": {}, "limit": None, "cursor": None},
+        "instance": {},
     },
     "network": {
         "module": network,
@@ -394,7 +448,7 @@ def run(collector: str, generations: dict[str, int], payload_dir: Path) -> None:
 
     for collection in generations:
         try:
-            items = asyncio.run(adapter.acquire(collection))
+            items = asyncio.run(materialise(adapter, collection, spec.get("page")))
         except Exception as exc:  # a real inability to run, not a decline
             fail(
                 f"{collector}/{collection}: acquisition raised "

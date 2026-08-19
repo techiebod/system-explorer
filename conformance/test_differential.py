@@ -201,6 +201,36 @@ CASES = (
          # capture and this is the operator that mints the one shape it exists
          # for.
          ("unexpected:", differential.REMOVED_PACKAGE, "objects: expected")),
+    Case("thread-share-blind", "unbound-second-thread",
+         "a9_thread_share_blind.py", differential.DISAGREE, "differences",
+         # Both halves of the one row, by value: the resolver's query total,
+         # which only an implementation reading `total.` can produce, and the
+         # first thread's share, which is what a thread-blind one publishes in
+         # its place. Bound to the pair because the facts dict is compared
+         # whole — a single spelling would also be satisfied by a port that had
+         # lost some other counter entirely. Every committed capture is of a
+         # ONE-thread resolver, where the two numbers are the same on every
+         # line, so this distinction is exercised by no replay and this
+         # operator is what mints the only shape that draws it.
+         (differential.UNBOUND_QUERY_TOTAL, differential.UNBOUND_THREAD_SHARE)),
+    Case("scoped-state-enum", "docker-restarting-container",
+         "a9_scope_state_blind.py", differential.DISAGREE, "differences",
+         # The fact and the unit it names, by value. Every committed container
+         # is running or exited, and a running-only scope rule agrees with the
+         # reference on both — so the blindness is invisible until a container
+         # is crash-looping, which is the moment somebody is actually following
+         # the edge from a units/units row back to a name. Bound to the scope
+         # NAME as well as the fact, because the name is derived from the full
+         # id and a port that published the twelve-character form would satisfy
+         # a bare "ScopeUnit" and still resolve to no unit at all.
+         ("ScopeUnit", differential.RESTARTING_SCOPE)),
+    Case("scoped-state-enum", "docker-paused-container",
+         "a9_scope_state_blind.py", differential.DISAGREE, "differences",
+         # The third member of the declared set, staged separately for the same
+         # reason the nftables families are: an enum that learned `restarting`
+         # the hard way still drops `paused`, and a closed set is closed member
+         # by member or not at all.
+         ("ScopeUnit", differential.PAUSED_SCOPE)),
 )
 
 
@@ -441,9 +471,20 @@ def _declared_zfs_groups() -> frozenset[str]:
     return frozenset(storage.ZFS_GROUP_VDEVS)
 
 
+def _declared_scoped_states() -> frozenset[str]:
+    """The container states that keep a scope cgroup, from docker.py's own
+    declared constant. Docker's vocabulary rather than this product's, which is
+    the point: the set is closed by the daemon and a port that shipped a shorter
+    one is wrong about a machine, not about a convention."""
+    from system_explorer.agent.adapters import docker
+
+    return frozenset(docker._SCOPED_STATES)
+
+
 _AUTHORITIES = {
     "family-enum": _declared_nft_families,
     "group-enum": _declared_zfs_groups,
+    "scoped-state-enum": _declared_scoped_states,
 }
 
 

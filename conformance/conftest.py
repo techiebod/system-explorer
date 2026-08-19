@@ -46,6 +46,8 @@ GO_COLLECTORS = {
     "network": "./cmd/se-collect-network",
     "vms": "./cmd/se-collect-vms",
     "packages": "./cmd/se-collect-packages",
+    "unbound": "./cmd/se-collect-unbound",
+    "docker": "./cmd/se-collect-docker",
 }
 
 

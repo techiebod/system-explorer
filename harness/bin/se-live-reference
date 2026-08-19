@@ -39,7 +39,7 @@ REPO = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(REPO / "harness"))
 
-from se_harness.emission import Emitter, parse_generations  # noqa: E402
+from se_harness.emission import Emitter, materialise, parse_generations  # noqa: E402
 
 
 def fail(message: str) -> None:
@@ -58,7 +58,7 @@ if os.environ.get("SE_REPLAY_DIR"):
 
 from system_explorer.agent import envelope as env  # noqa: E402
 from system_explorer.agent.adapters import (  # noqa: E402
-    docker, network, packages, storage, traefik, vms,
+    docker, logs, network, packages, storage, traefik, unbound, vms,
 )
 
 # The collections each adapter serves live, and the capability attributes the
@@ -80,6 +80,18 @@ LIVE = {
     "traefik": {"module": traefik, "adapter": traefik.Adapter,
                 "interface": "traefik api",
                 "collections": ["overview", "routers", "services"]},
+    "unbound": {"module": unbound, "adapter": unbound.Adapter,
+                "interface": "unbound control socket",
+                "collections": ["daemon"]},
+    # The one adapter with no acquire(): a bounded journal query has no "all
+    # items" to materialise, so `page` names the collect() call to drive and
+    # emission.materialise dispatches on it. Declared here as well as in the
+    # replay seam because the two references must ask the adapter the SAME
+    # question — a live comparison whose reference read a different page than
+    # the corpus did would diff a port against an answer nobody captured.
+    "logs": {"module": logs, "adapter": logs.Adapter,
+             "interface": "systemd journal", "collections": ["journal"],
+             "page": {"query": {}, "limit": None, "cursor": None}},
 }
 
 
@@ -178,7 +190,7 @@ def run(collector: str, generations: dict[str, int]) -> None:
     for collection in generations:
         at = time.clock_gettime(time.CLOCK_BOOTTIME)
         try:
-            items = asyncio.run(adapter.acquire(collection))
+            items = asyncio.run(materialise(adapter, collection, spec.get("page")))
         except env.UnknownCollection:
             # The adapter's capability gate said it does not serve this
             # collection here — for storage that is `self._zfs`, which is

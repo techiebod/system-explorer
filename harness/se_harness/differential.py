@@ -68,6 +68,8 @@ SEEDS = {
     "storage": "storage/healthy",
     "vms": "vms/healthy",
     "packages": "packages/healthy",
+    "unbound": "unbound/healthy",
+    "docker": "docker/healthy",
 }
 
 # Names the operators mint. Constants rather than inline literals so the
@@ -93,6 +95,36 @@ GUEST_ADDRESS = "192.168.122.50"
 # configuration of: ifupdown is what netplan replaced, so `rc  ifupdown` is an
 # ordinary line in `dpkg -l` on an upgraded Ubuntu guest.
 REMOVED_PACKAGE = "ifupdown"
+# The two containers the docker operators mint, and the scope units the daemon
+# gives them. Sixty-four hex characters, because a docker id is what the scope
+# name is derived from and a short one would exercise the wrong branch. The
+# names carry the `mut-` prefix every minted object in this module uses, so a
+# reader of a failing diff can tell a staged row from a captured one.
+RESTARTING_CONTAINER = "mut-restarting"
+RESTARTING_ID = "d0c1e2a3b4956677889900aabbccddeeff00112233445566778899aabbccddee"
+RESTARTING_SCOPE = f"docker-{RESTARTING_ID}.scope"
+PAUSED_CONTAINER = "mut-paused"
+PAUSED_ID = "c1a2b3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90"
+PAUSED_SCOPE = f"docker-{PAUSED_ID}.scope"
+# The second resolver thread the unbound operator mints, and what it has been
+# doing: one thread's own share of the traffic, in the records `stats_noreset`
+# keeps per thread. Its cache hits and misses sum to its queries, because a
+# document whose members disagree with each other is not one unbound produces.
+UNBOUND_THREAD1 = {
+    "num.queries": 37,
+    "num.cachehits": 20,
+    "num.cachemiss": 17,
+    "num.prefetch": 3,
+    "requestlist.current.all": 1,
+}
+# The two spellings the disagreement lands on: the resolver's query total,
+# which only an implementation reading `total.` can produce, and the first
+# thread's share, which is what a thread-blind one publishes in its place.
+# Read off the committed seed — 21 queries — plus the thread minted above; a
+# re-stage of corpus/unbound/healthy moves both, exactly as it moves that
+# variant's anchors, and the case that binds to them fails by name when it does.
+UNBOUND_QUERY_TOTAL = "'NumQueries': 58"
+UNBOUND_THREAD_SHARE = "'NumQueries': 21"
 
 
 # ── nftables helpers, grammar-aware ──────────────────────────────────────
@@ -782,6 +814,172 @@ def _removed_but_configured_row(payloads: dict) -> dict:
     return payloads
 
 
+# ── unbound's control socket ─────────────────────────────────────────────
+
+# Records whose total is not a sum over the threads: an average across two
+# identical threads is that average, and a high-water mark across them is that
+# mark. Raising either by addition would produce a figure unbound cannot report.
+_NOT_SUMMED_OVER_THREADS = (".avg", ".median", ".max")
+
+
+def _keep_trailing_newline(original: str, lines: list[str]) -> str:
+    """Rejoin rewritten lines without moving the document's final byte.
+
+    The replay seam serves these payloads verbatim, and a mutation that also
+    reformatted would put the harness's whitespace into the comparison.
+    """
+    return "\n".join(lines) + ("\n" if original.endswith("\n") else "")
+
+
+def _second_resolver_thread(payloads: dict) -> dict:
+    """CLASS thread-share-blind: a stats parse that cannot tell the resolver's
+    TOTAL from one thread's share of it.
+
+    `stats_noreset` reports every counter twice — once per thread as
+    `threadN.…`, once summed as `total.…` — and on the single-threaded resolver
+    every committed capture holds, the two are the same number on every line.
+    So a port that reads `thread0.` outright, or that keys a record on its tail
+    and keeps the first match it meets, reproduces the committed pair exactly
+    while being wrong about every multi-threaded resolver there is. Wrong in the
+    direction that matters, too: it under-reports the query load of the busiest
+    hosts, because more than one thread is what a busy resolver is configured
+    with.
+
+    So give this resolver a second thread. Its traffic is minted (UNBOUND_THREAD1),
+    the records that are not per-thread sums are copied rather than added, and
+    every summed total rises by what the new thread did. The status document
+    moves with it: `threads: 1` beside a thread1 block is not a document unbound
+    produces, and the mutator's contract is a machine that could exist.
+    """
+    stats = payloads["stats_noreset"]
+    lines = stats.splitlines()
+    thread0 = {}
+    for line in lines:
+        key, sep, value = line.partition("=")
+        if sep and key.startswith("thread0."):
+            thread0[key[len("thread0."):]] = value
+    if not thread0:
+        raise MutatorError(
+            "the stats payload carries no thread0 records, so there is no "
+            "per-thread block to add a thread to"
+        )
+
+    def thread1(tail: str) -> str:
+        return str(UNBOUND_THREAD1.get(tail, thread0[tail]))
+
+    out: list[str] = []
+    added = False
+    for line in lines:
+        key, sep, value = line.partition("=")
+        if sep and key.startswith("thread0."):
+            out.append(line)
+            continue
+        if not added:
+            # The first line past the thread0 block is where unbound writes the
+            # next thread's, so that is where this one goes.
+            out.extend(f"thread1.{tail}={thread1(tail)}" for tail in thread0)
+            added = True
+        if sep and key.startswith("total."):
+            tail = key[len("total."):]
+            if tail in thread0 and not tail.endswith(_NOT_SUMMED_OVER_THREADS):
+                line = f"{key}={int(value) + int(thread1(tail))}"
+        out.append(line)
+    payloads["stats_noreset"] = _keep_trailing_newline(stats, out)
+
+    status = payloads["status"]
+    payloads["status"] = _keep_trailing_newline(status, [
+        "threads: 2" if line.partition(":")[0].strip() == "threads" else line
+        for line in status.splitlines()
+    ])
+    return payloads
+
+
+# ── docker containers ────────────────────────────────────────────────────
+
+
+def _container_entry(identifier: str, name: str, state: str, status: str) -> dict:
+    """One /containers/json?all=1 row, as dockerd spells one.
+
+    The members are the ones adapters/docker.py reads plus the ones every
+    listing entry carries, because a row missing Image or HostConfig is not a
+    document dockerd produces and the mutated payload has to stay one. No
+    Labels: the minted containers belong to no compose project, which keeps the
+    disagreement about the scope alone.
+    """
+    return {
+        "Id": identifier,
+        "Names": [f"/{name}"],
+        "Image": "busybox:latest",
+        "ImageID": "sha256:" + identifier,
+        "Command": "sh -c 'while :; do sleep 3600; done'",
+        # Inside the corpus's own window, so the row reads as one taken beside
+        # the captured containers rather than at some unrelated moment.
+        "Created": 1787128180,
+        "Ports": [],
+        "Labels": {},
+        "State": state,
+        "Status": status,
+        "HostConfig": {"NetworkMode": "bridge"},
+        "NetworkSettings": {"Networks": {}},
+        "Mounts": [],
+    }
+
+
+def _append_container(payloads: dict, entry: dict) -> dict:
+    listing = payloads.get("containers-json-all-1")
+    if not isinstance(listing, list):
+        raise MutatorError("the payload carries no container listing")
+    if any(isinstance(row, dict) and row.get("Id") == entry["Id"] for row in listing):
+        raise MutatorError(
+            f"{entry['Id']} is already in this capture, so a minted row would be "
+            "a duplicate rather than a new container"
+        )
+    listing.append(entry)
+    return payloads
+
+
+def _restarting_container(payloads: dict) -> dict:
+    """CLASS scoped-state-enum: a scope name derived from the states its author
+    met. adapters/docker.py declares the closed set _SCOPED_STATES — the states
+    that HAVE processes and therefore a live scope cgroup — and `running` is
+    only one of its three. A port whose rule is `state == "running"`, which is
+    the simplification anybody writes first, is right about every container in
+    every committed capture and wrong about a crash-looping one.
+
+    That is the container an operator most wants to find. A restarting container
+    is burning CPU right now, its scope is where the kernel keeps the accounting
+    that says so, and a port that omits ScopeUnit there breaks the only edge
+    from units/units back to a name a person recognises — precisely when
+    somebody is looking.
+
+    The Status string is dockerd's own spelling for the state, because a
+    document whose Status disagrees with its State is not one dockerd produces
+    and the reference's opinion evaluator reads both.
+    """
+    return _append_container(
+        payloads,
+        _container_entry(RESTARTING_ID, RESTARTING_CONTAINER, "restarting",
+                         "Restarting (1) 3 seconds ago"),
+    )
+
+
+def _paused_container(payloads: dict) -> dict:
+    """CLASS scoped-state-enum, the paused spelling: the third member of
+    _SCOPED_STATES and the one an enum reaches last.
+
+    Staged separately for the same reason the nftables families are: an enum
+    port that has learned `restarting` the hard way still drops `paused`, and a
+    closed set is closed member by member or not at all. A paused container is
+    frozen by the freezer cgroup with every process still resident — its scope
+    is very much alive, which is exactly what makes the omission look
+    defensible and be wrong.
+    """
+    return _append_container(
+        payloads,
+        _container_entry(PAUSED_ID, PAUSED_CONTAINER, "paused", "Up 4 minutes (Paused)"),
+    )
+
+
 @dataclass(frozen=True)
 class Operator:
     """One structural transformation, bound to the defect class it exposes."""
@@ -814,6 +1012,12 @@ OPERATORS: tuple[Operator, ...] = (
     Operator("libvirt-running-guest", "vms", "address-blind", _running_guest),
     Operator("dpkg-removed-config-row", "packages", "status-blind",
              _removed_but_configured_row),
+    Operator("unbound-second-thread", "unbound", "thread-share-blind",
+             _second_resolver_thread),
+    Operator("docker-restarting-container", "docker", "scoped-state-enum",
+             _restarting_container),
+    Operator("docker-paused-container", "docker", "scoped-state-enum",
+             _paused_container),
 )
 
 
@@ -910,6 +1114,21 @@ def zpool_vdev_names_in(payloads: dict) -> frozenset[str]:
 ZFS_GROUP_KEYS = ("logs", "l2cache", "spares")
 
 
+def container_states_in(payloads: dict) -> frozenset[str]:
+    """Every State any container row in a docker payload names — the raw tokens
+    present, for the closure guard to intersect with the scope-bearing set
+    adapters/docker.py declares. Reads the same member the operators mint and
+    _scope_unit branches on, which is the one way the product answers it."""
+    listing = payloads.get("containers-json-all-1")
+    if not isinstance(listing, list):
+        return frozenset()
+    return frozenset(
+        row["State"]
+        for row in listing
+        if isinstance(row, dict) and isinstance(row.get("State"), str)
+    )
+
+
 @dataclass(frozen=True)
 class ClosedClass:
     """One `exposes=` label that claims to close a finite declared set. The
@@ -937,6 +1156,13 @@ CLOSED_CLASSES: tuple[ClosedClass, ...] = (
         collector="storage",
         authority="system_explorer.agent.adapters.storage.ZFS_GROUP_VDEVS",
         members_in=zpool_vdev_names_in,
+        residual={},
+    ),
+    ClosedClass(
+        label="scoped-state-enum",
+        collector="docker",
+        authority="system_explorer.agent.adapters.docker._SCOPED_STATES",
+        members_in=container_states_in,
         residual={},
     ),
 )

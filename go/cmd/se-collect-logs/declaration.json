@@ -1,0 +1,153 @@
+{
+  "schema": "se.declaration/1",
+  "collector": "logs",
+  "version": "0.7.0",
+  "authority": {
+    "read_paths": [
+      "/run/log/journal",
+      "/var/log/journal",
+      "/proc/sys/kernel/random/boot_id",
+      "/proc/self/timens_offsets"
+    ],
+    "groups": ["systemd-journal"],
+    "commands": ["journalctl"]
+  },
+  "probe": "journalctl answers a bounded newest-first read here. The group is the whole of the question: journalctl on PATH is not the answer, because an unprivileged reader is served its own uid's entries and nothing else — measured on the lab guest, 200 of 200 entries came back _UID=1000 with no kernel transport at all — so a probe that only looked for the binary would report yes for a collector that can see one user's session and calls it the machine's journal.",
+  "collections": [
+    {
+      "name": "journal",
+      "question": "what has this machine logged, newest first?",
+      "prefix": "entry",
+      "freshness": "60s",
+      "perishability": "sampled",
+      "answer": ["Timestamp", "Priority", "SyslogIdentifier", "Message"],
+      "ceiling": { "records": 1000, "bytes": 4194304 },
+      "facts": {
+        "Message": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/MESSAGE",
+          "sentence": "The log line as its emitter wrote it. Content, and the widest disclosure surface this product has: a message is whatever a program chose to print, which on some machine somewhere includes a path, an address or a credential. Declared `string` because that is what journald carries for a text entry; an entry whose bytes are not valid UTF-8 is rendered by journalctl as an array of byte values and republished here unchanged, which the declared type cannot express and the vocabulary has no union for."
+        },
+        "MessageId": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/MESSAGE_ID",
+          "sentence": "The emitter's own catalogue id for a message TYPE, so two entries differing only in an interpolated value share it. It is a constant compiled into the emitting software — the same 32 hex digits on every machine running it — and most emitters set none, which is why repetition falls back to the message text."
+        },
+        "Priority": {
+          "type": "integer",
+          "unit": "none",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/PRIORITY",
+          "sentence": "The syslog severity, 0 (emerg) to 7 (debug). Parsed to an integer rather than republished as the string journald spells it, because it is the one field this product compares numerically; everything else keeps the journal's own spelling."
+        },
+        "SyslogIdentifier": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/SYSLOG_IDENTIFIER",
+          "sentence": "What the emitter called itself — the tag a person reads first when scanning a log. Software's own name for itself, identical on every machine running it."
+        },
+        "Transport": {
+          "type": "enum",
+          "values": ["audit", "driver", "syslog", "journal", "stdout", "kernel"],
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/_TRANSPORT",
+          "sentence": "Which stream the entry arrived on, as journald recorded it. It is what distinguishes 'the application said this is an error' from 'the application wrote to stderr': the journald log driver maps a container's stderr to priority err, and that mapping is the single biggest source of misleading err entries."
+        },
+        "SystemdUnit": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/_SYSTEMD_UNIT",
+          "sentence": "The system unit the emitting process belonged to, attached by journald rather than claimed by the process. A kernel entry has none, because no unit emitted it."
+        },
+        "SystemdUserUnit": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/_SYSTEMD_USER_UNIT",
+          "sentence": "The user unit the emitting process belonged to, where a per-user systemd manager was running. Present on the same entries SystemdUnit names user@<uid>.service for, and on no others."
+        },
+        "Container": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/CONTAINER_NAME",
+          "sentence": "The container that emitted this entry, as the journald log driver labelled it. Content, because a container name is a word somebody chose. Its presence is also what makes a priority-3 entry readable: it says the err may be the stream the line arrived on rather than a severity the application picked."
+        },
+        "Command": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/_COMM",
+          "sentence": "The emitting process's command name — the fifteen-character comm the kernel holds, not its full argv. Software's own name for itself."
+        },
+        "PID": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/_PID",
+          "sentence": "The emitting process's id, republished as the string journald spells it. A string rather than an integer on purpose: journald renders every field as text and this collection converts exactly one of them, so PID travels as it was written and a consumer that wants arithmetic parses it knowingly."
+        },
+        "Timestamp": {
+          "type": "timestamp",
+          "temperament": "state",
+          "kind": "derived",
+          "derived_from": ["__REALTIME_TIMESTAMP"],
+          "discloses": "nothing",
+          "from": "/__REALTIME_TIMESTAMP",
+          "sentence": "When journald recorded the entry, to the second, in UTC. Derived from the journal's microsecond realtime stamp; an entry whose stamp is zero or the unset u64 carries no Timestamp at all, because a manufactured epoch is worse than an admitted absence."
+        },
+        "RepeatCount": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "derived",
+          "derived_from": ["MessageId", "Message"],
+          "discloses": "nothing",
+          "sentence": "How many entries in THIS page share this message's identity — its catalogue id where it has one, its text where it does not. Repetition is the signal priority cannot give: it answers 'is this line spam', which no single record can, and it is scoped to the page rather than to the entry because a window is the only thing a count can be taken over."
+        },
+        "RepeatWindow": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "derived",
+          "derived_from": ["RepeatCount"],
+          "discloses": "nothing",
+          "sentence": "How many entries the page RepeatCount was counted over. It rides beside the count because a count without its window is unreadable — three in three is every line, three in a thousand is noise — and both are properties of the read rather than of the entry."
+        }
+      },
+      "redaction_exemption": "This collector serves no evidence verb yet (DESIGN 18's partial-verb ruling), so there is no raw payload to withhold paths from — and when it does, the withholding cannot be a path list, which is why the exemption says so now rather than being written as one later. A journal entry's credential surface is not AT a path: it is INSIDE MESSAGE, in text a program chose, and no path expression names half of a sentence. The two facts declared `content` above (Message, Container) are the whole of that surface, they are declared as such so a policy can act on them (DESIGN 21), and an evidence verb here will have to redact by rule rather than by path or not ship.",
+      "reference_commands": [
+        {
+          "purpose": "the same page this collection reads, by hand",
+          "argv": ["journalctl", "-o", "json", "--no-pager", "-q", "-r", "-n", "100"]
+        },
+        {
+          "purpose": "one entry again, addressed by the cursor this collection names it with",
+          "argv": ["journalctl", "-o", "json", "--no-pager", "-q", "--cursor", "<cursor>", "-n", "1"]
+        },
+        {
+          "purpose": "the same page a person reads, to check a rendering against the fields",
+          "argv": ["journalctl", "--no-pager", "-n", "100"]
+        }
+      ]
+    }
+  ]
+}

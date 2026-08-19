@@ -1,0 +1,4 @@
+{"batch":"replay","boot_id":"5e000000-0000-4000-8000-000000000001","declaration":"sha256:replay","generations":{"daemon":824},"instance":null,"record":"begin","request":"replay","timens":0}
+{"at":1.0,"collection":"daemon","facts":{"CacheHits":13,"CacheMiss":8,"NumQueries":21,"Prefetches":0,"RecursionTimeAvgSeconds":0.120223,"RequestListCurrent":0,"Uptime":3648,"Version":"1.24.2"},"name":"unbound","record":"object"}
+{"assertions":0,"collection":"daemon","generation":824,"objects":1,"record":"commit","unobservable":0}
+{"batch":"replay","cpu_ms":0.5,"record":"end","request":"replay","wall_ms":1.0}

@@ -1,0 +1,314 @@
+{
+  "#": "Scrub manifest for the docker collector: the three engine-API documents the adapter fetches on the acquisition path — /containers/json?all=1, /volumes and /networks — each scoped to the payload stem it answers. The engine API is the native interface, so a response document IS the payload.",
+  "#scoped": "Nearly every entry names its payload, because the three documents do not share a root — containers and networks are arrays, volumes is an object — so an unscoped `*` at the root means 'a list index' in two files and 'a schema member' in the third. Scoping is what lets one manifest cover payloads with different shapes.",
+  "#shared": "Four patterns are UNSCOPED, and they have to be: a manifest is a JSON object keyed by the path pattern, so one pattern can carry one entry and therefore one scope. `*.Id`, `*.Created`, `*.Labels.*` and `*.Labels.~key` are real members of BOTH array documents — a container has an Id and a Created, and so does a network — and a second, scoped copy of any of them is simply the first key overwritten, which is a silent way to leave one document's leaves unclassified. Unscoped is the honest spelling because the classification is the same on both sides; where it would not be, this manifest could not say so, and the capture would have to be refused rather than mis-scoped.\n\nThe cost of unscoping is the `~key` entry at the volumes root below. `_keys_are_data` asks whether ANY entry walks a dict's keys with a `*`, and an unscoped `*.…` pattern does that at every document's root — including the volumes object's, whose keys are the schema's own words rather than data. So the root entry is there to answer a question the pattern language made the tool ask, and it answers it truthfully: `Volumes` and `Warnings` are member names, identical on every daemon, and they disclose nothing.",
+  "#ids": "Container, image, network and endpoint ids are classified NOTHING, and the first draft of this file had them as identity — which was wrong and the tool said so, because no substitution rule engages for a 64-hex string. Correcting the classification rather than inventing a format was the answer: a docker id is minted at create time from randomness and denotes nothing outside the daemon that minted it — not a serial, not an address, not an operator's choice of name. An image DIGEST is more public still: it is a content address anyone can fetch from the registry. What made ids look identifying was that a collator joins on them, and consistency across the three documents matters — but they are consistent already, because they are captured together and published unchanged.",
+  "#nothing": "Image names, OCI labels and annotations are public registry metadata, identical for everyone who pulls the same tag, and they are most of what this collection is FOR.",
+  "#argv-and-labels": "A BOUND this file needs and did not have, found by an independent audit of the first docker capture. Two members are classified `nothing` and are only safely so BECAUSE OF WHAT THIS PARTICULAR HOST RUNS, which is the shape of every subset guard this repository has had to fix.\n\n`*.Command` is a container's argv. On this guest it is /init, `true`, and a busybox sleep loop. On a real host it is where `--api-key=`, `--password=` and `--token=` are written, because passing a secret on the command line is common and wrong and people do it anyway.\n\n`*.Labels.*` is justified above as public registry metadata, identical for everyone who pulls the same tag. That is true of OCI labels and false of operator-written ones: traefik's `traefik.http.middlewares.<name>.basicauth.users` label carries htpasswd hashes, and this repository ships a traefik collector, so a capture from a host running Traefik behind docker would put password hashes in a public corpus under an entry that says they disclose nothing.\n\nNeither is a leak in THIS capture. Both must be reclassified before a capture from a host running anybody's actual stacks is scrubbed — the same sentence #names already carries for container names and bind-mount paths, which these two needed and did not get.",
+  "#names": "Container, network and volume NAMES, the compose labels, and the bind-mount host paths are classified nothing FOR THIS CAPTURE, on the rule DESIGN 21 states outright — the class is a property of the VALUE, not of the field — and on the same reading harness/scrub/traefik.json already applies to its router names. Every one of them here is either docker's own vocabulary (bridge, host, none, /var/lib/docker/volumes/<volume>/_data), the image's own conventional name (radarr, prowlarr, traefik), or a word minted while staging this lab fixture (labstack, /srv/lab/…). None of them names anything in any estate.\n\nThat is a bound of this capture and NOT a property of the field, and unlike traefik's unreached members — which carry no entry, so the deny-by-default walk refuses them — a `nothing` entry here would let a future estate capture's real names and real host paths through silently. So it is stated rather than implied: a capture from a host running somebody's actual stacks carries operator-chosen names (content) and operator-chosen host paths (location), and these entries must be reclassified BEFORE that capture is scrubbed. Nothing mechanical will force it.",
+  "#empty": "Docker spells 'there is no such address here' as the empty string, in seven members across two documents: Ports.*.IP on an exposed-but-unpublished port, and Gateway, IPAddress, MacAddress, IPv6Gateway and GlobalIPv6Address on a container attached to the host or null driver, and IPAM.Config.*.IPRange on every network whose operator set no range. A declared format refuses those outright — 'declared ipv4 but not an address', 'declared mac but not a MAC' — because a format asserts one shape and this member has two. So the address- and MAC-bearing members that can be empty are classified without a format and go through the free-text pass, which substitutes a real address or MAC by the same builders the format would have called and leaves the empty sentinel alone. What that costs is the format's own refusal — the check that the capture matches the declaration — and it is paid only where the sentinel makes the declaration unwritable. IPAM.Config.*.Subnet and .Gateway keep format ipv4, which is also what arms the detectors: a manifest declaring no address field reads to them as 'this file has none' rather than 'nobody looked'.",
+  "#dotted": "Docker writes option and label keys with literal dots — com.docker.network.bridge.name is ONE key, not five path segments — so the dicts that hold them are classified as a whole (`Labels.*` for the values, `Labels.~key` for the keys) rather than expanded. Expanding them produced seven-segment patterns for three-segment leaves, which matched nothing and failed the walk: the deny-by-default refusal doing its job on the manifest rather than on the payload.",
+  "#unreached": "The container INSPECT document (/containers/{id}/json) carries Env, where an operator's secrets live and which the adapter redacts on the way out. Inspect is reached by get_object and get_evidence, never by acquire, so it is outside this corpus — and the deny-by-default walk is what will force this file to grow before an inspect payload can ever be committed. Nothing here classifies an IPv6-enabled network either: EnableIPv6 is false on every network this daemon carries, so the GlobalIPv6Address and IPv6Gateway members are only ever seen holding the empty sentinel.",
+  "*.Id": {
+    "discloses": "nothing"
+  },
+  "*.Names.*": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.Image": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.ImageID": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.ImageManifestDescriptor.mediaType": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.ImageManifestDescriptor.digest": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.ImageManifestDescriptor.size": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.ImageManifestDescriptor.annotations.*": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.ImageManifestDescriptor.annotations.~key": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.ImageManifestDescriptor.platform.architecture": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.ImageManifestDescriptor.platform.os": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.Command": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.Created": {
+    "discloses": "nothing"
+  },
+  "*.Ports.*.IP": {
+    "discloses": "location",
+    "payload": "containers-json-all-1"
+  },
+  "*.Ports.*.PrivatePort": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.Ports.*.PublicPort": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.Ports.*.Type": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.Labels.*": {
+    "discloses": "nothing"
+  },
+  "*.Labels.~key": {
+    "discloses": "nothing"
+  },
+  "*.State": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.Status": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.HostConfig.NetworkMode": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.Health.Status": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.Health.FailingStreak": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.NetworkSettings.Networks.~key": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.NetworkSettings.Networks.*.IPAMConfig": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.NetworkSettings.Networks.*.Links": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.NetworkSettings.Networks.*.Aliases": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.NetworkSettings.Networks.*.DriverOpts": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.NetworkSettings.Networks.*.GwPriority": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.NetworkSettings.Networks.*.NetworkID": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.NetworkSettings.Networks.*.EndpointID": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.NetworkSettings.Networks.*.Gateway": {
+    "discloses": "location",
+    "payload": "containers-json-all-1"
+  },
+  "*.NetworkSettings.Networks.*.IPAddress": {
+    "discloses": "location",
+    "payload": "containers-json-all-1"
+  },
+  "*.NetworkSettings.Networks.*.MacAddress": {
+    "discloses": "identity",
+    "payload": "containers-json-all-1"
+  },
+  "*.NetworkSettings.Networks.*.IPPrefixLen": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.NetworkSettings.Networks.*.IPv6Gateway": {
+    "discloses": "location",
+    "payload": "containers-json-all-1"
+  },
+  "*.NetworkSettings.Networks.*.GlobalIPv6Address": {
+    "discloses": "location",
+    "payload": "containers-json-all-1"
+  },
+  "*.NetworkSettings.Networks.*.GlobalIPv6PrefixLen": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.NetworkSettings.Networks.*.DNSNames": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.Mounts.*.Type": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.Mounts.*.Name": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.Mounts.*.Driver": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.Mounts.*.Source": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.Mounts.*.Destination": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.Mounts.*.Mode": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.Mounts.*.RW": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.Mounts.*.Propagation": {
+    "discloses": "nothing",
+    "payload": "containers-json-all-1"
+  },
+  "*.Name": {
+    "discloses": "nothing",
+    "payload": "networks"
+  },
+  "*.Scope": {
+    "discloses": "nothing",
+    "payload": "networks"
+  },
+  "*.Driver": {
+    "discloses": "nothing",
+    "payload": "networks"
+  },
+  "*.EnableIPv4": {
+    "discloses": "nothing",
+    "payload": "networks"
+  },
+  "*.EnableIPv6": {
+    "discloses": "nothing",
+    "payload": "networks"
+  },
+  "*.IPAM.Driver": {
+    "discloses": "nothing",
+    "payload": "networks"
+  },
+  "*.IPAM.Options": {
+    "discloses": "nothing",
+    "payload": "networks"
+  },
+  "*.IPAM.Config": {
+    "discloses": "nothing",
+    "payload": "networks"
+  },
+  "*.IPAM.Config.*.Subnet": {
+    "discloses": "location",
+    "format": "ipv4",
+    "payload": "networks"
+  },
+  "*.IPAM.Config.*.IPRange": {
+    "discloses": "location",
+    "payload": "networks"
+  },
+  "*.IPAM.Config.*.Gateway": {
+    "discloses": "location",
+    "format": "ipv4",
+    "payload": "networks"
+  },
+  "*.Internal": {
+    "discloses": "nothing",
+    "payload": "networks"
+  },
+  "*.Attachable": {
+    "discloses": "nothing",
+    "payload": "networks"
+  },
+  "*.Ingress": {
+    "discloses": "nothing",
+    "payload": "networks"
+  },
+  "*.ConfigFrom.Network": {
+    "discloses": "nothing",
+    "payload": "networks"
+  },
+  "*.ConfigOnly": {
+    "discloses": "nothing",
+    "payload": "networks"
+  },
+  "*.Options.*": {
+    "discloses": "nothing",
+    "payload": "networks"
+  },
+  "*.Options.~key": {
+    "discloses": "nothing",
+    "payload": "networks"
+  },
+  "Volumes.*.Name": {
+    "discloses": "nothing",
+    "payload": "volumes"
+  },
+  "Volumes.*.Driver": {
+    "discloses": "nothing",
+    "payload": "volumes"
+  },
+  "Volumes.*.Scope": {
+    "discloses": "nothing",
+    "payload": "volumes"
+  },
+  "Volumes.*.CreatedAt": {
+    "discloses": "nothing",
+    "payload": "volumes"
+  },
+  "Volumes.*.Mountpoint": {
+    "discloses": "nothing",
+    "payload": "volumes"
+  },
+  "Volumes.*.Options": {
+    "discloses": "nothing",
+    "payload": "volumes"
+  },
+  "Volumes.*.Labels.*": {
+    "discloses": "nothing",
+    "payload": "volumes"
+  },
+  "Volumes.*.Labels.~key": {
+    "discloses": "nothing",
+    "payload": "volumes"
+  },
+  "~key": {
+    "discloses": "nothing",
+    "payload": "volumes"
+  },
+  "Warnings": {
+    "discloses": "nothing",
+    "payload": "volumes"
+  }
+}

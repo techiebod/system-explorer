@@ -1,0 +1,7 @@
+version: 1.24.2
+verbosity: 1
+threads: 1
+modules: 2 [ validator iterator ]
+uptime: 3648 seconds
+options: reuseport control(namedpipe)
+unbound (pid 32742) is running...

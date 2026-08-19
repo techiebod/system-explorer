@@ -1,0 +1,781 @@
+[
+  {
+    "Id": "64f0a0f56c46c5fc83f445a0e36a2c0f114b27eeb39cb4660e7fe4f814020619",
+    "Names": [
+      "/lab-oneshot"
+    ],
+    "Image": "busybox:latest",
+    "ImageID": "sha256:dc2d74b28e4cf8984fa52af1f39bc7c3d9c73760b41a74d629f5d11b1ab28616",
+    "ImageManifestDescriptor": {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "sha256:1cfa4e2b09e127b9c4ed43578d3f3c18e7d44ea47b9ea98475c0cbe9086525f8",
+      "size": 610,
+      "annotations": {
+        "com.docker.official-images.bashbrew.arch": "amd64",
+        "org.opencontainers.image.base.name": "scratch",
+        "org.opencontainers.image.created": "2026-05-20T19:52:05Z",
+        "org.opencontainers.image.revision": "71dbea6bedb4bb497581d61bb025f8558cc7833a",
+        "org.opencontainers.image.source": "https://github.com/docker-library/busybox.git",
+        "org.opencontainers.image.url": "https://hub.docker.com/_/busybox",
+        "org.opencontainers.image.version": "1.38.0-glibc"
+      },
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    },
+    "Command": "true",
+    "Created": 1787128178,
+    "Ports": [],
+    "Labels": {},
+    "State": "exited",
+    "Status": "Exited (0) About a minute ago",
+    "HostConfig": {
+      "NetworkMode": "bridge"
+    },
+    "Health": {
+      "Status": "none",
+      "FailingStreak": 0
+    },
+    "NetworkSettings": {
+      "Networks": {
+        "bridge": {
+          "IPAMConfig": null,
+          "Links": null,
+          "Aliases": null,
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "b76f2a0af19dfb0f1e495a462b3cc64d579e30232a14fb0692316b845f8fafe0",
+          "EndpointID": "",
+          "Gateway": "",
+          "IPAddress": "",
+          "MacAddress": "",
+          "IPPrefixLen": 0,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": null
+        }
+      }
+    },
+    "Mounts": []
+  },
+  {
+    "Id": "abca102c682048799d799d8209cf73f0a25da4c7989edec3dc58a5aac788d5ef",
+    "Names": [
+      "/labstack-worker-1"
+    ],
+    "Image": "busybox:latest",
+    "ImageID": "sha256:dc2d74b28e4cf8984fa52af1f39bc7c3d9c73760b41a74d629f5d11b1ab28616",
+    "ImageManifestDescriptor": {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "sha256:1cfa4e2b09e127b9c4ed43578d3f3c18e7d44ea47b9ea98475c0cbe9086525f8",
+      "size": 610,
+      "annotations": {
+        "com.docker.official-images.bashbrew.arch": "amd64",
+        "org.opencontainers.image.base.name": "scratch",
+        "org.opencontainers.image.created": "2026-05-20T19:52:05Z",
+        "org.opencontainers.image.revision": "71dbea6bedb4bb497581d61bb025f8558cc7833a",
+        "org.opencontainers.image.source": "https://github.com/docker-library/busybox.git",
+        "org.opencontainers.image.url": "https://hub.docker.com/_/busybox",
+        "org.opencontainers.image.version": "1.38.0-glibc"
+      },
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    },
+    "Command": "sh -c 'while :; do sleep 3600; done'",
+    "Created": 1787128171,
+    "Ports": [],
+    "Labels": {
+      "com.docker.compose.config-hash": "eee8c88504a6fbcfab5b54f25ea6313dea6c6c82a0e27b6d0114293a0171e5ea",
+      "com.docker.compose.container-number": "1",
+      "com.docker.compose.depends_on": "",
+      "com.docker.compose.image": "sha256:dc2d74b28e4cf8984fa52af1f39bc7c3d9c73760b41a74d629f5d11b1ab28616",
+      "com.docker.compose.oneoff": "False",
+      "com.docker.compose.project": "labstack",
+      "com.docker.compose.project.config_files": "/srv/lab/labstack/compose.yaml",
+      "com.docker.compose.project.working_dir": "/srv/lab/labstack",
+      "com.docker.compose.service": "worker",
+      "com.docker.compose.version": "2.40.3"
+    },
+    "State": "running",
+    "Status": "Up About a minute",
+    "HostConfig": {
+      "NetworkMode": "host"
+    },
+    "Health": {
+      "Status": "none",
+      "FailingStreak": 0
+    },
+    "NetworkSettings": {
+      "Networks": {
+        "host": {
+          "IPAMConfig": null,
+          "Links": null,
+          "Aliases": null,
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "7d947b07bcfc813d7f3abc591030804f3f0e3a4595747707ca3824f7077a9664",
+          "EndpointID": "bb4c82187653c729a2d4cc89e88f53e7b834e798a6b5863f68add1026bc6968d",
+          "Gateway": "",
+          "IPAddress": "",
+          "MacAddress": "",
+          "IPPrefixLen": 0,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": null
+        }
+      }
+    },
+    "Mounts": []
+  },
+  {
+    "Id": "627f80267d07d0dac0b7c66d605b835734ad25b19152c6dd2bc50cfdce7d41f7",
+    "Names": [
+      "/labstack-cache-1"
+    ],
+    "Image": "busybox:latest",
+    "ImageID": "sha256:dc2d74b28e4cf8984fa52af1f39bc7c3d9c73760b41a74d629f5d11b1ab28616",
+    "ImageManifestDescriptor": {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "sha256:1cfa4e2b09e127b9c4ed43578d3f3c18e7d44ea47b9ea98475c0cbe9086525f8",
+      "size": 610,
+      "annotations": {
+        "com.docker.official-images.bashbrew.arch": "amd64",
+        "org.opencontainers.image.base.name": "scratch",
+        "org.opencontainers.image.created": "2026-05-20T19:52:05Z",
+        "org.opencontainers.image.revision": "71dbea6bedb4bb497581d61bb025f8558cc7833a",
+        "org.opencontainers.image.source": "https://github.com/docker-library/busybox.git",
+        "org.opencontainers.image.url": "https://hub.docker.com/_/busybox",
+        "org.opencontainers.image.version": "1.38.0-glibc"
+      },
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    },
+    "Command": "sh -c 'while :; do sleep 3600; done'",
+    "Created": 1787128171,
+    "Ports": [
+      {
+        "IP": "0.0.0.0",
+        "PrivatePort": 8080,
+        "PublicPort": 18080,
+        "Type": "tcp"
+      },
+      {
+        "IP": "::",
+        "PrivatePort": 8080,
+        "PublicPort": 18080,
+        "Type": "tcp"
+      }
+    ],
+    "Labels": {
+      "com.docker.compose.config-hash": "fee2dc246c6e399aea08eaf9e005b95d74848098168caca0eac3a1439af6e78b",
+      "com.docker.compose.container-number": "1",
+      "com.docker.compose.depends_on": "",
+      "com.docker.compose.image": "sha256:dc2d74b28e4cf8984fa52af1f39bc7c3d9c73760b41a74d629f5d11b1ab28616",
+      "com.docker.compose.oneoff": "False",
+      "com.docker.compose.project": "labstack",
+      "com.docker.compose.project.config_files": "/srv/lab/labstack/compose.yaml",
+      "com.docker.compose.project.working_dir": "/srv/lab/labstack",
+      "com.docker.compose.service": "cache",
+      "com.docker.compose.version": "2.40.3"
+    },
+    "State": "running",
+    "Status": "Up About a minute (healthy)",
+    "HostConfig": {
+      "NetworkMode": "labstack_default"
+    },
+    "Health": {
+      "Status": "healthy",
+      "FailingStreak": 0
+    },
+    "NetworkSettings": {
+      "Networks": {
+        "labstack_default": {
+          "IPAMConfig": null,
+          "Links": null,
+          "Aliases": null,
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "2a0990979cde990478e957534806660c47feee926a3a3bf6a3f9d152cca9e696",
+          "EndpointID": "b136dcbf414873e330af4f33aec51315fa0063aabf3b385875ba0c1e087cdeab",
+          "Gateway": "172.24.108.3",
+          "IPAddress": "172.24.108.133",
+          "MacAddress": "02:6b:e9:02:2c:9f",
+          "IPPrefixLen": 16,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": null
+        }
+      }
+    },
+    "Mounts": [
+      {
+        "Type": "volume",
+        "Name": "labstack_state",
+        "Source": "/var/lib/docker/volumes/labstack_state/_data",
+        "Destination": "/var/lib/state",
+        "Driver": "local",
+        "Mode": "rw",
+        "RW": true,
+        "Propagation": ""
+      }
+    ]
+  },
+  {
+    "Id": "6e47cc1d9ef20f3a23ae670381857c2b383095e522dac79630f59aa579be06d1",
+    "Names": [
+      "/sabnzbd"
+    ],
+    "Image": "lscr.io/linuxserver/sabnzbd:latest",
+    "ImageID": "sha256:8fb83ceffaca6b9c0cc8d86b1acb525818fe3ce1e5a5ee9e9dd1227a26dce57d",
+    "ImageManifestDescriptor": {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "sha256:dfa3bbd419569607e5bf7134fbfc3d59ccae7a127bf685f7c1862836d3dc7c64",
+      "size": 2190,
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    },
+    "Command": "/init",
+    "Created": 1787125783,
+    "Ports": [
+      {
+        "IP": "0.0.0.0",
+        "PrivatePort": 8080,
+        "PublicPort": 8085,
+        "Type": "tcp"
+      },
+      {
+        "IP": "::",
+        "PrivatePort": 8080,
+        "PublicPort": 8085,
+        "Type": "tcp"
+      }
+    ],
+    "Labels": {
+      "build_version": "Linuxserver.io version:- 5.1.1-ls267 Build-date:- 2026-08-18T15:45:46+00:00",
+      "maintainer": "thespad",
+      "org.opencontainers.image.authors": "linuxserver.io",
+      "org.opencontainers.image.created": "2026-08-18T15:45:46+00:00",
+      "org.opencontainers.image.description": "[Sabnzbd](http://sabnzbd.org/) makes Usenet as simple and streamlined as possible by automating everything we can. All you have to do is add an .nzb. SABnzbd takes over from there, where it will be automatically downloaded, verified, repaired, extracted and filed away with zero human interaction.",
+      "org.opencontainers.image.documentation": "https://docs.linuxserver.io/images/docker-sabnzbd",
+      "org.opencontainers.image.licenses": "GPL-3.0-only",
+      "org.opencontainers.image.ref.name": "4776bb0d72a7c7429ff1647d2c15c0fef927c592",
+      "org.opencontainers.image.revision": "4776bb0d72a7c7429ff1647d2c15c0fef927c592",
+      "org.opencontainers.image.source": "https://github.com/linuxserver/docker-sabnzbd",
+      "org.opencontainers.image.title": "Sabnzbd",
+      "org.opencontainers.image.url": "https://github.com/linuxserver/docker-sabnzbd/packages",
+      "org.opencontainers.image.vendor": "linuxserver.io",
+      "org.opencontainers.image.version": "5.1.1-ls267"
+    },
+    "State": "running",
+    "Status": "Up 41 minutes",
+    "HostConfig": {
+      "NetworkMode": "bridge"
+    },
+    "Health": {
+      "Status": "none",
+      "FailingStreak": 0
+    },
+    "NetworkSettings": {
+      "Networks": {
+        "bridge": {
+          "IPAMConfig": null,
+          "Links": null,
+          "Aliases": null,
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "b76f2a0af19dfb0f1e495a462b3cc64d579e30232a14fb0692316b845f8fafe0",
+          "EndpointID": "8cab11a96d3e8416b5563ad856d8a0f9257df5b07fe4a481fe758939d706ec8d",
+          "Gateway": "172.23.241.236",
+          "IPAddress": "172.28.6.109",
+          "MacAddress": "02:e8:a9:a0:49:21",
+          "IPPrefixLen": 16,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": null
+        }
+      }
+    },
+    "Mounts": [
+      {
+        "Type": "bind",
+        "Source": "/srv/lab/sabnzbd",
+        "Destination": "/config",
+        "Mode": "",
+        "RW": true,
+        "Propagation": "rprivate"
+      }
+    ]
+  },
+  {
+    "Id": "c84d3ce4abf8c482b89175a073e2797136c85164ae2687a918fad2b89cd095d8",
+    "Names": [
+      "/bazarr"
+    ],
+    "Image": "lscr.io/linuxserver/bazarr:latest",
+    "ImageID": "sha256:ac284d3fda9ee7da8b15197dc51f0d7a2a1da98549bee99a3d924d3e94a5e7ed",
+    "ImageManifestDescriptor": {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "sha256:e2c621e525d6356f34032cddd7deb3978cbaafc4f537e995efe64b5baf3c7548",
+      "size": 2189,
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    },
+    "Command": "/init",
+    "Created": 1787125776,
+    "Ports": [
+      {
+        "IP": "0.0.0.0",
+        "PrivatePort": 6767,
+        "PublicPort": 6767,
+        "Type": "tcp"
+      },
+      {
+        "IP": "::",
+        "PrivatePort": 6767,
+        "PublicPort": 6767,
+        "Type": "tcp"
+      }
+    ],
+    "Labels": {
+      "build_version": "Linuxserver.io version:- v1.6.0-ls360 Build-date:- 2026-08-18T21:38:12+00:00",
+      "maintainer": "chbmb",
+      "org.opencontainers.image.authors": "linuxserver.io",
+      "org.opencontainers.image.created": "2026-08-18T21:38:12+00:00",
+      "org.opencontainers.image.description": "[Bazarr](https://www.bazarr.media/) is a companion application to Sonarr and Radarr. It can manage and download subtitles based on your requirements. You define your preferences by TV show or movie and Bazarr takes care of everything for you.",
+      "org.opencontainers.image.documentation": "https://docs.linuxserver.io/images/docker-bazarr",
+      "org.opencontainers.image.licenses": "GPL-3.0-only",
+      "org.opencontainers.image.ref.name": "65fc712dd0822cb78f1790513b85dad34de0261f",
+      "org.opencontainers.image.revision": "65fc712dd0822cb78f1790513b85dad34de0261f",
+      "org.opencontainers.image.source": "https://github.com/linuxserver/docker-bazarr",
+      "org.opencontainers.image.title": "Bazarr",
+      "org.opencontainers.image.url": "https://github.com/linuxserver/docker-bazarr/packages",
+      "org.opencontainers.image.vendor": "linuxserver.io",
+      "org.opencontainers.image.version": "v1.6.0-ls360"
+    },
+    "State": "running",
+    "Status": "Up 41 minutes",
+    "HostConfig": {
+      "NetworkMode": "bridge"
+    },
+    "Health": {
+      "Status": "none",
+      "FailingStreak": 0
+    },
+    "NetworkSettings": {
+      "Networks": {
+        "bridge": {
+          "IPAMConfig": null,
+          "Links": null,
+          "Aliases": null,
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "b76f2a0af19dfb0f1e495a462b3cc64d579e30232a14fb0692316b845f8fafe0",
+          "EndpointID": "3da2140315ca86b0428ae3fcbf7bfd0baf7151a4233d1e3fd9a8ddda4bb5b078",
+          "Gateway": "172.23.241.236",
+          "IPAddress": "172.22.241.7",
+          "MacAddress": "02:14:89:d4:4b:64",
+          "IPPrefixLen": 16,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": null
+        }
+      }
+    },
+    "Mounts": [
+      {
+        "Type": "bind",
+        "Source": "/srv/lab/bazarr",
+        "Destination": "/config",
+        "Mode": "",
+        "RW": true,
+        "Propagation": "rprivate"
+      }
+    ]
+  },
+  {
+    "Id": "b95be65d4b8b798ffd84c3bb8f9546bb6eb07c99abeb8d9bfedc4d2e68e918df",
+    "Names": [
+      "/traefik"
+    ],
+    "Image": "traefik:v3.1",
+    "ImageID": "sha256:74d72c7a1345984f186bddbabcc462b2128d0d8054177dc84afaeac4db1f0f56",
+    "ImageManifestDescriptor": {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "sha256:8516638b18e67e999d293e4ff0e5baf7807674cd4bdd3d36d448497bcbf0a174",
+      "size": 1728,
+      "annotations": {
+        "com.docker.official-images.bashbrew.arch": "amd64",
+        "org.opencontainers.image.base.digest": "sha256:029a752048e32e843bd6defe3841186fb8d19a28dae8ec287f433bb9d6d1ad85",
+        "org.opencontainers.image.base.name": "alpine:3.20",
+        "org.opencontainers.image.created": "2024-11-12T02:10:36Z",
+        "org.opencontainers.image.revision": "40f669e3bf6b1827863a3ab9c901025e6c25b77c",
+        "org.opencontainers.image.source": "https://github.com/traefik/traefik-library-image.git#40f669e3bf6b1827863a3ab9c901025e6c25b77c:v3.1/alpine",
+        "org.opencontainers.image.url": "https://hub.docker.com/_/traefik",
+        "org.opencontainers.image.version": "v3.1.7"
+      },
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    },
+    "Command": "/entrypoint.sh --api.insecure=true --providers.docker=false --entrypoints.web.address=:80",
+    "Created": 1787124869,
+    "Ports": [
+      {
+        "IP": "0.0.0.0",
+        "PrivatePort": 80,
+        "PublicPort": 8081,
+        "Type": "tcp"
+      },
+      {
+        "IP": "::",
+        "PrivatePort": 80,
+        "PublicPort": 8081,
+        "Type": "tcp"
+      },
+      {
+        "IP": "0.0.0.0",
+        "PrivatePort": 8080,
+        "PublicPort": 8080,
+        "Type": "tcp"
+      },
+      {
+        "IP": "::",
+        "PrivatePort": 8080,
+        "PublicPort": 8080,
+        "Type": "tcp"
+      }
+    ],
+    "Labels": {
+      "org.opencontainers.image.description": "A modern reverse-proxy",
+      "org.opencontainers.image.documentation": "https://docs.traefik.io",
+      "org.opencontainers.image.source": "https://github.com/traefik/traefik",
+      "org.opencontainers.image.title": "Traefik",
+      "org.opencontainers.image.url": "https://traefik.io",
+      "org.opencontainers.image.vendor": "Traefik Labs",
+      "org.opencontainers.image.version": "v3.1.7"
+    },
+    "State": "running",
+    "Status": "Up 56 minutes",
+    "HostConfig": {
+      "NetworkMode": "bridge"
+    },
+    "Health": {
+      "Status": "none",
+      "FailingStreak": 0
+    },
+    "NetworkSettings": {
+      "Networks": {
+        "bridge": {
+          "IPAMConfig": null,
+          "Links": null,
+          "Aliases": null,
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "b76f2a0af19dfb0f1e495a462b3cc64d579e30232a14fb0692316b845f8fafe0",
+          "EndpointID": "92eaa2eeb6c1e6e3748b70d873d891ab3376a686c3017c9a4864d28e0d378f66",
+          "Gateway": "172.23.241.236",
+          "IPAddress": "172.29.71.124",
+          "MacAddress": "02:48:58:69:59:eb",
+          "IPPrefixLen": 16,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": null
+        }
+      }
+    },
+    "Mounts": []
+  },
+  {
+    "Id": "5b3e81546f704b4190abb05d65b30ec2ef7345b4f4781178e8d7c2bf1bb80ac0",
+    "Names": [
+      "/transmission"
+    ],
+    "Image": "lscr.io/linuxserver/transmission:latest",
+    "ImageID": "sha256:7356451f32395838628b241f33bcd7130df9302777fc23f80cbc7ca8b4997c02",
+    "ImageManifestDescriptor": {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "sha256:5d851a61371e8120b9e1dbe338b4f21802a24c5565598f7e8dd896b9b6a70874",
+      "size": 2189,
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    },
+    "Command": "/init",
+    "Created": 1787124856,
+    "Ports": [
+      {
+        "IP": "",
+        "PrivatePort": 51413,
+        "Type": "tcp"
+      },
+      {
+        "IP": "",
+        "PrivatePort": 51413,
+        "Type": "udp"
+      },
+      {
+        "IP": "0.0.0.0",
+        "PrivatePort": 9091,
+        "PublicPort": 9091,
+        "Type": "tcp"
+      },
+      {
+        "IP": "::",
+        "PrivatePort": 9091,
+        "PublicPort": 9091,
+        "Type": "tcp"
+      }
+    ],
+    "Labels": {
+      "build_version": "Linuxserver.io version:- 4.1.3-r0-ls358 Build-date:- 2026-08-18T10:51:10+00:00",
+      "maintainer": "aptalca",
+      "org.opencontainers.image.authors": "linuxserver.io",
+      "org.opencontainers.image.created": "2026-08-18T10:51:10+00:00",
+      "org.opencontainers.image.description": "[Transmission](https://www.transmissionbt.com/) is designed for easy, powerful use. Transmission has the features you want from a BitTorrent client: encryption, a web interface, peer exchange, magnet links, DHT, \u00b5TP, UPnP and NAT-PMP port forwarding, webseed support, watch directories, tracker editing, global and per-torrent speed limits, and more.",
+      "org.opencontainers.image.documentation": "https://docs.linuxserver.io/images/docker-transmission",
+      "org.opencontainers.image.licenses": "GPL-3.0-only",
+      "org.opencontainers.image.ref.name": "4b62b2d3d65810b0cf204d407cd8de37c03836aa",
+      "org.opencontainers.image.revision": "4b62b2d3d65810b0cf204d407cd8de37c03836aa",
+      "org.opencontainers.image.source": "https://github.com/linuxserver/docker-transmission",
+      "org.opencontainers.image.title": "Transmission",
+      "org.opencontainers.image.url": "https://github.com/linuxserver/docker-transmission/packages",
+      "org.opencontainers.image.vendor": "linuxserver.io",
+      "org.opencontainers.image.version": "4.1.3-r0-ls358"
+    },
+    "State": "running",
+    "Status": "Up 56 minutes",
+    "HostConfig": {
+      "NetworkMode": "bridge"
+    },
+    "Health": {
+      "Status": "none",
+      "FailingStreak": 0
+    },
+    "NetworkSettings": {
+      "Networks": {
+        "bridge": {
+          "IPAMConfig": null,
+          "Links": null,
+          "Aliases": null,
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "b76f2a0af19dfb0f1e495a462b3cc64d579e30232a14fb0692316b845f8fafe0",
+          "EndpointID": "7d823693da6969ee6838e020d38d71e105496d0d03c545038836377affa2c935",
+          "Gateway": "172.23.241.236",
+          "IPAddress": "172.19.25.198",
+          "MacAddress": "02:c4:8e:a5:12:0c",
+          "IPPrefixLen": 16,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": null
+        }
+      }
+    },
+    "Mounts": [
+      {
+        "Type": "bind",
+        "Source": "/srv/lab/transmission",
+        "Destination": "/config",
+        "Mode": "",
+        "RW": true,
+        "Propagation": "rprivate"
+      }
+    ]
+  },
+  {
+    "Id": "855ad7f2f267ca9491012b6623bc4e97ce2337965da2f02ec4f16c4b7d76fb17",
+    "Names": [
+      "/prowlarr"
+    ],
+    "Image": "lscr.io/linuxserver/prowlarr:latest",
+    "ImageID": "sha256:1295cff29d10b486c0d8324d1559a552140a5932bf8b3d87e398654414f63f92",
+    "ImageManifestDescriptor": {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "sha256:fc10055b0fbda44b7d75a68ba9a336e378cd8dcec49809f24e8a1cad7bb97b49",
+      "size": 1998,
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    },
+    "Command": "/init",
+    "Created": 1787124850,
+    "Ports": [
+      {
+        "IP": "0.0.0.0",
+        "PrivatePort": 9696,
+        "PublicPort": 9696,
+        "Type": "tcp"
+      },
+      {
+        "IP": "::",
+        "PrivatePort": 9696,
+        "PublicPort": 9696,
+        "Type": "tcp"
+      }
+    ],
+    "Labels": {
+      "build_version": "Linuxserver.io version:- 2.5.2.5491-ls156 Build-date:- 2026-08-05T06:13:08+00:00",
+      "maintainer": "Roxedus,thespad",
+      "org.opencontainers.image.authors": "linuxserver.io",
+      "org.opencontainers.image.created": "2026-08-05T06:13:08+00:00",
+      "org.opencontainers.image.description": "[Prowlarr](https://github.com/Prowlarr/Prowlarr) is a indexer manager/proxy built on the popular arr .net/reactjs base stack to integrate with your various PVR apps. Prowlarr supports both Torrent Trackers and Usenet Indexers. It integrates seamlessly with Sonarr, Radarr, Lidarr, and Readarr offering complete management of your indexers with no per app Indexer setup required (we do it all).  ",
+      "org.opencontainers.image.documentation": "https://docs.linuxserver.io/images/docker-prowlarr",
+      "org.opencontainers.image.licenses": "GPL-3.0-only",
+      "org.opencontainers.image.ref.name": "6bfe1c59dc7c8288b34a13d01c7f50c6b8e1d6d4",
+      "org.opencontainers.image.revision": "6bfe1c59dc7c8288b34a13d01c7f50c6b8e1d6d4",
+      "org.opencontainers.image.source": "https://github.com/linuxserver/docker-prowlarr",
+      "org.opencontainers.image.title": "Prowlarr",
+      "org.opencontainers.image.url": "https://github.com/linuxserver/docker-prowlarr/packages",
+      "org.opencontainers.image.vendor": "linuxserver.io",
+      "org.opencontainers.image.version": "2.5.2.5491-ls156"
+    },
+    "State": "running",
+    "Status": "Up 56 minutes",
+    "HostConfig": {
+      "NetworkMode": "bridge"
+    },
+    "Health": {
+      "Status": "none",
+      "FailingStreak": 0
+    },
+    "NetworkSettings": {
+      "Networks": {
+        "bridge": {
+          "IPAMConfig": null,
+          "Links": null,
+          "Aliases": null,
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "b76f2a0af19dfb0f1e495a462b3cc64d579e30232a14fb0692316b845f8fafe0",
+          "EndpointID": "33c361577f0c954e88319368a17c885f592098bf52b085c23b2d88368afbd897",
+          "Gateway": "172.23.241.236",
+          "IPAddress": "172.17.85.34",
+          "MacAddress": "02:69:ab:4e:72:e2",
+          "IPPrefixLen": 16,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": null
+        }
+      }
+    },
+    "Mounts": [
+      {
+        "Type": "bind",
+        "Source": "/srv/lab/prowlarr",
+        "Destination": "/config",
+        "Mode": "",
+        "RW": true,
+        "Propagation": "rprivate"
+      }
+    ]
+  },
+  {
+    "Id": "6d27378f5d9981dee1087738a3f41a20e4275b775fe0bafdc9f08231d7c9daa8",
+    "Names": [
+      "/radarr"
+    ],
+    "Image": "lscr.io/linuxserver/radarr:latest",
+    "ImageID": "sha256:a45b5ab0f850f39edb4cc9c95bbd967b52ddc3d4574a4dfb45561177db6c88f4",
+    "ImageManifestDescriptor": {
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "digest": "sha256:263be1036419fcb38fc1cf76be90db8db4b0dc49fd492617b17cc58e9e0bf1b5",
+      "size": 1998,
+      "platform": {
+        "architecture": "amd64",
+        "os": "linux"
+      }
+    },
+    "Command": "/init",
+    "Created": 1787124843,
+    "Ports": [
+      {
+        "IP": "0.0.0.0",
+        "PrivatePort": 7878,
+        "PublicPort": 7878,
+        "Type": "tcp"
+      },
+      {
+        "IP": "::",
+        "PrivatePort": 7878,
+        "PublicPort": 7878,
+        "Type": "tcp"
+      }
+    ],
+    "Labels": {
+      "build_version": "Linuxserver.io version:- 6.3.0.10514-ls313 Build-date:- 2026-08-02T17:49:44+00:00",
+      "maintainer": "Roxedus,thespad",
+      "org.opencontainers.image.authors": "linuxserver.io",
+      "org.opencontainers.image.created": "2026-08-02T17:49:44+00:00",
+      "org.opencontainers.image.description": "[Radarr](https://github.com/Radarr/Radarr) - A fork of Sonarr to work with movies \u00e0 la Couchpotato.  ",
+      "org.opencontainers.image.documentation": "https://docs.linuxserver.io/images/docker-radarr",
+      "org.opencontainers.image.licenses": "GPL-3.0-only",
+      "org.opencontainers.image.ref.name": "b8e3a21dae7a54d6521f71c63a88e6f4cd977ac1",
+      "org.opencontainers.image.revision": "b8e3a21dae7a54d6521f71c63a88e6f4cd977ac1",
+      "org.opencontainers.image.source": "https://github.com/linuxserver/docker-radarr",
+      "org.opencontainers.image.title": "Radarr",
+      "org.opencontainers.image.url": "https://github.com/linuxserver/docker-radarr/packages",
+      "org.opencontainers.image.vendor": "linuxserver.io",
+      "org.opencontainers.image.version": "6.3.0.10514-ls313"
+    },
+    "State": "running",
+    "Status": "Up 56 minutes",
+    "HostConfig": {
+      "NetworkMode": "bridge"
+    },
+    "Health": {
+      "Status": "none",
+      "FailingStreak": 0
+    },
+    "NetworkSettings": {
+      "Networks": {
+        "bridge": {
+          "IPAMConfig": null,
+          "Links": null,
+          "Aliases": null,
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "b76f2a0af19dfb0f1e495a462b3cc64d579e30232a14fb0692316b845f8fafe0",
+          "EndpointID": "36c70a48f15affb76b3c5fdf8dc659668d2c3e0210eddfee6d663b0681450ab4",
+          "Gateway": "172.23.241.236",
+          "IPAddress": "172.16.3.187",
+          "MacAddress": "02:d2:e1:3c:22:93",
+          "IPPrefixLen": 16,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": null
+        }
+      }
+    },
+    "Mounts": [
+      {
+        "Type": "bind",
+        "Source": "/srv/lab/radarr",
+        "Destination": "/config",
+        "Mode": "",
+        "RW": true,
+        "Propagation": "rprivate"
+      }
+    ]
+  }
+]

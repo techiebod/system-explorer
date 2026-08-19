@@ -208,6 +208,26 @@ def _source(method: str) -> dict:
     return env.source("docker-api", "docker-engine-api", REFERENCE, method=f"GET {method}")
 
 
+def _stated(facts: dict) -> dict:
+    """The facts the document actually carried, with the rest left OFF the row.
+
+    A fact's value is never null at any depth (DESIGN 19): value, absent and
+    unobservable are three statements with three channels, and a null names
+    none of them — the contract's recursive fact_value refuses one and so does
+    the replay judge, so a row carrying one is not a weaker reading but an
+    unlawful stream.
+
+    All three collections below produce one on a stock install, which is why
+    this is not defensive tidying. ComposeProject is null on every container,
+    volume and network that no compose file created — on this lab guest, six
+    of nine containers and three of four networks. BridgeInterface is null for
+    the host and null drivers, which every daemon ships with and cannot be
+    removed. The first real capture published a null on every row of two of
+    the three collections.
+    """
+    return {fact: value for fact, value in facts.items() if value is not None}
+
+
 # One entry so far, deliberately: the facts an opinion already cites are
 # carried in test_fact_dictionary's UNDOCUMENTED_EVIDENCE debt register, and
 # documenting them here is that list's work to retire, not this change's.
@@ -352,7 +372,7 @@ class Adapter:
         items = []
         for c in raw:
             name = self._container_name(c)
-            facts = {
+            facts = _stated({
                 "State": c.get("State"), "Status": c.get("Status"),
                 "Image": c.get("Image"),
                 "Created": env.usec_to_iso(int(c.get("Created", 0)) * 1_000_000),
@@ -365,7 +385,7 @@ class Adapter:
                 # compose names outlive recreations while IDs churn.
                 "ContainerID": (c.get("Id") or "")[:12] or None,
                 "ScopeUnit": _scope_unit(c.get("Id") or "", c.get("State")),
-            }
+            })
             # Only when at least one mapping exists: a portless container
             # (host networking, batch jobs) says nothing rather than [] —
             # NetworkMode above states which portless shape this is.
@@ -377,7 +397,7 @@ class Adapter:
             items.append(env.item_summary(
                 f"container:{name}", "container", name, facts,
                 opinions=container_opinions(facts),
-                healthy="ok" if facts["State"] == "running" else "info"))
+                healthy="ok" if facts.get("State") == "running" else "info"))
         return items
 
     async def _volume_items(self) -> list[dict]:
@@ -385,8 +405,9 @@ class Adapter:
         return [
             env.item_summary(
                 f"volume:{v['Name']}", "volume", v["Name"],
-                {"Driver": v.get("Driver"), "Mountpoint": v.get("Mountpoint"),
-                 "ComposeProject": (v.get("Labels") or {}).get(COMPOSE_PROJECT)})
+                _stated({"Driver": v.get("Driver"),
+                         "Mountpoint": v.get("Mountpoint"),
+                         "ComposeProject": (v.get("Labels") or {}).get(COMPOSE_PROJECT)}))
             for v in raw.get("Volumes") or []
         ]
 
@@ -395,10 +416,10 @@ class Adapter:
         return [
             env.item_summary(
                 f"docker-network:{n['Name']}", "network", n["Name"],
-                {"Driver": n.get("Driver"), "Scope": n.get("Scope"),
-                 "Internal": n.get("Internal"),
-                 "BridgeInterface": _bridge_interface(n),
-                 "ComposeProject": (n.get("Labels") or {}).get(COMPOSE_PROJECT)})
+                _stated({"Driver": n.get("Driver"), "Scope": n.get("Scope"),
+                         "Internal": n.get("Internal"),
+                         "BridgeInterface": _bridge_interface(n),
+                         "ComposeProject": (n.get("Labels") or {}).get(COMPOSE_PROJECT)}))
             for n in raw
         ]
 

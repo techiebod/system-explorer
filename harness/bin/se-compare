@@ -53,6 +53,8 @@ SERVES = {
     "packages": ["packages"],
     "docker": ["containers", "volumes", "networks"],
     "traefik": ["overview", "routers", "services"],
+    "unbound": ["daemon"],
+    "logs": ["journal"],
 }
 
 REFERENCE = REPO / "harness" / "bin" / "se-live-reference"

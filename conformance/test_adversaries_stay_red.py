@@ -295,6 +295,40 @@ EXPECTED = (
                 "can expose: all 963 rows are `installed`, so the filter is "
                 "exercised by nothing under replay and the differential guard "
                 "owns its red"),
+    # ── GREEN, adjudicated: the third trap, the counted-twice spelling ──
+    #
+    # The thread-share-blind port reads `thread0.` where the resolver's `total.`
+    # belongs, and the only captured resolver runs ONE thread — so the two are
+    # the same number on every line of the payload and both implementations
+    # emit the same row. The judge honestly passes it. Its RED lives in
+    # test_differential.py, where the unbound-second-thread operator gives the
+    # resolver a second thread and the totals stop being one thread's share. If
+    # this goes red here, the replay judge has grown a rule that sees a thread
+    # split no committed capture holds — DESIGN 20's trap statement and the
+    # case table move together, not this row alone.
+    Expectation("a9_thread_share_blind.py", None, "unbound/healthy", "GREEN",
+                "one thread's counters published as the resolver's, which no "
+                "committed capture can expose: the captured resolver runs a "
+                "single thread, so thread0 and total are the same number and "
+                "the differential guard owns the red"),
+    # ── GREEN, adjudicated: the third trap, the narrowed-enum spelling ──
+    #
+    # The scope-state-blind port names a scope unit only for a RUNNING
+    # container, where adapters/docker.py's _SCOPED_STATES has three members.
+    # Every container in the only committed docker capture is running or
+    # exited, and the two rules agree on both — running keeps its scope either
+    # way, exited keeps none either way — so the judge honestly passes it. Its
+    # RED lives in test_differential.py, where docker-restarting-container and
+    # docker-paused-container mint the two remaining members and the reference
+    # names the scope this port drops. If this goes red here, the replay judge
+    # has grown a rule that sees a container state no committed capture holds —
+    # DESIGN 20's trap statement and the case table move together, not this row
+    # alone.
+    Expectation("a9_scope_state_blind.py", None, "docker/healthy", "GREEN",
+                "a scope unit named only for a running container, which no "
+                "committed capture can expose: every captured container is "
+                "running or exited and the narrow rule agrees with the "
+                "reference on both, so the differential guard owns the red"),
 )
 
 # The closed set of adjudicated greens, and the DESIGN clause each rests
@@ -316,6 +350,15 @@ ADJUDICATED_GREEN = {
     "removed-but-configured row no committed capture holds, because every "
     "captured row is installed (DESIGN 20); the differential guard owns this "
     "red, under dpkg-removed-config-row",
+    ("a9_thread_share_blind.py", None): "the third trap: replay cannot tell a "
+    "thread's counters from the resolver's, because the only captured resolver "
+    "runs one thread and the two are the same number (DESIGN 20); the "
+    "differential guard owns this red, under unbound-second-thread",
+    ("a9_scope_state_blind.py", None): "the third trap: replay cannot see a "
+    "restarting or paused container, because every captured one is running or "
+    "exited and a running-only scope rule agrees on both (DESIGN 20); the "
+    "differential guard owns this red, under docker-restarting-container and "
+    "docker-paused-container",
 }
 
 

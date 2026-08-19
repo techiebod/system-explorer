@@ -1,0 +1,100 @@
+{
+  "schema": "se.declaration/1",
+  "collector": "unbound",
+  "version": "0.7.0",
+  "authority": {
+    "read_paths": [
+      "/proc/sys/kernel/random/boot_id",
+      "/proc/self/timens_offsets"
+    ],
+    "groups": ["unbound"]
+  },
+  "probe": "the unbound control socket answers. The socket's PATH is deployment configuration and not a constant, so it is named by SE_UNBOUND_SOCKET rather than declared here — a read path this file invented would be granted on hosts that put the socket somewhere else and denied on the ones that do not. What the deployment must grant is the socket's group, which is the authority above (the NixOS module's grantUnboundAccess). No socket configured is a host that observes no unbound, and a socket that exists and refuses this collector is a permissions gap rather than an absence: the two are different verdicts and the reason says which.",
+  "collections": [
+    {
+      "name": "daemon",
+      "question": "is the resolver up, and how much work is it doing?",
+      "prefix": "daemon",
+      "freshness": "60s",
+      "perishability": "sampled",
+      "answer": ["Version", "Uptime", "NumQueries", "CacheHits"],
+      "ceiling": { "records": 1, "bytes": 65536 },
+      "facts": {
+        "Version": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The unbound release answering the control socket, from the `version:` line of `status`. It is the build that is actually running, which is not always the build on PATH — a package upgrade without a restart leaves the two disagreeing, and this is the half that is serving queries."
+        },
+        "Uptime": {
+          "type": "integer",
+          "unit": "seconds",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Seconds since the daemon started, by its own statement on the `uptime:` line of `status`. A gauge rather than a counter because it reads meaningfully alone, and because a restart resets it — which is the one thing this number is worth watching for."
+        },
+        "NumQueries": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Queries answered since the daemon started, from the `total.num.queries` record of `stats_noreset`. A counter, never a rate: this collector holds no previous sample, so a rate is derived across the window whoever asked actually observed."
+        },
+        "CacheHits": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Queries answered from cache since the daemon started, from `total.num.cachehits`. Against NumQueries it is the cache doing its job — and the ratio is the reader's to take, because it is a claim about a window and the window is theirs."
+        },
+        "CacheMiss": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Queries that needed recursion since the daemon started, from `total.num.cachemiss`. It is published beside CacheHits rather than left to be subtracted, because the two are separate records and a resolver's own arithmetic is not this collector's to assume."
+        },
+        "Prefetches": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Cache entries refreshed ahead of expiry since the daemon started, from `total.num.prefetch`. Zero on a resolver with prefetching off, which is unbound's default — a reading of the configuration in effect, not a missing measurement."
+        },
+        "RequestListCurrent": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Queries in flight right now, waiting on recursion, from `total.requestlist.current.all`. The closest thing to a live load figure this daemon states, and the one number here that can fall as well as rise."
+        },
+        "RecursionTimeAvgSeconds": {
+          "type": "number",
+          "unit": "seconds",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The daemon's own average time to resolve a cache miss, from `total.recursion.time.avg`. Observed and not derived: unbound computed it and this collector reads it, so it is the resolver's arithmetic over the resolver's own samples rather than a figure assembled here."
+        }
+      },
+      "redaction_exemption": "the two control-socket documents are the daemon reporting on itself — a release string, its thread and module counts, its uptime and pid, and counters of the queries it answered. Nothing in either names a client, a query, a zone or an address, and the socket takes no credential in this posture, so there is none to leak into a reason or an error. The bound is stated because it is a decision rather than a shape: a resolver configured with authoritative zones or extended statistics answers `stats_noreset` with per-zone records, and a zone name is a word somebody chose — a host serving those needs this exemption revisited rather than inherited.",
+      "reference_commands": [
+        {
+          "purpose": "the daemon's own account of itself — the version and uptime facts come from here",
+          "argv": ["unbound-control", "-c", "/etc/unbound/unbound.conf", "status"]
+        },
+        {
+          "purpose": "the counters, WITHOUT resetting them — plain `stats` zeroes every figure it reports, so it is not a reference command for anything read-only",
+          "argv": ["unbound-control", "-c", "/etc/unbound/unbound.conf", "stats_noreset"]
+        }
+      ]
+    }
+  ]
+}
