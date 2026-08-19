@@ -11,7 +11,7 @@ collector, as a manifest, and this tool guesses nothing:
 
   harness/scrub/<collector>.json maps payload field paths to
       {"discloses": nothing|identity|location|content|secret,
-       "format": wwn|guid_u64|serial|mac|ipv4|ipv6|hostname|name|path,
+       "format": wwn|guid_u64|serial|mac|ipv4|ipv6|hostname|name|path|prose,
        "payload": <payload stem this entry is scoped to, optional>}
 
   paths are dotted; '*' matches one dict key or one list index; a trailing
@@ -109,7 +109,24 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 DISCLOSES = {"nothing", "identity", "location", "content", "secret"}
-FORMATS = {"wwn", "guid_u64", "serial", "mac", "ipv4", "ipv6", "hostname", "name", "path"}
+FORMATS = {"wwn", "guid_u64", "serial", "mac", "ipv4", "ipv6", "hostname",
+           "name", "path", "prose"}
+
+# The formats whose whole VALUE is the identifier. Everything here is held to
+# the survived-unchanged gate below: if the leaf is a WWN and scrubbing left it
+# alone, no rule engaged and the run is lying when it prints `scrubbed`.
+#
+# `prose` is deliberately outside it, and it is the only format that is. A
+# journal MESSAGE, a syslog line, a command line — these are unbounded text
+# that MAY carry an identifier and routinely carries none, so "nothing changed"
+# is the ordinary outcome rather than evidence of a hole. It still takes the
+# same free-text pass every formatless entry takes, so a hostname or an address
+# written inside prose is still substituted; what it exempts is only the
+# refusal for having found nothing. Naming it as a format rather than inferring
+# it from a missing one keeps the exemption a written, per-leaf claim a
+# reviewer can disagree with — thirty formatless entries in the shipped
+# manifests rely on that gate today, and they must go on relying on it.
+PROSE = "prose"
 
 U64_MAX = 2**64 - 1
 
@@ -729,7 +746,9 @@ def _substitute(value, fmt: str | None, path: tuple, ctx: Ctx):
         return replaced
     if fmt == "hostname":
         return _host_replacement(ctx, value)
-    # name, path, or no format: free text that may embed anything
+    # name, path, prose, or no format: free text that may embed anything.
+    # All four take the SAME pass — prose differs only in that finding nothing
+    # is not a refusal, because a log line is allowed to be about nothing.
     return scrub_text(value, ctx)
 
 
@@ -775,6 +794,7 @@ def _scrub_leaf(value, entry: dict, path: tuple, ctx: Ctx):
         isinstance(value, str)
         and replaced == value
         and len(ctx.problems) == before  # not already refused for this leaf
+        and entry.get("format") != PROSE  # see FORMATS: prose may honestly hold none
         and not _keeps_unchanged(value)
     ):
         ctx.problems.append(

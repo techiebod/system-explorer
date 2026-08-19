@@ -420,3 +420,83 @@ def test_regression_a_name_field_must_not_noop_silently(tmp_path: Path) -> None:
     proc = run("--hostnames", "operatorpool")  # the guard discriminates
     assert proc.returncode == 0, proc.stderr
     assert "operatorpool" not in json.dumps(json.loads(payload.read_text()))
+
+
+def run_anonymise(payload, manifest, state, hostnames: str = "") -> int:
+    """Drive the real tool the way a capture does, and return its exit code."""
+    env = {**os.environ, "SE_SCRUB_SECRET": "conformance-fixed-secret"}
+    argv = [sys.executable, str(ANONYMISE), "--manifest", str(manifest),
+            "--map", str(state)]
+    if hostnames:
+        argv += ["--hostnames", hostnames]
+    return subprocess.run(argv + [str(payload)], capture_output=True,
+                          text=True, env=env).returncode
+
+
+def test_prose_may_honestly_carry_no_identifier(tmp_path: Path) -> None:
+    """A journal MESSAGE that contains nothing identifying is not a hole.
+
+    The survived-unchanged gate exists for a real leak: a pool name classified
+    as substituting, left verbatim by a run that then printed `scrubbed`. That
+    reasoning holds for every format whose whole VALUE is the identifier, and
+    breaks for unbounded text — a log line, a syslog record, a command line —
+    where carrying no identifier is the ordinary case and refusing it would
+    mean a corpus can never contain prose at all.
+
+    So `format: prose` exempts that one refusal and nothing else. Both
+    directions are asserted here, because an exemption nobody bounded is an
+    escape hatch: prose that DOES embed a hostname must still come back
+    substituted, and every other class must still refuse when nothing engaged.
+    """
+    payload = tmp_path / "journal.json"
+    manifest = tmp_path / "m.json"
+    state = tmp_path / "map.json"
+
+    payload.write_text(json.dumps({
+        "MESSAGE": "Started Daily apt download activities.",   # nothing in it
+        "SPEAKING": "connection from labhost-9 accepted",      # a name in it
+    }))
+    manifest.write_text(json.dumps({
+        "MESSAGE": {"discloses": "content", "format": "prose"},
+        "SPEAKING": {"discloses": "content", "format": "prose"},
+    }))
+    code = run_anonymise(payload, manifest, state, hostnames="labhost-9")
+    assert code == 0, "prose carrying no identifier is not a refusal"
+
+    after = json.loads(payload.read_text())
+    assert after["MESSAGE"] == "Started Daily apt download activities.", (
+        "prose with nothing in it comes back verbatim — substituting it would "
+        "corrupt the capture to satisfy a gate"
+    )
+    assert "labhost-9" not in after["SPEAKING"], (
+        "prose is NOT an exemption from scrubbing: the free-text pass still "
+        "runs, and a name written inside a log line is still substituted"
+    )
+
+
+def test_the_survived_unchanged_gate_still_refuses_every_other_class(tmp_path: Path) -> None:
+    """The reversion for the test above, as its own test.
+
+    If `prose` had been implemented by relaxing the gate for any entry without
+    a format — the smaller change, and the tempting one — this would pass
+    while thirty formatless entries in the shipped manifests silently stopped
+    being checked. It fails instead, which is the evidence that the exemption
+    is scoped to the one format that claims it.
+    """
+    payload = tmp_path / "p.json"
+    manifest = tmp_path / "m.json"
+    state = tmp_path / "map.json"
+    # ONE leaf, formatless, and that is the whole point of the fixture. An
+    # earlier version of this test also carried a `format: name` leaf, which
+    # refused under BOTH implementations and made the test pass whether or not
+    # the exemption was scoped — it pinned nothing, and only running the
+    # reversion showed it.
+    payload.write_text(json.dumps({"note": "tank"}))
+    manifest.write_text(json.dumps({"note": {"discloses": "content"}}))
+    code = run_anonymise(payload, manifest, state, hostnames="")
+    assert code != 0, (
+        "a formatless substituting class that changed nothing must still "
+        "refuse — that is the pool name which outlived a run printing "
+        "`scrubbed`, and exempting it along with prose would retire the gate "
+        "for thirty entries in the shipped manifests"
+    )
