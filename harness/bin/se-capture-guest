@@ -211,6 +211,7 @@ for name, document in (("instances", bundle["instances"]),
 servarr_version_py='
 import json, sys
 print(", ".join(json.load(sys.stdin)["versions"]))
+'
 # One command, one connection, the answer verbatim — Kea's control channel IS
 # a JSON interface (no socat on the lab image, and a shell pipeline would put
 # a transcription between the daemon and the payload). The socket path comes
@@ -370,6 +371,7 @@ async def main():
     queue = (await adapter._sab("queue")).get("queue") or {}
     return "transmission " + str(session.get("version")) + " + sabnzbd " + str(queue.get("version"))
 print(asyncio.run(main()))
+'
 # hardware'"'"'s interface is a TREE, so its payload is the filesystem
 # transcribed: every file the walk opened, every directory it enumerated, every
 # link it resolved, every hwdb reply it asked for (DESIGN'"'"'s ruling of
@@ -429,6 +431,7 @@ print(json.dumps(seen.get(want, {}), indent=1, sort_keys=True))
 hostname_py='
 import socket
 print(socket.gethostname().split(".")[0])
+'
 # The units acquisition, as busctl renders it. DESIGN ruled on 2026-08-19 that
 # the native document for a D-Bus interface is systemd'"'"'s OWN rendering —
 # `busctl call … --json=short`, which carries the type signature beside the data
@@ -502,6 +505,104 @@ for name, document in sorted(documents.items()):
     print("      " + name + ": " + str(len(document)) + " replies")
 os.remove(bundle)
 '
+# plex answers per-SECTION documents, and which sections exist is decided by
+# the server rather than by this table — so the section list and the per-section
+# counts are captured as ONE reading. Two ssh calls could not be: a section
+# created or deleted between them yields a capture whose totals name a section
+# its own listing does not, which replays as a broken variant rather than as
+# the server that produced it.
+#
+# The window is the adapter's own — Container-Start=0, Container-Size=0 — which
+# asks Plex for the total without the rows. Choosing a different one here would
+# put this tool between the corpus and the code under test.
+plex_py='
+import json, os, urllib.request
+
+base = os.environ["SE_PLEX_URL"].rstrip("/")
+token = os.environ.get("SE_PLEX_TOKEN") or ""
+
+
+def slug(argument):
+    # mirrors slug() in harness/bin/se-reference-collector
+    text = str(argument).strip("/")
+    keep = [c if (c.isalnum() or c in "-_.") else "-" for c in text]
+    return "".join(keep).strip("-").replace("--", "-") or "root"
+
+
+def get(path, query=""):
+    request = urllib.request.Request(
+        base + path + query,
+        headers={"Accept": "application/json", "X-Plex-Token": token})
+    with urllib.request.urlopen(request, timeout=15) as response:
+        return json.loads(response.read().decode())
+
+
+out = {}
+for path in ("/", "/status/sessions", "/library/sections"):
+    out[slug(path) + ".json"] = get(path)
+sections = out[slug("/library/sections") + ".json"]
+for entry in (sections.get("MediaContainer") or {}).get("Directory") or []:
+    path = "/library/sections/" + str(entry["key"]) + "/all"
+    out[slug(path) + ".json"] = get(
+        path, "?X-Plex-Container-Start=0&X-Plex-Container-Size=0")
+print(json.dumps(out))
+'
+
+# protection reads FILES, all of them through one module-level _load(path) that
+# returns (document, why-not) — so each payload is that PAIR and not the
+# document alone. Capturing the document alone would make every replayed read
+# unpack a dict into two names and raise; worse, it would erase the distinction
+# the collection exists to keep, because "no such file" and "a file that will
+# not parse" differ only in the second member.
+#
+# One reading, for the same reason as plex: the job list comes from status.json
+# and the receipts are read per job, so a run that finished between two ssh
+# calls would produce a status naming a job whose receipt the capture missed.
+protection_py='
+import json
+
+MANIFEST = "/etc/homelab/protection-manifest.json"
+STATUS = "/var/lib/homelab/protection/status.json"
+RECEIPTS = "/var/lib/homelab/protection/receipts"
+
+
+def slug(argument):
+    # mirrors slug() in harness/bin/se-reference-collector
+    text = str(argument).strip("/")
+    keep = [c if (c.isalnum() or c in "-_.") else "-" for c in text]
+    return "".join(keep).strip("-").replace("--", "-") or "root"
+
+
+def load(path):
+    # mirrors _load() in the adapter, pair and all
+    try:
+        with open(path) as handle:
+            return [json.load(handle), None]
+    except FileNotFoundError:
+        return [None, None]
+    except (OSError, ValueError) as exc:
+        return [None, type(exc).__name__ + ": " + str(exc)]
+
+
+out = {}
+for path in (MANIFEST, STATUS):
+    out[slug(path) + ".json"] = load(path)
+status = out[slug(STATUS) + ".json"][0] or {}
+for row in status.get("jobs") or []:
+    if not isinstance(row, dict) or not row.get("job"):
+        continue
+    for suffix in ("last", "last-success"):
+        path = RECEIPTS + "/" + str(row["job"]) + "." + suffix + ".json"
+        out[slug(path) + ".json"] = load(path)
+print(json.dumps(out))
+'
+
+protection_version_py='
+import json
+print("protection-manifest-schema",
+      json.load(open("/etc/homelab/protection-manifest.json"))["schema"])
+'
+
 declare -a acquisitions
 case "$collector" in
     storage)
@@ -596,6 +697,34 @@ case "$collector" in
             "lscpu.json|lscpu -J"
             "hostname|python3 -c '$hostname_py'"
         )
+        ;;
+    paperless)
+        # Two paths, two documents, named by the path that answers them. The
+        # token rides the Authorization header and never the query string —
+        # the posture the adapter's own docstring states, kept here so a
+        # capture cannot be the thing that puts it somewhere else.
+        acquisitions=(
+            "api-statistics.json|curl -s -H \"Authorization: Token \$SE_PAPERLESS_TOKEN\" \"\$SE_PAPERLESS_URL/api/statistics/\""
+            "api-status.json|curl -s -H \"Authorization: Token \$SE_PAPERLESS_TOKEN\" \"\$SE_PAPERLESS_URL/api/status/\""
+        )
+        ;;
+    plex)
+        # One bundle: the section list decides which per-section documents
+        # exist, so they are one reading. seerr has no acquisition here at all
+        # — it is not capturable in a lab, see the plex seam in
+        # se-reference-collector and NAMED_RESIDUALS.
+        acquisitions=("@bundle|python3 -c '$plex_py'")
+        ;;
+    protection)
+        # The bundle, plus the host name as its own text payload. The name is
+        # not decoration: a target's opinions fire only where its ownerHost
+        # matches this host, so without capturing it the replay would judge
+        # the capture against whichever machine replayed it.
+        acquisitions=(
+            "@bundle|python3 -c '$protection_py'"
+            "hostname|python3 -c '$hostname_py'"
+        )
+        ;;
     units)
         # One bundle, because the four documents are one reading of one bus and
         # the per-unit half is chosen by what the listing said.
@@ -693,6 +822,16 @@ case "$collector" in
     # about both, and a source_version naming one of them could not tell a
     # drift diff which half moved.
     downloaders) version_probe="python3 -c '$downloaders_version_py'" ;;
+    # The server reporting its own build, from the one endpoint that answers
+    # before anything else does — /identity is what an unclaimed server serves
+    # while it is still deciding what it is.
+    plex) version_probe="curl -s -H \"Accept: application/json\" \"\$SE_PLEX_URL/identity\" | python3 -c 'import json,sys; print(\"plex\", json.load(sys.stdin)[\"MediaContainer\"][\"version\"])'" ;;
+    paperless) version_probe="curl -s -H \"Authorization: Token \$SE_PAPERLESS_TOKEN\" \"\$SE_PAPERLESS_URL/api/status/\" | python3 -c 'import json,sys; print(\"paperless-ngx\", json.load(sys.stdin)[\"pngx_version\"])'" ;;
+    # Not a program's version: these documents are written by the estate, and
+    # what versions them is the schema member they each carry. A drift diff
+    # wants to know the SHAPE moved, and that is the only thing here that says
+    # so.
+    protection) version_probe="python3 -c '$protection_version_py'" ;;
 esac
 
 # Forward the caller's SE_* variables to the guest. Every HTTP-interface
@@ -807,7 +946,6 @@ if [[ $collector == resources ]]; then
     rm -f "$payload_dir/_bundle.json"
 fi
 
-source_version="$(ssh "${ssh_opts[@]}" -- "$target" "set -o pipefail; $remote_env$version_probe" | tr -d '\r')"
 if [[ -z $source_version ]]; then
     echo "could not read the interface version on $target — a capture whose" >&2
     echo "source_version is unknown cannot tell a drift diff what changed." >&2
