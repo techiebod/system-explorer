@@ -10,7 +10,7 @@ on:
 
 jobs:
   python:
-    name: conformance (2,779 tests incl. three ported collectors, relations and the live comparator)
+    name: conformance (2,823 tests incl. five ported collectors)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
