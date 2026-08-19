@@ -120,6 +120,17 @@ CIDR = re.compile(
     r"(?<![\w.:])((?:\d{1,3}\.){3}\d{1,3}|[0-9A-Fa-f:]*:[0-9A-Fa-f:.]+)/(\d{1,3})\b"
 )
 V4_ADDR = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+# The release field of a package version, which is what follows a dotted quad
+# that is not an address: alsa-topology-conf is 1.2.5.1-3build1 and
+# libasound2-data is 1.2.15.3-1ubuntu1.1 — four components, every one of them
+# 0..255, and an IPv4 address by shape alone. Debian and RPM spell a release
+# as a hyphen, a digit, and a run that carries a letter, and nothing that is
+# an address is written that way. The leading digit is load-bearing: it keeps
+# 10.0.0.1-router a finding, so this narrows the address detector by one
+# notation rather than by every hyphen. The bound: a version with no release
+# field at all (a bare "1.2.3.4") stays indistinguishable from an address and
+# still fires, which is the side to be wrong on.
+VERSION_RELEASE = re.compile(r"-\d[0-9A-Za-z.+~]*[A-Za-z]")
 # Any colon-grouped hex run is a v6 CANDIDATE; ipaddress is the arbiter, so
 # timestamps, SCSI targets and PCI functions fall out as parse failures
 # instead of being pattern-guessed away (the DESIGN 21 lesson, in reverse).
@@ -348,6 +359,8 @@ def _scan_text(
     # says. ipaddress classifies; the deny side is everything it cannot put
     # in private/CGNAT/loopback/link-local/multicast/documentation/ULA.
     for m in V4_ADDR.finditer(text):
+        if VERSION_RELEASE.match(text, m.end()):
+            continue  # a package version's upstream half, not an address
         try:
             ip = ipaddress.ip_address(m.group(0))
         except ValueError:

@@ -1,0 +1,27 @@
+{
+  "collector": "packages",
+  "collections": ["packages"],
+  "variant": "healthy",
+  "provenance": "captured",
+  "os": "ubuntu",
+  "os_version": "26.04",
+  "source_version": "dpkg 1.23.7ubuntu1",
+  "captured": "2026-08-19T08:00:00Z",
+  "regenerable": true,
+  "regenerable_on": "an Ubuntu 26.04 guest with dpkg-query on PATH. The package set is that guest's install rather than a property of the release, so a re-stage moves the commit count and every anchored version with it — the anchors are re-read by hand in the same change, or they are asserting the machine that is gone.",
+  "canaries": [],
+  "anonymised": true,
+  "anonymisation_note": "Through the gate, and no substitution was needed. A package name, its version and its architecture are archive-wide constants — the same strings on every Ubuntu 26.04 machine that installed the same set — so there is nothing here that correlates one host. The field says the gate ran, not that values were rewritten; harness/scrub/packages.json states the bound under which that classification holds.",
+  "note": "963 packages from an Ubuntu 26.04 guest, read through dpkg-query with this collector's own format string. The manager is what the variant is FOR: `nix/packages` read the /run/current-system/sw link farm and nothing else, so on a Debian-family host the product had no package inventory at all — it declined the whole subsystem honestly and left an operator unable to ask a question every host can answer. A corpus that could only ever be a Nix store would let a port keep exactly that blind spot and stay green. So the Manager fact rides every row as the answer's own provenance, and _detect — which names it — is the capability probe as well as an acquisition: pinning it is what lets a machine with no dpkg at all replay this capture without ever reading its own package database. What it bounds: every one of the 963 rows is `installed`, so the removed-but-configured filter the dpkg branch exists to apply is exercised by no committed capture, and a port that emitted every row dpkg keeps would reproduce this pair exactly — that shape is minted by the `dpkg-removed-config-row` mutation operator instead. No variant captures nix or rpm, so StorePath is reached by no committed stream and is named in the residual ledger. And an inventory carries no health: no opinion, no severity, no unobservable, no absent list. That is the same stance the subsystem took before the split, and this pair is what it looks like on the wire.",
+  "anchors": [
+    {"collection": "packages", "commit_objects": 963},
+    {"collection": "packages", "object": "dpkg", "fact": "Version", "value": "1.23.7ubuntu1"},
+    {"collection": "packages", "object": "dpkg", "fact": "Manager", "value": "dpkg"},
+    {"collection": "packages", "object": "dpkg", "fact": "Architecture", "value": "amd64"},
+    {"collection": "packages", "object": "dpkg", "absent_fact": "StorePath"},
+    {"collection": "packages", "object": "adduser", "fact": "Architecture", "value": "all"},
+    {"collection": "packages", "object": "zfsutils-linux", "fact": "Version", "value": "2.4.1-1ubuntu5"},
+    {"collection": "packages", "object": "3cpio", "fact": "Name", "value": "3cpio"}
+  ],
+  "anchors_note": "Read off dpkg.json by hand at staging, never from the reference. 963 is the row count of the payload, and every version, architecture and name below was read out of the row it belongs to. `dpkg 1.23.7ubuntu1` is the interface reporting on itself, which is why source_version is that string rather than a release guess. zfsutils-linux 2.4.1-1ubuntu5 is the same guest corpus/storage/degraded was captured from, so the two variants can be read as one machine. `3cpio` is anchored because it sorts FIRST: the order is by codepoint, so a digit precedes every letter, and a port sorting case-insensitively or by locale would put it elsewhere. Both architecture spellings are anchored because `all` and `amd64` come out of the same field and a port that mapped one onto the other would still pass a single-value check. StorePath is anchored ABSENT on a dpkg row because a manager-specific fact must not arrive as an empty string on a manager that has none — value, absent and unobservable each have their own channel, and \"\" names none of them."
+}

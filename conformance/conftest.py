@@ -44,6 +44,8 @@ GO_COLLECTORS = {
     "system": "./cmd/se-collect-system",
     "storage": "./cmd/se-collect-storage",
     "network": "./cmd/se-collect-network",
+    "vms": "./cmd/se-collect-vms",
+    "packages": "./cmd/se-collect-packages",
 }
 
 

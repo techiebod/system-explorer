@@ -263,6 +263,38 @@ EXPECTED = (
                 "an l2cache group dropped whole, which no committed pool can "
                 "expose: every capture is cache-less, so the blindness is "
                 "invisible under replay and the differential guard owns its red"),
+    # ── GREEN, adjudicated: the third trap, the vms spelling ──
+    #
+    # The address-blind port: it never implemented the address fact, and the
+    # only captured domain is SHUT OFF — a stopped guest has no address because
+    # it is off, so the reference omits the fact too and the two rows are
+    # identical. The judge honestly passes it. Its RED lives in
+    # test_differential.py, where the libvirt-running-guest operator brings the
+    # guest up with a lease and the reference reads the address this port
+    # drops. If this goes red here, the replay judge has grown a rule that sees
+    # an address no committed capture holds — DESIGN 20's trap statement and
+    # test_differential.py's case table move together, not this row alone.
+    Expectation("a9_address_blind.py", None, "vms/healthy", "GREEN",
+                "a domain row with no address fact, which no committed guest "
+                "can expose: the captured domain is shut off, so both "
+                "implementations omit the fact and the differential guard owns "
+                "the red"),
+    # ── GREEN, adjudicated: the third trap, the unread-column spelling ──
+    #
+    # The status-blind port publishes every row dpkg has a record of, including
+    # the ones removed with their configuration left behind. Every row of the
+    # only committed packages capture is `installed`, so there is nothing to
+    # over-report and the judge honestly passes it. Its RED lives in
+    # test_differential.py, where the dpkg-removed-config-row operator inserts
+    # an `rc ifupdown` row the reference drops. If this goes red here, the
+    # replay judge has grown a rule that sees a status no committed capture
+    # holds — DESIGN 20's trap statement and the case table move together, not
+    # this row alone.
+    Expectation("a9_dpkg_status_blind.py", None, "packages/healthy", "GREEN",
+                "the dpkg status column never read, which no committed capture "
+                "can expose: all 963 rows are `installed`, so the filter is "
+                "exercised by nothing under replay and the differential guard "
+                "owns its red"),
 )
 
 # The closed set of adjudicated greens, and the DESIGN clause each rests
@@ -276,6 +308,14 @@ ADJUDICATED_GREEN = {
     ("a8_l2cache_blind.py", None): "the third trap: replay cannot see the "
     "l2cache group no committed pool holds (DESIGN 20); the differential "
     "guard owns this red, under zpool-cache-vdev",
+    ("a9_address_blind.py", None): "the third trap: replay cannot see an "
+    "address no committed guest holds, because the only captured domain is "
+    "shut off (DESIGN 20); the differential guard owns this red, under "
+    "libvirt-running-guest",
+    ("a9_dpkg_status_blind.py", None): "the third trap: replay cannot see a "
+    "removed-but-configured row no committed capture holds, because every "
+    "captured row is installed (DESIGN 20); the differential guard owns this "
+    "red, under dpkg-removed-config-row",
 }
 
 

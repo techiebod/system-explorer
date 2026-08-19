@@ -1,0 +1,15 @@
+[
+  {
+    "name": "host-7a173d",
+    "uuid": "5cb07e64-2969-354b-a116-6fb8a59e6fb7",
+    "state": "shutoff",
+    "memory_mib": 256,
+    "max_memory_mib": 256,
+    "vcpus": 1,
+    "autostart": false,
+    "persistent": true,
+    "xml": "<domain type='qemu'>\n  <name>host-7a173d</name>\n  <uuid>5cb07e64-2969-354b-a116-6fb8a59e6fb7</uuid>\n  <memory unit='KiB'>262144</memory>\n  <currentMemory unit='KiB'>262144</currentMemory>\n  <vcpu placement='static'>1</vcpu>\n  <os>\n    <type arch='x86_64' machine='pc-i440fx-resolute'>hvm</type>\n    <boot dev='hd'/>\n  </os>\n  <cpu mode='custom' match='exact' check='none'>\n    <model fallback='forbid'>qemu64</model>\n  </cpu>\n  <clock offset='utc'/>\n  <on_poweroff>destroy</on_poweroff>\n  <on_reboot>restart</on_reboot>\n  <on_crash>destroy</on_crash>\n  <devices>\n    <emulator>/usr/bin/qemu-system-x86_64</emulator>\n    <disk type='file' device='disk'>\n      <driver name='qemu' type='raw'/>\n      <source file='/tmp/lab.qcow2'/>\n      <target dev='vda' bus='virtio'/>\n      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>\n    </disk>\n    <controller type='usb' index='0' model='piix3-uhci'>\n      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x2'/>\n    </controller>\n    <controller type='pci' index='0' model='pci-root'/>\n    <interface type='network'>\n      <mac address='02:62:e1:33:4c:83'/>\n      <source network='default'/>\n      <model type='virtio'/>\n      <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>\n    </interface>\n    <input type='mouse' bus='ps2'/>\n    <input type='keyboard' bus='ps2'/>\n    <audio id='1' type='none'/>\n    <memballoon model='virtio'>\n      <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>\n    </memballoon>\n  </devices>\n</domain>\n",
+    "ips_by_mac": {},
+    "ip_note": null
+  }
+]

@@ -63,7 +63,12 @@ REFUSED = "REFUSED"
 # healthy captures, because every operator ADDS the shape it exposes — a
 # degraded seed would entangle each operator's disagreement with the staged
 # defect the degraded variant exists for.
-SEEDS = {"network": "network/healthy", "storage": "storage/healthy"}
+SEEDS = {
+    "network": "network/healthy",
+    "storage": "storage/healthy",
+    "vms": "vms/healthy",
+    "packages": "packages/healthy",
+}
 
 # Names the operators mint. Constants rather than inline literals so the
 # tests can bind their evidence to the exact spelling without restating it —
@@ -80,6 +85,14 @@ NETDEV_CHAIN = "netdev filter ingress"
 BRIDGE_BASE_CHAIN = "bridge filter FORWARD"
 BRIDGE_ISLAND_CHAIN = "bridge filter island"
 ARP_CHAIN = "arp filter input"
+# libvirt's own default network hands out 192.168.122.0/24, so a leased guest
+# on a stock host answers on an address from it. In its own space, like every
+# other address this repository writes down (DESIGN 21).
+GUEST_ADDRESS = "192.168.122.50"
+# A real Debian-family package that a machine plausibly removed and kept the
+# configuration of: ifupdown is what netplan replaced, so `rc  ifupdown` is an
+# ordinary line in `dpkg -l` on an upgraded Ubuntu guest.
+REMOVED_PACKAGE = "ifupdown"
 
 
 # ── nftables helpers, grammar-aware ──────────────────────────────────────
@@ -672,6 +685,103 @@ def _null_nested_member(payloads: dict) -> dict:
     raise MutatorError("no nested leaf with a state member to null")
 
 
+# ── libvirt domains ──────────────────────────────────────────────────────
+
+
+def _first_nic_mac(definition: str) -> str:
+    """The first NIC's MAC, read from the domain XML the way the reference
+    reads it — `./devices/interface`, then the `mac` child's `address`.
+
+    Parsed rather than pattern-matched because the payload's XML is the
+    reference's own input: an operator that invented a MAC would key the lease
+    map on an interface the domain does not have, which is a document libvirt
+    cannot produce.
+    """
+    import xml.etree.ElementTree as ET
+
+    try:
+        root = ET.fromstring(definition)
+    except ET.ParseError as exc:
+        raise MutatorError(f"the domain definition does not parse: {exc}") from exc
+    for iface in root.findall("./devices/interface"):
+        mac = iface.find("mac")
+        if mac is not None and mac.get("address"):
+            return mac.get("address")
+    raise MutatorError("the first domain has no interface with a MAC to lease to")
+
+
+def _running_guest(payloads: dict) -> dict:
+    """CLASS address-blind: a domain row that never answers "where".
+
+    Every committed capture is of a STOPPED guest, and a stopped guest has no
+    address because it is off — so the reference omits the address fact and a
+    port that never implemented it emits exactly the same row. The blindness
+    is invisible under replay by construction, which is DESIGN 20's third
+    trap, and it is the one question an operator opens this collection to ask:
+    which guest is 192.168.122.50.
+
+    So bring the guest up and give it the lease libvirt's own default network
+    would hand it. The reference reads `ips_by_mac` and publishes the address;
+    an address-blind port publishes the same row without it. State moves with
+    it because the two are one shape — an address on a shut-off guest is not a
+    document libvirt produces, and the reference's own rule 7 arm turns on the
+    state.
+    """
+    domains = payloads.get("domains")
+    if not isinstance(domains, list) or not domains:
+        raise MutatorError("the payload carries no domains")
+    domain = domains[0]
+    if not isinstance(domain.get("xml"), str):
+        raise MutatorError("the first domain carries no XML definition")
+    domain["state"] = "running"
+    domain["ips_by_mac"] = {_first_nic_mac(domain["xml"]): [GUEST_ADDRESS]}
+    # The note is what the adapter sets when a source ANSWERED, which is null:
+    # it exists to explain a blank, and there is no blank here.
+    domain["ip_note"] = None
+    return payloads
+
+
+# ── dpkg rows ────────────────────────────────────────────────────────────
+
+
+def _removed_but_configured_row(payloads: dict) -> dict:
+    """CLASS status-blind: an inventory that reports what dpkg REMEMBERS.
+
+    dpkg keeps a row for a package that was removed with its configuration
+    left behind — `rc` in `dpkg -l`, `config-files` in the status field this
+    collector's format string asks for — and half a package is not an
+    installed one. Every row of every committed capture is `installed`, so the
+    filter that the dpkg branch exists to apply is exercised by nothing: a
+    port that published every row dpkg hands over reproduces the pair exactly.
+    That is DESIGN 20's third trap, and this is the shape that springs it.
+
+    ifupdown is the specimen because a real machine produces it: netplan
+    replaced it, and an upgraded Ubuntu guest carries exactly this row. It is
+    inserted at its sorted position rather than appended, because
+    `dpkg-query -W` lists in name order and a document out of order is not one
+    dpkg could have produced — and because appending would let a port that
+    published it still sort it into place, blurring which defect the
+    disagreement names.
+
+    The reference drops the row and commits 963; a status-blind port publishes
+    it and commits 964, so the disagreement arrives twice over — an unexpected
+    object, and the port's own count betraying it.
+    """
+    rows = payloads.get("dpkg")
+    if not isinstance(rows, list) or not rows:
+        raise MutatorError("the payload carries no dpkg rows")
+    if any(row and row[0] == REMOVED_PACKAGE for row in rows):
+        raise MutatorError(
+            f"{REMOVED_PACKAGE} is already in this capture, so a minted row "
+            "would be a duplicate rather than a removed-but-configured one"
+        )
+    row = [REMOVED_PACKAGE, "0.8.41ubuntu1", "amd64", "config-files"]
+    at = next((i for i, existing in enumerate(rows)
+               if existing and existing[0] > REMOVED_PACKAGE), len(rows))
+    rows.insert(at, row)
+    return payloads
+
+
 @dataclass(frozen=True)
 class Operator:
     """One structural transformation, bound to the defect class it exposes."""
@@ -701,6 +811,9 @@ OPERATORS: tuple[Operator, ...] = (
     Operator("zpool-nulled-member", "storage", "nested-null",
              _null_nested_member),
     Operator("zpool-faulted-leaf", "storage", "health-stub", _fault_leaf),
+    Operator("libvirt-running-guest", "vms", "address-blind", _running_guest),
+    Operator("dpkg-removed-config-row", "packages", "status-blind",
+             _removed_but_configured_row),
 )
 
 
@@ -840,29 +953,42 @@ def mutated_payloads(operator: Operator, variant: Variant) -> dict:
     return operator.apply(copy.deepcopy(variant.payloads))
 
 
-def write_payloads(payloads: dict, directory: Path) -> None:
+def write_payloads(payloads: dict, directory: Path, suffixes: dict[str, str]) -> None:
     """Write a mutated payload set back out the way the loader reads it.
 
-    Keyed by stem, and the extension follows the value's type exactly as
-    corpus.load_variant decides it going the other way: a decoded document
-    round-trips through `<stem>.json`, and a text payload — os-release, a
-    hostname, a boot id — is written back as raw bytes under its bare stem,
-    because the native format IS the payload (DESIGN 20).
+    Keyed by stem, and the extension comes from the VARIANT
+    (corpus.Variant.payload_suffixes) rather than from the value's type: a
+    `.json` payload round-trips through json.dumps, and a text payload —
+    os-release, a hostname, a boot id — is written back as raw bytes under its
+    bare stem, because the native format IS the payload (DESIGN 20).
 
     Writing every stem as `.json` was silent and total: a text-payload
     collector routed through this guard would be handed `os-release.json`
     holding a JSON-quoted string, a directory its own replay seam cannot
     read, and the run would report REFUSED about the collector rather than
-    about the harness. Nothing hit it because the two collectors with
-    operators both capture JSON — the defect was waiting for the first port
-    whose interface speaks text.
+    about the harness.
+
+    Deciding on the value's TYPE instead was the same defect one layer in, and
+    the packages collector is where it surfaced: manager.json is a JSON
+    document whose whole content is the string "dpkg", so a type test writes it
+    as a bare `manager` file the seam does not glob, and the collector replays
+    with no manager at all. The suffix is the half load_variant throws away, so
+    it is a required argument — a caller that cannot say which form a payload
+    was committed in has no business writing one back.
     """
     directory.mkdir(parents=True, exist_ok=True)
     for stem, document in payloads.items():
-        if isinstance(document, str):
-            (directory / stem).write_text(document)
+        if stem not in suffixes:
+            raise MutatorError(
+                f"payload {stem!r} is not one the seed committed, so nothing "
+                "here knows what file it should be — an operator that mints a "
+                "payload states its form"
+            )
+        path = directory / f"{stem}{suffixes[stem]}"
+        if suffixes[stem] == ".json":
+            path.write_text(json.dumps(document, indent=1))
         else:
-            (directory / f"{stem}.json").write_text(json.dumps(document, indent=1))
+            path.write_text(document)
 
 
 @dataclass
@@ -932,7 +1058,7 @@ def run_differential(
     )
 
     def _run(directory: Path) -> DifferentialRun:
-        write_payloads(payloads, directory)
+        write_payloads(payloads, directory, variant.payload_suffixes)
         reference = replay.run_collector(
             replay.reference_binary(), variant, payload_dir=directory,
             issued=issued,

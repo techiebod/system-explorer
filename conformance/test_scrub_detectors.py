@@ -353,6 +353,29 @@ def test_regression_a_dashed_uuid_fires_under_an_id_key() -> None:
         assert "uuid" not in classes(scan({key: value})), (key, value)
 
 
+def test_regression_a_package_version_is_not_an_address() -> None:
+    """The packages capture's four false positives, and the line the fix holds.
+
+    alsa-topology-conf 1.2.5.1-3build1 and libasound2-data 1.2.15.3-1ubuntu1.1
+    are dotted quads whose every component is 0..255, so the address detector
+    read four Ubuntu package versions as live global addresses and the whole
+    committed corpus went red on a payload carrying nothing identifying at
+    all. The discriminator is the release field — a hyphen, a digit, a run
+    with a letter — which is how Debian and RPM spell one and no address is
+    written. Both directions, because a detector narrowed by a shape has to
+    prove it kept the shapes it was narrowed around: an address followed by a
+    letter-led word is still a finding (that is a hostname beside an address,
+    not a release), an address range is still a finding, and a version with no
+    release field at all is still a finding — which is the side to be wrong on.
+    """
+    for quiet in ("1.2.5.1-3build1", "1.2.15.3-1ubuntu1.1",
+                  "1.2.15.3-1ubuntu1.5", "1.07.1-4build1"):
+        assert "address" not in classes(scan({"v": quiet})), quiet
+    for loud in ("89.58.41.7-router", "89.58.41.7-89.58.41.9", "89.58.41.7",
+                 "1.2.5.1"):
+        assert "address" in classes(scan({"v": loud})), loud
+
+
 def test_regression_a_name_field_must_not_noop_silently(tmp_path: Path) -> None:
     """The demonstrated F2 leak: a manifest classifying an operator-chosen
     pool name as content/name, a run given no names source, the tool printing

@@ -1,0 +1,21 @@
+{
+  "#": "Scrub manifest for the vms collector: the one payload its domains collection captures (domains.json), which is `_domains_raw()` — a list of libvirt domains, one object each, carrying the values `dom.info()` returns plus the domain XML as a string. Every entry therefore starts at a list index, matched by '*'.",
+  "#name": "The domain name is a word an operator typed, exactly as a pool name is, so it is content and takes the free-text pass — the run is handed it through --hostnames, the one global-substring mechanism the tool has for operator-chosen words. It is NOT a libvirt convention the way an nftables chain name is a distribution convention: two hosts running the same image carry different domain names, and that difference is what the name discloses.",
+  "#uuid": "The domain UUID survives rename, migration and redefinition — it is libvirt's own durable identifier for this guest, which is exactly what makes it identity. It appears TWICE per domain, once as its own member and once inside <uuid> in the XML, and the keyed map is what keeps the two spellings the same string after scrubbing; a specimen where they diverged would teach a join that does not exist.",
+  "#xml": "The whole domain XML in one string: names, the UUID, MAC addresses, disk paths and whatever else the operator wrote into the definition. There is no path a manifest could name inside it, so it takes the free-text pass over the document, whose UUID, MAC and address rules are the ones that fire here. Classified content rather than identity because the string is a mixture — most of it is qemu's own vocabulary, and the identifying tokens inside it are substituted by shape.",
+  "#addresses": "ips_by_mac is keyed by the interface MAC and holds the addresses libvirt could see for it. A guest address is location: it says where on somebody's network this machine sits, and the substitution keeps it inside its own space so a specimen of a libvirt-leased guest stays one. The key is the same MAC the XML carries, and the shared map keeps both copies one value.",
+  "#nothing": "State, memory, vCPU count, the autostart and persistent flags and the address-source note are measurements, verdicts and fixed vocabulary — the same words on every host that has them. ip_note in particular is one of four sentences this collector composes itself (adapters/vms.py ADDRESS_SOURCE_NOTES), so it carries nothing from the machine.",
+
+  "*.name": {"discloses": "content", "format": "name"},
+  "*.uuid": {"discloses": "identity"},
+  "*.state": {"discloses": "nothing"},
+  "*.memory_mib": {"discloses": "nothing"},
+  "*.max_memory_mib": {"discloses": "nothing"},
+  "*.vcpus": {"discloses": "nothing"},
+  "*.autostart": {"discloses": "nothing"},
+  "*.persistent": {"discloses": "nothing"},
+  "*.xml": {"discloses": "content"},
+  "*.ips_by_mac.~key": {"discloses": "identity", "format": "mac"},
+  "*.ips_by_mac.*.*": {"discloses": "location", "format": "ipv4"},
+  "*.ip_note": {"discloses": "nothing"}
+}

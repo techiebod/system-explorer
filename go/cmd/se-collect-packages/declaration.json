@@ -1,0 +1,89 @@
+{
+  "schema": "se.declaration/1",
+  "collector": "packages",
+  "version": "0.7.0",
+  "authority": {
+    "read_paths": [
+      "/run/current-system",
+      "/run/current-system/sw",
+      "/proc/sys/kernel/random/boot_id",
+      "/proc/self/timens_offsets"
+    ],
+    "commands": ["dpkg-query", "rpm"]
+  },
+  "probe": "a package manager this collector can read answers here: an activated Nix system closure, dpkg-query, or rpm. Which one it is comes back in the reason, because it is also the Manager fact every row carries — a host with a manager and nothing installed still answers yes, since zero packages is a reading and not an inability.",
+  "collections": [
+    {
+      "name": "packages",
+      "question": "what is installed on this machine, and which package manager says so?",
+      "prefix": "package",
+      "freshness": "1h",
+      "perishability": "reconstructible",
+      "answer": ["Name", "Version", "Manager"],
+      "ceiling": { "records": 20000, "bytes": 8388608 },
+      "facts": {
+        "Name": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The package's name as its manager spells it. It is also this object's native name on dpkg and rpm; on Nix the native name is the name-version the store publishes, and this is the half of it before the version."
+        },
+        "Version": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The installed version, printed exactly as the manager reports it — a Debian epoch, an Ubuntu revision and a Nix suffix all travel unparsed, because comparing versions is the manager's job and mangling them into a common shape would lose the only string an operator can match against an advisory."
+        },
+        "Manager": {
+          "type": "enum",
+          "values": ["nix", "dpkg", "rpm"],
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/manager",
+          "sentence": "Which package manager answered. It rides every row so the answer names its own provenance: one question, asked the same way on every host, and the row says who is speaking rather than leaving a reader to infer it from the operating system."
+        },
+        "Architecture": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The architecture the package was built for, as dpkg and rpm report it — `all`/`noarch` for the ones that are architecture-independent. Nix has no such field, and a row from the store carries no architecture rather than an invented one."
+        },
+        "StorePath": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/nixstore/*",
+          "sentence": "The /nix/store path this package is linked into the system environment from. The hash is content-addressed, so the same path on two machines is the same build; dpkg and rpm have no store, and their rows carry no such fact."
+        }
+      },
+      "redaction_exemption": "neither package database has a credential surface: every value served is a package name, a version string, an architecture token or a store path, and dpkg-query and rpm are asked for exactly those fields by a format string this collector supplies. The identifiers published verbatim are archive-wide constants — the same strings on every machine that installed the same thing — which is what makes them safe to publish and useful to compare. The bound is stated because it is a decision and not a shape: a locally built package carries a name somebody in this estate chose, and a capture holding one would need that name classified as content rather than exempted here.",
+      "reference_commands": [
+        {
+          "purpose": "the dpkg inventory, in this collector's own field order",
+          "argv": ["dpkg-query", "-W", "-f", "${Package}\\t${Version}\\t${Architecture}\\t${db:Status-Status}\\n"]
+        },
+        {
+          "purpose": "the same rows a person reads, where the status column is the one this collection filters on",
+          "argv": ["dpkg", "-l"]
+        },
+        {
+          "purpose": "the rpm inventory, the same idea one field shorter",
+          "argv": ["rpm", "-qa", "--qf", "%{NAME}\\t%{VERSION}-%{RELEASE}\\t%{ARCH}\\n"]
+        },
+        {
+          "purpose": "the NixOS system environment's link farm, which is the interface itself and needs no subprocess",
+          "argv": ["ls", "/run/current-system/sw/bin"]
+        },
+        {
+          "purpose": "the store path behind one of those links",
+          "argv": ["readlink", "/run/current-system/sw/bin/<command>"]
+        }
+      ]
+    }
+  ]
+}

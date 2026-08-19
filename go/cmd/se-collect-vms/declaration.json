@@ -1,0 +1,166 @@
+{
+  "schema": "se.declaration/1",
+  "collector": "vms",
+  "version": "0.7.0",
+  "authority": {
+    "read_paths": [
+      "/var/run/libvirt/libvirt-sock-ro"
+    ]
+  },
+  "probe": "libvirt's read-only socket is there and the domain walk over it answers; a host running libvirt with no domain defined still answers, and that is a reading of zero domains rather than a probe failure",
+  "collections": [
+    {
+      "name": "domains",
+      "question": "which guests does this host define, which of them are up, and what is each one holding?",
+      "prefix": "domain",
+      "freshness": "60s",
+      "perishability": "sampled",
+      "answer": [
+        "State",
+        "IPAddresses",
+        "MemoryMiB",
+        "VCPUs"
+      ],
+      "ceiling": {
+        "records": 2048,
+        "bytes": 4194304
+      },
+      "facts": {
+        "State": {
+          "type": "enum",
+          "values": [
+            "nostate",
+            "running",
+            "blocked",
+            "paused",
+            "shutdown",
+            "shutoff",
+            "crashed",
+            "pmsuspended"
+          ],
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/*/state",
+          "sentence": "Where libvirt says this domain is, in libvirt's own word for it. `running` is the only positively healthy one; `shutoff` is a guest somebody stopped, which is neutral until the domain is also marked autostart, and `paused`, `blocked` and `crashed` each mean a guest that is defined and not doing its job."
+        },
+        "IPAddresses": {
+          "type": "list",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "location",
+          "from": "/*/ips_by_mac",
+          "sentence": "Every address libvirt could see for this guest, across all of its interfaces, sorted and deduplicated. Present only when something answered: a guest that is not running has no address because it is off, so the fact is omitted rather than emptied, and a running guest nothing could answer for gets an unobservable record instead — an empty list would claim the guest has no address, which is a different and usually false thing to say."
+        },
+        "MemoryMiB": {
+          "type": "integer",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/*/memory_mib",
+          "sentence": "The memory this domain currently has, in mebibytes. Current rather than maximum: a ballooned guest sits below its configured ceiling, and this is the figure that says what it is actually holding. Deliberately carries no unit member — the vocabulary has bytes and no mebibytes, and declaring bytes would be wrong by a factor of 1048576."
+        },
+        "VCPUs": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/*/vcpus",
+          "sentence": "How many virtual CPUs this domain has. A count of what the guest was given, not a measure of what it is using."
+        },
+        "Autostart": {
+          "type": "boolean",
+          "labels": [
+            "autostart",
+            "manual"
+          ],
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/*/autostart",
+          "sentence": "Whether libvirt starts this domain when the host boots. It is what turns a shut-off guest from a neutral state into a finding: something meant to be up is down."
+        },
+        "Persistent": {
+          "type": "boolean",
+          "labels": [
+            "defined",
+            "transient"
+          ],
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/*/persistent",
+          "sentence": "Whether this domain has a stored definition. A transient domain exists only while it runs, so stopping it destroys it — which is why a transient guest disappearing from this collection is not necessarily a fault."
+        },
+        "HostTaps": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "identity",
+          "from": "/*/xml",
+          "sentence": "The host-side tap devices this domain owns, from the <target dev=…/> of each of its interfaces. It rides on the row because it is the ONLY authoritative answer to which domain owns a given vnet device: a tap carries no domain identity in sysfs, and the fe:54:/52:54: MAC resemblance is a QEMU convention rather than a record. Empty means this domain's interfaces name no host device, which is the ordinary shape for a guest on a libvirt-managed network."
+        }
+      },
+      "redactions": [
+        {
+          "path": "/*/name",
+          "discloses": "content"
+        },
+        {
+          "path": "/*/uuid",
+          "discloses": "identity"
+        },
+        {
+          "path": "/*/xml",
+          "discloses": "content"
+        },
+        {
+          "path": "/*/ips_by_mac",
+          "discloses": "identity"
+        },
+        {
+          "path": "/*/ips_by_mac/*",
+          "discloses": "location"
+        }
+      ],
+      "reference_commands": [
+        {
+          "purpose": "the domains this collection rows, by hand",
+          "argv": [
+            "virsh",
+            "--readonly",
+            "--connect",
+            "qemu:///system",
+            "list",
+            "--all"
+          ]
+        },
+        {
+          "purpose": "one domain's definition, where HostTaps is read from",
+          "argv": [
+            "virsh",
+            "--readonly",
+            "--connect",
+            "qemu:///system",
+            "dumpxml",
+            ""
+          ]
+        },
+        {
+          "purpose": "the addresses libvirt holds for a running guest",
+          "argv": [
+            "virsh",
+            "--readonly",
+            "--connect",
+            "qemu:///system",
+            "domifaddr",
+            "",
+            "--source",
+            "lease"
+          ]
+        }
+      ]
+    }
+  ]
+}

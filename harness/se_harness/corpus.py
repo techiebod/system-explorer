@@ -136,6 +136,23 @@ NAMED_RESIDUALS = {
         "layer yet — so the tool is real and the SHAPE is still unvisited, and "
         "this truth stays owed."
     ),
+    # The packages collector reads three interfaces and the corpus captures
+    # one. A second variant would close this outright — which is why the entry
+    # says so rather than dressing a gap as a boundary.
+    "packages/nix-store-path": (
+        "StorePath is published only by the nix branch, and no committed "
+        "variant captures a NixOS host: a variant stages exactly the one "
+        "payload its detected packaging interface produces, and every "
+        "committed packages payload is dpkg's. No mutation operator mints it "
+        "either, and that is a ruling rather than an oversight — an operator "
+        "ADDS a shape to the machine its seed captured, where staging a Nix "
+        "store swaps the machine outright and the guard's reference half would "
+        "be answering about a host nobody observed. Venue: the live comparator "
+        "(harness/bin/se-compare), run on a NixOS host, where the "
+        "/run/current-system/sw link farm is walked for real and every "
+        "StorePath it yields is compared. The tool exists and no such run has "
+        "been taken, so this truth stays owed rather than owned."
+    ),
 }
 
 
@@ -188,6 +205,24 @@ class Variant:
     @property
     def regenerable(self) -> bool:
         return bool(self.meta["regenerable"])
+
+    @property
+    def payload_suffixes(self) -> dict[str, str]:
+        """The on-disk suffix each payload stem was committed under.
+
+        load_variant decodes `.json` and keeps everything else as raw text,
+        and that is a one-way trip: the string "dpkg" in a payloads dict could
+        have come from a JSON document holding one string or from a text file
+        holding one word, and the two are different files. Anything that
+        writes a payload set back out — the mutation guard does, on every run
+        — has to know which, or it hands a collector a directory its own
+        replay seam cannot read and the verdict is about the harness.
+        """
+        return {
+            p.stem: p.suffix
+            for p in sorted((self.path / "payloads").iterdir())
+            if p.is_file() and not p.name.startswith(".")
+        }
 
     def collections(self) -> set[str]:
         return {

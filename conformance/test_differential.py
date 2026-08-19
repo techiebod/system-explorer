@@ -183,6 +183,24 @@ CASES = (
          # lives on storage/degraded's anchors; here the fault is a MUTATION,
          # so the whole S1–S5 class is regression on every healthy seed.
          ("DEGRADED", "StatusMessage", "UnhealthyVdevs")),
+    Case("address-blind", "libvirt-running-guest", "a9_address_blind.py",
+         differential.DISAGREE, "differences",
+         # The fact and the address it carries, by name. Every committed
+         # capture is of a stopped guest, whose address is inapplicable and
+         # omitted by both implementations — so the blindness is invisible
+         # until the operator brings the guest up, and this is the row that
+         # binds it.
+         ("IPAddresses", differential.GUEST_ADDRESS)),
+    Case("status-blind", "dpkg-removed-config-row", "a9_dpkg_status_blind.py",
+         differential.DISAGREE, "differences",
+         # The removed package published as installed, by name, and the port's
+         # own count betraying it. Both, because the object alone would also be
+         # satisfied by a port that emitted the row AND miscounted, and the
+         # count alone by a port that lost some other row entirely. Every
+         # committed dpkg row is `installed`, so the filter is exercised by no
+         # capture and this is the operator that mints the one shape it exists
+         # for.
+         ("unexpected:", differential.REMOVED_PACKAGE, "objects: expected")),
 )
 
 
