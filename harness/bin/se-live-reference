@@ -345,10 +345,24 @@ def run(collector: str, generations: dict[str, int]) -> None:
         except Exception:  # noqa: BLE001 - a gate that raises is not a reading
             gate = {}
         unconfigured = spec.get("receipts")
-        if not gate.get("available", True) and unconfigured and unconfigured(adapter):
+        if not gate.get("available", True) and unconfigured:
+            # Two branches, two details, and both are TRUE — which is the whole
+            # reason this is not one. The first version said "not configured"
+            # for every unavailable capability, and a stopped traefik proved
+            # that false on all three collections: the endpoint was configured
+            # and simply down.
+            #
+            # A dark service is ruling 3's third trigger and the one that fires
+            # weekly, since any container restart produces it. Before this the
+            # reference exited 2 and lost every collection it could not ask,
+            # where the port declines each and keeps saying what it knows.
+            if unconfigured(adapter):
+                detail = f"no {spec['interface']} configured for this process"
+            else:
+                detail = (f"the {spec['interface']} is configured and could not"
+                          " be observed on this host")
             for collection in generations:
-                out.decline(collection, "unavailable",
-                            f"no {spec['interface']} configured for this process")
+                out.decline(collection, "unavailable", detail)
             return
 
         # The adapter's PER-COLLECTION statement, which the shipping agent's
