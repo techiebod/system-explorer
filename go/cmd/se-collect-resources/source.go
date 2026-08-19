@@ -134,8 +134,15 @@ const (
 	// The capability probe's file. It exists only on a unified v2 mount,
 	// which is what every fact here is read from — the same two-stage
 	// question the reference's capability() asks.
-	cgroupControllers = cgroupRoot + "/cgroup.controllers"
+	cgroupControllersPath = cgroupRoot + "/cgroup.controllers"
 )
+
+// The probe path as a var so a test can point it at a state THIS platform does
+// not happen to be in. The first version of the both-paths test asserted that
+// walking a missing root errors, which is true only on a machine with no
+// cgroup hierarchy at all: it passed on a developer's macOS and failed on a
+// Linux runner, having asserted nothing about the gate either time.
+var cgroupControllers = cgroupControllersPath
 
 func newSource(getenv func(string) string) source {
 	if dir := getenv("SE_REPLAY_DIR"); dir != "" {

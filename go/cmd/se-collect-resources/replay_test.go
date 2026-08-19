@@ -442,10 +442,22 @@ func TestTheInterfaceMissingReadingIsOneConstantForBothPaths(t *testing.T) {
 	}
 	// The live path reaches the same value, so there is nowhere for a second
 	// spelling to live: this asserts the identity rather than the string.
+	//
+	// The PROBE is pointed at a path that is not there, rather than the walk
+	// being handed a root that is not there. Those are different questions and
+	// the first version asked the second: walking a missing root records it as
+	// an unlistable subtree and returns no error, which is correct and is what
+	// the reference does, so the assertion only ever held on a machine with no
+	// cgroup hierarchy at all. It passed on macOS and failed on a Linux runner,
+	// having tested nothing about the gate on either.
+	saved := cgroupControllers
+	cgroupControllers = filepath.Join(t.TempDir(), "cgroup.controllers")
+	defer func() { cgroupControllers = saved }()
+
 	live := &liveSource{}
-	_, err := live.walk("/no/such/hierarchy/for/this/test")
+	_, err := live.walk(cgroupRoot)
 	if err == nil {
-		t.Fatal("a hierarchy that is not there must not walk")
+		t.Fatal("no cgroup.controllers is no unified hierarchy, and must decline")
 	}
 	var refused *declined
 	if !errors.As(err, &refused) || *refused != declineNoCgroupV2 {
