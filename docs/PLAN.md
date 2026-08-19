@@ -151,7 +151,43 @@ The second blocker was the seam, and it was the real one: **ten of the seventeen
 
 **Captured and replaying: `vms`, `packages`, `docker`, `traefik`.** traefik's pair is committed — the first capture this product has taken from an HTTP interface, and it found a null fact value on three of three services the moment it ran. `docker`'s payloads are captured and held OUT of the tree until its scrub manifest classifies them: its documents carry real MACs and host mount paths, and the deny-by-default walk is refusing an imperfect manifest, which is the gate working rather than an obstacle to route around.
 
-**Where gate 3 actually stands, 2026-08-19.** The parity report
+**GATE 3 IS OPEN, 2026-08-20.** Every clause of the criterion below is met and
+each was measured rather than argued:
+
+- **Twenty of twenty collectors ported**, `nix` included. The deferral is
+  withdrawn, not extended: what a host HAS BEEN ports, and what CHANGED between
+  two generations left the rewrite's scope by ruling.
+- **Nineteen of nineteen clean on two hosts** — the fully provisioned Ubuntu
+  guest and the NixOS one, which is the sparse host as well. `system` is the
+  twentieth and has no second implementation to disagree with, which the report
+  states rather than counting as a pass. One divergence is named and accepted,
+  `nix`'s five delta facts, and the comparator strips them from the reference
+  only — so a port emitting one is still reported.
+- **Item 1's collator half**: two instances with identical native names never
+  merge, and one instance's re-commit retires only its own scope. Judged in
+  process and, since today, through the black-box driver.
+- **Item 6's collator half**: unresolved, resolved-later, parallel, confirmed,
+  contradicted, unconfirmable and retired, plus an upgrade that never re-keys.
+  Judged through the black-box driver, which had refused every fixture that
+  would have exercised it.
+- **Item 7's first half**: an unknown declaration hash is held rather than
+  applied, and an undeclared fact reaches no join — the second of those
+  enforced by nothing at the collator until today.
+- **Item 8**: green since gate 1.5, carried by the discrimination guards.
+
+Nine defects were found by the live comparator this round and by nothing else.
+The four that arrived last are the ones worth remembering: a null fact value
+the sweep of thirty-seven could not have caught, because it is written after
+the sweep runs; two implementations composing different sentences for one fact
+that no interface authors; a reference that said nothing where the answer was
+none; and whole collections lost to an exception on every host that does not
+run the thing they read.
+
+**What the gate does NOT claim**, stated because a clean report invites the
+wrong reading: not that the collectors are correct, only that two independent
+implementations reading one machine at one moment agree.
+
+**Where gate 3 stood earlier on 2026-08-19.** The parity report
 (`docs/PARITY-REPORT.md`) is **clean — 18 of 18**, up from 8 this morning. Two
 things got it there: the lab gained the venues twelve collectors need to read
 anything at all (`harness/bin/se-provision-lab`), and `vms` was ported over

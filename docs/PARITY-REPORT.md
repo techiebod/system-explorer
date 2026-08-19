@@ -1,7 +1,8 @@
 # Parity report — the reference and the port, one machine, one moment
 
 Gate 3 asks for this: *"the parity report per collection is clean or its diffs
-are named and accepted."* **All eighteen are clean.**
+are named and accepted."* **All nineteen are clean, on two hosts, with one
+named acceptance.**
 
 Produced by `harness/bin/se-compare --json`, which runs the shipping Python
 adapter and the Go port against the same live interfaces in the same minute and
@@ -9,18 +10,33 @@ diffs their streams with the corpus's own comparator. Replay proves a port
 reproduces a *capture*; this proves it reproduces the *reference* on shapes
 nobody captured — which is where every finding below came from.
 
-## Three runs, and the third is the one that counts
+## Two hosts, and they answer different questions
 
-| | sparse | provisioned | fully provisioned |
-|---|---|---|---|
-| Host | `se-test-debian` | `se-test-ubuntu2604` | `se-test-ubuntu2604` |
-| Interfaces | journal, dpkg, busctl | + zpool, nft, docker, libvirt, unbound, smartctl | + 11 app containers, unbound and kea control sockets, protection documents |
-| Compared | 18 | 18 | 18 |
-| **Clean** | **5** | **8** | **17** |
+| | fully provisioned | NixOS |
+|---|---|---|
+| Host | `se-test-ubuntu2604` | `se-test-nixos` |
+| Interfaces | zpool, nft, docker, libvirt, unbound, smartctl, 11 app containers, kea and unbound control sockets, protection documents | a nix profile with four generations, a SCSI disk, an NVMe namespace — and *none* of the others |
+| Compared | 19 | 19 |
+| **Clean** | **19** | **19** |
 
-All three are kept because they answer different questions. The sparse host
-tests **decline correctness**, which is the half that retires objects. The
-provisioned hosts test the readings.
+The NixOS guest is the sparse host as well as the nix one, and that is what
+makes it worth two runs' work: it has no zpool, no nft, no docker socket, no
+libvirt, no protection manifest and no smartctl, so it tests **decline
+correctness** — the half that retires objects — on every collector at once,
+while testing the positive path on the two that read a nix host.
+
+**`se-test-debian` was not re-run**, and that is a gap rather than a result:
+its Python has none of the agent's dependencies and its apt has no index, so
+the reference cannot start there. What it used to cover — a sparse host, and
+dpkg rather than rpm or nix — is covered by the NixOS guest for the first and
+by `corpus/packages/healthy` for the second. Stated because a run that did not
+happen must not read as one that did.
+
+**The earlier round of this report, the same day, read `18 of 18` on one host
+and `5 of 18` on the sparse one.** Both numbers are superseded: nineteen
+collectors are compared now, and the sparse figure was dominated by the
+reference RAISING where the port declined — which five ruled bridges have
+since closed.
 
 Ports were cross-built `CGO_ENABLED=0 GOOS=linux GOARCH=amd64`, static, and
 **shipped rather than built in place** — the comparator must measure what would
@@ -32,7 +48,7 @@ reference to disagree with — already named in
 `test_differential.PORTED_WITHOUT_A_REFERENCE`. 18 compared, 19 ported, 20
 collectors.
 
-## Clean: seventeen collectors, 1,895 objects
+## Clean, in the run that first reached it: seventeen collectors, 1,895 objects
 
 | Collector | Objects | What it read |
 |---|---|---|
@@ -92,7 +108,7 @@ credential. The receipt is only written after `/library/sections` is confirmed
 to answer 200, because a receipt pointing at a server that 401s everything makes
 both sides fail identically, and identical failure reads as agreement.
 
-## `vms`, which was the eighteenth, and the objection that was about the wrong command
+## `vms`, the eighteenth, and an objection that was about the wrong command
 
 It declined `unsupported` on any host where libvirt was listening, so it passed
 replay and could not read a machine. The recorded objection was that `virsh`
@@ -115,6 +131,87 @@ and defines no domains, so both sides committed zero and the run went green over
 an empty set. A nested domain now makes the venue real, and it is started rather
 than merely defined, because a shutoff domain reaches neither `HostTaps` nor the
 address path.
+
+## `nix`, the nineteenth, and the one divergence this report ACCEPTS
+
+The collector that was deferred whole this morning, on the argument that it was
+about to be replaced. It is split instead: **what a host HAS BEEN ports; what
+CHANGED between two generations leaves the rewrite's scope**, to a plugin once
+a plugin surface exists (DESIGN, adjudication queue, 2026-08-19).
+
+So the shipping adapter and the port disagree **by construction** on five fact
+names — `ComparedWithGeneration`, `DeltaCounts`, `DeltaFromPrevious`,
+`DeltaFromPreviousPartial`, `DeltaFromPreviousUnobservable` — and on nothing
+else. This is gate 3's second clause exercised rather than waived, and the
+comparator now knows how to say it: `ACCEPTED_DIVERGENCES` strips those five
+from the **reference** before the diff and never from the port.
+
+**One-sided deliberately, and it is the whole of what keeps this from being a
+hole.** Strip both streams and a port that emitted a delta fact — wrongly,
+since the ruling puts them out of its scope — becomes invisible; strip one and
+the port carrying any of them is itself reported, under `port_emitted_accepted`.
+A divergence on any fact NOT listed still fails, which is the property the
+acceptance must not widen into, and the table carries the dated ruling that
+authorised it.
+
+Measured on the NixOS guest against four generations: every pointer, every
+timestamp, the release strings, the specialisation lists, the store paths and
+the full `Deployment` object with all five members agreed exactly. The only
+differences were the five.
+
+**The port could not be captured at all before today**, which is why it was
+deferred rather than merely late. Its reads were spread across `agent/nixos.py`
+and its adapter as inline `Path(...)` and `os.*` calls, so a replay would have
+walked the tree of whichever machine was replaying. Five primitives now carry
+every read, `readlink` separate from `realpath` because both are needed — a
+profile link's own target IS the generation's store path, where resolving it
+follows through to whatever that path points at in turn.
+
+## `packages` on a NixOS host, where the PORT was right
+
+Ten of 102 rows disagreed, and the reference lost. A store path whose name
+carries no version — `nixos-version`, `nix-info`, the `nixos-*` tools —
+belongs to a package that genuinely HAS no version. That is
+has-no-such-property, so it goes to the absent list; the reference emitted a
+null, which its envelope builder strips, so the row said **nothing at all**
+where the answer is none. Same ruling os-release's missing keys took. Reachable
+on no other guest in the lab.
+
+## `hardware`, and the 38th null
+
+`SmartTemperatureC: null`, published by the reference for a SCSI disk on a host
+with no smartctl and no udisks2. `setdefault(key, None)` writes the key, and it
+runs AFTER `item_summary` has stripped nulls — which is exactly why it survived
+the sweep that closed thirty-seven sites of this family. The port omitted the
+fact and was right. Found on the only lab host that has a SCSI disk and no
+smartctl.
+
+## `vms`, and two authors of one sentence
+
+`IPAddressesUnobservable` is the collector's own sentence — no interface
+produces it — so both implementations author it, and they wrote different
+words. Replay can never see this: the only captured domain is shut off and
+omits the fact entirely. The port now carries the reference's string verbatim.
+
+The same shape appeared once more in the same run, on `nix`'s decline DETAIL,
+and was closed the same way. Decline detail travels to a hub and out over MCP;
+two implementations answering one condition with two sentences is one defect
+wearing two hats.
+
+## Five ruled decline bridges, and why they are a separate branch
+
+A host with no `nft`, no docker socket, no libvirt socket, no protection
+manifest and no nix closure is a host where the reference RAISED and lost every
+collection, while the port declined `absent` and committed zero. That condition
+is the closed storage ruling — the interface is not here, which is a successful
+reading that establishes something — so the live reference now declines it too.
+
+`not_applicable` is a **separate branch from the receipts bridge beside it**,
+and separately deliberately: that one is a configuration gap and must NOT retire
+anything, this one must. The two answers differ in exactly the direction that
+matters. Every predicate tests the ABSENCE only — a socket that exists and
+refuses, a manifest that will not parse, a python binding the agent is missing —
+each is a reading nobody took, and none of them reaches this branch.
 
 ## Closed since the last report
 
@@ -406,18 +503,29 @@ that one took full parity from 17 clean to 16 on the next run. And a single
 reason for every gated collection would have told an operator to retry
 something permanent. Each was caught by a measurement rather than by review.
 
-## What gate 3 still needs
+## What gate 3's parity clause still needs: nothing
 
-1. ~~**The `vms` port**~~ — **done**, and with it the report is clean.
-2. **`units`' could-not-read channel**, ruled and not yet implemented: route a
-   failed property read to the structural `unobservable` record, and migrate
-   `MissingReferenceUnobservable` with it.
-3. **Whether `capability()` probes as a rule**, which is new and which decides
-   how much of the dark-service trigger can be bridged at all: three adapters
-   probe their interface there and five do not.
-4. **Whether the reference should adopt the port's decline DETAIL** on the
-   three collectors where the port's sentence is better. Not done here, because
-   that text is per-collector and copying it would give one fact two homes.
+1. ~~**The `vms` port**~~ — **done**.
+2. ~~**The `nix` port**~~ — **done**, at the scope the ruling leaves it, with
+   its divergence named and accepted above.
+3. ~~**Whether the reference should adopt the port's decline DETAIL**~~ —
+   answered by the run rather than by argument. Where both implementations
+   AUTHOR a sentence, they must write the same one, and which side moves is
+   decided per case: `vms` and `nix` both moved the PORT onto the reference's
+   words, because the reference's are what the shipping product already
+   publishes to a live consumer.
+
+Two items are open and neither blocks this clause:
+
+- **`units`' could-not-read channel**, ruled and deliberately not implemented:
+  `rules/units.py` reads `MissingReferenceUnobservable` as a FACT, and moving
+  it to the record channel would delete the rule's only signal that the probe
+  never ran. It waits on the prior decision — whether the rules layer reads the
+  unobservable channel at all — which is now its own queue item.
+- **Whether `capability()` probes as a rule**: three adapters probe their
+  interface there and five do not, so a stopped traefik yields three honest
+  declines and a stopped paperless yields nothing, and the difference is which
+  adapter's author thought of it rather than a property of the services.
 
 Class 1, the empty commit, and the decline vocabulary are **ruled and
 implemented** — see the rulings section above.
@@ -442,14 +550,24 @@ be sourced **inside** the privileged shell: `sudo -E` does not carry them past
 `env_reset`, and the app collectors then decline for want of a receipt while
 looking exactly like a host that has no apps.
 
-Parity is **established for all eighteen collectors compared, and unavailable
-for one** — `system`, which has no Python adapter and so nothing to disagree
-with.
+Parity is **established for all nineteen collectors compared, on two hosts, and
+unavailable for one** — `system`, which has no Python adapter and so nothing to
+disagree with. Twenty collectors ship; nineteen have two implementations to put
+against each other.
 
-The round's arc, in one line each: eight clean this morning, seventeen once the
-lab had venues to read, eighteen once `vms` was ported over a command the
-original objection had not examined. What the report cannot say, and should be
-read as not saying, is that the collectors are correct — only that two
-independent implementations reading one machine at one moment agree, which is a
-weaker and more useful claim. Five defects this round were found by exactly that
-disagreement and by nothing else.
+The round's arc, in one line each: eight clean at the start of the day,
+seventeen once the lab had venues to read, eighteen once `vms` was ported over a
+command the original objection had not examined, and nineteen on two hosts once
+`nix` was split from its deltas and five ruled declines stopped the reference
+losing whole collections to interfaces that are simply not there.
+
+What the report cannot say, and should be read as not saying, is that the
+collectors are correct — only that two independent implementations reading one
+machine at one moment agree, which is a weaker and more useful claim. **Nine
+defects this round were found by exactly that disagreement and by nothing
+else**, and the four that arrived last are the ones worth remembering: a null
+fact value the sweep of thirty-seven could not have caught because it is
+written after the sweep runs; two implementations composing different sentences
+for one fact that no interface authors; a reference that said nothing where the
+answer was none; and a whole collection lost to an exception on every host that
+does not run the thing it reads.
