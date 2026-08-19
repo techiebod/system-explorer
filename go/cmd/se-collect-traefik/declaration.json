@@ -1,0 +1,376 @@
+{
+  "schema": "se.declaration/1",
+  "collector": "traefik",
+  "version": "0.7.0",
+  "authority": {
+    "read_paths": [
+      "/proc/sys/kernel/random/boot_id",
+      "/proc/self/timens_offsets"
+    ]
+  },
+  "probe": "the traefik API answers /api/version. The ENDPOINT is deployment configuration and not a constant — the scheme, the port and the bind address are the deployment's decision, and this estate publishes the API loopback-only — so it is named by SE_TRAEFIK_URL rather than declared here. No endpoint configured is a host that publishes no ingress this collector can see, and an endpoint that answers with a refusal is a credential gap rather than an absence: the two are different verdicts and the reason says which. Traefik's own API takes no credential in this posture, so what refuses is whatever the deployment put in front of it.",
+  "collections": [
+    {
+      "name": "overview",
+      "question": "what is this proxy, and is any of its configuration broken?",
+      "prefix": "overview",
+      "freshness": "60s",
+      "perishability": "sampled",
+      "answer": [
+        "Version",
+        "RoutersTotal",
+        "ServicesTotal",
+        "RoutersErrors",
+        "MiddlewaresErrors"
+      ],
+      "ceiling": {
+        "records": 1,
+        "bytes": 65536
+      },
+      "facts": {
+        "Version": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/version/Version",
+          "sentence": "The Traefik release answering the API. It is the build that is actually routing, which is not always the image the deployment names — a pulled tag that nothing restarted leaves the two disagreeing, and this is the half that is serving requests."
+        },
+        "RoutersTotal": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/overview/http/routers/total",
+          "sentence": "How many HTTP routers are loaded. Read against the routers collection it is also a completeness check: a total larger than the rows a reader can see means the listing was cut short somewhere between the proxy and them."
+        },
+        "RoutersErrors": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/overview/http/routers/errors",
+          "sentence": "How many routers Traefik rejects. Each one is also a row of its own carrying the reason, so this number is the count to alarm on and the routers collection is where to look next."
+        },
+        "RoutersWarnings": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/overview/http/routers/warnings",
+          "sentence": "How many routers Traefik loaded with warnings. They ARE routing, which is what separates this figure from the error count and what makes it the one people leave alone for months."
+        },
+        "ServicesTotal": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/overview/http/services/total",
+          "sentence": "How many HTTP services are loaded. Three on a proxy with no dynamic providers — api, dashboard and noop are Traefik's own and are present on every install."
+        },
+        "ServicesErrors": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/overview/http/services/errors",
+          "sentence": "How many services Traefik rejects outright. A rejected service takes every router that points at it out of use, so this figure reaches further than its own collection."
+        },
+        "ServicesWarnings": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/overview/http/services/warnings",
+          "sentence": "How many services loaded with warnings — still serving, and still worth reading."
+        },
+        "MiddlewaresTotal": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/overview/http/middlewares/total",
+          "sentence": "How many middlewares are loaded across every provider. Their definitions are deliberately not served as rows — that is the one Traefik document family where auth material lives — so this count and the two beside it are all this collector says about them."
+        },
+        "MiddlewaresErrors": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/overview/http/middlewares/errors",
+          "sentence": "How many middlewares Traefik rejects. It is surfaced here precisely because there is no middlewares collection to carry it: a broken authentication middleware is the failure that opens a door rather than closing one, and this is the only number in the product that names it."
+        },
+        "MiddlewaresWarnings": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/overview/http/middlewares/warnings",
+          "sentence": "How many middlewares loaded with warnings."
+        },
+        "Providers": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/overview/providers",
+          "sentence": "The configuration providers this instance runs — Docker, File, Kubernetes and the internal one Traefik always has. It is the answer to \"where do I edit this route\", and it is absent on a proxy running nothing but its own internal configuration."
+        },
+        "EntryPoints": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/entrypoints/*/name",
+          "sentence": "The listening ports this instance declares, by the names the install config gave them. The names are the vocabulary every router's own EntryPoints fact is written in, so this is the list that makes those readable."
+        }
+      },
+      "redaction_exemption": "the three documents behind this row are the proxy reporting on itself — a release string, per-family counts of what loaded, the provider names in use, and the entrypoint names and their listen addresses. None of them names a credential and the API takes none in this posture, so there is none to leak into a reason or an error. The bound is stated because it is a decision rather than a shape: an entrypoint's address is the port a deployment chose to bind, which is a location and not a secret, and a deployment that ever put a credential in an entrypoint name would need this exemption revisited rather than inherited.",
+      "reference_commands": [
+        {
+          "purpose": "the per-family counts this row is built from",
+          "argv": ["curl", "-s", "${SE_TRAEFIK_URL}/api/overview"]
+        },
+        {
+          "purpose": "the release actually answering",
+          "argv": ["curl", "-s", "${SE_TRAEFIK_URL}/api/version"]
+        },
+        {
+          "purpose": "the entrypoints, one page as the collector asks for them",
+          "argv": ["curl", "-s", "${SE_TRAEFIK_URL}/api/entrypoints?page=1&per_page=100"]
+        }
+      ]
+    },
+    {
+      "name": "routers",
+      "question": "which URL reaches which application on this host, and did traefik accept the route?",
+      "prefix": "router",
+      "freshness": "60s",
+      "perishability": "reconstructible",
+      "answer": [
+        "Rule",
+        "Service",
+        "EntryPoints",
+        "Status"
+      ],
+      "ceiling": {
+        "records": 4096,
+        "bytes": 4194304
+      },
+      "facts": {
+        "Rule": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "location",
+          "from": "/rule",
+          "sentence": "The matching expression that selects requests for this router — the hostname half of \"which URL reaches which app\". It is how the application is reached rather than what it is called, which is why it discloses location even when it is only a path prefix."
+        },
+        "Service": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/service",
+          "sentence": "The service this router hands matched requests to; the flow's next hop, carried as a filterable name. It is the SHORT name as the provider wrote it, where the service's own UsedBy carries the full provider-qualified one — so the edge is published from the service side, where both halves are unambiguous."
+        },
+        "EntryPoints": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/entryPoints",
+          "sentence": "The listening ports this router is mounted on, by the entrypoint names the install config declares. An empty list is a router mounted on nothing, which is a route that exists and can never be reached."
+        },
+        "Provider": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/provider",
+          "sentence": "Where this router's configuration came from — docker labels, the file provider, Traefik's own internal one. It is who to edit to change the route, which is the first question anybody asks about a route they did not expect."
+        },
+        "Status": {
+          "type": "enum",
+          "values": ["enabled", "disabled", "warning"],
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/status",
+          "sentence": "Traefik's own three-valued verdict: enabled routes clean, warning ROUTES despite non-critical errors, disabled does not route at all. A disabled router is configuration somebody wrote and the proxy refused, so it is a route that exists everywhere except in the traffic."
+        },
+        "Priority": {
+          "type": "integer",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/priority",
+          "sentence": "Evaluation order among overlapping rules; higher wins. Traefik defaults it to the rule's length, and reserves the top of the range for its own internal routes — the API router sits two below 2^63, which is a real integer this product carries verbatim rather than through any floating-point form."
+        },
+        "Middlewares": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/middlewares",
+          "sentence": "The middleware chain applied to matched requests, by name only. The definitions themselves are deliberately not served anywhere in this collector, because that is where basic-auth password hashes live — so this list says which protections a route claims and never what they contain."
+        },
+        "Tls": {
+          "type": "boolean",
+          "labels": ["TLS", "plain"],
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/tls",
+          "sentence": "Whether this router terminates TLS. The presence of the block is the fact: Traefik writes an empty one for a router that terminates with every option defaulted, so a row saying true with no CertResolver beside it is using a certificate the deployment supplied rather than one ACME keeps current."
+        },
+        "CertResolver": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/tls/certResolver",
+          "sentence": "The ACME resolver that keeps this router's certificate current, by the name the static configuration gave it. Absent on a TLS router means nothing renews its certificate automatically, which is a fact about the next expiry rather than about today."
+        },
+        "Error": {
+          "type": "list",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/error",
+          "sentence": "Why Traefik rejects this router, in its own words — the parse error, the missing service, the resolver that does not exist. Absent means it loaded clean. The text quotes the operator's own rule back at them, which is what makes it actionable and what makes it content."
+        }
+      },
+      "redaction_exemption": "a router document is topology: a rule, the entrypoints it is mounted on, the service it forwards to, the provider that wrote it, the middleware chain BY NAME, and whether TLS terminates here. Traefik keeps auth material in middleware definitions, and this collector serves no middlewares collection and no evidence path to one — the chain here is names only. The bound is stated because it is a decision rather than a shape: a rule can carry a header or query match somebody chose, and a deployment that ever matched on a secret header VALUE would need this exemption revisited rather than inherited.",
+      "reference_commands": [
+        {
+          "purpose": "the exact document this collection is built from, one page as the collector asks for it",
+          "argv": ["curl", "-s", "${SE_TRAEFIK_URL}/api/http/routers?page=1&per_page=100"]
+        }
+      ]
+    },
+    {
+      "name": "services",
+      "question": "what does each route actually forward to, and are those backends up?",
+      "prefix": "service",
+      "freshness": "60s",
+      "perishability": "sampled",
+      "answer": [
+        "Status",
+        "ServersUp",
+        "ServersDown",
+        "Type"
+      ],
+      "ceiling": {
+        "records": 4096,
+        "bytes": 4194304
+      },
+      "facts": {
+        "Type": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/type",
+          "sentence": "The service's balancing shape — loadbalancer, weighted, mirroring. Absent on Traefik's own internal services, which balance nothing, and that absence is a statement rather than a gap: it is why this row omits a member it cannot read instead of publishing a null."
+        },
+        "Provider": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/provider",
+          "sentence": "Where this service's configuration came from — the same vocabulary the routers use, and the same answer to \"who do I edit\"."
+        },
+        "Status": {
+          "type": "enum",
+          "values": ["enabled", "disabled", "warning"],
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/status",
+          "sentence": "Traefik's own three-valued verdict on the service: enabled, warning (still serving), or disabled. It says whether the proxy accepted the definition, and says nothing at all about whether the backends behind it answer — ServersUp is that."
+        },
+        "UsedBy": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/usedBy",
+          "sentence": "The routers that hand traffic to this service — the flow's previous hop, carried as the FULL provider-qualified names, which is what makes the edge resolvable where the router's own short service name is not. Absent means nothing routes here, which for a service with real backends is a deployment somebody half-removed."
+        },
+        "Servers": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "location",
+          "from": "/loadBalancer/servers/*/url",
+          "sentence": "The backend URLs this service balances across, with any userinfo replaced by a visible marker. They are where the request actually goes, which is the one fact on this row that leaves the proxy — a container address, a port on another host, a socket."
+        },
+        "ServersUp": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/serverStatus",
+          "sentence": "How many backends currently pass Traefik's health view, folded from the per-server map. It is a reading of the proxy's opinion and not of the backends themselves: a service with no health check configured has every server UP by definition."
+        },
+        "ServersDown": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/serverStatus",
+          "sentence": "How many do not. A green router over ServersUp 0 is a front door onto nothing, and it is the shape that looks healthiest from every other vantage — the route exists, the service loaded, the proxy is up, and every request 502s."
+        },
+        "DownServers": {
+          "type": "list",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "location",
+          "from": "/serverStatus",
+          "sentence": "Exactly which backend URLs report down, sorted, with userinfo replaced. The count says how bad it is and this says which replica to go and look at."
+        },
+        "Error": {
+          "type": "list",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/error",
+          "sentence": "Why Traefik rejects this service, in its own words; absent means it loaded clean. A rejected service silently takes every router pointing at it out of use, so this is the text that explains a route that looks perfect and does not work."
+        }
+      },
+      "redactions": [
+        {
+          "path": "/loadBalancer/servers/*/url",
+          "discloses": "secret"
+        },
+        {
+          "path": "/loadBalancer/servers/*/address",
+          "discloses": "secret"
+        },
+        {
+          "path": "/serverStatus",
+          "discloses": "secret"
+        }
+      ],
+      "reference_commands": [
+        {
+          "purpose": "the exact document this collection is built from, one page as the collector asks for it",
+          "argv": ["curl", "-s", "${SE_TRAEFIK_URL}/api/http/services?page=1&per_page=100"]
+        }
+      ]
+    }
+  ]
+}

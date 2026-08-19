@@ -243,6 +243,19 @@ CASES = (
          # a port that published the member's presence rather than its content
          # would satisfy a name-only row.
          (differential.BAZARR_SONARR_VERSION, differential.BAZARR_RADARR_VERSION)),
+    Case("dynamic-provider-blind", "traefik-dynamic-provider",
+         "a9_traefik_dynamic_blind.py", differential.DISAGREE, "differences",
+         # Both readings this tier exists to give, by value. The health fold —
+         # a service whose backends are not all up, which is the front-door-onto-
+         # nothing shape — bound to the count AND to the backend it names, so a
+         # port that folded the map and lost the URL would not satisfy this row.
+         # And the rejected route's own words, which are the difference between
+         # an overview saying one router is broken and a row saying which. Every
+         # committed capture is of a Traefik with no dynamic providers, where
+         # none of these members exists at all, so this operator mints the only
+         # shape that draws the distinction.
+         (differential.TRAEFIK_SERVERS_DOWN, differential.TRAEFIK_DOWN_BACKEND,
+          differential.TRAEFIK_ROUTER_ERROR)),
 )
 
 

@@ -71,6 +71,7 @@ SEEDS = {
     "unbound": "unbound/healthy",
     "docker": "docker/healthy",
     "bazarr": "bazarr/healthy",
+    "traefik": "traefik/healthy",
 }
 
 # Names the operators mint. Constants rather than inline literals so the
@@ -137,6 +138,27 @@ BAZARR_SONARR_RELEASE = "4.0.15.2941"
 BAZARR_RADARR_RELEASE = "5.27.5.10198"
 BAZARR_SONARR_VERSION = f"'SonarrVersion': '{BAZARR_SONARR_RELEASE}'"
 BAZARR_RADARR_VERSION = f"'RadarrVersion': '{BAZARR_RADARR_RELEASE}'"
+# What a dynamic provider brings to a Traefik that had none. Every value below
+# was measured on a live Traefik 3.1.7 on 2026-08-19 — a file provider with one
+# TLS'd application, two backends and one deliberately broken rule — and is
+# carried in that spelling, because the operator's contract is a document the
+# interface produces and not one that resembles it. The two backend addresses
+# are docker's own bridge space, synthetic and in their own space like every
+# other address this repository writes down (DESIGN 21); the hostname is IANA's
+# documentation domain for the same reason.
+TRAEFIK_APP = "labapp@file"
+TRAEFIK_REJECTED_ROUTER = "broken@file"
+TRAEFIK_UP_BACKEND = "http://172.19.0.4:8080"
+TRAEFIK_DOWN_BACKEND = "http://172.19.0.5:8080"
+TRAEFIK_CERT_RESOLVER = "lab"
+# Traefik's own words for the rule it refused, quoted exactly as the API
+# returned them: the rule text is in the message, which is what makes a rejected
+# route actionable rather than merely counted.
+TRAEFIK_ROUTER_ERROR = (
+    "error while parsing rule Hostx(`nope.example.com`): unsupported function: Hostx"
+)
+# The one figure that only exists if the serverStatus map was folded at all.
+TRAEFIK_SERVERS_DOWN = "'ServersDown': 1"
 
 
 # ── nftables helpers, grammar-aware ──────────────────────────────────────
@@ -1034,6 +1056,134 @@ def _wired_managers(payloads: dict) -> dict:
     return payloads
 
 
+# ── traefik's ingress tier ───────────────────────────────────────────────
+
+
+def _sorted_insert(listing: list, entry: dict, what: str) -> None:
+    """Put one API entry at the position Traefik would have listed it.
+
+    The listing endpoints answer in name order, so an appended entry is a
+    document Traefik could not have produced — and it would also let a
+    challenger that publishes the entry still sort it into place, blurring which
+    defect the disagreement names. Same reasoning as the dpkg row above.
+    """
+    if any(isinstance(row, dict) and row.get("name") == entry["name"] for row in listing):
+        raise MutatorError(
+            f"{entry['name']} is already in this capture, so a minted {what} "
+            "would be a duplicate rather than a new one"
+        )
+    at = next((i for i, row in enumerate(listing)
+               if isinstance(row, dict) and str(row.get("name", "")) > entry["name"]),
+              len(listing))
+    listing.insert(at, entry)
+
+
+def _bump_count(overview: dict, family: str, member: str, by: int) -> None:
+    counts = ((overview.get("http") or {}).get(family) or {})
+    if member not in counts:
+        raise MutatorError(
+            f"the overview payload carries no http.{family}.{member} to move, so "
+            "the mutated document's totals would disagree with its listings"
+        )
+    counts[member] += by
+
+
+def _dynamic_provider(payloads: dict) -> dict:
+    """CLASS dynamic-provider-blind: a collector written against a proxy that
+    fronts nothing.
+
+    A Traefik with no dynamic providers publishes only its own internal routers
+    and services, and that is the whole committed capture — it is the universal
+    shape, present on every install, and it is also the shape in which nine of
+    this collector's declared facts are unreachable. An internal service carries
+    no `type`, no `loadBalancer` and no `serverStatus`; an internal router
+    carries no `tls` and no `error`; an overview with no providers carries no
+    `providers`. So a port that never implemented any of them reproduces the
+    committed pair exactly while being blind to everything the collector exists
+    to say about a real ingress tier. That is DESIGN 20's third trap, and this
+    is the transformation that springs it.
+
+    One deploy, and the whole of what a deploy brings: a file provider appears
+    with one TLS'd application on two backends — one of which is down — and one
+    route whose rule Traefik refused. The counts on the overview move with it,
+    the provider list appears, the entries land at their sorted positions, and
+    the rejected router's own words ride on its row. Measured on a live Traefik
+    3.1.7 rather than composed from the documentation: `serverStatus` is emitted
+    for any loadbalancer service and not only for a health-checked one, `tls`
+    carries `options` beside the resolver, and the refused router keeps its rule
+    while losing its `ruleSyntax`.
+
+    The disagreement it exposes is the one that matters at this tier. A
+    green router over ServersDown is a front door onto nothing — the route
+    exists, the service loaded, the proxy is up, and every request 502s — and a
+    rejected route is configuration somebody wrote that carries no traffic. A
+    blind port publishes both as ordinary healthy rows, with the overview's own
+    error count beside them saying one router is broken and nothing saying
+    which.
+    """
+    overview = payloads["api-overview"]
+    routers = payloads["api-http-routers"]
+    services = payloads["api-http-services"]
+    if not isinstance(routers, list) or not isinstance(services, list):
+        raise MutatorError("the routers and services payloads are not listings")
+    if "providers" in overview:
+        raise MutatorError(
+            "this capture already names its providers, so the seed is not the "
+            "no-dynamic-provider shape this operator adds one to"
+        )
+
+    _sorted_insert(routers, {
+        "entryPoints": ["web"],
+        "service": "labapp",
+        "rule": "Host(`labapp.example.com`)",
+        "priority": 26,
+        "tls": {"options": "default", "certResolver": TRAEFIK_CERT_RESOLVER},
+        "status": "enabled",
+        "using": ["web"],
+        "name": TRAEFIK_APP,
+        "provider": "file",
+    }, "router")
+    _sorted_insert(routers, {
+        "entryPoints": ["web"],
+        "service": "labapp",
+        "rule": "Hostx(`nope.example.com`)",
+        "priority": 25,
+        "error": [TRAEFIK_ROUTER_ERROR],
+        "status": "disabled",
+        "using": ["web"],
+        "name": TRAEFIK_REJECTED_ROUTER,
+        "provider": "file",
+    }, "router")
+    _sorted_insert(services, {
+        "loadBalancer": {
+            "servers": [{"url": TRAEFIK_UP_BACKEND}, {"url": TRAEFIK_DOWN_BACKEND}],
+            "healthCheck": {"mode": "http", "path": "/", "interval": "3s",
+                            "timeout": "2s", "followRedirects": True},
+            "passHostHeader": True,
+            "responseForwarding": {"flushInterval": "100ms"},
+        },
+        "status": "enabled",
+        # Both routers point at this service, the refused one included: Traefik
+        # records the reference whether or not the router it came from routes.
+        "usedBy": [TRAEFIK_REJECTED_ROUTER, TRAEFIK_APP],
+        "serverStatus": {TRAEFIK_UP_BACKEND: "UP", TRAEFIK_DOWN_BACKEND: "DOWN"},
+        "name": TRAEFIK_APP,
+        "provider": "file",
+        "type": "loadbalancer",
+    }, "service")
+
+    # A document whose totals disagree with its listings is not one Traefik
+    # produces, and the error count in particular is the figure a blind port
+    # keeps reporting while no row explains it.
+    _bump_count(overview, "routers", "total", 2)
+    _bump_count(overview, "routers", "errors", 1)
+    _bump_count(overview, "services", "total", 1)
+    # Traefik writes the provider list after `features`, and only once a
+    # provider other than its internal one is configured.
+    overview["providers"] = ["File"]
+    return payloads
+
+
 @dataclass(frozen=True)
 class Operator:
     """One structural transformation, bound to the defect class it exposes."""
@@ -1074,6 +1224,8 @@ OPERATORS: tuple[Operator, ...] = (
              _paused_container),
     Operator("bazarr-wired-managers", "bazarr", "manager-version-blind",
              _wired_managers),
+    Operator("traefik-dynamic-provider", "traefik", "dynamic-provider-blind",
+             _dynamic_provider),
 )
 
 

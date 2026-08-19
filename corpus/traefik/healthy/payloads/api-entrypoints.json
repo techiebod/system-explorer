@@ -1,1 +1,44 @@
-[{"address":":8080","transport":{"lifeCycle":{"graceTimeOut":"10s"},"respondingTimeouts":{"readTimeout":"1m0s","idleTimeout":"3m0s"}},"forwardedHeaders":{},"http":{},"http2":{"maxConcurrentStreams":250},"udp":{"timeout":"3s"},"name":"traefik"},{"address":":80","transport":{"lifeCycle":{"graceTimeOut":"10s"},"respondingTimeouts":{"readTimeout":"1m0s","idleTimeout":"3m0s"}},"forwardedHeaders":{},"http":{},"http2":{"maxConcurrentStreams":250},"udp":{"timeout":"3s"},"name":"web"}]
+[
+  {
+    "address": ":8080",
+    "transport": {
+      "lifeCycle": {
+        "graceTimeOut": "10s"
+      },
+      "respondingTimeouts": {
+        "readTimeout": "1m0s",
+        "idleTimeout": "3m0s"
+      }
+    },
+    "forwardedHeaders": {},
+    "http": {},
+    "http2": {
+      "maxConcurrentStreams": 250
+    },
+    "udp": {
+      "timeout": "3s"
+    },
+    "name": "traefik"
+  },
+  {
+    "address": ":80",
+    "transport": {
+      "lifeCycle": {
+        "graceTimeOut": "10s"
+      },
+      "respondingTimeouts": {
+        "readTimeout": "1m0s",
+        "idleTimeout": "3m0s"
+      }
+    },
+    "forwardedHeaders": {},
+    "http": {},
+    "http2": {
+      "maxConcurrentStreams": 250
+    },
+    "udp": {
+      "timeout": "3s"
+    },
+    "name": "web"
+  }
+]

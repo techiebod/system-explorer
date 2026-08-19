@@ -346,6 +346,26 @@ EXPECTED = (
                 "nor radarr and the interface spells that as an empty string, "
                 "so both implementations drop both facts and the differential "
                 "guard owns the red"),
+    # ── GREEN, adjudicated: the third trap, the fronts-nothing spelling ──
+    #
+    # The dynamic-provider-blind port never reads the members a bare Traefik
+    # does not carry: a service's type, load balancer and serverStatus map, a
+    # router's tls block and its error list, the overview's provider list. The
+    # only committed capture is of a proxy with no dynamic providers — the
+    # universal shape, present on every install — so not one of those members
+    # exists in it and both implementations emit identical rows. The judge
+    # honestly passes it. Its RED lives in test_differential.py, where the
+    # traefik-dynamic-provider operator deploys one TLS'd application on two
+    # backends, one of them down, plus one route Traefik refused. If this goes
+    # red here, the replay judge has grown a rule that sees a dynamic provider
+    # no committed capture holds — DESIGN 20's trap statement and the case table
+    # move together, not this row alone.
+    Expectation("a9_traefik_dynamic_blind.py", None, "traefik/healthy", "GREEN",
+                "the members only a dynamic provider brings, never read, which "
+                "no committed capture can expose: the captured proxy fronts "
+                "nothing but its own internal routes, so there is no backend "
+                "health, no TLS block and no rejected route to miss and the "
+                "differential guard owns the red"),
 )
 
 # The closed set of adjudicated greens, and the DESIGN clause each rests
@@ -381,6 +401,11 @@ ADJUDICATED_GREEN = {
     "to neither and the interface spells that as an empty string both "
     "implementations drop (DESIGN 20); the differential guard owns this red, "
     "under bazarr-wired-managers",
+    ("a9_traefik_dynamic_blind.py", None): "the third trap: replay cannot see "
+    "a backend health map, a TLS block, a provider list or a rejected route, "
+    "because the only captured proxy fronts nothing but its own internal "
+    "routes and carries none of those members (DESIGN 20); the differential "
+    "guard owns this red, under traefik-dynamic-provider",
 }
 
 

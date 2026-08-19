@@ -184,6 +184,27 @@ NAMED_RESIDUALS = {
         "verdict (DESIGN 20). The tool exists and no such run has been taken, "
         "so this truth stays owed rather than owned."
     ),
+    # A traefik SERVICE error, distinct from the router error beside it, which
+    # the dynamic-provider operator does mint. The distinction is what makes
+    # this a residual rather than laziness: the ROUTER half was staged on a live
+    # proxy and is covered, and this half could not be.
+    "traefik/rejected-service": (
+        "the services collection's Error fact is published only where Traefik "
+        "rejects a SERVICE, and no committed capture carries one. It is not "
+        "minted either, and that is a measurement rather than an omission: on a "
+        "live Traefik 3.1.7 (2026-08-19) the file provider accepts a weighted "
+        "service naming a service that does not exist, accepts a mirroring one "
+        "the same way and accepts a load balancer with no servers — all three "
+        "load `enabled` with no error member — and the docker provider skips a "
+        "container with no port rather than publishing a service that carries "
+        "the reason. An operator that minted the member anyway would be staging "
+        "a document nobody has seen this interface produce, which is the "
+        "failure the spares-and-logs placement already cost once. Venue: a "
+        "capture from a Traefik whose provider does reject a service — the "
+        "kubernetes and consul providers do — or the live comparator "
+        "(harness/bin/se-compare) run beside one. The tool exists and no such "
+        "proxy is in the lab, so this truth stays owed rather than owned."
+    ),
 }
 
 

@@ -49,6 +49,7 @@ GO_COLLECTORS = {
     "unbound": "./cmd/se-collect-unbound",
     "docker": "./cmd/se-collect-docker",
     "bazarr": "./cmd/se-collect-bazarr",
+    "traefik": "./cmd/se-collect-traefik",
 }
 
 

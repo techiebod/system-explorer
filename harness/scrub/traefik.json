@@ -1,158 +1,196 @@
 {
-  "#": "Scrub manifest for the traefik collector: the five API documents the adapter fetches, keyed by the request path each answers (api-overview, api-version, api-entrypoints, api-http-routers, api-http-services). Traefik's API carries no credential of its own \u2014 there is deliberately no API key and no middlewares collection, because auth material lives in middleware documents this collector never reads.",
-  "#nothing": "Router, service and entrypoint NAMES are the operator's own configuration vocabulary and are the answer this collector exists to give, so they are published. In this variant they are Traefik's internal ones (api@internal, dashboard@internal, noop@internal, and the traefik/web entrypoints), which are identical on every install and disclose nothing about any estate. A capture from a Traefik fronting real backends would carry operator-chosen names and backend URLs, and THAT variant needs entries this one does not \u2014 see #unreached.",
-  "#unreached": "Not classified here because no path in this variant reaches them, and a manifest entry for a shape nobody captured is a claim nobody checked: services.*.loadBalancer.servers.*.url and services.*.serverStatus.* carry backend URLs, which may embed userinfo credentials \u2014 the adapter already redacts them on the way out (_redact_url_userinfo, _redact_service_evidence). The first capture from a Traefik with a dynamic provider must extend this file before it can be scrubbed, and the scrubber's own deny-by-default walk is what will force that rather than trusting anyone to remember.",
-  "api-entrypoints.*.address": {
+  "#": "Scrub manifest for the traefik collector: the five API documents the adapter fetches on the acquisition path — /api/overview, /api/version, /api/entrypoints, /api/http/routers and /api/http/services — each scoped to the payload stem it answers. The API is the native interface, so a response document IS the payload. Traefik's API carries no credential of its own — there is deliberately no API key and no middlewares collection, because auth material lives in middleware documents this collector never reads.",
+  "#grammar": "A path is dotted FROM THE PAYLOAD'S OWN ROOT, and the payload it belongs to is named in the entry's `payload` member — never prefixed onto the path. The first version of this file spelled every key as `api-overview.http.routers.total`, which the walk reads as a four-segment path whose first segment is a literal member called `api-overview`, so not one entry matched and a real run refused all 68 leaves. Nothing caught it because only `se-anonymise --check` had been run, and --check runs the independent detectors alone: it answers 'is there identifying material here', never 'does this manifest classify the capture'. The two halves of the gate are separate and both have to be run.",
+  "#scoped": "Nearly every entry names its payload, because the five documents do not share a root — overview and version are objects, the other three are arrays — so an unscoped `*` at the root means 'a list index' in three files and 'a schema member' in two. Scoping is what lets one manifest cover payloads with different shapes.",
+  "#shared": "Three patterns are UNSCOPED, and they have to be: a manifest is a JSON object keyed by the path pattern, so one pattern can carry one entry and therefore one scope. `*.name` is a real member of all three listings, and `*.status` and `*.provider` of both the router and the service documents — a second, scoped copy of any of them is simply the first key overwritten, which is a silent way to leave one document's leaves unclassified. Unscoped is the honest spelling because the classification is the same on every side.\n\nThe cost of unscoping is the `~key` entry at the root below. `_keys_are_data` asks whether ANY entry walks a dict's keys with a `*`, and an unscoped `*.…` pattern does that at every document's root — including the overview and version objects', whose keys are the schema's own words rather than data. So the root entry answers a question the pattern language made the tool ask, and it answers it truthfully: `http`, `tcp`, `udp`, `features`, `Version`, `Codename` and `startDate` are member names, identical on every install.",
+  "#nothing": "Router, service and entrypoint NAMES are the operator's own configuration vocabulary and are the answer this collector exists to give, so they are published. In this variant they are Traefik's internal ones (api@internal, dashboard@internal, noop@internal, and the traefik/web entrypoints), which are identical on every install and disclose nothing about any estate. Same for the two rules, which are Traefik's own PathPrefix(`/api`) and PathPrefix(`/`), and for the two dashboard middleware names it mints for itself.\n\nThat is a bound of this capture and NOT a property of the field, and it is stated rather than implied: a capture from a Traefik fronting real backends carries operator-chosen router and service names (content), rules naming real FQDNs (location) and backend URLs (location), and every one of these entries must be reclassified BEFORE that capture is scrubbed. Nothing mechanical will force it — what the deny-by-default walk forces is the members below, which this capture does not reach at all.",
+  "#unreached": "Not classified here because no path in this variant reaches them, and a manifest entry for a shape nobody captured is a claim nobody checked. Measured on a live Traefik 3.1.7 (2026-08-19), a dynamic provider brings all of these at once: `providers` on the overview; `tls` and `error` on a router; `type`, `loadBalancer.servers.*.url`, `serverStatus.*` and its `~key`, and `error` on a service. The backend URL and the serverStatus keys are the ones that matter — they carry addresses and can embed userinfo credentials, which the adapter already redacts on the way out (_redact_url_userinfo, _redact_service_evidence). The first capture from a Traefik with a dynamic provider must extend this file before it can be scrubbed, and the scrubber's own deny-by-default walk is what will force that rather than trusting anyone to remember.",
+  "~key": {
     "discloses": "nothing"
   },
-  "api-entrypoints.*.http2.maxConcurrentStreams": {
+  "*.name": {
     "discloses": "nothing"
   },
-  "api-entrypoints.*.name": {
+  "*.status": {
     "discloses": "nothing"
   },
-  "api-entrypoints.*.transport.lifeCycle.graceTimeOut": {
+  "*.provider": {
     "discloses": "nothing"
   },
-  "api-entrypoints.*.transport.respondingTimeouts.idleTimeout": {
-    "discloses": "nothing"
+  "http.routers.total": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-entrypoints.*.transport.respondingTimeouts.readTimeout": {
-    "discloses": "nothing"
+  "http.routers.warnings": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-entrypoints.*.udp.timeout": {
-    "discloses": "nothing"
+  "http.routers.errors": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-http-routers.*.entryPoints.*": {
-    "discloses": "nothing"
+  "http.services.total": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-http-routers.*.middlewares.*": {
-    "discloses": "nothing"
+  "http.services.warnings": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-http-routers.*.name": {
-    "discloses": "nothing"
+  "http.services.errors": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-http-routers.*.priority": {
-    "discloses": "nothing"
+  "http.middlewares.total": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-http-routers.*.provider": {
-    "discloses": "nothing"
+  "http.middlewares.warnings": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-http-routers.*.rule": {
-    "discloses": "nothing"
+  "http.middlewares.errors": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-http-routers.*.ruleSyntax": {
-    "discloses": "nothing"
+  "tcp.routers.total": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-http-routers.*.service": {
-    "discloses": "nothing"
+  "tcp.routers.warnings": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-http-routers.*.status": {
-    "discloses": "nothing"
+  "tcp.routers.errors": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-http-routers.*.using.*": {
-    "discloses": "nothing"
+  "tcp.services.total": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-http-services.*.name": {
-    "discloses": "nothing"
+  "tcp.services.warnings": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-http-services.*.provider": {
-    "discloses": "nothing"
+  "tcp.services.errors": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-http-services.*.status": {
-    "discloses": "nothing"
+  "tcp.middlewares.total": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-http-services.*.usedBy.*": {
-    "discloses": "nothing"
+  "tcp.middlewares.warnings": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-overview.features.accessLog": {
-    "discloses": "nothing"
+  "tcp.middlewares.errors": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-overview.features.metrics": {
-    "discloses": "nothing"
+  "udp.routers.total": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-overview.features.tracing": {
-    "discloses": "nothing"
+  "udp.routers.warnings": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-overview.http.middlewares.errors": {
-    "discloses": "nothing"
+  "udp.routers.errors": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-overview.http.middlewares.total": {
-    "discloses": "nothing"
+  "udp.services.total": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-overview.http.middlewares.warnings": {
-    "discloses": "nothing"
+  "udp.services.warnings": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-overview.http.routers.errors": {
-    "discloses": "nothing"
+  "udp.services.errors": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-overview.http.routers.total": {
-    "discloses": "nothing"
+  "features.tracing": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-overview.http.routers.warnings": {
-    "discloses": "nothing"
+  "features.metrics": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-overview.http.services.errors": {
-    "discloses": "nothing"
+  "features.accessLog": {
+    "discloses": "nothing",
+    "payload": "api-overview"
   },
-  "api-overview.http.services.total": {
-    "discloses": "nothing"
+  "Version": {
+    "discloses": "nothing",
+    "payload": "api-version"
   },
-  "api-overview.http.services.warnings": {
-    "discloses": "nothing"
+  "Codename": {
+    "discloses": "nothing",
+    "payload": "api-version"
   },
-  "api-overview.tcp.middlewares.errors": {
-    "discloses": "nothing"
+  "startDate": {
+    "discloses": "nothing",
+    "payload": "api-version"
   },
-  "api-overview.tcp.middlewares.total": {
-    "discloses": "nothing"
+  "*.address": {
+    "discloses": "nothing",
+    "payload": "api-entrypoints"
   },
-  "api-overview.tcp.middlewares.warnings": {
-    "discloses": "nothing"
+  "*.transport.lifeCycle.graceTimeOut": {
+    "discloses": "nothing",
+    "payload": "api-entrypoints"
   },
-  "api-overview.tcp.routers.errors": {
-    "discloses": "nothing"
+  "*.transport.respondingTimeouts.readTimeout": {
+    "discloses": "nothing",
+    "payload": "api-entrypoints"
   },
-  "api-overview.tcp.routers.total": {
-    "discloses": "nothing"
+  "*.transport.respondingTimeouts.idleTimeout": {
+    "discloses": "nothing",
+    "payload": "api-entrypoints"
   },
-  "api-overview.tcp.routers.warnings": {
-    "discloses": "nothing"
+  "*.http2.maxConcurrentStreams": {
+    "discloses": "nothing",
+    "payload": "api-entrypoints"
   },
-  "api-overview.tcp.services.errors": {
-    "discloses": "nothing"
+  "*.udp.timeout": {
+    "discloses": "nothing",
+    "payload": "api-entrypoints"
   },
-  "api-overview.tcp.services.total": {
-    "discloses": "nothing"
+  "*.entryPoints.*": {
+    "discloses": "nothing",
+    "payload": "api-http-routers"
   },
-  "api-overview.tcp.services.warnings": {
-    "discloses": "nothing"
+  "*.middlewares.*": {
+    "discloses": "nothing",
+    "payload": "api-http-routers"
   },
-  "api-overview.udp.routers.errors": {
-    "discloses": "nothing"
+  "*.service": {
+    "discloses": "nothing",
+    "payload": "api-http-routers"
   },
-  "api-overview.udp.routers.total": {
-    "discloses": "nothing"
+  "*.rule": {
+    "discloses": "nothing",
+    "payload": "api-http-routers"
   },
-  "api-overview.udp.routers.warnings": {
-    "discloses": "nothing"
+  "*.ruleSyntax": {
+    "discloses": "nothing",
+    "payload": "api-http-routers"
   },
-  "api-overview.udp.services.errors": {
-    "discloses": "nothing"
+  "*.priority": {
+    "discloses": "nothing",
+    "payload": "api-http-routers"
   },
-  "api-overview.udp.services.total": {
-    "discloses": "nothing"
+  "*.using.*": {
+    "discloses": "nothing",
+    "payload": "api-http-routers"
   },
-  "api-overview.udp.services.warnings": {
-    "discloses": "nothing"
-  },
-  "api-version.Codename": {
-    "discloses": "nothing"
-  },
-  "api-version.Version": {
-    "discloses": "nothing"
-  },
-  "api-version.startDate": {
-    "discloses": "nothing"
+  "*.usedBy.*": {
+    "discloses": "nothing",
+    "payload": "api-http-services"
   }
 }
