@@ -39,8 +39,14 @@ def _declares_addresses(collector: str) -> bool:
     if not manifest.exists():
         # no manifest yet: deny-by-default, a private address is a finding
         return False
+    # The vocabulary comes FROM the tool rather than being spelled again here.
+    # Two copies of this predicate drifted apart the moment `prose` was ruled
+    # in — one of them would have been updated and the other not, and which
+    # one governs depends on whether you are scrubbing or checking. That is
+    # the fourth-copy failure this repository names, in the guard that decides
+    # what may be published.
     return any(
-        entry.get("format") in ("ipv4", "ipv6")
+        entry.get("format") in detectors.ADDRESS_BEARING_FORMATS
         and entry.get("discloses") != "nothing"
         for key, entry in json.loads(manifest.read_text()).items()
         if not key.startswith("#") and isinstance(entry, dict)

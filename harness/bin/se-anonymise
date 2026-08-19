@@ -108,6 +108,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from se_harness import detectors  # noqa: E402  (after the path insert above)
+
 DISCLOSES = {"nothing", "identity", "location", "content", "secret"}
 FORMATS = {"wwn", "guid_u64", "serial", "mac", "ipv4", "ipv6", "hostname",
            "name", "path", "prose"}
@@ -907,7 +909,8 @@ def _declares_addresses(entries: dict[tuple, dict], wholes: dict[str, dict]) -> 
     # whole-document entries count too: a text payload classified as an
     # address is exactly as much of an address field as any JSON leaf
     return any(
-        e.get("format") in ("ipv4", "ipv6") and e["discloses"] != "nothing"
+        e.get("format") in detectors.ADDRESS_BEARING_FORMATS
+        and e["discloses"] != "nothing"
         for e in (*entries.values(), *wholes.values())
     )
 

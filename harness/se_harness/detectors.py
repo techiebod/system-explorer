@@ -120,6 +120,23 @@ CIDR = re.compile(
     r"(?<![\w.:])((?:\d{1,3}\.){3}\d{1,3}|[0-9A-Fa-f:]*:[0-9A-Fa-f:.]+)/(\d{1,3})\b"
 )
 V4_ADDR = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+
+# The manifest formats under which a payload may legitimately hold an address.
+#
+# This is the ONE bit these detectors take from a scrub manifest — DESIGN 21
+# forbids them any more of the collector's vocabulary, because a detector that
+# knew what the collector knew would agree with it about the same blind spots.
+# It lives HERE, with its consumer, and the scrubber imports it: two copies
+# drifted apart the moment `prose` was ruled in, and which copy governed
+# depended on whether you were scrubbing or checking.
+#
+# `prose` was missing from that vocabulary at first, which made the gate refuse
+# a manifest for the scrubber's OWN work — the free-text pass substitutes an
+# address inside a log line RFC1918 to RFC1918, and a manifest whose
+# address-bearing fields are all prose then read as "declares none", the exact
+# misreading the predicate exists to prevent. A set, not a literal tuple,
+# because enumerating the formats its author had met is the whole defect.
+ADDRESS_BEARING_FORMATS = frozenset({"ipv4", "ipv6", "prose"})
 # The release field of a package version, which is what follows a dotted quad
 # that is not an address: alsa-topology-conf is 1.2.5.1-3build1 and
 # libasound2-data is 1.2.15.3-1ubuntu1.1 — four components, every one of them

@@ -35,6 +35,7 @@ from pathlib import Path
 
 import pytest
 
+from se_harness import detectors
 from se_harness.detectors import scan
 
 REPO = Path(__file__).resolve().parent.parent
@@ -500,3 +501,53 @@ def test_the_survived_unchanged_gate_still_refuses_every_other_class(tmp_path: P
         "`scrubbed`, and exempting it along with prose would retire the gate "
         "for thirty entries in the shipped manifests"
     )
+
+
+def test_a_prose_manifest_declares_that_addresses_may_appear() -> None:
+    """The one bit the detectors take from a manifest must include prose.
+
+    `_declares_addresses` tells the detectors whether a private address in this
+    payload is expected or is a finding. It enumerated ipv4 and ipv6, and was
+    not extended when `prose` was ruled in — so a manifest whose address-bearing
+    fields are all prose read as "this file declares none", which is precisely
+    the misreading the predicate exists to prevent, aimed at the scrubber's own
+    output. The first journal payload produced twenty-seven findings, every one
+    of them an address the free-text pass had correctly substituted RFC1918 to
+    RFC1918.
+
+    The vocabulary now lives once, beside the detectors that consume it, because
+    two copies drifted apart the moment prose landed and which one governed
+    depended on whether you were scrubbing or checking.
+    """
+    assert "prose" in detectors.ADDRESS_BEARING_FORMATS, (
+        "a prose leaf may hold an address inside it, so a manifest carrying one "
+        "has declared that addresses may appear"
+    )
+    for shaped in ("ipv4", "ipv6"):
+        assert shaped in detectors.ADDRESS_BEARING_FORMATS
+
+    # And the other direction: a format that cannot hold an address must not
+    # widen the predicate, or every manifest would declare addresses and the
+    # detectors' address rule would be switched off everywhere.
+    for narrow in ("mac", "wwn", "serial", "guid_u64", "hostname", "name", "path"):
+        assert narrow not in detectors.ADDRESS_BEARING_FORMATS, narrow
+
+
+def test_the_scrubber_and_the_conformance_guard_read_one_vocabulary() -> None:
+    """Two copies of a predicate is the fourth-copy failure, in the guard that
+    decides what may be published. Both sides now import the same set, so a
+    format added for one is added for the other."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_loader("se_anonymise_script", loader=None)
+    module = importlib.util.module_from_spec(spec)
+    source = ANONYMISE.read_text()
+    assert "detectors.ADDRESS_BEARING_FORMATS" in source, (
+        "se-anonymise must read the vocabulary from se_harness.detectors rather "
+        "than spelling its own copy"
+    )
+    guard = (REPO / "conformance" / "test_corpus_is_scrubbed.py").read_text()
+    assert "detectors.ADDRESS_BEARING_FORMATS" in guard, (
+        "the conformance guard must read the same one"
+    )
+    assert module is not None  # the loader is unused; the source read is the test
