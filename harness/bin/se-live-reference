@@ -111,6 +111,15 @@ LIVE = {
     # would compare a collection no corpus can stage.
     "plex": {"module": plex, "adapter": plex.Adapter,
              "receipts": lambda a: a.plex_url is None and a.seerr_url is None,
+             # The one adjudicated per-collection receipt gap: a Plex that IS
+             # addressed but holds no usable token cannot be asked for
+             # libraries or sessions — guessing would only manufacture 401s —
+             # and the adapter says so per collection. Without this the driver
+             # acquired them anyway, got [] and COMMITTED it, retiring every
+             # library the estate had published because a variable was unset.
+             "receipt_collections": lambda a, c: (
+                 c in ("libraries", "sessions")
+                 and a.plex_url is not None and not a._plex_token_set),
              "interface": "plex api",
              "collections": ["server", "libraries", "sessions"]},
     # Reads files this host publishes, so live means literally that — and it
@@ -334,7 +343,54 @@ def run(collector: str, generations: dict[str, int]) -> None:
                             f"no {spec['interface']} configured for this process")
             return
 
+        # The adapter's PER-COLLECTION statement, which the shipping agent's
+        # HTTP path already honours and this driver did not.
+        #
+        # plex is the case that forced it: with SE_PLEX_TOKEN unset the adapter
+        # declares `libraries` and `sessions` unavailable — guessing would only
+        # manufacture 401s — but this driver acquired them anyway, got an empty
+        # list back, and COMMITTED it. An empty commit is authoritative-empty,
+        # so every library and every session the estate had published was
+        # retired because a variable was unset. Measured 2026-08-19; the port
+        # declines both and retires nothing.
+        #
+        # `unavailable` for the same reason as above: the adapter has said it
+        # cannot serve this collection and has NOT said the thing is absent, so
+        # this is the reading that is true of everything reachable here and it
+        # cannot retire a row. Where a port says something sharper — kea answers
+        # `unsupported` for a lease collection whose hook is not loaded — the
+        # comparator reports the difference, which is the honest outcome: a
+        # visible disagreement about a WORD, rather than the reference losing
+        # every collection to an exit 2 or retiring rows it never read.
+        #
+        # The adapter's own reason is deliberately NOT carried into the detail.
+        # Every one of them is host-free today, but a decline detail travels to
+        # a hub and out over MCP, and this collector's sibling already publishes
+        # an instance URL inside a fact by exactly that route — prose written
+        # for a capability page is not reviewed as wire-visible text.
+        #
+        # NARROWED to the collectors whose per-collection gap is a RECEIPT gap,
+        # named in the table, because the first version bridged all of them and
+        # broke `hardware` immediately. Eight adapters populate
+        # unavailable_collections and they do not mean one thing: hardware sets
+        # `nvme` when /sys/class/nvme does not exist, which is not a gap in the
+        # asking — it is the answer, "there are no NVMe controllers here", and
+        # DESIGN 19's own worked example of a reading that must commit zero and
+        # retire. Declining it made the reference disagree with a port that was
+        # right, on a host that genuinely has no NVMe. Measured 2026-08-19: 17
+        # clean went to 16 on the first full run after that change.
+        receipt_gap = spec.get("receipt_collections")
+        dark = gate.get("unavailable_collections") or {}
+        skip = {name for name in generations
+                if name in dark and receipt_gap and receipt_gap(adapter, name)}
+        for collection in skip:
+            out.decline(collection, "unavailable",
+                        f"{collection} is not observable through the "
+                        f"{spec['interface']} on this host")
+
         for collection in generations:
+            if collection in skip:
+                continue  # declined above, and never acquired
             at = time.clock_gettime(time.CLOCK_BOOTTIME)
             try:
                 items = await materialise(adapter, collection, spec.get("page"))
