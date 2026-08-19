@@ -60,6 +60,7 @@ SERVES = {
     "bazarr": ["instance"],
     "servarr": ["apps", "health", "queue", "history"],
     "downloaders": ["clients", "transfers"],
+    "hardware": ["platform", "pci", "usb", "scsi", "nvme"],
 }
 
 REFERENCE = REPO / "harness" / "bin" / "se-live-reference"

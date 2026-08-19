@@ -75,13 +75,10 @@ if os.environ.get("SE_REPLAY_NOW"):
 # choice of exception the thing under test.
 import httpx  # noqa: E402
 
+from system_explorer.agent import envelope as env  # noqa: E402
 from system_explorer.agent.adapters import (  # noqa: E402
-    bazarr, docker, logs, network, packages, storage, traefik, unbound, vms,
-    docker, logs, network, packages, servarr, storage, traefik, unbound, vms,
-    docker, kea, logs, network, packages, storage, traefik, unbound, vms,
-    docker, logs, network, packages, resources, storage, traefik, unbound, vms,
-    docker, downloaders, logs, network, packages, storage, traefik, unbound,
-    vms,
+    bazarr, docker, downloaders, hardware, kea, logs, network, packages,
+    resources, servarr, storage, traefik, unbound, vms,
 )
 
 # Which module-level acquisition each collector redirects, and what payload
@@ -92,7 +89,9 @@ from system_explorer.agent.adapters import (  # noqa: E402
 # interface was absent and the batch declines. `auxiliary` are acquisitions
 # that qualify the interface without being it (device alias links): a missing
 # one pins to its stated default so the adapter can say could-not-read,
-# rather than counting toward absence.
+# rather than counting toward absence. `path_acquisitions` are the tree seam:
+# one document per primitive, keyed the way a filesystem is, for an interface
+# that answers a WALK rather than a request.
 # `collections` is the closed set this shim can replay: the collections
 # derived from the stubbed acquisitions and no others. It is load-bearing
 # twice. It is the SEAM's safety bound — `collect links:5` is a legal request
@@ -371,6 +370,74 @@ SEAM = {
         # `null`, not an empty document: absent and empty are different
         # answers here, and the whole collection turns on keeping them apart.
         "arg_acquisitions": ["_read_text", "_walk"],
+    },
+    # ── the tree-shaped seam: one document per primitive, keyed by path ──
+    "hardware": {
+        "module": hardware,
+        "adapter": hardware.Adapter,
+        "interface": "sysfs",
+        "collections": ["platform", "pci", "usb", "scsi", "nvme"],
+        # lscpu is a command that answers with a document, so it takes the
+        # ordinary zero-argument seam. /proc/meminfo does NOT appear here on
+        # purpose: _meminfo_total_bytes reads it through _read, so pinning the
+        # derived integer would stub out the parse the port has to reproduce —
+        # the kernel file itself is in the read map, where it belongs.
+        "acquisitions": {"_lscpu_json": "lscpu"},
+        # Ruled 2026-08-19 (DESIGN, adjudication queue, "what a captured
+        # payload is for a TREE-shaped interface"): the native document for a
+        # filesystem interface is the filesystem transcribed — the directory
+        # listings the collector walked plus the contents of every file it
+        # read. So each primitive gets ONE document, keyed directory-then-name,
+        # and a reviewer can `cat` any path on the guest and compare.
+        #
+        # One document and not one file per path, for a reason the dispatched
+        # seam cannot serve: on a sysfs walk "there is no such file" is an
+        # ORDINARY reading — six firmware attribute names are tried per scsi
+        # host and at most one of them exists — so a null sits beside the
+        # values and is a captured answer rather than an uncaptured one. A path
+        # the capture does not hold still raises, so this stays deny-by-default
+        # exactly like the other kinds: it can never read the tree of the
+        # machine REPLAYING the corpus.
+        #
+        # _realpath and _exists are here because neither reads a file and both
+        # are readings all the same — which ata port a disk hangs from, which
+        # PCI function a host adapter is, whether a scsi host publishes a SAS
+        # address. Unpinned they do not fail, they ANSWER, out of the tree of
+        # whichever machine is replaying: realpath returns a missing path
+        # unchanged, so the walk finds no ata port and publishes a host with no
+        # transport, and exists answers about the replaying host's own scsi
+        # tree. Both were unstubbed until 2026-08-19, which meant a pair was
+        # not a function of its payload — a SAS host replaying a SATA capture
+        # read SAS out of its own /sys.
+        #
+        # The three smart maps are captured empty on a guest with no block
+        # device in either walk, and empty is the whole point of declaring
+        # them: without these entries a replay would run `smartctl` against
+        # the disks of whichever machine is replaying.
+        "path_acquisitions": {
+            "_read": "read",
+            "_listdir": "listdir",
+            "_realpath": "realpath",
+            "_exists": "exists",
+            "_udev_json": "udev",
+            "_smartctl_json": "smartctl",
+            "_smart_snapshot": "smart-snapshot",
+            "_smart_no_reading": "smart-reason",
+        },
+        # udisks2 is reached through the D-Bus singleton rather than a module
+        # function, so the seam is the singleton: an object that refuses. No
+        # committed variant carries a udisks2 document — see
+        # corpus.NAMED_RESIDUALS["hardware/udisks2-smart"] — and refusing is
+        # what the adapter's own degradation already handles, by the same path
+        # a host with no udisks2 on the bus takes.
+        "bus": "udisks2",
+        # env.HOST is read from the kernel at import and hardware mints the
+        # platform object's id from its hostname, so an unpinned replay names
+        # the object after whichever machine is REPLAYING and one capture
+        # produces a different object on every host that reads it. Pinned from
+        # the capture's own payload, which is the discipline every acquisition
+        # here takes: the corpus, never the replaying host.
+        "host": {"hostname": "hostname"},
         "instance": {},
     },
     "network": {
@@ -394,16 +461,28 @@ SEAM = {
 def load_payloads(directory: Path) -> dict[str, object]:
     """Every captured document, keyed by file stem.
 
-    `.json` is parsed; `.txt` is handed over as the exact text. The second
-    exists because not every native interface answers in JSON — unbound's
-    control socket replies in plain text, and wrapping that in a JSON string
-    would put a transcription between the capture and the parser it feeds.
+    `.json` is parsed; anything else is handed over as the exact text, because
+    not every native interface answers in JSON — unbound's control socket
+    replies in plain text, os-release and the kernel hostname ARE text — and
+    wrapping those in a JSON string would put a transcription between the
+    capture and the parser it feeds.
+
+    Every file, exactly as se_harness.corpus.load_variant reads them, and that
+    is the point rather than a convenience: this globbed `*.json` and `*.txt`
+    only, so a payload committed under a bare stem — which is the form the
+    corpus loader and the differential guard's writer both produce — was
+    silently invisible here while sitting in the directory. Dotfiles stay
+    behind; the .gitkeep marking an absent-interface variant is git plumbing,
+    never a capture.
     """
     payloads: dict[str, object] = {}
-    for path in sorted(directory.glob("*.json")):
-        payloads[path.stem] = json.loads(path.read_text())
-    for path in sorted(directory.glob("*.txt")):
-        payloads[path.stem] = path.read_text()
+    for path in sorted(directory.iterdir()):
+        if not path.is_file() or path.name.startswith("."):
+            continue
+        payloads[path.stem] = (
+            json.loads(path.read_text()) if path.suffix == ".json"
+            else path.read_text()
+        )
     return payloads
 
 
@@ -499,6 +578,71 @@ def fleet_specs(captured: object, payload_name: str) -> list[dict]:
             "duplicates": list(entry.get("duplicates") or []),
         })
     return specs
+def by_path(label: str, payload_name: str, document: object):
+    """A stub that answers a TREE-shaped acquisition out of one document.
+
+    The captured document holds every path the collector asked the interface
+    about and what came back — including the nulls, because on a filesystem
+    walk "there is no such file" is an ordinary reading the adapter degrades
+    through rather than an absence of capture. A path that IS in the document
+    is answered with whatever it holds, null included; one that is not raises,
+    because the variant never recorded that read and falling back would read
+    the tree of the machine REPLAYING the corpus.
+
+    Keyed the way a filesystem is — the directory, then the name inside it —
+    rather than by the whole path as one string, and that shape is load-bearing
+    twice. It is how a reviewer reads it: one object per directory, its
+    attributes beside each other, `cat`-able against the guest one line at a
+    time. And it is the granularity the scrub manifest classifies at (DESIGN
+    21): `*.wwid` is one written claim about a field of this interface, where
+    a flat map offers only the whole path — either forty literal entries that
+    a guest with one more disk invalidates, or a single `*` that classifies a
+    WWN and a link rate as one thing, which is the audited failure the manifest
+    exists to prevent.
+
+    An argument with no directory part (a device NAME — smartctl's snapshot
+    files are addressed that way) lands under the empty container, so the rule
+    stays one rule.
+    """
+    entries = document if isinstance(document, dict) else {}
+
+    def answer(argument, *_args, **_kwargs):
+        container, _, member = str(argument).rpartition("/")
+        inside = entries.get(container)
+        if not isinstance(inside, dict) or member not in inside:
+            raise RuntimeError(
+                f"{label} {argument!r} was not captured in this variant "
+                f"(payload {payload_name!r}); the tree seam refuses to read "
+                "the filesystem of the machine replaying the corpus"
+            )
+        return inside[member]
+
+    return answer
+
+
+class RefusingBus:
+    """The D-Bus singleton, for a variant that captured no bus reply.
+
+    Not a stub that answers: an adapter reading D-Bus under replay must reach
+    no bus at all, and the one thing worse than an uncaptured reply is a reply
+    from the session the replaying machine happens to be running. Raising is
+    the reading the adapter already knows how to take — hardware's
+    _drive_health catches it and records that udisks2 is not on the bus, which
+    is what a host without the daemon produces too.
+    """
+
+    def __init__(self, payload_name: str) -> None:
+        self._payload_name = payload_name
+
+    async def call(self, destination, path, interface, member, *_a, **_k):
+        raise RuntimeError(
+            f"{destination}.{member} was not captured in this variant "
+            f"(payload {self._payload_name!r}); the bus seam refuses to dial "
+            "the system bus of the machine replaying the corpus"
+        )
+
+    async def get_all(self, destination, path, interface):
+        return await self.call(destination, path, interface, "GetAll")
 
 
 class CapturedResponse:
@@ -648,8 +792,13 @@ def run(collector: str, generations: dict[str, int], payload_dir: Path) -> None:
     # this collector uses — a dispatched seam has no fixed payload names, so
     # its presence test is whether the variant staged anything.
     present = [n for n in spec.get("acquisitions", {}).values() if n in payloads]
-    if spec.get("methods") or spec.get("arg_acquisitions") \
-            or spec.get("fleet_methods"):
+    # Every dispatched seam kind, in one condition. Each was added by a
+    # different collector and each is a way for a variant to stage documents
+    # under names no fixed table lists, so a kind missing from here would read
+    # as "this variant captured nothing" and decline `absent` — which commits,
+    # and retires every object the collection had.
+    if any(spec.get(kind) for kind in
+           ("methods", "fleet_methods", "arg_acquisitions", "path_acquisitions")):
         present = present or list(payloads)
     absent = not present
 
@@ -663,7 +812,7 @@ def run(collector: str, generations: dict[str, int], payload_dir: Path) -> None:
         value = payloads.get(payload_name, default)
         setattr(module, attribute, lambda _v=value, *a, **k: _v)
     # Module-level, but the document depends on the argument: protection's
-    # _load(path), hardware's _read(path), logs' _run_journalctl(args).
+    # _load(path), logs' _run_journalctl(args).
     for attribute in spec.get("arg_acquisitions", ()):
         setattr(module, attribute, dispatched("module", attribute))
     # The fleet, before the adapter is constructed: Adapter.__init__ calls
@@ -676,6 +825,13 @@ def run(collector: str, generations: dict[str, int], payload_dir: Path) -> None:
             setattr(module, attribute, lambda _v=value, *a, **k: list(_v))
         else:
             setattr(module, attribute, uncaptured(payload_name))
+    # Module-level, and one captured document answers every argument: the
+    # filesystem transcribed by path (DESIGN's tree ruling, 2026-08-19).
+    for attribute, payload_name in spec.get("path_acquisitions", {}).items():
+        setattr(module, attribute,
+                by_path(attribute, payload_name, payloads.get(payload_name)))
+    if "bus" in spec:
+        module.BUS = RefusingBus(spec["bus"])
 
     out = Emitter(
         sys.stdout,
@@ -718,6 +874,20 @@ def run(collector: str, generations: dict[str, int], payload_dir: Path) -> None:
             out.commit(collection, objects=0, assertions=0, unobservable=0)
         out.end()
         return
+
+    # The host identity a captured object was named for. Required rather than
+    # defaulted: env.HOST is read from the kernel at import, so a replay that
+    # let it stand would name the object after the machine REPLAYING and one
+    # capture would produce a different object on every host that read it —
+    # silently, because a hostname is a plausible value wherever it came from.
+    for key, payload_name in spec.get("host", {}).items():
+        if payload_name not in payloads:
+            fail(
+                f"{collector}: payload {payload_name!r} pins env.HOST[{key!r}] "
+                "and this variant did not capture it; without it the objects "
+                "would be named after the machine replaying the corpus"
+            )
+        env.HOST[key] = str(payloads[payload_name]).strip()
 
     adapter = spec["adapter"]()
     for attribute, value in spec.get("instance", {}).items():

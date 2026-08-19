@@ -217,6 +217,83 @@ NAMED_RESIDUALS = {
         "item names. The tool exists, the guest does not, so this truth stays "
         "owed rather than owned."
     ),
+    # The hardware collector reads five trees and the only guest available to
+    # capture it has devices in three of them. These four entries are what
+    # that costs, named fact by fact rather than as "some disk facts" — the
+    # contract check reads them, so a name missing from the prose is a promise
+    # nothing tests and the guard says so.
+    "hardware/no-disk-in-either-walk": (
+        "the lab guest's disks are virtio-blk, which the kernel presents "
+        "through neither the scsi nor the nvme class: /sys/class/nvme does not "
+        "exist there and /sys/bus/scsi/devices holds two ata_piix hosts and no "
+        "device. So the whole nvme collection is exercised by zero committed "
+        "records — Model, FirmwareRev, Serial, State, Transport, PCIAddress, "
+        "Namespaces, WWN, WWNUnobservable, LinkSpeed, LinkSpeedMax, LinkWidth, "
+        "LinkWidthMax, SlotLinkSpeedMax, SlotLinkWidthMax, "
+        "LinkBandwidthBytesPerSec and LinkBandwidthMaxBytesPerSec — and so is "
+        "every scsi fact that belongs to a DISK rather than to a controller: "
+        "Block, SizeBytes, Serial, WWN, ByPath, Revision, and the SATA link "
+        "pair LinkSpeed and LinkSpeedMax. No mutation operator mints them "
+        "either, and that is a ruling rather than an oversight: an operator "
+        "ADDS a shape to the machine its seed captured, and staging a disk "
+        "here would mean inventing a sysfs subtree — the vpd page, the block "
+        "size file, the ata_link class — that nobody observed, which is the "
+        "reference half of the guard answering about a host that does not "
+        "exist. Venue: the live comparator (harness/bin/se-compare) on a host "
+        "with SATA, SAS or NVMe disks. The tool exists and no such run has "
+        "been taken, so this truth stays owed rather than owned."
+    ),
+    "hardware/udisks2-smart": (
+        "no committed variant carries a udisks2 document at all, so every fact "
+        "that arrives over D-Bus is exercised by no replayed stream: Firmware, "
+        "Vendor, SmartFailing, SmartBadSectors, SmartSelftestStatus, "
+        "SmartCriticalWarning, and the SmartTemperatureC and SmartPowerOnHours "
+        "readings that come from the daemon rather than from smartctl. Two "
+        "reasons, and the second is the harder one. The guest runs udisks2 and "
+        "answers, but its drives are virtio-blk and appear in neither walk, so "
+        "the reply joins to nothing and would contribute no fact. And the "
+        "reply CANNOT be committed as it stands: the scrub manifest addresses "
+        "payload leaves by dotted path, and a GetManagedObjects document is "
+        "keyed by D-Bus INTERFACE NAMES which contain dots — so "
+        "org.freedesktop.UDisks2.Drive.Serial cannot be told from "
+        "org.freedesktop.UDisks2.Block.Device by any pattern the manifest "
+        "grammar can write, and the only classification it admits is one "
+        "wildcard over every property of every interface at once. That is the "
+        "coarse-classification failure DESIGN 21 exists to prevent. Venue: the "
+        "live comparator on a host with an ATA or NVMe drive udisks2 manages; "
+        "the manifest gap is reported as an adjudication item, because "
+        "classifying a D-Bus document is a decision about the scrubber's "
+        "grammar and not a manifest's to make."
+    ),
+    "hardware/smartctl-depth": (
+        "the deepest SMART depth runs only where the deployment granted raw "
+        "device access, and the lab guest has no /run/system-explorer-smart "
+        "and no block device in either walk to run it against — so "
+        "SmartSnapshotAt, SmartSnapshotAgeSeconds, SmartSnapshotReason, "
+        "SmartOverallPassed, SmartPercentUsed, SmartAvailableSparePct, "
+        "SmartSpareThresholdPct, SmartMediaErrors, SmartPowerOnHours, "
+        "SmartTemperatureC and the SmartUnobservable statement that stands in "
+        "for all of them are reached by no committed record. The three smart "
+        "payloads are captured EMPTY rather than omitted, which is what makes "
+        "the absence visible in the corpus rather than merely true. Venue: the "
+        "live comparator on a host running the module's grantDiskAccess timer, "
+        "where the snapshots exist and their age is derived against a real "
+        "clock — which replay cannot authenticate in any case (DESIGN 19)."
+    ),
+    "hardware/no-hba-no-enclosure": (
+        "the guest has no host bus adapter and no SES enclosure, and both are "
+        "hardware nothing in a lab can conjure. The adapter's own identity is "
+        "therefore unexercised — FirmwareVersion, BiosVersion and BoardName "
+        "are published by mpt3sas-family drivers and read back null under all "
+        "six attribute spellings here — as is the SAS topology beneath one: "
+        "Level and SASAddress on an expander, and the enclosure facts a shelf "
+        "supplies, Enclosure, EnclosureSlot, SlotStatus and Slots. platform's "
+        "BoardName is the same shape one layer up: DMI leaves it empty on this "
+        "i440FX guest and on most virtual machines. Venue: the live comparator "
+        "on a host with a SAS HBA and a populated shelf. Not mintable by an "
+        "operator for the same reason the disk facts are not — the sysfs "
+        "subtree an enclosure publishes is a document nobody here has observed."
+    ),
     "packages/nix-store-path": (
         "StorePath is published only by the nix branch, and no committed "
         "variant captures a NixOS host: a variant stages exactly the one "

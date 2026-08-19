@@ -348,6 +348,44 @@ def _listdir(path: str) -> list[str]:
         return []
 
 
+def _realpath(path: str) -> str:
+    """Where a sysfs link actually lands, as a named primitive.
+
+    A third of what this adapter knows is read off the resolved path rather
+    than out of a file: which ata port a disk hangs from, which PCI function a
+    host adapter is, which kernel name a by-path alias denotes. That makes the
+    link graph part of the native document — DESIGN's ruling of 2026-08-19 on
+    tree-shaped interfaces, which is that the payload is the filesystem
+    transcribed, listings and contents alike — and a bare os.path.realpath has
+    no stub point, so a replay would resolve against the tree of whichever
+    machine is REPLAYING. It does not fail there: realpath returns a missing
+    path unchanged, so the walk quietly finds no ata port and no PCI function
+    and publishes a host with neither, which is a wrong answer wearing a
+    complete one's clothes.
+
+    Named here for the same reason _read and _listdir are, and it changes
+    nothing live — this is os.path.realpath, called through one door.
+    """
+    return os.path.realpath(path)
+
+
+def _exists(path: str) -> bool:
+    """Whether a sysfs attribute is there at all, as a named primitive.
+
+    One transport verdict turns on presence rather than content —
+    host_sas_address exists on a SAS host and nowhere else, and it is read for
+    nothing but that — so the probe IS the reading and there is no file
+    contents for _read to carry.
+
+    Named for the same reason _realpath is, and it is the last unseamed native
+    touch on the acquisition path: called bare, it answers about the machine
+    REPLAYING a capture rather than the one captured, which makes a corpus pair
+    stop being a function of its payload — a SAS host replaying a SATA capture
+    would read SAS out of its own tree.
+    """
+    return os.path.exists(path)
+
+
 # sysfs says "<unknown>" or "Unknown" where a value is not established. Both
 # read as data if passed through, so they become absence.
 _SYSFS_UNKNOWN = {"", "<unknown>", "unknown", "Unknown", "none"}
@@ -356,6 +394,25 @@ _SYSFS_UNKNOWN = {"", "<unknown>", "unknown", "Unknown", "none"}
 def _sysfs_value(raw: str | None) -> str | None:
     value = (raw or "").strip()
     return None if value in _SYSFS_UNKNOWN else value
+
+
+def _facts(values: dict) -> dict:
+    """A row's facts, with the readings that were not there left off.
+
+    A fact's value is never null (DESIGN 19): *we could not read this*, *this
+    object genuinely has no such property* and *here is the value* are three
+    statements on three channels, and null names none of them — the contract's
+    recursive fact_value and the replay judge both refuse it. Nearly every
+    reading here is a sysfs file or a hwdb property that may simply not exist,
+    so absence arrives as None at a dozen sites: a QEMU guest has no
+    board_name, an ata_piix host publishes no firmware attribute under any of
+    the six names, a PCI function with no driver bound has no DRIVER.
+
+    Dropped once, where a row is built, rather than by thirteen conditional
+    dict literals — which is the same shape traefik took when the same defect
+    was found on a stock install (DESIGN, adjudication queue, 2026-08-19).
+    """
+    return {key: value for key, value in values.items() if value is not None}
 
 
 def _lane_count(raw: str | None) -> int | None:
@@ -409,7 +466,7 @@ def _scsi_link_facts(scsi_id: str) -> dict:
     end_device names its phy, and sas_phy carries both negotiated and maximum,
     which is what makes the comparison possible there and not on SATA.
     """
-    segments = os.path.realpath(f"{SCSI_DEVICES}/{scsi_id}").split("/")
+    segments = _realpath(f"{SCSI_DEVICES}/{scsi_id}").split("/")
 
     ata = next((seg for seg in segments if re.fullmatch(r"ata\d+", seg)), None)
     if ata:
@@ -491,7 +548,7 @@ def _nvme_link_facts(controller: str) -> dict:
     }
     # The bridge immediately above shares this link, so its max_link_* is the
     # slot's capability while the device's is the card's.
-    bridge = os.path.dirname(os.path.realpath(base))
+    bridge = os.path.dirname(_realpath(base))
     facts["SlotLinkWidthMax"] = _lane_count(_read(f"{bridge}/max_link_width"))
     facts["SlotLinkSpeedMax"] = _sysfs_value(_read(f"{bridge}/max_link_speed"))
     # Derived, not read — and the reason the four facts above stop reading as
@@ -517,10 +574,10 @@ def _host_transport(base: str, driver: str | None) -> str | None:
     able from a SAS HBA in the UI, both labelled scsi-host with nothing else to
     go on. An ata port in the path means SATA; a host_sas_address means SAS.
     """
-    if os.path.exists(f"{base}/host_sas_address"):
+    if _exists(f"{base}/host_sas_address"):
         return "SAS"
     if any(re.fullmatch(r"ata\d+", seg)
-           for seg in os.path.realpath(base).split("/")):
+           for seg in _realpath(base).split("/")):
         return "SATA"
     if driver in ("usb-storage", "uas"):
         return "USB"
@@ -533,7 +590,7 @@ def _pci_addr_of(syspath: str) -> str | None:
     """Deepest PCI function on the device's real path — the adapter a
     controller hangs from."""
     addr = None
-    for seg in os.path.realpath(syspath).split("/"):
+    for seg in _realpath(syspath).split("/"):
         if PCI_ADDR_RE.match(seg):
             addr = seg
     return addr
@@ -656,7 +713,7 @@ class Adapter:
                 celsius = round(int(raw) / 1000, 1)
             except ValueError:
                 continue
-            device = os.path.realpath(f"{HWMON}/{hw}/device")
+            device = _realpath(f"{HWMON}/{hw}/device")
             if name == "nvme":
                 out[os.path.basename(device)] = celsius
             else:
@@ -825,7 +882,8 @@ class Adapter:
             self.subsystem, obj,
             env.source("hardware-fs", "sysfs DMI + lscpu -J + /proc/meminfo",
                        PLATFORM_REFERENCE),
-            facts, evidence_ref=env.evidence_ref("hardware", "platform", obj['id']))
+            _facts(facts),
+            evidence_ref=env.evidence_ref("hardware", "platform", obj['id']))
 
     # ── pci ──────────────────────────────────────────────────
     async def _pci_items(self) -> list[dict]:
@@ -844,7 +902,7 @@ class Adapter:
                 "PCIID": props.get("PCI_ID"),
             }
             items.append(env.item_summary(f"pci:{address}", "pci-device",
-                                          address, facts))
+                                          address, _facts(facts)))
         return items
 
     # ── usb ──────────────────────────────────────────────────
@@ -869,14 +927,14 @@ class Adapter:
             }
             items.append(env.item_summary(
                 f"usb:{name}", "usb-hub" if device_class == "09" else "usb-device",
-                name, facts))
+                name, _facts(facts)))
         return items
 
     # ── scsi topology ────────────────────────────────────────
     @staticmethod
     def _chain_of(syspath: str) -> list[str]:
         """Topology nodes along a device's real sysfs path, outermost first."""
-        return [seg for seg in os.path.realpath(syspath).split("/")
+        return [seg for seg in _realpath(syspath).split("/")
                 if SCSI_SEG_RE.match(seg)]
 
     @staticmethod
@@ -903,7 +961,7 @@ class Adapter:
                     continue
                 slot = {"Status": _read(f"{comp_dir}/status"),
                         "Slot": _read(f"{comp_dir}/slot") or comp}
-                device = os.path.realpath(f"{comp_dir}/device")
+                device = _realpath(f"{comp_dir}/device")
                 occupant = os.path.basename(device)
                 if SCSI_DEV_RE.match(occupant):
                     slot["Device"] = occupant
@@ -953,7 +1011,7 @@ class Adapter:
             if facts.get("Model") is None:
                 facts["Model"] = facts.get("BoardName")
             items_by_name[host] = env.item_summary(
-                f"scsi:{host}", "scsi-host", host, facts)
+                f"scsi:{host}", "scsi-host", host, _facts(facts))
             parents[host] = None
 
         for expander in _listdir(SAS_EXPANDERS):
@@ -968,7 +1026,7 @@ class Adapter:
                      # class, same as end devices (verified on a NetApp shelf)
                      "SASAddress": _read(f"/sys/class/sas_device/{expander}/sas_address")}
             items_by_name[expander] = env.item_summary(
-                f"scsi:{expander}", "expander", expander, facts)
+                f"scsi:{expander}", "expander", expander, _facts(facts))
             chain = self._chain_of(f"{base}/device")
             parents[expander] = next((s for s in reversed(chain) if s != expander), None)
 
@@ -980,7 +1038,7 @@ class Adapter:
             dev_type = SCSI_TYPES.get(type_code if type_code is not None else -1, "device")
             block = next(iter(_listdir(f"{base}/block")), None)
             chain = self._chain_of(base)
-            end_device = next((seg for seg in os.path.realpath(base).split("/")
+            end_device = next((seg for seg in _realpath(base).split("/")
                                if END_DEVICE_RE.match(seg)), None)
             # libata and usb-storage fill the SCSI vendor field with the
             # transport name — that is a protocol fact, not a manufacturer.
@@ -1039,7 +1097,8 @@ class Adapter:
                 facts["Slots"] = enclosure_slots.get(dev, {})
             # Severity waits for _scsi_items_with_health: SMART facts merge
             # after this walk, and rows must reflect the merged whole.
-            items_by_name[dev] = env.item_summary(f"scsi:{dev}", dev_type, dev, facts)
+            items_by_name[dev] = env.item_summary(f"scsi:{dev}", dev_type, dev,
+                                                  _facts(facts))
             parents[dev] = chain[-1] if chain else None
 
         # Devices behind each host, so the UI can hide childless controllers
@@ -1093,7 +1152,7 @@ class Adapter:
                 **_nvme_wwn(namespaces),
             }
             items.append(env.item_summary(f"nvme:{ctrl}", "nvme-controller",
-                                          ctrl, facts))
+                                          ctrl, _facts(facts)))
         return items
 
     async def _nvme_items(self) -> list[dict]:
@@ -1283,7 +1342,7 @@ class Adapter:
             if not os.path.isdir(base):
                 raise env.UnknownObject(object_id)
             payload = {
-                "syspath": os.path.realpath(base),
+                "syspath": _realpath(base),
                 "udev": await anyio.to_thread.run_sync(_udev_json, base),
             }
         elif collection == "scsi":
@@ -1292,7 +1351,7 @@ class Adapter:
                          f"{SCSI_DEVICES}/{name}"):
                 if os.path.isdir(base):
                     payload = {
-                        "syspath": os.path.realpath(base),
+                        "syspath": _realpath(base),
                         "attributes": {attr: _read(f"{base}/{attr}")
                                        for attr in _listdir(base)
                                        if os.path.isfile(f"{base}/{attr}")},
@@ -1310,7 +1369,7 @@ class Adapter:
             if not os.path.isdir(base):
                 raise env.UnknownObject(object_id)
             payload = {
-                "syspath": os.path.realpath(base),
+                "syspath": _realpath(base),
                 "attributes": {attr: _read(f"{base}/{attr}")
                                for attr in _listdir(base)
                                if os.path.isfile(f"{base}/{attr}")},
@@ -1332,6 +1391,6 @@ class Adapter:
 
 def _realpath_base(path: str) -> str | None:
     try:
-        return os.path.basename(os.path.realpath(path))
+        return os.path.basename(_realpath(path))
     except OSError:
         return None

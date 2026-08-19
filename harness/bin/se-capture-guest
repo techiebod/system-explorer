@@ -361,6 +361,65 @@ async def main():
     queue = (await adapter._sab("queue")).get("queue") or {}
     return "transmission " + str(session.get("version")) + " + sabnzbd " + str(queue.get("version"))
 print(asyncio.run(main()))
+# hardware'"'"'s interface is a TREE, so its payload is the filesystem
+# transcribed: every file the walk opened, every directory it enumerated, every
+# link it resolved, every hwdb reply it asked for (DESIGN'"'"'s ruling of
+# 2026-08-19). There is no single command whose output is that document, and
+# there cannot be — the set of paths is decided by what the walk finds — so the
+# capture IS the adapter, instrumented: each of its named primitives is wrapped,
+# the five collections are acquired once, and the recorded calls are printed
+# under the primitive named on the command line.
+#
+# Recorded WITH ITS NULLS, and that is the point rather than a detail: six HBA
+# firmware attribute names are tried per scsi host and at most one exists, so
+# "there is no such file" is an ordinary reading the adapter degrades through.
+# A null in the document is a captured answer; a path missing from it is one
+# nothing observed, and the replay seam refuses that rather than reading the
+# tree of whichever machine replays.
+#
+# Keyed directory-then-name, which is how a reviewer reads it back — `cat` the
+# path on the guest and compare one line — and the granularity the scrub
+# manifest classifies at.
+hardware_py='
+import asyncio, json, sys
+sys.path.insert(0, "/tmp/secmp/src")
+from system_explorer.agent.adapters import hardware
+
+want = sys.argv[1]
+seen = {}
+
+def record(name, fn):
+    def call(argument):
+        answer = fn(argument)
+        container, _, member = str(argument).rpartition("/")
+        seen.setdefault(name, {}).setdefault(container, {})[member] = answer
+        return answer
+    return call
+
+for name, attr in (("read", "_read"), ("listdir", "_listdir"),
+                   ("realpath", "_realpath"), ("exists", "_exists"),
+                   ("udev", "_udev_json"),
+                   ("smartctl", "_smartctl_json"),
+                   ("smart-snapshot", "_smart_snapshot"),
+                   ("smart-reason", "_smart_no_reading")):
+    setattr(hardware, attr, record(name, getattr(hardware, attr)))
+
+adapter = hardware.Adapter()
+
+async def walk():
+    for collection in adapter.collections():
+        await adapter.acquire(collection)
+
+asyncio.run(walk())
+print(json.dumps(seen.get(want, {}), indent=1, sort_keys=True))
+'
+# The name the platform object is published under. socket.gethostname() and not
+# `hostname`, because env.HOST reads it that way and the object id is minted
+# from it — a capture taken one way and replayed against the other would name
+# the object twice.
+hostname_py='
+import socket
+print(socket.gethostname().split(".")[0])
 '
 declare -a acquisitions
 case "$collector" in
@@ -438,6 +497,25 @@ case "$collector" in
         # sitting right beside it.
         acquisitions=("r---n--100.json|sudo python3 -c '$logs_py'")
         ;;
+    hardware)
+        # Seven instrumented runs and two commands. Seven because each payload
+        # is one file and the tool's contract is one command per file; the walk
+        # is read-only and deterministic on a quiescent guest, so seven runs
+        # record the same calls. lscpu answers with a document already, so it
+        # is captured by the command a reader would run themselves.
+        acquisitions=(
+            "read.json|python3 -c '$hardware_py' read"
+            "listdir.json|python3 -c '$hardware_py' listdir"
+            "realpath.json|python3 -c '$hardware_py' realpath"
+            "exists.json|python3 -c '$hardware_py' exists"
+            "udev.json|python3 -c '$hardware_py' udev"
+            "smartctl.json|python3 -c '$hardware_py' smartctl"
+            "smart-snapshot.json|python3 -c '$hardware_py' smart-snapshot"
+            "smart-reason.json|python3 -c '$hardware_py' smart-reason"
+            "lscpu.json|lscpu -J"
+            "hostname|python3 -c '$hostname_py'"
+        )
+        ;;
     unbound)
         # unbound-control speaks the control socket for us, and prints the
         # reply verbatim — which is exactly what the adapter's _command
@@ -511,6 +589,11 @@ case "$collector" in
     # answered the socket — `unbound -V` reads the binary on PATH and can name
     # a different build from the one running.
     unbound) version_probe="sudo unbound-control status | sed -n '1s/^version: /unbound /p'" ;;
+    # Three producers, because the payload has three: the kernel lays out
+    # sysfs, udev's hwdb supplies every vendor and model name the walk joins on,
+    # and util-linux is what `lscpu -J` is. A field's presence here is a fact
+    # about whichever of the three added it.
+    hardware) version_probe='echo "linux-$(uname -r) udev-$(udevadm --version) util-linux-$(lscpu --version | grep -o "[0-9.]*$")"' ;;
     traefik) version_probe="curl -s \"\$SE_TRAEFIK_URL/api/version\" | head -c 120" ;;
     # The instance reporting on itself, which is the build that actually
     # answered — a container tag or a package name would say what was deployed,

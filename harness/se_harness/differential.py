@@ -76,6 +76,7 @@ SEEDS = {
     "kea": "kea/no-lease-hook",
     "resources": "resources/healthy",
     "downloaders": "downloaders/healthy",
+    "hardware": "hardware/qemu-guest",
 }
 
 # Names the operators mint. Constants rather than inline literals so the
@@ -1504,6 +1505,88 @@ def _transmission_tracker_error(payloads: dict) -> dict:
     return payloads
 
 
+# ── the udev hardware database ───────────────────────────────────────────
+
+# The two hwdb members hardware/usb joins against, and the two sysfs
+# attributes it falls back to when neither is there. The pair is what the
+# operator below removes and the pair below is what it puts in their place.
+HWDB_USB_MEMBERS = ("ID_VENDOR_FROM_DATABASE", "ID_MODEL_FROM_DATABASE")
+
+# What the root hubs on the seed guest report about THEMSELVES, read off that
+# guest rather than invented: a root hub's manufacturer string is the kernel
+# release plus the host-controller driver, and its product string is the
+# controller's name. The driver differs per hub, so it is derived from the
+# hwdb model name the capture already carries instead of being written twice.
+USB_SYSFS_MANUFACTURER = "Linux 7.0.0-28-generic uhci_hcd"
+USB_SYSFS_PRODUCT = "UHCI Host Controller"
+
+
+def _usb_hwdb_miss(payloads: dict) -> dict:
+    """CLASS hwdb-fallback-blind: a host whose udev has no usb.ids.
+
+    hardware/usb publishes a Vendor and a Product from TWO sources in order —
+    the udev hardware database's name for the vendor and product ids, and, when
+    the database has neither, the strings the device reports about itself in
+    sysfs. Every USB device in every committed capture is a device the database
+    knows, so the second source is exercised by nothing: a port that reads the
+    hwdb alone reproduces the pair exactly.
+
+    A real machine exhibits this constantly. hwdb's USB tables come from a
+    separate package (usb.ids, hwdata), and a minimal image — Alpine, a
+    container base, an appliance build — has udev without them: every reply
+    comes back with no ID_VENDOR_FROM_DATABASE at all, while the devices go on
+    reporting their own strings exactly as they always did. So this removes the
+    two database members and puts the sysfs attributes the fallback reads in
+    their place, with the values the seed guest's own hubs publish.
+
+    Both halves are needed and neither is decoration. Removing the hwdb members
+    alone would leave the reference asking the tree seam for a path the capture
+    does not hold, which is a refusal about the harness rather than a
+    disagreement about the machine — the tree payload records the files the
+    walk OPENED, and on the seed the fallback was never reached.
+
+    The reference publishes both facts from sysfs; a hwdb-only port publishes
+    neither, and the row it emits is a USB device with no maker and no model.
+    """
+    udev = payloads.get("udev")
+    read = payloads.get("read")
+    if not isinstance(udev, dict) or not isinstance(read, dict):
+        raise MutatorError("the payload carries no udev or read document")
+    devices = udev.get("/sys/bus/usb/devices")
+    if not isinstance(devices, dict) or not devices:
+        raise MutatorError("the capture enumerated no usb devices")
+    touched = 0
+    for name, properties in devices.items():
+        if not isinstance(properties, dict):
+            continue
+        model = properties.get("ID_MODEL_FROM_DATABASE")
+        if not any(member in properties for member in HWDB_USB_MEMBERS):
+            continue
+        for member in HWDB_USB_MEMBERS:
+            properties.pop(member, None)
+        # The driver a hub is behind decides both strings, and the capture
+        # already names it: `2.0 root hub` is the EHCI controller and every
+        # other hub here is UHCI. Derived rather than hardcoded per device, so
+        # a re-stage with a different hub count needs no edit.
+        manufacturer, product = USB_SYSFS_MANUFACTURER, USB_SYSFS_PRODUCT
+        if isinstance(model, str) and model.startswith("2."):
+            manufacturer = manufacturer.replace("uhci_hcd", "ehci_hcd")
+            product = product.replace("UHCI", "EHCI")
+        base = f"/sys/bus/usb/devices/{name}"
+        attributes = read.setdefault(base, {})
+        if not isinstance(attributes, dict):
+            raise MutatorError(f"{base} is not a directory in the read document")
+        attributes["manufacturer"] = manufacturer
+        attributes["product"] = product
+        touched += 1
+    if touched == 0:
+        raise MutatorError(
+            "no usb device in this capture carried a hwdb name, so removing "
+            "them would stage nothing"
+        )
+    return payloads
+
+
 @dataclass(frozen=True)
 class Operator:
     """One structural transformation, bound to the defect class it exposes."""
@@ -1554,6 +1637,7 @@ OPERATORS: tuple[Operator, ...] = (
              _addressless_reservation),
     Operator("transmission-errored-transfer", "downloaders", "error-text-blind",
              _transmission_tracker_error),
+    Operator("usb-hwdb-miss", "hardware", "hwdb-fallback-blind", _usb_hwdb_miss),
 )
 
 

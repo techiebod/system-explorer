@@ -307,6 +307,19 @@ CASES = (
          # satisfy a bare "ErrorString" while still being wrong about what the
          # tracker said.
          ("ErrorString", differential.TRANSFER_ERROR_TEXT)),
+    Case("hwdb-fallback-blind", "usb-hwdb-miss", "a9_usb_hwdb_blind.py",
+         differential.DISAGREE, "differences",
+         # Both facts, by the only values the SECOND source can produce: the
+         # hub's own manufacturer string and its own product string, which the
+         # hardware database never spells that way. Bound to the pair because
+         # the facts dict is compared whole — a single fact would also be
+         # satisfied by a port that had lost some other USB attribute — and to
+         # the values rather than to the fact names, because a port publishing
+         # the fact from the database would satisfy a bare "Vendor". Every USB
+         # device in the committed capture is a root hub the database knows, so
+         # the fallback is exercised by no replay and this operator is what
+         # mints the only shape that draws it.
+         (differential.USB_SYSFS_MANUFACTURER, differential.USB_SYSFS_PRODUCT)),
 )
 
 

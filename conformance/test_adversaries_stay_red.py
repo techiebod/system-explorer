@@ -438,6 +438,24 @@ EXPECTED = (
                 "error 0 with an empty errorString, so the arm that publishes "
                 "the line is taken by neither implementation and the "
                 "differential guard owns the red"),
+    # ── GREEN, adjudicated: the third trap, the second-source spelling ──
+    #
+    # The hwdb-blind port reads the udev hardware database's vendor and model
+    # names and never falls through to the strings a device reports about
+    # itself. Every USB device in the only committed hardware capture is a
+    # Linux Foundation root hub, which the database knows, so the fallback is
+    # reached by nothing and the two implementations emit the same row. The
+    # judge honestly passes it. Its RED lives in test_differential.py, where
+    # usb-hwdb-miss strips the database members exactly as a host with no
+    # usb.ids has them stripped. If this goes red here, the replay judge has
+    # grown a rule that sees a database gap no committed capture holds —
+    # DESIGN 20's trap statement and the case table move together, not this
+    # row alone.
+    Expectation("a9_usb_hwdb_blind.py", None, "hardware/qemu-guest", "GREEN",
+                "a device's own vendor and product strings never read, which "
+                "no committed capture can expose: every captured USB device is "
+                "a root hub the udev hardware database names, so the fallback "
+                "is reached by nothing and the differential guard owns the red"),
 )
 
 # The closed set of adjudicated greens, and the DESIGN clause each rests
@@ -496,6 +514,11 @@ ADJUDICATED_GREEN = {
     "beside an empty errorString and the reference's own guard fires on "
     "neither (DESIGN 20); the differential guard owns this red, under "
     "transmission-errored-transfer",
+    ("a9_usb_hwdb_blind.py", None): "the third trap: replay cannot see a udev "
+    "hardware database with no usb.ids in it, because every captured USB "
+    "device is a root hub the database names and the fallback to the device's "
+    "own strings is reached by nothing (DESIGN 20); the differential guard "
+    "owns this red, under usb-hwdb-miss",
 }
 
 

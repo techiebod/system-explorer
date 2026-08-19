@@ -1,0 +1,8 @@
+{
+  "/sys/class/scsi_host/host0": {
+    "host_sas_address": false
+  },
+  "/sys/class/scsi_host/host1": {
+    "host_sas_address": false
+  }
+}

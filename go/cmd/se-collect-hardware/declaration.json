@@ -1,0 +1,608 @@
+{
+  "schema": "se.declaration/1",
+  "collector": "hardware",
+  "version": "0.7.0",
+  "authority": {
+    "read_paths": [
+      "/proc/sys/kernel/random/boot_id",
+      "/proc/self/timens_offsets",
+      "/proc/meminfo",
+      "/sys/devices",
+      "/sys/bus/pci/devices",
+      "/sys/bus/usb/devices",
+      "/sys/bus/scsi/devices",
+      "/sys/class/scsi_host",
+      "/sys/class/sas_expander",
+      "/sys/class/sas_device",
+      "/sys/class/sas_phy",
+      "/sys/class/ata_link",
+      "/sys/class/enclosure",
+      "/sys/class/nvme",
+      "/sys/class/hwmon",
+      "/sys/block",
+      "/dev/disk/by-path",
+      "/run/system-explorer-smart"
+    ],
+    "commands": ["udevadm", "lscpu", "busctl", "smartctl"],
+    "groups": [],
+    "capabilities": [],
+    "credentials": []
+  },
+  "probe": "sysfs is mounted and its device trees are readable. Not 'is there hardware': a host with no NVMe controller and no SAS expander is an ordinary host and every collection here reads it fine, committing zero rows for the trees that are empty. The probe says no in exactly one case — none of /sys/devices, /sys/bus/pci/devices, /sys/bus/usb/devices, /sys/class/scsi_host or /sys/class/nvme exists at all, which is a machine with no sysfs rather than a machine with no devices. Three of the four commands are optional depth: udevadm supplies the hwdb vendor and model names, lscpu the CPU topology, busctl the udisks2 SMART properties, and smartctl runs only where the deployment granted raw device access (the NixOS module's grantDiskAccess). A host missing any of them still publishes what sysfs alone says.",
+  "collections": [
+    {
+      "name": "platform",
+      "question": "what machine is this, and what is it made of?",
+      "prefix": "platform",
+      "freshness": "3600s",
+      "perishability": "reconstructible",
+      "answer": ["SysVendor", "ProductName", "CPUModel", "CPUs", "MemoryTotalBytes"],
+      "ceiling": { "records": 1, "bytes": 65536 },
+      "facts": {
+        "SysVendor": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/devices/virtual/dmi/id/sys_vendor",
+          "sentence": "The system manufacturer as the firmware states it, from DMI. The same string on every machine of that model, which is why it is a description of hardware rather than of this host."
+        },
+        "ProductName": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/devices/virtual/dmi/id/product_name",
+          "sentence": "The model name the firmware reports. On a virtual machine it is the emulated board, which is the honest answer: that is the hardware the kernel is driving."
+        },
+        "BoardName": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/devices/virtual/dmi/id/board_name",
+          "sentence": "The motherboard's own model designation, where the firmware fills it in. Many boards and most virtual machines leave it empty, and an empty DMI field is an absence rather than a value."
+        },
+        "BiosVersion": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/devices/virtual/dmi/id/bios_version",
+          "sentence": "The firmware release currently installed. Firmware is a first-class fact everywhere it exists natively, because a firmware level is what an errata notice is written against."
+        },
+        "BiosDate": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/devices/virtual/dmi/id/bios_date",
+          "sentence": "The build date the firmware reports, in the American ordering DMI defines. Read as a string and never reformatted: it is the vendor's own label for a release, not a timestamp of anything that happened."
+        },
+        "CPUModel": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/lscpu/*/data",
+          "sentence": "The processor's own model string, as lscpu reports it. On a guest it is the model the hypervisor exposed, which is what the guest's software will actually see."
+        },
+        "Architecture": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/lscpu/*/data",
+          "sentence": "The instruction set this kernel is running, in util-linux's spelling."
+        },
+        "CPUs": {
+          "type": "integer", "unit": "count", "temperament": "configuration",
+          "kind": "observed", "discloses": "nothing", "from": "/lscpu/*/data",
+          "sentence": "How many logical processors the kernel can schedule on — sockets times cores times threads, and the number a capacity question is actually about."
+        },
+        "Sockets": {
+          "type": "integer", "unit": "count", "temperament": "configuration",
+          "kind": "observed", "discloses": "nothing", "from": "/lscpu/*/data",
+          "sentence": "How many physical processor packages are fitted. On a guest this is what the hypervisor presented, which is why it can disagree with the host it runs on."
+        },
+        "CoresPerSocket": {
+          "type": "integer", "unit": "count", "temperament": "configuration",
+          "kind": "observed", "discloses": "nothing", "from": "/lscpu/*/data",
+          "sentence": "Physical cores in each package. Beside ThreadsPerCore it is what turns a bare CPU count into a statement about real parallelism."
+        },
+        "ThreadsPerCore": {
+          "type": "integer", "unit": "count", "temperament": "configuration",
+          "kind": "observed", "discloses": "nothing", "from": "/lscpu/*/data",
+          "sentence": "Hardware threads per core — 2 where SMT is on, 1 where it is off or absent. The one number here that a firmware setting changes."
+        },
+        "MemoryTotalBytes": {
+          "type": "integer", "unit": "bytes", "temperament": "configuration",
+          "kind": "observed", "discloses": "nothing", "from": "/proc/meminfo/MemTotal",
+          "sentence": "Memory the kernel can allocate, which is the installed total minus what the firmware and the kernel reserved. It is smaller than the DIMM total on every machine, and that gap is not a fault."
+        }
+      },
+      "redaction_exemption": "the platform row is DMI identity strings, util-linux's CPU table and one line of /proc/meminfo — a vendor, a model, a firmware release, an instruction set, four topology counts and a size. Every one of them is the same on every machine of that model, and none is a credential, a name somebody chose or a locator in this estate. THE BOUND IS STATED because it is a decision and not a shape: DMI also carries product_serial, chassis_serial and product_uuid, which ARE identity, and this collector reads none of the three — a future fact that did would move this collection out of its exemption rather than inherit it.",
+      "reference_commands": [
+        { "purpose": "the same firmware identity, by hand", "argv": ["dmidecode", "-t", "system"] },
+        { "purpose": "the CPU topology this reads, in its native JSON", "argv": ["lscpu", "-J"] },
+        { "purpose": "the memory total, from the kernel's own file", "argv": ["cat", "/proc/meminfo"] }
+      ]
+    },
+    {
+      "name": "pci",
+      "question": "what is plugged into this machine's buses, and which driver claimed it?",
+      "prefix": "pci",
+      "freshness": "3600s",
+      "perishability": "reconstructible",
+      "answer": ["Class", "Vendor", "Model", "Driver"],
+      "ceiling": { "records": 4096, "bytes": 4194304 },
+      "facts": {
+        "Class": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/ID_PCI_SUBCLASS_FROM_DATABASE",
+          "sentence": "What kind of device this is, in the udev hardware database's own words. The SUBCLASS name where the database has one ('IDE interface') and the broader class name where it does not ('Mass storage controller'), because the narrower answer is the one a reader is looking for."
+        },
+        "Vendor": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/ID_VENDOR_FROM_DATABASE",
+          "sentence": "The maker, resolved from the PCI vendor id through the udev hardware database rather than read off the device. A host with no pci.ids installed has the id and not the name, and the absence is honest."
+        },
+        "Model": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/ID_MODEL_FROM_DATABASE",
+          "sentence": "The device's model name from the same database. It names the silicon, not the card: two vendors' boards around one chip report the same string."
+        },
+        "Driver": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/DRIVER",
+          "sentence": "The kernel driver bound to this function right now. Absent means nothing is bound — a device the kernel enumerated and left alone, which is the interesting case rather than a gap in the reading."
+        },
+        "PCIID": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/PCI_ID",
+          "sentence": "The vendor and device ids, as `vvvv:dddd`. This is what a driver actually matches on, and what an internet search answers about when the database has no name."
+        }
+      },
+      "redaction_exemption": "every fact is a hardware database lookup or a bus identifier: a vendor name, a model name, a class name, a driver name and a four-by-four hex id. All of them are identical on every machine of that model — DESIGN 21's own worked example is that a PCI address discloses nothing — and none is operator-chosen or a credential. THE BOUND: the collector reads six members of the udev reply and no others, so a member that DID identify a device (ID_SERIAL on a USB node is the one this fleet has met) reaches no fact here.",
+      "reference_commands": [
+        { "purpose": "the same inventory, by hand", "argv": ["lspci", "-nnk"] },
+        { "purpose": "the enumeration this walks", "argv": ["ls", "/sys/bus/pci/devices"] },
+        { "purpose": "the hwdb reply one row is built from", "argv": ["udevadm", "info", "--json=short", "/sys/bus/pci/devices/"] }
+      ]
+    },
+    {
+      "name": "usb",
+      "question": "what is attached over usb, and at what speed did it negotiate?",
+      "prefix": "usb",
+      "freshness": "600s",
+      "perishability": "reconstructible",
+      "answer": ["Vendor", "Product", "SpeedMbps", "USBVersion"],
+      "ceiling": { "records": 2048, "bytes": 2097152 },
+      "facts": {
+        "Vendor": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/ID_VENDOR_FROM_DATABASE",
+          "sentence": "The maker: the udev hardware database's name for the vendor id where it has one, and the string the device reports about itself where it does not. A host with no usb.ids installed falls to the second, which is a real machine and not a degraded reading."
+        },
+        "Product": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/ID_MODEL_FROM_DATABASE",
+          "sentence": "The model, by the same two-source rule as Vendor — the database's name first, the device's own product string second."
+        },
+        "VendorID": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/bus/usb/devices/*/idVendor",
+          "sentence": "The USB vendor id, four hex digits, exactly as the device reports it. Assigned by the USB-IF and identical on every unit of that vendor."
+        },
+        "ProductID": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/bus/usb/devices/*/idProduct",
+          "sentence": "The USB product id. Together with VendorID it is what a udev rule matches on and what the hardware database is keyed by."
+        },
+        "SpeedMbps": {
+          "type": "string", "temperament": "state", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/bus/usb/devices/*/speed",
+          "sentence": "The rate this device NEGOTIATED, in megabits per second, as the kernel spells it. A string because the kernel's spelling is the fact — '1.5', '12', '480', '5000' — and a device that came up at 12 on a 480-capable port is the case worth seeing."
+        },
+        "USBVersion": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/bus/usb/devices/*/version",
+          "sentence": "The USB specification revision the device speaks, as the kernel formats it ('2.00'). What it CAN do, against SpeedMbps's what it did."
+        },
+        "DeviceVersion": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/bus/usb/devices/*/bcdDevice",
+          "sentence": "The device's own release number — bcdDevice — which for most peripherals is its firmware revision. Firmware is a first-class fact everywhere it exists natively, and on USB this is where it exists."
+        }
+      },
+      "redaction_exemption": "vendor and product names, two assigned ids, a negotiated rate, a specification revision and a firmware revision. Every one is a property of the MODEL rather than of the unit, and identical across every device of that model. THE BOUND IS STATED because the udev reply this joins against also carries ID_SERIAL and ID_SERIAL_SHORT, which on a real peripheral are that unit's serial and therefore identity: the collector reads neither, and a fact that did would need this exemption rewritten rather than inherited.",
+      "reference_commands": [
+        { "purpose": "the same inventory, by hand", "argv": ["lsusb"] },
+        { "purpose": "the tree, which is what the interface filter is about", "argv": ["lsusb", "-t"] },
+        { "purpose": "the sysfs attributes each row is built from", "argv": ["cat", "/sys/bus/usb/devices/usb1/idVendor"] }
+      ]
+    },
+    {
+      "name": "scsi",
+      "question": "what is attached to each storage controller, by what physical route, and is it healthy?",
+      "prefix": "scsi",
+      "freshness": "300s",
+      "perishability": "sampled",
+      "answer": ["Vendor", "Model", "State", "Block", "SizeBytes", "SmartTemperatureC"],
+      "ceiling": { "records": 4096, "bytes": 4194304 },
+      "facts": {
+        "Driver": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/class/scsi_host/*/proc_name",
+          "sentence": "The kernel driver behind this host adapter, by its own registered name."
+        },
+        "State": {
+          "type": "string", "temperament": "state", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/bus/scsi/devices/*/state",
+          "sentence": "The kernel's own device state. It records that the device was enumerated and is reachable, which is not a measurement of health."
+        },
+        "Transport": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/class/scsi_host/*/host_sas_address",
+          "sentence": "How the device is actually attached — SAS, SATA, USB, virtio — established from the kernel's own topology rather than a driver-name lookup. The kernel presents SATA and USB storage through the SCSI subsystem, so without this an AHCI port and a SAS HBA are the same row."
+        },
+        "PCIAddress": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/class/scsi_host/*/device",
+          "sentence": "The PCI function this device hangs from, in domain:bus:device.function form — the deepest one on its resolved sysfs path."
+        },
+        "Vendor": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/bus/scsi/devices/*/vendor",
+          "sentence": "The maker, as reported. For ATA devices behind SCSI this is derived from the model prefix, which is where the real name survives — libata fills the SCSI vendor field with the transport name instead."
+        },
+        "Model": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/bus/scsi/devices/*/model",
+          "sentence": "The device's model string, as it reports it. On a host adapter it is the silicon's name from the hardware database, so a controller row names what it is instead of a wall of dashes."
+        },
+        "Revision": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/bus/scsi/devices/*/rev",
+          "sentence": "The drive's firmware revision. The SCSI `rev` attribute IS drive firmware, which is why it is published under a firmware-shaped name rather than as a version of anything else."
+        },
+        "FirmwareVersion": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/class/scsi_host/*/version_fw",
+          "sentence": "The host adapter's own firmware, where its driver publishes one. Drivers spell the attribute differently — version_fw on mpt3sas, fw_version and fwrev elsewhere — and whichever exists is read."
+        },
+        "BiosVersion": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/class/scsi_host/*/version_bios",
+          "sentence": "The option-ROM version on the host adapter, where the driver publishes it. Separate from the adapter firmware and separately out of date."
+        },
+        "BoardName": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/class/scsi_host/*/board_name",
+          "sentence": "The adapter's board designation as its driver names it. It is also the fallback for Model, because the hardware database has gaps and a driver's own label beats nothing."
+        },
+        "Level": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/class/sas_expander/*/level",
+          "sentence": "How deep this SAS expander sits in the attachment tree. Level 1 hangs off the adapter; a higher number means it is cascaded behind another expander."
+        },
+        "SASAddress": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "identity", "from": "/sys/class/sas_device/*/sas_address",
+          "sentence": "The SAS address of this end device or expander — sixteen hex digits, assigned at manufacture, and the identity a cabling change does not move."
+        },
+        "Devices": {
+          "type": "integer", "unit": "count", "temperament": "state", "kind": "derived",
+          "derived_from": ["Transport"], "discloses": "nothing",
+          "sentence": "How many devices are attached below this host adapter. Counted from the attachment tree this walk built, so an empty SATA port can be recognised as noise rather than information."
+        },
+        "Block": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/bus/scsi/devices/*/block",
+          "sentence": "The block device this hardware backs, if the kernel created one. A kernel name, reassigned on rescan, and never the thing a join runs on."
+        },
+        "SizeBytes": {
+          "type": "integer", "unit": "bytes", "temperament": "gauge", "kind": "derived",
+          "derived_from": ["Block"], "discloses": "nothing",
+          "sentence": "The device's capacity, from the kernel's sector count in 512-byte units — the sysfs contract, regardless of the device's own logical block size."
+        },
+        "Serial": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "identity", "from": "/sys/bus/scsi/devices/*/vpd_pg80",
+          "sentence": "The drive's serial number, from SCSI VPD page 0x80 — a sysfs read that needs no daemon and no privilege."
+        },
+        "Firmware": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/data/0/*/org.freedesktop.UDisks2.Drive/Revision",
+          "sentence": "The firmware revision as the health daemon reports it; the same value as Revision, from the other source. Both are published because the two sources disagree exactly when one of them is stale, and a reader is entitled to see that."
+        },
+        "WWN": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "identity", "from": "/sys/bus/scsi/devices/*/wwid",
+          "sentence": "The device's world-wide name, the kernel's own wwid. A kernel name renumbers when enumeration order shifts and this does not, so it is what a join survives a reboot on."
+        },
+        "ByPath": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/dev/disk/by-path",
+          "sentence": "The /dev/disk/by-path alias for this device — the human phy and slot route, positional and stable while the cabling is."
+        },
+        "Enclosure": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/class/enclosure",
+          "sentence": "The enclosure this device is a member of, named as the SES device names itself."
+        },
+        "EnclosureSlot": {
+          "type": "integer", "unit": "count", "temperament": "configuration",
+          "kind": "observed", "discloses": "nothing",
+          "from": "/sys/class/enclosure/*/*/slot",
+          "sentence": "Which physical bay in the enclosure holds this device — the number to walk to when a drive needs replacing."
+        },
+        "SlotStatus": {
+          "type": "string", "temperament": "state", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/class/enclosure/*/*/status",
+          "sentence": "What the enclosure says about that bay, in the SES vocabulary: OK, Not installed, Critical. It is the shelf's opinion of the slot, not the drive's opinion of itself."
+        },
+        "Slots": {
+          "type": "object", "temperament": "state", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/class/enclosure",
+          "sentence": "The whole slot table of an enclosure device: every bay, its status, and which scsi device occupies it. Published on the enclosure row so the shelf can be read as a shelf rather than one drive at a time."
+        },
+        "LinkSpeed": {
+          "type": "string", "temperament": "state", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/class/ata_link/*/sata_spd",
+          "sentence": "The rate this SATA or SAS link NEGOTIATED. One serial connection, so unlike PCIe there is no lane count to multiply — and a 6 Gbps drive that trained at 1.5 is a real fault that every other fact on the row calls healthy."
+        },
+        "LinkSpeedMax": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/class/ata_link/*/hw_sata_spd_limit",
+          "sentence": "The fastest rate this link could run at. On SATA the kernel fills it in only when something has LIMITED the link, so it is usually absent rather than equal to the negotiated rate."
+        },
+        "SmartFailing": {
+          "type": "boolean", "temperament": "state", "kind": "observed",
+          "discloses": "nothing", "labels": ["failing", "not failing"],
+          "from": "/data/0/*/org.freedesktop.UDisks2.Drive.Ata/SmartFailing",
+          "sentence": "The ATA equivalent of SmartOverallPassed, inverted: true means the drive is reporting imminent failure."
+        },
+        "SmartOverallPassed": {
+          "type": "boolean", "temperament": "state", "kind": "observed",
+          "discloses": "nothing", "labels": ["passed", "failed"],
+          "from": "/smart_status/passed",
+          "sentence": "The drive's own pass/fail self-assessment. A pass is the drive saying it has not crossed its own failure thresholds, not a promise about tomorrow."
+        },
+        "SmartBadSectors": {
+          "type": "integer", "unit": "count", "temperament": "counter", "kind": "observed",
+          "discloses": "nothing",
+          "from": "/data/0/*/org.freedesktop.UDisks2.Drive.Ata/SmartNumBadSectors",
+          "sentence": "Sectors the drive has reallocated or cannot read. A count that is GROWING matters more than its value."
+        },
+        "SmartSelftestStatus": {
+          "type": "string", "temperament": "state", "kind": "observed",
+          "discloses": "nothing",
+          "from": "/data/0/*/org.freedesktop.UDisks2.Drive.Ata/SmartSelftestStatus",
+          "sentence": "How the drive's last self-test ended, in its own words. Read from both the ATA and the NVMe interface under one fact name, because one drive's verdict should not depend on which transport it arrived over."
+        },
+        "SmartTemperatureC": {
+          "type": "number", "unit": "celsius", "temperament": "gauge", "kind": "observed",
+          "discloses": "nothing", "from": "/temperature/current",
+          "sentence": "Drive temperature in degrees Celsius, from SMART where it is readable and from hwmon otherwise. The hwmon floor keeps its one decimal because it reports millidegrees; a whole-kelvin reading is rounded to a whole degree rather than inventing a digit the sensor never measured."
+        },
+        "SmartPowerOnHours": {
+          "type": "integer", "unit": "count", "temperament": "counter", "kind": "observed",
+          "discloses": "nothing", "from": "/power_on_time/hours",
+          "sentence": "Hours the drive has been powered on across its life — its age in service, not its uptime since boot."
+        },
+        "SmartCriticalWarning": {
+          "type": "list", "temperament": "state", "kind": "observed",
+          "discloses": "nothing",
+          "from": "/data/0/*/org.freedesktop.UDisks2.NVMe.Controller/SmartCriticalWarning",
+          "sentence": "The controller's own critical-warning flags, verbatim — the drive naming what it is unhappy about."
+        },
+        "SmartSnapshotAt": {
+          "type": "timestamp", "temperament": "state", "kind": "observed",
+          "discloses": "nothing", "from": "/run/system-explorer-smart",
+          "sentence": "When the root SMART collector last wrote these readings. They are last-known, not live: reading SMART needs privilege the agent does not hold."
+        },
+        "SmartSnapshotAgeSeconds": {
+          "type": "integer", "unit": "seconds", "temperament": "gauge", "kind": "derived",
+          "derived_from": ["SmartSnapshotAt"], "discloses": "nothing",
+          "sentence": "How old that snapshot is. Large means the collector is not running, not that the drive is quiet. Derived here rather than in a rule, because rules never read clocks."
+        },
+        "SmartSnapshotReason": {
+          "type": "string", "temperament": "state", "kind": "observed",
+          "discloses": "nothing", "from": "/run/system-explorer-smart",
+          "sentence": "Why the snapshot is stale or absent, recorded by the collector itself rather than guessed here. 'Device is in STANDBY mode' is the common one and it is not a fault — a spun-down bulk disk is deliberately left asleep."
+        },
+        "SmartUnobservable": {
+          "type": "string", "temperament": "state", "kind": "derived",
+          "derived_from": ["SmartSnapshotReason", "SmartSnapshotAt"],
+          "discloses": "nothing",
+          "sentence": "Why this device yielded no health reading at all, so a rule can decline to vouch for it instead of calling it healthy. A row that says only 'the kernel enumerated this and it is running' has measured nothing."
+        }
+      },
+      "redaction_exemption": "three facts here disclose identity and are declared so — Serial, WWN and SASAddress, each a manufacturer-assigned identifier that correlates one drive across captures — and the rest are model names, kernel states, capacities, link rates, bay numbers and SMART counters, which are the same on every machine that has one. THE BOUND: no fact on this collection is operator-chosen text or a credential, and the interfaces it reads carry none — sysfs attributes, the udev hardware database, udisks2's D-Bus properties and smartctl's JSON, none of which takes an authentication token in this posture. A collection that grew a mount point, a filesystem label or a pool name would be carrying content and would need this rewritten.",
+      "reference_commands": [
+        { "purpose": "the same inventory, by hand", "argv": ["lsscsi", "-v"] },
+        { "purpose": "the physical route each disk takes", "argv": ["ls", "-l", "/dev/disk/by-path"] },
+        { "purpose": "the device attributes each row is built from", "argv": ["cat", "/sys/bus/scsi/devices/0:0:0:0/model"] },
+        { "purpose": "the negotiated link rate on a SATA port", "argv": ["cat", "/sys/class/ata_link/link1/sata_spd"] },
+        { "purpose": "the negotiated and maximum rate on a SAS phy", "argv": ["cat", "/sys/class/sas_phy/phy-0:0/negotiated_linkrate"] },
+        { "purpose": "the enclosure slot table", "argv": ["ls", "/sys/class/enclosure"] },
+        { "purpose": "the zero-privilege temperature floor", "argv": ["cat", "/sys/class/hwmon/hwmon0/temp1_input"] },
+        { "purpose": "the health daemon's own view, in systemd's JSON rendering of the reply", "argv": ["busctl", "call", "--json=short", "org.freedesktop.UDisks2", "/org/freedesktop/UDisks2", "org.freedesktop.DBus.ObjectManager", "GetManagedObjects"] },
+        { "purpose": "the deepest SMART reading, where the deployment granted it", "argv": ["smartctl", "--json=c", "-H", "-A", "/dev/sda"] }
+      ]
+    },
+    {
+      "name": "nvme",
+      "question": "what nvme controllers are fitted, how fast is each link, and how much life is left in them?",
+      "prefix": "nvme",
+      "freshness": "300s",
+      "perishability": "sampled",
+      "answer": ["Model", "State", "LinkBandwidthBytesPerSec", "SmartPercentUsed", "SmartTemperatureC"],
+      "ceiling": { "records": 256, "bytes": 1048576 },
+      "facts": {
+        "Model": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/class/nvme/*/model",
+          "sentence": "The controller's model string, as it reports it."
+        },
+        "FirmwareRev": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/class/nvme/*/firmware_rev",
+          "sentence": "The firmware revision the controller is running. NVMe firmware fixes real data-loss bugs, which is why the level is a fact rather than a detail."
+        },
+        "Serial": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "identity", "from": "/sys/class/nvme/*/serial",
+          "sentence": "The controller's serial number, as it reports it."
+        },
+        "State": {
+          "type": "string", "temperament": "state", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/class/nvme/*/state",
+          "sentence": "The kernel's own controller state — `live` on a working device. It records that the controller was enumerated and is reachable, which is not a measurement of health."
+        },
+        "Transport": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/class/nvme/*/transport",
+          "sentence": "How this controller is reached: `pcie` for a fitted card, `tcp` or `rdma` for a fabrics target somewhere else entirely."
+        },
+        "PCIAddress": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/class/nvme/*/device",
+          "sentence": "The PCI function this controller hangs from, in domain:bus:device.function form."
+        },
+        "Namespaces": {
+          "type": "list", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/class/nvme",
+          "sentence": "The NVMe namespaces this controller exposes — the block devices a filesystem can actually sit on. An empty list is a statement rather than a gap: a controller with no namespace is a real and worrying shape."
+        },
+        "WWN": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "identity", "from": "/sys/block/*/wwid",
+          "sentence": "The device's world-wide name, read from its NAMESPACE — a wwid belongs to a namespace, not to a controller. `nvme0n1` can come back as `nvme1n1` when enumeration order shifts; this does not, so it is what a join survives a reboot on."
+        },
+        "WWNUnobservable": {
+          "type": "string", "temperament": "state", "kind": "derived",
+          "derived_from": ["Namespaces"], "discloses": "nothing",
+          "sentence": "Why this controller states no world-wide name: a wwid belongs to a namespace, and a controller exposing several has no single one of its own. It says so rather than picking the first."
+        },
+        "LinkSpeed": {
+          "type": "string", "temperament": "state", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/class/nvme/*/device/current_link_speed",
+          "sentence": "The signalling rate of ONE PCIe lane, in the kernel's own label. Not the link's total — multiply by LinkWidth for that."
+        },
+        "LinkSpeedMax": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/class/nvme/*/device/max_link_speed",
+          "sentence": "The fastest per-lane rate the device itself supports, whatever the slot it is fitted in can do."
+        },
+        "LinkWidth": {
+          "type": "integer", "unit": "count", "temperament": "state", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/class/nvme/*/device/current_link_width",
+          "sentence": "How many PCIe lanes are actually carrying traffic. The link's bandwidth is LinkSpeed multiplied by this."
+        },
+        "LinkWidthMax": {
+          "type": "integer", "unit": "count", "temperament": "configuration",
+          "kind": "observed", "discloses": "nothing",
+          "from": "/sys/class/nvme/*/device/max_link_width",
+          "sentence": "How many lanes the device can use when a slot provides them."
+        },
+        "SlotLinkWidthMax": {
+          "type": "integer", "unit": "count", "temperament": "configuration",
+          "kind": "observed", "discloses": "nothing",
+          "from": "/sys/class/nvme/*/device/../max_link_width",
+          "sentence": "How many lanes the SLOT is physically wired for, read from the bridge above the device. A property of the board, which no configuration can change — and the only thing that tells a narrow slot from a degraded link."
+        },
+        "SlotLinkSpeedMax": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/class/nvme/*/device/../max_link_speed",
+          "sentence": "The fastest per-lane rate the slot supports, read from the bridge above the device."
+        },
+        "LinkBandwidthBytesPerSec": {
+          "type": "integer", "unit": "bytes_per_second", "temperament": "gauge",
+          "kind": "derived", "derived_from": ["LinkSpeed", "LinkWidth"],
+          "discloses": "nothing",
+          "sentence": "Derived, not read: LinkSpeed's per-lane throughput AFTER PCIe line encoding, times LinkWidth. Each direction — PCIe is full duplex. A generation the conversion table has not met produces no value rather than a plausible wrong one."
+        },
+        "LinkBandwidthMaxBytesPerSec": {
+          "type": "integer", "unit": "bytes_per_second", "temperament": "gauge",
+          "kind": "derived", "derived_from": ["LinkSpeedMax", "LinkWidthMax"],
+          "discloses": "nothing",
+          "sentence": "The same arithmetic at LinkSpeedMax and LinkWidthMax — what this device would carry in a slot that did not narrow it."
+        },
+        "SmartOverallPassed": {
+          "type": "boolean", "temperament": "state", "kind": "observed",
+          "discloses": "nothing", "labels": ["passed", "failed"],
+          "from": "/smart_status/passed",
+          "sentence": "The drive's own pass/fail self-assessment. A pass is the drive saying it has not crossed its own failure thresholds, not a promise about tomorrow."
+        },
+        "SmartPercentUsed": {
+          "type": "integer", "temperament": "gauge", "kind": "observed",
+          "discloses": "nothing",
+          "from": "/nvme_smart_health_information_log/percentage_used",
+          "sentence": "The drive's own estimate, as a percentage, of the write endurance it has consumed. Above 100 is defined and expected: it means the rated endurance is spent, not that the drive failed. udisks2 has no property for this at all, which is why smartctl is read."
+        },
+        "SmartAvailableSparePct": {
+          "type": "integer", "temperament": "gauge", "kind": "observed",
+          "discloses": "nothing",
+          "from": "/nvme_smart_health_information_log/available_spare",
+          "sentence": "How much of the drive's spare block pool is left to remap failing blocks with, as a percentage of the pool it shipped with."
+        },
+        "SmartSpareThresholdPct": {
+          "type": "integer", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing",
+          "from": "/nvme_smart_health_information_log/available_spare_threshold",
+          "sentence": "The spare level, as a percentage, below which the drive itself declares a problem — the number SmartAvailableSparePct is judged against."
+        },
+        "SmartMediaErrors": {
+          "type": "integer", "unit": "count", "temperament": "counter", "kind": "observed",
+          "discloses": "nothing",
+          "from": "/nvme_smart_health_information_log/media_errors",
+          "sentence": "Unrecovered data-integrity errors the controller has counted. Non-zero is worth investigating."
+        },
+        "SmartCriticalWarning": {
+          "type": "list", "temperament": "state", "kind": "observed",
+          "discloses": "nothing",
+          "from": "/data/0/*/org.freedesktop.UDisks2.NVMe.Controller/SmartCriticalWarning",
+          "sentence": "The controller's own critical-warning flags, verbatim — the drive naming what it is unhappy about."
+        },
+        "SmartSelftestStatus": {
+          "type": "string", "temperament": "state", "kind": "observed",
+          "discloses": "nothing",
+          "from": "/data/0/*/org.freedesktop.UDisks2.NVMe.Controller/SmartSelftestStatus",
+          "sentence": "How the drive's last self-test ended, in its own words."
+        },
+        "SmartTemperatureC": {
+          "type": "number", "unit": "celsius", "temperament": "gauge", "kind": "observed",
+          "discloses": "nothing", "from": "/temperature/current",
+          "sentence": "Controller temperature in degrees Celsius, from SMART where it is readable and from the nvme driver's hwmon sensor otherwise — the floor that exists with no daemon and no grant."
+        },
+        "SmartPowerOnHours": {
+          "type": "integer", "unit": "count", "temperament": "counter", "kind": "observed",
+          "discloses": "nothing", "from": "/power_on_time/hours",
+          "sentence": "Hours the drive has been powered on across its life — its age in service, not its uptime since boot."
+        },
+        "Vendor": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/data/0/*/org.freedesktop.UDisks2.Drive/Vendor",
+          "sentence": "The maker, as the health daemon reports it. NVMe controllers rarely fill this in and the absence is the drive's, not the reading's."
+        },
+        "Firmware": {
+          "type": "string", "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/data/0/*/org.freedesktop.UDisks2.Drive/Revision",
+          "sentence": "The firmware revision as the health daemon reports it; the same value as FirmwareRev, from the other source."
+        },
+        "SmartSnapshotAt": {
+          "type": "timestamp", "temperament": "state", "kind": "observed",
+          "discloses": "nothing", "from": "/run/system-explorer-smart",
+          "sentence": "When the root SMART collector last wrote these readings. They are last-known, not live."
+        },
+        "SmartSnapshotAgeSeconds": {
+          "type": "integer", "unit": "seconds", "temperament": "gauge", "kind": "derived",
+          "derived_from": ["SmartSnapshotAt"], "discloses": "nothing",
+          "sentence": "How old that snapshot is. Large means the collector is not running, not that the drive is quiet."
+        },
+        "SmartSnapshotReason": {
+          "type": "string", "temperament": "state", "kind": "observed",
+          "discloses": "nothing", "from": "/run/system-explorer-smart",
+          "sentence": "Why the snapshot is stale or absent, recorded by the collector itself rather than guessed here."
+        },
+        "SmartUnobservable": {
+          "type": "string", "temperament": "state", "kind": "derived",
+          "derived_from": ["SmartSnapshotReason", "SmartSnapshotAt"],
+          "discloses": "nothing",
+          "sentence": "Why this controller yielded no health reading at all, so a rule can decline to vouch for it instead of calling it healthy."
+        }
+      },
+      "redaction_exemption": "two facts disclose identity and are declared so — Serial and WWN, each assigned at manufacture and correlating one drive across captures. Everything else is a model name, a kernel state, a PCIe rate, a lane count, a derived bandwidth or a SMART counter, identical on every drive of that model. THE BOUND: none of these interfaces takes a credential in this posture, and no fact here is operator-chosen text; the namespace list carries kernel names, which are ephemeral and named as such rather than joined on.",
+      "reference_commands": [
+        { "purpose": "the same inventory, by hand", "argv": ["nvme", "list"] },
+        { "purpose": "the controller attributes each row is built from", "argv": ["cat", "/sys/class/nvme/nvme0/model"] },
+        { "purpose": "the namespace's world-wide name", "argv": ["cat", "/sys/block/nvme0n1/wwid"] },
+        { "purpose": "the negotiated PCIe link, and the bridge above it that says what the slot can do", "argv": ["cat", "/sys/class/nvme/nvme0/device/current_link_speed"] },
+        { "purpose": "the same link, as lspci reports it", "argv": ["lspci", "-vv", "-s", "0000:00:00.0"] },
+        { "purpose": "the zero-privilege temperature floor", "argv": ["cat", "/sys/class/hwmon/hwmon0/temp1_input"] },
+        { "purpose": "the endurance reading no other source carries", "argv": ["smartctl", "--json=c", "-H", "-A", "-d", "nvme", "/dev/nvme0"] }
+      ]
+    }
+  ]
+}

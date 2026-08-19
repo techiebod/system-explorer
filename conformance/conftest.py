@@ -54,6 +54,7 @@ GO_COLLECTORS = {
     "kea": "./cmd/se-collect-kea",
     "resources": "./cmd/se-collect-resources",
     "downloaders": "./cmd/se-collect-downloaders",
+    "hardware": "./cmd/se-collect-hardware",
 }
 
 

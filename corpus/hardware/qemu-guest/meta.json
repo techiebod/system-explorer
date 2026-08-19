@@ -1,0 +1,47 @@
+{
+  "collector": "hardware",
+  "collections": ["platform", "pci", "usb", "scsi", "nvme"],
+  "variant": "healthy",
+  "provenance": "captured",
+  "os": "ubuntu",
+  "os_version": "26.04",
+  "source_version": "linux-7.0.0-28-generic udev-259 util-linux-2.41.3",
+  "captured": "2026-08-19T11:00:00Z",
+  "regenerable": true,
+  "anonymised": true,
+  "directory_name_note": "The directory is `qemu-guest` and the variant kind is `healthy`, which is the same split network/fedora-empty and storage/spare-engaged already use. It is not cosmetic here: replay.issue_generations seeds the issued generation map on the variant's identity, and `hardware/healthy` issued 198 to `platform` — the same number network/fedora-empty issues to its one collection — which test_no_two_variants_issue_the_same_generation refuses. The identity is the thing that was free to change, and `qemu-guest` is what this capture actually is: an i440FX guest whose disks are virtio-blk. The guard's own premise cannot apply to a five-collection variant — no single constant echoes five distinct generations — so this is a collision in the issuance, not a defect this pair carries; it is written down here rather than left as an unexplained name.",
+  "note": "The first pair captured for a TREE-shaped interface, under the ruling of 2026-08-19: the native document for a filesystem is the filesystem transcribed, so read.json holds every file the walk opened, listdir.json every directory it enumerated, realpath.json every link it resolved, and udev.json every hwdb reply it asked for — each keyed the way a filesystem is, the directory then the name inside it, so a reviewer can `cat` any path on the guest and compare. lscpu.json is `lscpu -J` verbatim; hostname is the name the platform object is published under, substituted, so the object travels under the substitution rather than under whichever machine replays this. The three smart maps are captured EMPTY and that is the reason they exist: the collector made no smartctl call on this guest, and without the entries a replay would run smartctl against the disks of whichever machine is replaying.",
+  "coverage_note": "What this guest cannot teach, stated rather than implied. Its disks are virtio-blk, which appear in neither the scsi nor the nvme walk, so /sys/class/nvme does not exist and /sys/bus/scsi/devices holds two ata_piix hosts and no device — which means every disk-shaped fact this collector serves (WWN, serial, capacity, enclosure slot, link rate, and every SMART reading in all three depths) is exercised by no replayed record here. corpus.NAMED_RESIDUALS carries the two entries that own those truths. What IS exercised: the DMI/lscpu/meminfo platform row, the full udev hwdb join on 21 PCI functions and 4 USB root hubs, the USB device-versus-interface filter, and the scsi host walk with its ata-port transport derivation and its PCI-function identity — the last of which exists only because the link resolution is captured.",
+  "anchors": [
+    {"collection": "platform", "object": "host-77df07",
+     "fact": "SysVendor", "value": "QEMU"},
+    {"collection": "platform", "object": "host-77df07",
+     "fact": "MemoryTotalBytes", "value": 2053214208},
+    {"collection": "platform", "object": "host-77df07",
+     "absent_fact": "BoardName"},
+    {"collection": "platform", "commit_objects": 1},
+
+    {"collection": "pci", "object": "0000:00:01.1",
+     "fact": "Class", "value": "IDE interface"},
+    {"collection": "pci", "object": "0000:00:00.0", "absent_fact": "Driver"},
+    {"collection": "pci", "commit_objects": 21},
+
+    {"collection": "usb", "object": "usb3", "fact": "SpeedMbps", "value": "480"},
+    {"collection": "usb", "object": "usb3", "fact": "Vendor",
+     "value": "Linux Foundation"},
+    {"collection": "usb", "commit_objects": 4},
+
+    {"collection": "scsi", "object": "host0", "fact": "Transport", "value": "SATA"},
+    {"collection": "scsi", "object": "host0",
+     "fact": "PCIAddress", "value": "0000:00:01.1"},
+    {"collection": "scsi", "object": "host0",
+     "fact": "Model",
+     "value": "82371SB PIIX3 IDE [Natoma/Triton II] (Qemu virtual machine)"},
+    {"collection": "scsi", "object": "host0", "fact": "Devices", "value": 0},
+    {"collection": "scsi", "object": "host0", "absent_fact": "FirmwareVersion"},
+    {"collection": "scsi", "commit_objects": 2},
+
+    {"collection": "nvme", "commit_objects": 0}
+  ],
+  "anchors_note": "Read off the payloads by hand, each naming the file and the member it came from. platform: sys_vendor and MemTotal are read.json's /sys/devices/virtual/dmi/id.sys_vendor and /proc.meminfo — 2005092 kB, times 1024 — and the object's name IS the substituted hostname, because law 1 publishes the name observed. pci: 0000:00:01.1 carries BOTH ID_PCI_CLASS_FROM_DATABASE ('Mass storage controller') and ID_PCI_SUBCLASS_FROM_DATABASE ('IDE interface'), so the Class anchor pins which one wins; 21 is the length of listdir.json's /sys/bus/pci.devices. usb: /sys/bus/usb.devices lists eight names and four of them are interfaces (1-0:1.0 and its siblings are the same physical device again), so commit_objects=4 pins the filter, and SpeedMbps is anchored as the STRING '480' because the value is passed through as sysfs spells it. scsi: host0's link in realpath.json resolves through ata1 and there is no host_sas_address beside it, which is the whole of the Transport derivation; 0000:00:01.1 is the deepest PCI function on that resolved path, and Model comes from the hwdb reply for that function rather than from any scsi attribute. THREE ABSENCES, and each is a null the reference used to publish: board_name, DRIVER on the host bridge, and all six HBA firmware attribute names read back null on this guest, and a fact value is never null (DESIGN 19). nvme: /sys/class.nvme is an empty listing, so the collection commits zero objects and does NOT decline — there are no controllers, which is a successful reading, not an unreadable interface."
+}
