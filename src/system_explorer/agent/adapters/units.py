@@ -183,6 +183,16 @@ REFERRER_PROPERTIES = {**ABSENT_REFERENCE_INVERSE,
 # apart.
 MISSING_UNIT_PROBE_LIMIT = 200
 
+# How many per-unit property reads are in flight at once. One bus connection is
+# not a licence to issue all of them: dbus_fast's write callback calls send() on
+# a non-blocking socket and lets EAGAIN escape as BlockingIOError, so a large
+# enough fan-out fails reads for reasons that have nothing to do with the unit.
+# Measured 2026-08-19 on a 546-unit host, one run in six lost 149 of its 219
+# Slice facts that way — and lost them SILENTLY, because `_slice_of` returns
+# None on any exception and None is how "accounts to no slice" is spelled. Same
+# bound as the port's probeParallelism, which reached it from the other side.
+SLICE_PROBE_PARALLELISM = 8
+
 
 def _absent_reference_facts(pairs: Iterable[tuple[str, str]]) -> dict:
     """{fact: ["<absent unit> (<Directive>=)", ...]} for ONE referencing unit.
@@ -421,13 +431,15 @@ class Adapter:
         if collection != "units":
             raise env.UnknownCollection(collection)
 
-    async def _slice_of(self, name: str, path: str) -> tuple[str, str | None]:
-        try:
-            value = await BUS.call(SYSTEMD, path, PROPERTIES, "Get", "ss",
-                                   [SLICE_IFACES[_unit_type(name)], "Slice"])
-            return name, value[0] or None
-        except Exception:  # noqa: BLE001 - unit may vanish mid-walk
-            return name, None
+    async def _slice_of(self, name: str, path: str,
+                        tickets: asyncio.Semaphore) -> tuple[str, str | None]:
+        async with tickets:
+            try:
+                value = await BUS.call(SYSTEMD, path, PROPERTIES, "Get", "ss",
+                                       [SLICE_IFACES[_unit_type(name)], "Slice"])
+                return name, value[0] or None
+            except Exception:  # noqa: BLE001 - unit may vanish mid-walk
+                return name, None
 
     async def _probe_absent_unit(self, name: str, path: str) -> tuple[str, dict | None, str]:
         """(name, its Unit properties, why they could not be read).
@@ -571,10 +583,14 @@ class Adapter:
             )
             paths[name] = path
 
-        # Slice membership for every service and scope, concurrently — the
-        # replies interleave on one bus connection.
+        # Slice membership for every service and scope, concurrently but
+        # BOUNDED — the replies interleave on one bus connection, and issuing
+        # all of them at once makes that connection the thing that fails
+        # (SLICE_PROBE_PARALLELISM carries the measurement).
+        tickets = asyncio.Semaphore(SLICE_PROBE_PARALLELISM)
         slice_of = dict(await asyncio.gather(
-            *(self._slice_of(name, path) for name, path in paths.items()
+            *(self._slice_of(name, path, tickets)
+              for name, path in paths.items()
               if _unit_type(name) in SLICE_IFACES)))
 
         children: dict[str, list[str]] = {}

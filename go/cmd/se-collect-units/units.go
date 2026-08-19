@@ -103,12 +103,16 @@ var referrerProperties = func() map[string]string {
 // references it" are the two answers this collector exists to keep apart.
 const missingUnitProbeLimit = 200
 
-// How many per-unit reads are in flight at once. The reference issues all of
-// them on one bus connection and lets the replies interleave; this side spawns
-// busctl per call, so the pool is what keeps a 735-unit host from spawning two
-// hundred processes at the same instant. Bounded rather than unbounded, and
-// the results are keyed by unit so the order they finish in cannot reach the
-// stream.
+// How many per-unit reads are in flight at once. This side spawns busctl per
+// call, so the pool is what keeps a 735-unit host from spawning two hundred
+// processes at the same instant. Bounded rather than unbounded, and the results
+// are keyed by unit so the order they finish in cannot reach the stream.
+//
+// The reference now uses the same bound, for a reason this side does not have.
+// Sharing one bus connection was taken to make the fan-out free; measured
+// 2026-08-19, it is where the fan-out costs most, because dbus_fast lets a
+// non-blocking send's EAGAIN escape and the failed read spells itself as "no
+// slice". So both sides bound this, and neither does so for the other's reason.
 const probeParallelism = 8
 
 func unitType(name string) string {
