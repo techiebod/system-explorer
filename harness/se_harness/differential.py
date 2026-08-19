@@ -75,6 +75,7 @@ SEEDS = {
     "servarr": "servarr/healthy",
     "kea": "kea/no-lease-hook",
     "resources": "resources/healthy",
+    "downloaders": "downloaders/healthy",
 }
 
 # Names the operators mint. Constants rather than inline literals so the
@@ -211,6 +212,13 @@ OOM_KILLS = 1
 # which is what a port that read `oom` publishes in its place.
 OOM_KILLS_TRUE = f"'MemoryOomKills': {OOM_KILLS}"
 OOM_KILLS_BLIND = f"'MemoryOomKills': {OOM_EVENTS}"
+# The tracker failure the downloaders operator mints. transmission's own error
+# vocabulary numbers a tracker error 2, and the text is what a tracker that has
+# forgotten a torrent actually answers — a shape every seedbox meets and no
+# committed capture holds, because a staged lab torrent announces to a host
+# that does not resolve and never gets a reply to be refused by.
+TRANSFER_ERROR_CODE = 2
+TRANSFER_ERROR_TEXT = "Tracker gave HTTP response code 404 (Not Found)"
 
 
 # ── nftables helpers, grammar-aware ──────────────────────────────────────
@@ -1457,6 +1465,45 @@ def _addressless_reservation(payloads: dict) -> dict:
     return payloads
 
 
+# ── download clients ─────────────────────────────────────────────────────
+
+
+def _transmission_tracker_error(payloads: dict) -> dict:
+    """CLASS error-text-blind: a transfer row that carries the error CODE and
+    never the client's own words.
+
+    This subsystem exists for the invisible middle — a manager says "grabbed",
+    a library says "missing", and nothing shows the transfer erroring in
+    between — and ErrorString is the only fact in it that says WHAT went wrong.
+    It is also the fact no committed capture can reach: every torrent in
+    corpus/downloaders/healthy reports error 0 with an empty errorString,
+    because a staged lab torrent announces to a host that does not resolve and
+    therefore never gets a reply to be refused by. So the reference's own guard
+    — publish the line only when the code is non-zero AND the member is
+    non-empty — is exercised by nothing, and a port that never implemented the
+    arm at all reproduces every committed pair exactly.
+
+    Give the first torrent, in document order, a tracker that has forgotten it.
+    Code and text move together because a document with one and not the other
+    is not one transmission produces: the code is what the daemon assigns and
+    the text is what it stored beside it, and the reference reads both before
+    it publishes either.
+    """
+    document = payloads.get("torrent-get")
+    torrents = document.get("torrents") if isinstance(document, dict) else None
+    if not isinstance(torrents, list) or not torrents:
+        raise MutatorError("the payload carries no torrents to fault")
+    first = torrents[0]
+    if first.get("error"):
+        raise MutatorError(
+            "the first torrent already carries a non-zero error, so this "
+            "operator would overwrite a staged fault rather than mint one"
+        )
+    first["error"] = TRANSFER_ERROR_CODE
+    first["errorString"] = TRANSFER_ERROR_TEXT
+    return payloads
+
+
 @dataclass(frozen=True)
 class Operator:
     """One structural transformation, bound to the defect class it exposes."""
@@ -1505,6 +1552,8 @@ OPERATORS: tuple[Operator, ...] = (
              _grab_in_flight),
     Operator("kea-addressless-reservation", "kea", "unlistable-remainder",
              _addressless_reservation),
+    Operator("transmission-errored-transfer", "downloaders", "error-text-blind",
+             _transmission_tracker_error),
 )
 
 

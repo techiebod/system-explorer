@@ -1,0 +1,293 @@
+{
+  "schema": "se.declaration/1",
+  "collector": "downloaders",
+  "version": "0.7.0",
+  "authority": {
+    "read_paths": [
+      "/proc/sys/kernel/random/boot_id",
+      "/proc/self/timens_offsets"
+    ],
+    "credentials": ["SE_SABNZBD_API_KEY"]
+  },
+  "probe": "at least one configured download client answers its API. WHICH clients exist is deployment configuration and not a constant, so the three receipts are named by SE_TRANSMISSION_URL, SE_SABNZBD_URL and SE_SABNZBD_API_KEY rather than declared here — a URL this file invented would point at whatever answers that port on the host. A process holding neither URL observes no download client, which is an absence and not a fault; a sabnzbd URL with no key is a fault, and the row says which receipt is missing rather than vanishing.",
+  "collections": [
+    {
+      "name": "clients",
+      "question": "are my download clients up, moving data, and not out of disk?",
+      "prefix": "client",
+      "freshness": "60s",
+      "perishability": "sampled",
+      "answer": ["Client", "Version", "QueueCount", "DownloadRateBytes", "DiskFreeBytes"],
+      "ceiling": { "records": 16, "bytes": 65536 },
+      "facts": {
+        "Client": {
+          "type": "enum",
+          "values": ["transmission", "sabnzbd"],
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Which download client this row describes — the filterable handle, and the name the managers' dispatches-to edges target. The set is closed because this collector reads two APIs and no others; a third client is a third reader, not a third value."
+        },
+        "Version": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The release the client reports for itself — transmission's from `session-get`, sabnzbd's from the queue document. It is the build actually answering, which a package listing on the host cannot tell you when the client runs in a container."
+        },
+        "Paused": {
+          "type": "boolean",
+          "labels": ["paused", "running"],
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The whole-queue pause switch. True means nothing the managers dispatch will move until somebody resumes it — the quietest way for a download tier to stop working, because every other figure still looks healthy. sabnzbd states it; transmission has no equivalent switch and the fact is absent on its row."
+        },
+        "DownloadRateBytes": {
+          "type": "integer",
+          "unit": "bytes_per_second",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Current aggregate download rate, from the client's own meter. Zero is an ordinary reading on an idle client and not a missing one."
+        },
+        "UploadRateBytes": {
+          "type": "integer",
+          "unit": "bytes_per_second",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Current aggregate upload rate, from transmission's own meter. sabnzbd fetches and never seeds, so the fact is absent on its row rather than published as zero — a zero would say it uploaded nothing, and the truth is that it cannot."
+        },
+        "QueueCount": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "How many items the client is holding, IN ITS OWN COUNTING. Not the number of transfer rows this collector published: sabnzbd's `noofslots_total` leaves out a paused job, so a queue of two can state one and both readings are true from where they were taken."
+        },
+        "ActiveTorrentCount": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Torrents currently moving data, by transmission's own count."
+        },
+        "PausedTorrentCount": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Torrents individually paused, by transmission's own count. Read beside ActiveTorrentCount and TorrentCount, which are three separate figures and not two plus a subtraction."
+        },
+        "TorrentCount": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Every torrent the client holds, seeding included."
+        },
+        "DiskFreeBytes": {
+          "type": "integer",
+          "unit": "bytes",
+          "temperament": "gauge",
+          "bound": "DiskTotalBytes",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Free space on the download volume AS THE CLIENT SEES IT from inside its own mount, which can differ from any host row when a bind has diverged — the incident class this subsystem watches. Absent where the client answered that it could not measure the directory: transmission spells that -1, and a negative byte count is not a reading to publish."
+        },
+        "DiskTotalBytes": {
+          "type": "integer",
+          "unit": "bytes",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Size of that same volume from the same vantage. Present only where the client states it: sabnzbd does, transmission states free space alone — so the capacity ladder runs on the sabnzbd row and no percentage is invented for the other (rule 7: no threshold without a denominator the source stated)."
+        },
+        "ConfigMissing": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The receipts this client still needs before it can be observed, by environment-variable name — never a value. A client configured by URL and missing its key gets a row saying so rather than no row at all, because a manager dispatching to it is blocked either way and a silent omission would be indistinguishable from the client not being deployed."
+        },
+        "StatusUnobservable": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Why the client's API could not be asked, when it could not. The row stays, because a configured client that does not answer blocks every manager dispatching to it — and the reading is a constant phrase rather than the transport's own error text, which carries the client URL and, for sabnzbd, the key in its query string."
+        }
+      },
+      "redactions": [
+        { "path": "/status/apikey", "discloses": "secret" },
+        { "path": "/status/publicipv4", "discloses": "location" },
+        { "path": "/status/localipv4", "discloses": "location" },
+        { "path": "/status/logfile", "discloses": "location" },
+        { "path": "/status/configfn", "discloses": "location" },
+        { "path": "/status/downloaddir", "discloses": "location" },
+        { "path": "/status/completedir", "discloses": "location" },
+        { "path": "/session/session-id", "discloses": "identity" },
+        { "path": "/session/download-dir", "discloses": "location" },
+        { "path": "/session/incomplete-dir", "discloses": "location" },
+        { "path": "/session/config-dir", "discloses": "location" },
+        { "path": "/session/blocklist-url", "discloses": "location" },
+        { "path": "/session/default-trackers", "discloses": "location" },
+        { "path": "/session/script-torrent-added-filename", "discloses": "location" },
+        { "path": "/session/script-torrent-done-filename", "discloses": "location" },
+        { "path": "/session/script-torrent-done-seeding-filename", "discloses": "location" }
+      ],
+      "reference_commands": [
+        {
+          "purpose": "transmission's account of itself — the Version and DiskFreeBytes facts come from here. The first POST is refused with 409 and hands over the session id; echo it back on one retry",
+          "argv": ["curl", "-X", "POST", "<transmission-url>/transmission/rpc", "-H", "X-Transmission-Session-Id: <id>", "-d", "{\"method\": \"session-get\"}"]
+        },
+        {
+          "purpose": "transmission's counts and speeds — the four count facts and the two rate facts",
+          "argv": ["curl", "-X", "POST", "<transmission-url>/transmission/rpc", "-H", "X-Transmission-Session-Id: <id>", "-d", "{\"method\": \"session-stats\"}"]
+        },
+        {
+          "purpose": "sabnzbd's queue document, which carries its client-level vantage: version, pause state, speed, depth and the disk it measures from inside its own mount. The key travels as a query parameter because that is the only place the API accepts it",
+          "argv": ["curl", "<sabnzbd-url>/api?mode=queue&output=json&apikey=<key>"]
+        }
+      ]
+    },
+    {
+      "name": "transfers",
+      "question": "what is each transfer actually doing, and is anything stalled or erroring?",
+      "prefix": "transfer",
+      "freshness": "60s",
+      "perishability": "sampled",
+      "answer": ["Client", "Name", "Status", "PercentDone", "ErrorString"],
+      "ceiling": { "records": 5000, "bytes": 4194304 },
+      "facts": {
+        "Client": {
+          "type": "enum",
+          "values": ["transmission", "sabnzbd"],
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Which client holds this transfer. It is also half the object's id: a transfer is `transfer:<client>/<join-key>`, so two clients holding one release are two transfers and not one."
+        },
+        "Name": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "sentence": "What the transfer is, as the client names it — a torrent's name or sabnzbd's job filename. It arrived from outside the estate and it is a title somebody chose, which is why it is content and not a bare label."
+        },
+        "Status": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The client's own state word. transmission's documented vocabulary is stopped, check-wait, check, download-wait, download, seed-wait and seed, read off the RPC enum by position; sabnzbd states its own words (Downloading, Paused, Queued, Fetching…). A string and not an enum because the two vocabularies are the clients' to extend, and a closed set here would refuse a state a client legitimately reports."
+        },
+        "PercentDone": {
+          "type": "number",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "How complete the transfer is, per the client, from 0 to 100. Carries no declared unit, and the omission is deliberate: `percent` requires a declared denominator, and the fact it is a percentage OF differs by client — SizeWhenDoneBytes on a torrent, SizeMB on an nzb — so naming one would be wrong on every row from the other."
+        },
+        "RateDownloadBytes": {
+          "type": "integer",
+          "unit": "bytes_per_second",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "This transfer's current download rate, as transmission meters it per torrent. sabnzbd meters only the queue as a whole, so the fact is absent on its rows."
+        },
+        "RateUploadBytes": {
+          "type": "integer",
+          "unit": "bytes_per_second",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "This transfer's current upload rate (transmission). Zero on a torrent nobody is asking for, which is a reading and not an absence."
+        },
+        "SizeWhenDoneBytes": {
+          "type": "integer",
+          "unit": "bytes",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Total bytes this transfer will occupy when complete, by transmission's own accounting of the files it was told to fetch."
+        },
+        "LeftUntilDoneBytes": {
+          "type": "integer",
+          "unit": "bytes",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "How many bytes this transfer still has to fetch before completion (transmission). Against SizeWhenDoneBytes it is the progress figure a reader can check PercentDone against."
+        },
+        "SizeMB": {
+          "type": "number",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Total size in megabytes, sabnzbd's own unit kept as stated. The unit rides the fact NAME because the declared unit vocabulary has no megabytes, and converting to bytes here would invent a precision sabnzbd never gave — it reports two decimal places of MB and nothing finer."
+        },
+        "LeftMB": {
+          "type": "number",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Megabytes still to fetch, sabnzbd's unit, on the same terms as SizeMB."
+        },
+        "TimeLeft": {
+          "type": "duration",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The client's own remaining-time estimate (sabnzbd), verbatim in its own H:MM:SS spelling. Carried rather than parsed, because it is the client's arithmetic over the client's own rate and re-deriving it here would be a second opinion wearing the first's name."
+        },
+        "Error": {
+          "type": "integer",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The error class transmission assigns this transfer: 0 none, 1 tracker warning, 2 tracker error, 3 local error. Published even when it is 0, because a reading of no-error is what tells an operator the transfer was looked at."
+        },
+        "ErrorString": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "content",
+          "sentence": "The client's own error line, bounded to one line and stripped of any URL query string it carried. It rides only a non-zero Error, because transmission leaves the member as an empty string when nothing is wrong. Content, not nothing: the text arrived from outside the estate and routinely quotes a tracker, a path or a file name."
+        },
+        "IsStalled": {
+          "type": "boolean",
+          "labels": ["stalled", "moving"],
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The client's own verdict that no peers are moving this transfer (transmission). It is the client's judgement and not this collector's — transmission applies its own configured idle window, and mirroring the verdict is what keeps the two surfaces agreeing about one torrent."
+        }
+      },
+      "redactions": [
+        { "path": "/password", "discloses": "secret" },
+        { "path": "/name", "discloses": "content" },
+        { "path": "/filename", "discloses": "content" },
+        { "path": "/errorString", "discloses": "content" },
+        { "path": "/downloadDir", "discloses": "location" },
+        { "path": "/script", "discloses": "location" }
+      ],
+      "reference_commands": [
+        {
+          "purpose": "every torrent transmission holds, with exactly the fields this collection publishes",
+          "argv": ["curl", "-X", "POST", "<transmission-url>/transmission/rpc", "-H", "X-Transmission-Session-Id: <id>", "-d", "{\"method\": \"torrent-get\", \"arguments\": {\"fields\": [\"hashString\", \"name\", \"status\", \"percentDone\", \"rateDownload\", \"rateUpload\", \"error\", \"errorString\", \"isStalled\", \"sizeWhenDone\", \"leftUntilDone\"]}}"]
+        },
+        {
+          "purpose": "sabnzbd's queue slots, which are its transfers — the same document the clients collection reads its client-level facts from",
+          "argv": ["curl", "<sabnzbd-url>/api?mode=queue&output=json&apikey=<key>"]
+        }
+      ]
+    }
+  ]
+}

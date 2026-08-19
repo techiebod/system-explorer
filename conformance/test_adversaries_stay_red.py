@@ -418,6 +418,26 @@ EXPECTED = (
                 "committed capture can expose: the captured fleet is idle, so "
                 "its queue holds no records at all and there is nothing to "
                 "explain — the differential guard owns the red"),
+    # ── GREEN, adjudicated: the third trap, the unfired-arm spelling ──
+    #
+    # The error-text-blind port publishes a transfer's error CODE and never the
+    # client's own words. Every torrent in the only committed downloaders
+    # capture reports error 0 beside an empty errorString — a staged lab torrent
+    # announces to a host that does not resolve, so nothing ever refuses it —
+    # and the reference's own guard fires on neither, so both implementations
+    # omit the fact and the judge honestly passes it. Its RED lives in
+    # test_differential.py, where the transmission-errored-transfer operator
+    # gives the first torrent a tracker that answers 404. If this goes red here,
+    # the replay judge has grown a rule that sees an error no committed capture
+    # holds — DESIGN 20's trap statement and the case table move together, not
+    # this row alone.
+    Expectation("a9_transfer_error_blind.py", None, "downloaders/healthy",
+                "GREEN",
+                "the client's own error line never published, which no "
+                "committed capture can expose: every captured transfer reports "
+                "error 0 with an empty errorString, so the arm that publishes "
+                "the line is taken by neither implementation and the "
+                "differential guard owns the red"),
 )
 
 # The closed set of adjudicated greens, and the DESIGN clause each rests
@@ -471,6 +491,11 @@ ADJUDICATED_GREEN = {
     "because the only captured proxy fronts nothing but its own internal "
     "routes and carries none of those members (DESIGN 20); the differential "
     "guard owns this red, under traefik-dynamic-provider",
+    ("a9_transfer_error_blind.py", None): "the third trap: replay cannot see a "
+    "transfer's error line, because every captured torrent reports error 0 "
+    "beside an empty errorString and the reference's own guard fires on "
+    "neither (DESIGN 20); the differential guard owns this red, under "
+    "transmission-errored-transfer",
 }
 
 

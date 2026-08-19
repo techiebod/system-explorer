@@ -283,6 +283,28 @@ NAMED_RESIDUALS = {
         "(harness/bin/se-compare) run beside one. The tool exists and no such "
         "proxy is in the lab, so this truth stays owed rather than owned."
     ),
+    # The downloaders collector's two configuration-fault facts. Neither is a
+    # shape a payload can carry, which is why this is a residual rather than a
+    # capture nobody has taken yet.
+    "downloaders/unconfigured-client": (
+        "ConfigMissing and StatusUnobservable are the two facts a client row "
+        "carries INSTEAD of a reading — a sabnzbd URL with no key, and a "
+        "configured client whose API did not answer — and both are decided by "
+        "the adapter's configuration gates rather than by any document. The "
+        "replay seam pins those gates to a both-clients-present constant "
+        "(harness/bin/se-reference-collector, the downloaders instance block), "
+        "so no committed variant can stage either and no mutation operator can "
+        "mint one: an operator ADDS a shape to a payload, and these are decided "
+        "before a payload is read. Venue: the live comparator "
+        "(harness/bin/se-compare), which was run on 2026-08-19 against a guest "
+        "with one client's receipts withheld and then with one client stopped. "
+        "So this truth is OWNED, and owned outside the replay tier — and the "
+        "run found what a residual is worth having for: the two "
+        "implementations agree exactly on ConfigMissing and disagree on "
+        "StatusUnobservable, where the reference writes the transport "
+        "exception's own text and the port writes a constant phrase, because "
+        "that text is a channel carrying the client URL and sabnzbd's key."
+    ),
 }
 
 

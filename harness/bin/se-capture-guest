@@ -314,6 +314,54 @@ print("  %d payload files (%d listings, %d paths read)"
       % (len(written), len(bundle["listings"]), len(bundle["reads"])))
 '
 
+# The two download-client readers, run as the adapter runs them. `_rpc` is
+# the one that has to be borrowed rather than reproduced: transmission refuses
+# the first POST with a 409 and hands over X-Transmission-Session-Id, and a
+# curl line that did not echo it back would capture the refusal instead of the
+# document. `_sab` is borrowed for the opposite reason — sabnzbd takes its key
+# as a QUERY PARAMETER, so a curl line here would write the key into this
+# file'"'"'s own text; taking the URL from the adapter keeps it in the
+# environment, where se-capture-guest already forwards it by name and never
+# prints its value.
+#
+# The payload stem is the seam'"'"'s own addressing: both methods are
+# dispatched on their first argument, so se-reference-collector keys each
+# document on slug(argument) — session-get, session-stats, torrent-get, queue
+# — and a reviewer reading the file name is reading the call it answers.
+#
+# fullstatus is NOT captured, and its absence is the decision: it is reached
+# only by get_evidence, never by acquire, and sabnzbd puts its own `apikey`
+# and the host'"'"'s public address in that document. A payload the corpus
+# does not need is a payload the scrubber never has to be trusted with.
+downloaders_rpc_py='
+import asyncio, json, sys
+sys.path.insert(0, "/tmp/secmp/src")
+from system_explorer.agent.adapters.downloaders import Adapter, TORRENT_FIELDS
+method = sys.argv[1]
+arguments = {"fields": TORRENT_FIELDS} if method == "torrent-get" else None
+print(json.dumps(asyncio.run(Adapter()._rpc(method, arguments))))
+'
+downloaders_sab_py='
+import asyncio, json, sys
+sys.path.insert(0, "/tmp/secmp/src")
+from system_explorer.agent.adapters.downloaders import Adapter
+print(json.dumps(asyncio.run(Adapter()._sab(sys.argv[1]))))
+'
+# Both clients state their own release, and both are read the way the adapter
+# reads them: transmission from session-get, sabnzbd from the queue document
+# rather than from fullstatus, so the version probe never touches the one
+# document that carries the key.
+downloaders_version_py='
+import asyncio, json, sys
+sys.path.insert(0, "/tmp/secmp/src")
+from system_explorer.agent.adapters.downloaders import Adapter
+async def main():
+    adapter = Adapter()
+    session = await adapter._rpc("session-get")
+    queue = (await adapter._sab("queue")).get("queue") or {}
+    return "transmission " + str(session.get("version")) + " + sabnzbd " + str(queue.get("version"))
+print(asyncio.run(main()))
+'
 declare -a acquisitions
 case "$collector" in
     storage)
@@ -423,6 +471,18 @@ case "$collector" in
             "statistic-get-all.json|sudo python3 -c '$kea_py' \"\$SE_KEA_SOCKET\" statistic-get-all"
             "config-get.json|sudo python3 -c '$kea_py' \"\$SE_KEA_SOCKET\" config-get"
             "list-commands.json|sudo python3 -c '$kea_py' \"\$SE_KEA_SOCKET\" list-commands"
+    downloaders)
+        # Four documents, and every one of them is on the ACQUISITION path.
+        # Both clients are asked, because the instance gates in the replay
+        # seam pin a two-client host: a variant that staged one client's
+        # documents and not the other's would replay as a client that could
+        # not be asked, which is a broken capture wearing a dark client's
+        # face.
+        acquisitions=(
+            "session-get.json|python3 -c '$downloaders_rpc_py' session-get"
+            "session-stats.json|python3 -c '$downloaders_rpc_py' session-stats"
+            "torrent-get.json|python3 -c '$downloaders_rpc_py' torrent-get"
+            "queue.json|python3 -c '$downloaders_sab_py' queue"
         )
         ;;
     *)
@@ -457,6 +517,10 @@ case "$collector" in
     # and those two disagree the moment an image is repulled without a restart.
     bazarr) version_probe="curl -s -H \"X-API-KEY: \$SE_BAZARR_API_KEY\" \"\$SE_BAZARR_URL/api/system/status\" | python3 -c 'import json,sys; print(\"bazarr\", json.load(sys.stdin)[\"data\"][\"bazarr_version\"])'" ;;
     kea) version_probe="sudo python3 -c '$kea_py' \"\$SE_KEA_SOCKET\" version-get | python3 -c '$kea_version_py'" ;;
+    # Two clients, two releases, one line: a downloaders capture is a fact
+    # about both, and a source_version naming one of them could not tell a
+    # drift diff which half moved.
+    downloaders) version_probe="python3 -c '$downloaders_version_py'" ;;
 esac
 
 # Forward the caller's SE_* variables to the guest. Every HTTP-interface

@@ -295,6 +295,18 @@ CASES = (
          # shape that draws the distinction.
          (differential.TRAEFIK_SERVERS_DOWN, differential.TRAEFIK_DOWN_BACKEND,
           differential.TRAEFIK_ROUTER_ERROR)),
+    Case("error-text-blind", "transmission-errored-transfer",
+         "a9_transfer_error_blind.py", differential.DISAGREE, "differences",
+         # The fact and the client's own words, by value. Every torrent in the
+         # only committed downloaders capture reports error 0 beside an empty
+         # errorString — a lab torrent announces to a host that does not
+         # resolve and never gets a reply to be refused by — so the arm that
+         # publishes the line is exercised by no replay, and this operator
+         # mints the one shape that takes it. Bound to the TEXT as well as the
+         # fact name, because a port that published some other error line would
+         # satisfy a bare "ErrorString" while still being wrong about what the
+         # tracker said.
+         ("ErrorString", differential.TRANSFER_ERROR_TEXT)),
 )
 
 

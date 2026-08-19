@@ -53,6 +53,7 @@ GO_COLLECTORS = {
     "servarr": "./cmd/se-collect-servarr",
     "kea": "./cmd/se-collect-kea",
     "resources": "./cmd/se-collect-resources",
+    "downloaders": "./cmd/se-collect-downloaders",
 }
 
 

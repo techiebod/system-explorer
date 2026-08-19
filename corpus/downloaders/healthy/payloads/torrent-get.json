@@ -1,0 +1,43 @@
+{
+  "torrents": [
+    {
+      "error": 0,
+      "errorString": "",
+      "hashString": "d92d27bd899a09537a6ad1b7030a7221ac143175",
+      "isStalled": false,
+      "leftUntilDone": 1048576,
+      "name": "lab-specimen-alpha.bin",
+      "percentDone": 0.0,
+      "rateDownload": 0,
+      "rateUpload": 0,
+      "sizeWhenDone": 1048576,
+      "status": 4
+    },
+    {
+      "error": 0,
+      "errorString": "",
+      "hashString": "7c15d567e0ac4376adfa5d1e8749021b42ed1302",
+      "isStalled": false,
+      "leftUntilDone": 2097152,
+      "name": "lab-specimen-beta.bin",
+      "percentDone": 0.0,
+      "rateDownload": 0,
+      "rateUpload": 0,
+      "sizeWhenDone": 2097152,
+      "status": 0
+    },
+    {
+      "error": 0,
+      "errorString": "",
+      "hashString": "cbc4760018990b47a8d78c9ab6ca8440ef24182a",
+      "isStalled": false,
+      "leftUntilDone": 4194304,
+      "name": "lab-specimen-epsilon.bin",
+      "percentDone": 0.0,
+      "rateDownload": 0,
+      "rateUpload": 0,
+      "sizeWhenDone": 4194304,
+      "status": 4
+    }
+  ]
+}

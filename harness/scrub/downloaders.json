@@ -1,0 +1,591 @@
+{
+  "#": "Scrub manifest for the downloaders collector: the four documents the adapter reads on its ACQUISITION path, each scoped to the payload stem it answers. Both readers are dispatched on their first argument, so the stem is the call \u2014 session-get, session-stats and torrent-get are transmission RPC returns, queue is sabnzbd's queue document.",
+  "#scoped": "Every entry names its payload, because the four documents share no root: session-get and session-stats are transmission's settings and counters at the top level, torrent-get wraps a list under `torrents`, and sabnzbd puts everything under `queue`. An unscoped pattern would mean one thing in one document and something else in the next.",
+  "#notcaptured": "sabnzbd's `fullstatus` document is NOT here, and its absence is the decision rather than an oversight. It is reached only by get_evidence, never by acquire, and it carries `apikey` \u2014 the collector's own credential, verbatim \u2014 beside `publicipv4`, the estate's real public address. A `secret` classification would refuse the run outright and be right to: no substitution repairs a captured credential. So the capture does not take the document at all (harness/bin/se-capture-guest states the same thing at the other end), and the day an evidence payload is wanted in the corpus is the day this file has to grow an answer that is not 'scrub it'.",
+  "#key": "The sabnzbd key travels as a QUERY PARAMETER and therefore lives in URLs, not in documents. Nothing on the acquisition path carries it: queue.json is the response, and a response has no query string. The one place it appears is the request line, which is why the adapter's reference commands show <key> and why text.scrub() strips query strings from every failure line.",
+  "#names": "torrents.*.name and queue.slots.*.filename are what somebody is downloading, and they are classified `nothing` FOR THIS CAPTURE ONLY, on the rule DESIGN 21 states outright \u2014 the class is a property of the VALUE, not of the field \u2014 and on the same reading harness/scrub/docker.json applies to its container names.\n\nEvery one of them here is a word minted while staging this fixture: three torrents built from metainfo generated on the spot, announcing to tracker.invalid, whose swarm is empty by construction; two sabnzbd jobs built from NZBs whose segments name message-ids that exist nowhere. None of them names any media, and none of them arrived from outside.\n\nThat is a bound of this capture and NOT a property of the field. On any real host these two members are the media titles the estate is fetching \u2014 `content` in every case \u2014 and they must be reclassified BEFORE such a capture is scrubbed. Nothing mechanical will force it: unlike an unclassified leaf, a `nothing` entry lets the next capture's real titles through in silence.",
+  "#hashes": "torrents.*.hashString is a torrent's info-hash, and it carries the same bound as the names above for a stronger reason. It is not minted from randomness the way a docker id is (harness/scrub/docker.json, #ids): it is a CONTENT ADDRESS, identical for everyone holding that torrent, so on a real host it says exactly what is being downloaded \u2014 `content`, substituted.\n\nIt is `nothing` here because all three hashes are SHA-1 over metainfo this staging generated, so each addresses a torrent that exists nowhere and denotes nothing. Two things must be said beside that. The reclassification a real capture needs is BLOCKED: an info-hash is 40 hex characters and the substitution vocabulary has no 40-hex format \u2014 wwn spells 16 and 32, and `serial` would return a 30-character ANON token, which is a change of shape (DESIGN 21, rule 1). And the independent detectors cannot see one either: their HEX32 pattern is word-bounded, so a 40-character hex run matches nothing at any offset. A real info-hash would therefore pass BOTH sides today, which is why the bound is written here rather than left to the gate.",
+  "#emptyandarmed": "Four members are classified `location` and are EMPTY in this capture: default-trackers and the three script-torrent-*-filename settings. The classification is what they are on a configured host \u2014 a tracker list names hosts, a script filename is a path into somebody's filesystem \u2014 and it costs nothing here because an empty string identifies nothing and the survived-unchanged gate exempts it.\n\nChosen over `nothing` deliberately: a non-empty value takes the free-text pass, finds no address and no identifier in a tracker hostname or a script path, comes back unchanged and REFUSES the run. That refusal is the correct outcome \u2014 it is the deny-by-default gate arming itself against the next capture instead of a sentence in this file asking somebody to remember.",
+  "#password": "queue.slots.*.password is the archive password sabnzbd carries for a job, and it is empty on both slots here. It is classified `content` and not `secret`, and that is a compromise worth stating: `secret` refuses the run unconditionally, before looking at the value, so declaring it would make this collector uncapturable for as long as sabnzbd emits the member \u2014 which it does on every slot, empty or not. `content` passes the empty string (nothing identifies nothing) and refuses a real password through the survived-unchanged gate, which is the behaviour wanted. The hole it leaves is narrow and real: a password that happened to contain a substitutable token would be rewritten and pass. A capture from a host running indexers that set passwords must be re-staged without them rather than scrubbed.",
+  "#sessionid": "session-id is transmission's CSRF nonce \u2014 the X-Transmission-Session-Id the daemon hands to any caller that asks, through the 409 handshake \u2014 so it authenticates nobody and is not `secret`. It does correlate one daemon session across captures, which is `identity`, and it is substituted under format `serial` because nothing in this collector parses it: the adapter reads the token from the HTTP HEADER during the handshake and never from this document, so the ANON stand-in's shorter length costs the specimen nothing.\n\nIt is here at all because the adapter asks session-get for everything. Transmission's RPC accepts a `fields` argument and the reference passes none, so a nonce lands in every capture this collector will ever take.",
+  "#paths": "config-dir, download-dir, incomplete-dir and blocklist-url are `nothing` under the same bound as the names above. /config, /downloads/complete and /downloads/incomplete are the linuxserver.io image's conventional in-container paths, identical on every install of it, and the blocklist URL is transmission's own shipped default (www.example.com, which is IANA's). On a host running transmission natively all four are operator-chosen \u2014 `location` \u2014 and must be reclassified before that capture is scrubbed.",
+  "#unreached": "Members this capture never produced, deliberately left unclassified so the deny-by-default walk refuses the first payload that carries one: queue.slots.*.labels is an empty list on both slots (sabnzbd writes duplicate/unwanted markers there), transmission's torrents list carries only the eleven members TORRENT_FIELDS asks for, and no slot here has a non-null direct_unpack. A manifest entry for a shape nobody captured is a claim nobody checked.",
+  "alt-speed-down": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "alt-speed-enabled": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "alt-speed-time-begin": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "alt-speed-time-day": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "alt-speed-time-enabled": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "alt-speed-time-end": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "alt-speed-up": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "anti-brute-force-enabled": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "anti-brute-force-threshold": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "blocklist-enabled": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "blocklist-size": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "blocklist-url": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "cache-size-mb": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "config-dir": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "dht-enabled": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "download-dir": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "download-dir-free-space": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "download-queue-enabled": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "download-queue-size": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "encryption": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "idle-seeding-limit": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "idle-seeding-limit-enabled": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "incomplete-dir": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "incomplete-dir-enabled": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "lpd-enabled": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "peer-limit-global": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "peer-limit-per-torrent": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "peer-port": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "peer-port-random-on-start": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "pex-enabled": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "port-forwarding-enabled": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "preferred_transports.*": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "queue-stalled-enabled": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "queue-stalled-minutes": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "rename-partial-files": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "reqq": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "rpc-version": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "rpc-version-minimum": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "rpc-version-semver": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "script-torrent-added-enabled": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "script-torrent-done-enabled": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "script-torrent-done-seeding-enabled": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "seed-queue-enabled": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "seed-queue-size": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "seedRatioLimit": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "seedRatioLimited": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "sequential_download": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "speed-limit-down": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "speed-limit-down-enabled": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "speed-limit-up": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "speed-limit-up-enabled": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "start-added-torrents": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "tcp-enabled": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "trash-original-torrent-files": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "units.memory-bytes": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "units.memory-units.*": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "units.size-bytes": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "units.size-units.*": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "units.speed-bytes": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "units.speed-units.*": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "utp-enabled": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "version": {
+    "discloses": "nothing",
+    "payload": "session-get"
+  },
+  "default-trackers": {
+    "discloses": "location",
+    "payload": "session-get"
+  },
+  "script-torrent-added-filename": {
+    "discloses": "location",
+    "payload": "session-get"
+  },
+  "script-torrent-done-filename": {
+    "discloses": "location",
+    "payload": "session-get"
+  },
+  "script-torrent-done-seeding-filename": {
+    "discloses": "location",
+    "payload": "session-get"
+  },
+  "session-id": {
+    "discloses": "identity",
+    "format": "serial",
+    "payload": "session-get"
+  },
+  "activeTorrentCount": {
+    "discloses": "nothing",
+    "payload": "session-stats"
+  },
+  "cumulative-stats.downloadedBytes": {
+    "discloses": "nothing",
+    "payload": "session-stats"
+  },
+  "cumulative-stats.filesAdded": {
+    "discloses": "nothing",
+    "payload": "session-stats"
+  },
+  "cumulative-stats.secondsActive": {
+    "discloses": "nothing",
+    "payload": "session-stats"
+  },
+  "cumulative-stats.sessionCount": {
+    "discloses": "nothing",
+    "payload": "session-stats"
+  },
+  "cumulative-stats.uploadedBytes": {
+    "discloses": "nothing",
+    "payload": "session-stats"
+  },
+  "current-stats.downloadedBytes": {
+    "discloses": "nothing",
+    "payload": "session-stats"
+  },
+  "current-stats.filesAdded": {
+    "discloses": "nothing",
+    "payload": "session-stats"
+  },
+  "current-stats.secondsActive": {
+    "discloses": "nothing",
+    "payload": "session-stats"
+  },
+  "current-stats.sessionCount": {
+    "discloses": "nothing",
+    "payload": "session-stats"
+  },
+  "current-stats.uploadedBytes": {
+    "discloses": "nothing",
+    "payload": "session-stats"
+  },
+  "downloadSpeed": {
+    "discloses": "nothing",
+    "payload": "session-stats"
+  },
+  "pausedTorrentCount": {
+    "discloses": "nothing",
+    "payload": "session-stats"
+  },
+  "torrentCount": {
+    "discloses": "nothing",
+    "payload": "session-stats"
+  },
+  "uploadSpeed": {
+    "discloses": "nothing",
+    "payload": "session-stats"
+  },
+  "torrents.*.error": {
+    "discloses": "nothing",
+    "payload": "torrent-get"
+  },
+  "torrents.*.hashString": {
+    "discloses": "nothing",
+    "payload": "torrent-get"
+  },
+  "torrents.*.isStalled": {
+    "discloses": "nothing",
+    "payload": "torrent-get"
+  },
+  "torrents.*.leftUntilDone": {
+    "discloses": "nothing",
+    "payload": "torrent-get"
+  },
+  "torrents.*.name": {
+    "discloses": "nothing",
+    "payload": "torrent-get"
+  },
+  "torrents.*.percentDone": {
+    "discloses": "nothing",
+    "payload": "torrent-get"
+  },
+  "torrents.*.rateDownload": {
+    "discloses": "nothing",
+    "payload": "torrent-get"
+  },
+  "torrents.*.rateUpload": {
+    "discloses": "nothing",
+    "payload": "torrent-get"
+  },
+  "torrents.*.sizeWhenDone": {
+    "discloses": "nothing",
+    "payload": "torrent-get"
+  },
+  "torrents.*.status": {
+    "discloses": "nothing",
+    "payload": "torrent-get"
+  },
+  "torrents.*.errorString": {
+    "discloses": "content",
+    "format": "prose",
+    "payload": "torrent-get"
+  },
+  "queue.cache_art": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.cache_size": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.diskspace1": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.diskspace1_norm": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.diskspace2": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.diskspace2_norm": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.diskspacetotal1": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.diskspacetotal2": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.finish": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.finishaction": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.have_quota": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.have_warnings": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.kbpersec": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.left_quota": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.limit": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.mb": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.mbleft": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.noofslots": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.noofslots_total": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.pause_int": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.paused": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.paused_all": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.quota": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.size": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.sizeleft": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.slots.*.avg_age": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.slots.*.cat": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.slots.*.direct_unpack": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.slots.*.filename": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.slots.*.index": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.slots.*.mb": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.slots.*.mbleft": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.slots.*.mbmissing": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.slots.*.percentage": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.slots.*.priority": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.slots.*.script": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.slots.*.size": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.slots.*.sizeleft": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.slots.*.status": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.slots.*.time_added": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.slots.*.timeleft": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.slots.*.unpackopts": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.speed": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.speedlimit": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.speedlimit_abs": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.start": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.status": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.timeleft": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.version": {
+    "discloses": "nothing",
+    "payload": "queue"
+  },
+  "queue.slots.*.nzo_id": {
+    "discloses": "identity",
+    "payload": "queue"
+  },
+  "queue.slots.*.password": {
+    "discloses": "content",
+    "payload": "queue"
+  }
+}

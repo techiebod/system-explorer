@@ -1,0 +1,21 @@
+{
+  "activeTorrentCount": 2,
+  "cumulative-stats": {
+    "downloadedBytes": 0,
+    "filesAdded": 0,
+    "secondsActive": 8959,
+    "sessionCount": 1,
+    "uploadedBytes": 0
+  },
+  "current-stats": {
+    "downloadedBytes": 0,
+    "filesAdded": 0,
+    "secondsActive": 8959,
+    "sessionCount": 1,
+    "uploadedBytes": 0
+  },
+  "downloadSpeed": 0,
+  "pausedTorrentCount": 1,
+  "torrentCount": 3,
+  "uploadSpeed": 0
+}

@@ -80,6 +80,8 @@ from system_explorer.agent.adapters import (  # noqa: E402
     docker, logs, network, packages, servarr, storage, traefik, unbound, vms,
     docker, kea, logs, network, packages, storage, traefik, unbound, vms,
     docker, logs, network, packages, resources, storage, traefik, unbound, vms,
+    docker, downloaders, logs, network, packages, storage, traefik, unbound,
+    vms,
 )
 
 # Which module-level acquisition each collector redirects, and what payload
@@ -275,6 +277,47 @@ SEAM = {
         # in __init__, so an unpinned replay would carry whatever the machine
         # REPLAYING the corpus has in its environment.
         "instance": {"socket_path": "/replay.invalid/kea4-ctrl-socket"},
+    },
+    "downloaders": {
+        "module": downloaders,
+        "adapter": downloaders.Adapter,
+        "interface": "download client",
+        "collections": ["clients", "transfers"],
+        # TWO dispatched methods, and both must be stubbed. _rpc(method) is
+        # transmission — session-get, session-stats, torrent-get, three calls
+        # whose whole difference is the method name — and _sab(mode) is
+        # sabnzbd. Stubbing one would leave the other client dialling whatever
+        # URL the replaying machine has in its environment, and the adapter
+        # degrades PER CLIENT: the dark half would come back as a
+        # StatusUnobservable row carrying this shim's own error text as a
+        # committed fact, which reads as a statement about a machine and is a
+        # statement about the harness.
+        #
+        # The payload is what _rpc RETURNS, which is the `arguments` member of
+        # the RPC reply rather than the whole envelope. That is the same
+        # boundary docker's captures draw: `result: "success"` is
+        # transmission's status line, the HTTP status's equivalent, and the
+        # body is the document. `curl -X POST … -d '{"method":"session-get"}'`
+        # — the adapter's own reference command — hands a reader both halves,
+        # and the payload is the half the parser sees.
+        "methods": ["_rpc", "_sab"],
+        # Pinned, and load-bearing in a way no other seam entry's is: these
+        # three are not addressing, they are the CAPABILITY GATE. The adapter
+        # builds a transmission row only if transmission_url is set, a sabnzbd
+        # row only if sab_url is, and asks sabnzbd for transfers only if
+        # sab_key is — the direct analogue of storage's `_zfs`. Unpinned, a
+        # replay would publish whichever clients the REPLAYING machine's
+        # environment happens to name.
+        #
+        # Pinned as constants, they also fix what a downloaders variant IS: a
+        # host running both clients. A one-client host is a real shape and
+        # this seam cannot express it, because the gates are per-collector
+        # here and would have to be per-variant — so a capture stages all four
+        # documents or none, and se-capture-guest's downloaders case says the
+        # same thing at the other end.
+        "instance": {"transmission_url": "http://replay.invalid",
+                     "sab_url": "http://replay.invalid",
+                     "sab_key": "replay.invalid"},
     },
     # ── the one collector with no acquire(), and the shape that follows ──
     "logs": {

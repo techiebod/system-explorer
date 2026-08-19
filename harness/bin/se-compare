@@ -59,6 +59,7 @@ SERVES = {
     "logs": ["journal"],
     "bazarr": ["instance"],
     "servarr": ["apps", "health", "queue", "history"],
+    "downloaders": ["clients", "transfers"],
 }
 
 REFERENCE = REPO / "harness" / "bin" / "se-live-reference"

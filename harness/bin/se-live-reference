@@ -62,6 +62,8 @@ from system_explorer.agent.adapters import (  # noqa: E402
     docker, logs, network, packages, servarr, storage, traefik, unbound, vms,
     docker, kea, logs, network, packages, storage, traefik, unbound, vms,
     docker, logs, network, packages, resources, storage, traefik, unbound, vms,
+    docker, downloaders, logs, network, packages, storage, traefik, unbound,
+    vms,
 )
 
 # The collections each adapter serves live, and the capability attributes the
@@ -101,6 +103,14 @@ LIVE = {
     "kea": {"module": kea, "adapter": kea.Adapter,
             "interface": "kea control socket",
             "collections": ["daemon", "subnets", "reservations", "leases"]},
+    # The one adapter here addressed entirely by environment: SE_TRANSMISSION_
+    # URL, SE_SABNZBD_URL and SE_SABNZBD_API_KEY decide which client rows
+    # exist at all. Nothing is pinned — reading the host IS the point on this
+    # side — so a comparator run must carry the same receipts the shipping
+    # agent would, or the two sides are answering about different deployments.
+    "downloaders": {"module": downloaders, "adapter": downloaders.Adapter,
+                    "interface": "download client",
+                    "collections": ["clients", "transfers"]},
     # The one adapter with no acquire(): a bounded journal query has no "all
     # items" to materialise, so `page` names the collect() call to drive and
     # emission.materialise dispatches on it. Declared here as well as in the
