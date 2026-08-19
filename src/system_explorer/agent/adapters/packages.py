@@ -151,6 +151,26 @@ class Adapter:
                         "Name": name, "Version": version or None,
                         "Manager": "rpm", "Architecture": arch or None,
                     }))
+        else:
+            # A manager this collector does not read is NOT an empty inventory.
+            #
+            # RULED 2026-08-19: an empty commit is authoritative-empty and
+            # retires, so it is not available to a collector that could not
+            # read. Falling through these branches used to return [], and
+            # `acquire` handed that to the caller as a successful reading — so
+            # a host whose manager this code does not recognise had its ENTIRE
+            # package inventory retired on the strength of a word nobody
+            # understood, with no decline record anywhere to say so. Reproduced
+            # by staging a manager of "pacman".
+            #
+            # Raising is what the Go port already does ("I could not run"), and
+            # over the HTTP contract it is correctly an error envelope. Neither
+            # establishes anything, which is the truth here.
+            raise RuntimeError(
+                f"package manager {manager!r} was detected but this collector "
+                "cannot read it — no inventory was established, and an empty "
+                "one would retire every package this host has published"
+            )
         items.sort(key=lambda i: (i["facts"]["Name"], i["native_id"]))
         return items
 

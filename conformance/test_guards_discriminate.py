@@ -332,6 +332,27 @@ ENTRIES = (
             "conformance/test_scrub_detectors.py::test_regression_check_is_no_longer_the_scrubbers_echo",
         ),
     ),
+    # The empty commit that retires. `packages._items` dispatched on the
+    # detected manager through nix, dpkg and rpm, and fell through all three
+    # returning [] — which `acquire` handed on as a successful reading, so a
+    # host whose manager this code does not recognise had its whole inventory
+    # retired with no decline record anywhere. Measured against a staged
+    # `pacman`: exit 0 and `commit objects:0` before, exit 2 and no commit
+    # after.
+    Reversion(
+        guard="empty-commit-never-retires",
+        file="src/system_explorer/agent/adapters/packages.py",
+        old="""        else:
+            # A manager this collector does not read is NOT an empty inventory.
+""",
+        new="""        elif manager == "this branch is unreachable and the fall-through returns []":
+            # the pre-ruling behaviour: an unreadable manager yields no items
+""",
+        red_tests=(
+            "conformance/test_empty_commit_never_retires.py::test_an_unreadable_manager_commits_nothing",
+        ),
+        extra_trees=("src",),
+    ),
     # se-capture-guest's dispatch fell through. The `kea)` arm closed neither
     # its array nor itself, so bash let the next arm's label supply the missing
     # `)` — `downloaders` surviving as a stray array element — and control fell
