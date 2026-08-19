@@ -374,6 +374,18 @@ type row struct {
 	name  string
 	kind  string
 	facts *factRow
+	// Facts this row could not READ, as opposed to facts it does not have.
+	// DESIGN 19 gives those two separate channels and this collector used to
+	// spell both as a missing fact — which for Slice means "accounts to no
+	// slice", a positive claim about the machine. Ruled 2026-08-19.
+	unobservable []unobservable
+}
+
+// unobservable is one could-not-read, named per fact. `reason` is the decline
+// vocabulary minus `absent`, because could-not-read-because-it-is-not-there is
+// the absent list's statement and lives on its own channel.
+type unobservable struct {
+	fact, reason, detail string
 }
 
 // buildRows is the whole derivation: four documents in, the collection's rows
@@ -477,7 +489,7 @@ func buildRows(src source, stderr writer) ([]row, error) {
 		paths[entry.name] = entry.path
 	}
 
-	sliceOf := readSlices(src, stderr, order, paths, guard)
+	sliceOf, sliceUnreadable := readSlices(src, stderr, order, paths, guard)
 	if guard.first != nil {
 		return nil, guard.first
 	}
@@ -493,6 +505,17 @@ func buildRows(src source, stderr writer) ([]row, error) {
 			parent = sliceOf[name]
 			if parent != "" {
 				items[name].facts.setString("Slice", parent)
+			} else if problem := sliceUnreadable[name]; problem != "" {
+				// A reading that did not happen, on its own channel. Without
+				// this the row is indistinguishable from a unit that accounts
+				// to no slice — which is a positive claim about the machine,
+				// not a gap (DESIGN 19; ruled 2026-08-19).
+				items[name].unobservable = append(items[name].unobservable,
+					unobservable{
+						fact:   "Slice",
+						reason: "unavailable",
+						detail: "the unit's Slice property did not answer: " + problem,
+					})
 			}
 		default:
 			continue
@@ -567,8 +590,11 @@ func tailRank(kind string) int {
 // one of them costs that unit its Slice fact and nothing else — a unit can
 // vanish between the listing and the read, and a collection that failed over
 // it would report a whole host as unreadable because one transient scope ended.
-func readSlices(src source, stderr writer, order []string, paths map[string]string, guard *uncapturedGuard) map[string]string {
-	type answer struct{ name, slice string }
+// The second return is why a unit's Slice could not be read, keyed by unit. It
+// used to be stderr alone, so a consumer saw a row with no Slice and could not
+// tell that from a unit which accounts to none.
+func readSlices(src source, stderr writer, order []string, paths map[string]string, guard *uncapturedGuard) (map[string]string, map[string]string) {
+	type answer struct{ name, slice, problem string }
 	var wanted []string
 	for _, name := range order {
 		if sliceIfaces[unitType(name)] != "" {
@@ -589,11 +615,13 @@ func readSlices(src source, stderr writer, order []string, paths map[string]stri
 			if err != nil {
 				fmt.Fprintf(stderr, "units: %s: Slice: %v\n", name, err)
 				guard.note(err)
+				answers[index] = answer{name: name, problem: "the property read failed"}
 				return
 			}
 			value, err := decodeStringProperty(raw)
 			if err != nil {
 				fmt.Fprintf(stderr, "units: %s: Slice: %v\n", name, err)
+				answers[index] = answer{name: name, problem: "the property did not decode"}
 				return
 			}
 			answers[index] = answer{name: name, slice: value}
@@ -601,6 +629,7 @@ func readSlices(src source, stderr writer, order []string, paths map[string]stri
 	}
 	wait.Wait()
 	out := make(map[string]string, len(answers))
+	unreadable := map[string]string{}
 	for _, got := range answers {
 		// The empty string is systemd's answer for a unit that accounts to no
 		// slice — a not-found service answers exactly that — and an empty read
@@ -609,6 +638,9 @@ func readSlices(src source, stderr writer, order []string, paths map[string]stri
 		if got.slice != "" {
 			out[got.name] = got.slice
 		}
+		if got.problem != "" {
+			unreadable[got.name] = got.problem
+		}
 	}
-	return out
+	return out, unreadable
 }

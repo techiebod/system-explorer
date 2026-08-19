@@ -432,14 +432,37 @@ class Adapter:
             raise env.UnknownCollection(collection)
 
     async def _slice_of(self, name: str, path: str,
-                        tickets: asyncio.Semaphore) -> tuple[str, str | None]:
+                        tickets: asyncio.Semaphore) -> tuple[str, str | None, str]:
+        """(name, the slice it accounts to, why that could not be read).
+
+        THREE outcomes on three channels, which is DESIGN 19 and which this
+        returned two of until 2026-08-19. A slice name is a reading. The empty
+        string is systemd answering that this unit accounts to no slice — a
+        not-found service answers exactly that — and it is the absent
+        statement. A raised call is NEITHER: it is a reading that did not
+        happen, and it now says so through the unobservable channel instead of
+        impersonating the second.
+
+        The conflation was not academic. The two rendered identically as a
+        missing fact, and `Slice` absent means "accounts to no slice" — a
+        positive claim about the machine. Measured on a 558-unit host before
+        the fan-out was bounded: one run in six lost up to 149 of 219 Slice
+        facts to bus backpressure and published every one of them as that
+        claim, exiting 0 with a full-length stream.
+
+        The error NAME is kept and never the message, the same discipline
+        `_probe_absent_unit` already applies: it distinguishes a denied call
+        from a vanished unit, and it carries no interpolated payload into text
+        that travels to a hub.
+        """
         async with tickets:
             try:
                 value = await BUS.call(SYSTEMD, path, PROPERTIES, "Get", "ss",
                                        [SLICE_IFACES[_unit_type(name)], "Slice"])
-                return name, value[0] or None
-            except Exception:  # noqa: BLE001 - unit may vanish mid-walk
-                return name, None
+                return name, value[0] or None, ""
+            except Exception as error:  # noqa: BLE001 - unit may vanish mid-walk
+                return name, None, (getattr(error, "error_name", None)
+                                    or type(error).__name__)
 
     async def _probe_absent_unit(self, name: str, path: str) -> tuple[str, dict | None, str]:
         """(name, its Unit properties, why they could not be read).
@@ -588,10 +611,13 @@ class Adapter:
         # all of them at once makes that connection the thing that fails
         # (SLICE_PROBE_PARALLELISM carries the measurement).
         tickets = asyncio.Semaphore(SLICE_PROBE_PARALLELISM)
-        slice_of = dict(await asyncio.gather(
+        read = await asyncio.gather(
             *(self._slice_of(name, path, tickets)
               for name, path in paths.items()
-              if _unit_type(name) in SLICE_IFACES)))
+              if _unit_type(name) in SLICE_IFACES))
+        slice_of = {name: value for name, value, _problem in read}
+        slice_unreadable = {name: problem for name, _value, problem in read
+                            if problem}
 
         children: dict[str, list[str]] = {}
         orphans: list[str] = []
@@ -603,6 +629,17 @@ class Adapter:
                 parent = slice_of.get(name)
                 if parent:
                     items_by_name[name]["facts"]["Slice"] = parent
+                elif name in slice_unreadable:
+                    # A reading that did not happen, on its own channel.
+                    # Without this the row is indistinguishable from a unit
+                    # that accounts to no slice, which is a positive claim
+                    # about the machine (DESIGN 19; ruled 2026-08-19).
+                    items_by_name[name].setdefault("unobservable", []).append({
+                        "fact": "Slice",
+                        "reason": "unavailable",
+                        "detail": ("the unit's Slice property did not answer: "
+                                   + slice_unreadable[name]),
+                    })
             else:
                 continue
             if parent in items_by_name:

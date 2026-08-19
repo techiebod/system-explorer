@@ -48,6 +48,19 @@ type objectRecord struct {
 	At         float64         `json:"at"`
 }
 
+// unobservableRecord is DESIGN 19's could-not-read channel: a fact this
+// collector tried to read and could not, named per object, distinct from a
+// fact the object does not have. Added 2026-08-19 with the Slice ruling; the
+// comment below used to say this collector emitted none.
+type unobservableRecord struct {
+	Record     string `json:"record"`
+	Collection string `json:"collection"`
+	Name       string `json:"name"`
+	Fact       string `json:"fact"`
+	Reason     string `json:"reason"`
+	Detail     string `json:"detail"`
+}
+
 type declineRecord struct {
 	Record     string `json:"record"`
 	Collection string `json:"collection"`
@@ -201,6 +214,7 @@ func collectUnits(out *emitter, stderr io.Writer, src source, collection string,
 		return exitRuntime
 	}
 
+	unobservables := 0
 	for _, item := range rows {
 		out.emit(objectRecord{
 			Record:     "object",
@@ -210,17 +224,31 @@ func collectUnits(out *emitter, stderr io.Writer, src source, collection string,
 			At:         src.stamp(*objects),
 		})
 		*objects++
+		// After the object, because a record about a fact must follow the row
+		// that fact belongs to.
+		for _, missing := range item.unobservable {
+			out.emit(unobservableRecord{
+				Record:     "unobservable",
+				Collection: collection,
+				Name:       item.name,
+				Fact:       missing.fact,
+				Reason:     missing.reason,
+				Detail:     missing.detail,
+			})
+			unobservables++
+		}
 	}
-	// No relation assertion and no unobservable record: the acquisition path
-	// publishes neither channel, so the two zeroes are the statement rather
-	// than a placeholder. The dependency edges this subsystem CAN draw need
+	// No relation assertion: the dependency edges this subsystem CAN draw need
 	// the per-unit forward properties, which cost one round trip per unit and
-	// belong to the opened object rather than to the listing.
+	// belong to the opened object rather than to the listing. Unobservable
+	// records ARE published now — a Slice the bus would not answer for — and
+	// the count is the reading rather than a placeholder.
 	out.emit(commitRecord{
-		Record:     "commit",
-		Collection: collection,
-		Generation: generation,
-		Objects:    len(rows),
+		Record:       "commit",
+		Collection:   collection,
+		Generation:   generation,
+		Objects:      len(rows),
+		Unobservable: unobservables,
 	})
 	return exitOK
 }
