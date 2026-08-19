@@ -366,6 +366,22 @@ EXPECTED = (
                 "nothing but its own internal routes, so there is no backend "
                 "health, no TLS block and no rejected route to miss and the "
                 "differential guard owns the red"),
+    # ── GREEN, adjudicated: the third trap, the idle-fleet spelling ──
+    #
+    # The reason-blind port publishes a download's verdict without the app's own
+    # explanation of it. The captured fleet has never downloaded anything — its
+    # queue holds no records and its trail no events — so the two collections
+    # that carry the explanation are empty and the judge honestly passes it. Its
+    # RED lives in test_differential.py, where the servarr-grab-in-flight
+    # operator puts one acquisition through the fleet and the messages appear.
+    # If this goes red here, the replay judge has grown a rule that sees a queue
+    # record no committed capture holds — DESIGN 20's trap statement and the
+    # case table move together, not this row alone.
+    Expectation("a9_queue_reason_blind.py", None, "servarr/healthy", "GREEN",
+                "the app's own reason for a stuck download never read, which no "
+                "committed capture can expose: the captured fleet is idle, so "
+                "its queue holds no records at all and there is nothing to "
+                "explain — the differential guard owns the red"),
 )
 
 # The closed set of adjudicated greens, and the DESIGN clause each rests
@@ -391,6 +407,10 @@ ADJUDICATED_GREEN = {
     "thread's counters from the resolver's, because the only captured resolver "
     "runs one thread and the two are the same number (DESIGN 20); the "
     "differential guard owns this red, under unbound-second-thread",
+    ("a9_queue_reason_blind.py", None): "the third trap: replay cannot see a "
+    "stuck download's explanation, because the captured fleet is idle and its "
+    "queue holds no records at all (DESIGN 20); the differential guard owns "
+    "this red, under servarr-grab-in-flight",
     ("a9_scope_state_blind.py", None): "the third trap: replay cannot see a "
     "restarting or paused container, because every captured one is running or "
     "exited and a running-only scope rule agrees on both (DESIGN 20); the "

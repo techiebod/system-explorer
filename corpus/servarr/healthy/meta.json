@@ -1,0 +1,133 @@
+{
+  "collector": "servarr",
+  "collections": [
+    "apps",
+    "health",
+    "queue",
+    "history"
+  ],
+  "variant": "healthy",
+  "provenance": "captured",
+  "os": "ubuntu",
+  "os_version": "26.04",
+  "source_version": "Radarr 6.3.0.10514, Prowlarr 2.5.2.5491",
+  "captured": "2026-08-19T10:06:00Z",
+  "regenerable": true,
+  "regenerable_on": "a guest running at least TWO servarr apps the capture user can reach, named in SE_SERVARR_INSTANCES with an SE_<NAME>_URL and SE_<NAME>_API_KEY each — and one of them must be prowlarr, or the two shapes this variant exists for are both gone. Every collection fans out over the fleet, so a one-instance capture exercises no fan-out at all, and prowlarr is the instance that answers /queue with a 404 and excludes itself from the acquisition trail by its own appName. The figures below are these two apps' own state, so a re-stage moves the health counts and the versions, and the anchors are re-read by hand in the same change or they are asserting a fleet that is gone.",
+  "canaries": [],
+  "anonymised": true,
+  "anonymisation_note": "Through the gate against harness/scrub/servarr.json, and no substitution was needed: 0 of the 0 identifying values these documents carry were rewritten, which is the honest reading of two apps reporting on themselves — their own release strings, their own build and start times, their own generic health sentences, and the empty queue and trail of a fleet that has never downloaded anything. The independent detectors were run over the committed bytes afterwards and found nothing. What the field does NOT say is that this collector has no credential surface: it has the sharpest one in the corpus. The API key rides the X-Api-Key request header, appears in no response body, and is never asked for by the capture — see the manifest's #credential — and the instance URL is not captured either, because it is pure location and nothing in a replay dials it.",
+  "note": "Two instances, four collections, and the point of it is the FAN-OUT: one adapter fronts a fleet of media managers, every collection asks each of them, and the rows are namespaced by the instance name so two apps can never collide. A one-instance capture would replay and diff perfectly while exercising none of that, which is why the capture tool refuses one.\n\nprowlarr is the second instance deliberately, because it is the one that is DIFFERENT in two ways this corpus needs. It answers /api/v1/queue and /api/v1/queue/status with 404 and no body at all (Content-Length: 0) — it has no queue, and the adapter reads that as silence by design rather than as a fault, so its apps row carries neither QueueTotal nor QueueUnobservable. And it excludes itself from the acquisition trail by its own `appName`, never by the operator-chosen instance name: /api/v1/history on prowlarr is indexer telemetry — releaseGrabbed, indexerQuery, indexerRss — a search audit rather than a record of what arrived. The payload for it is captured and committed even though the adapter never reads it, which is deliberate: the exclusion is a decision the adapter makes from /system/status, so a capture that pre-applied it would be the capture tool implementing the collector's rule, and a port that got the rule wrong would then meet a missing file and raise a harness error instead of disagreeing about a machine.\n\nThe 404s are why this variant carries a payload that is not a document. `response-codes.json` records the requests that answered with a status and no body: the response's whole content IS its status line, a zero-byte file could not carry it, and the capture tool refuses an empty payload precisely because an interface that answered with nothing produced no document. Deny-by-default is untouched — an uncaptured request still raises — and the replay seam will replay 404 and nothing else, because every other status reaches a fact value spelled by httpx's own exception rendering (see the defects section of the port's report).\n\n`instances.json` is the other non-document: the fleet receipt, which is CONFIGURATION rather than an interface reading — the same shape as the packages capture's manager.json, which names which manager answered. It carries each instance's name, its API family and which of its receipts were absent, and it does not carry the URL (location) or the key (a credential that must never have been captured at all).\n\nStated bounds, because a specimen shows one machine on one day.\n\nThe queue and the trail are BOTH EMPTY. This fleet has never grabbed anything: /queue holds no records, /history holds no records, and /queue/status reports totalCount 0. So `queue` and `history` commit zero objects, and every fact those two collections publish — Title, TrackedDownloadStatus, StatusMessages, EventType, Quality, DownloadId and the rest — is reached by no committed capture. That is exercised by the differential guard instead, where the `servarr-grab-in-flight` operator puts one real acquisition into the payloads: the grab in radarr's trail, the download it created in radarr's queue, and the indexer's own audit of it in prowlarr's. A commit of zero objects is not a decline and must not become one: the collections were read and are empty, which is a reading and retires whatever a previous batch published.\n\nNeither app has a download client configured, so /downloadclient answers with an empty list on both. Nothing is lost from this pair by that — the dispatches-to edges and the DownloadClients fact live on the opened object, which the collector contract's `object` verb serves and this phase does not — but it does mean the queue's `tracks` edge has no live subject anywhere in the corpus.\n\nEvery instance answered. Absent, unauthorised and unavailable are three different statements this collector must make — no instance configured at all, an app that refuses the key, an app that has stopped answering — and no committed capture stages any of them. The first is the port's `absent` decline and is exercised by a Go unit test over an empty replay directory; the other two are unmapped in both implementations and belong to the live comparator and the adjudication queue.\n\nAnd the rows carry values only: no names family, no absent list, no unobservable record, no relation assertion. The apps and health rows are facts and nothing else, so three of the stream's channels are unvisited here.",
+  "anchors": [
+    {
+      "collection": "apps",
+      "object": "radarr",
+      "fact": "Version",
+      "value": "6.3.0.10514"
+    },
+    {
+      "collection": "apps",
+      "object": "radarr",
+      "fact": "AppName",
+      "value": "Radarr"
+    },
+    {
+      "collection": "apps",
+      "object": "radarr",
+      "fact": "HealthErrors",
+      "value": 1
+    },
+    {
+      "collection": "apps",
+      "object": "radarr",
+      "fact": "HealthWarnings",
+      "value": 2
+    },
+    {
+      "collection": "apps",
+      "object": "radarr",
+      "fact": "QueueTotal",
+      "value": 0
+    },
+    {
+      "collection": "apps",
+      "object": "radarr",
+      "absent_fact": "ConfigMissing"
+    },
+    {
+      "collection": "apps",
+      "object": "prowlarr",
+      "fact": "ApiFamily",
+      "value": "v1"
+    },
+    {
+      "collection": "apps",
+      "object": "prowlarr",
+      "fact": "AppName",
+      "value": "Prowlarr"
+    },
+    {
+      "collection": "apps",
+      "object": "prowlarr",
+      "fact": "HealthErrors",
+      "value": 1
+    },
+    {
+      "collection": "apps",
+      "object": "prowlarr",
+      "fact": "HealthWarnings",
+      "value": 0
+    },
+    {
+      "collection": "apps",
+      "object": "prowlarr",
+      "absent_fact": "QueueTotal"
+    },
+    {
+      "collection": "apps",
+      "object": "prowlarr",
+      "absent_fact": "QueueUnobservable"
+    },
+    {
+      "collection": "apps",
+      "commit_objects": 2
+    },
+    {
+      "collection": "health",
+      "object": "radarr/IndexerRssCheck",
+      "fact": "Type",
+      "value": "error"
+    },
+    {
+      "collection": "health",
+      "object": "radarr/DownloadClientCheck",
+      "fact": "Type",
+      "value": "warning"
+    },
+    {
+      "collection": "health",
+      "object": "prowlarr/IndexerCheck",
+      "fact": "Message",
+      "value": "No indexers enabled, Prowlarr will not return search results"
+    },
+    {
+      "collection": "health",
+      "object": "prowlarr/IndexerCheck",
+      "fact": "App",
+      "value": "prowlarr"
+    },
+    {
+      "collection": "health",
+      "commit_objects": 4
+    },
+    {
+      "collection": "queue",
+      "commit_objects": 0
+    },
+    {
+      "collection": "history",
+      "commit_objects": 0
+    }
+  ],
+  "anchors_note": "Read off payloads/ by hand at staging, before any stream was generated, which is what makes them an authority the reference-generated half is not. Every value was read from the committed bytes; the scrub substituted nothing, so the scrubbed and captured spellings are the same here.\n\nThe apps row's two health counts are the densest anchors and they are a PAIR on purpose. radarr's /health holds three items — one `error` and two `warning` — and the counts are not a tally of items but of what the health evaluator grades them: 1 critical and 2 warn. A port that counted the items publishes 3 and 0, one that took the app's own `type` strings as levels publishes something else again, and either passes an anchor on one number alone. prowlarr's pair is 1 and 0 from a single error, which is the other side of the same rule: a port that counted every item as a warning publishes 0 and 1 and fails.\n\nQueueTotal 0 on radarr is a READING and not an absence: /queue/status answers totalCount 0, so a port that dropped a zero-valued figure as uninteresting fails. Beside it, prowlarr's TWO absences are the load-bearing pair in this pair. prowlarr answers /queue/status with 404, and the adapter reads that as this app having no queue endpoint at all — silence by design. So the row carries no QueueTotal, which a port that defaulted the figure to 0 would publish, and no QueueUnobservable, which a port that treated any failed request as a narrowed observation would publish. Together they pin the whole response-codes mechanism: get the 404 wrong in either direction and one of the two fires.\n\nConfigMissing absent on radarr is the fleet receipt being read rather than assumed: instances.json records that both instances had complete receipts, and a port that could not tell a complete receipt from a missing one publishes the fault fact on a row that has none.\n\nAppName Prowlarr is anchored because it is not decoration — it is the member the acquisition trail's exclusion turns on. The operator called this instance `prowlarr` and that is exactly what the adapter does NOT read; it reads the app's own statement of what it is. An anchor on the instance name would have certified a port that keyed the exclusion on the operator's word, which is the same defect one name over.\n\nApiFamily v1 is stated in configuration and never probed, which is why it is anchored on the instance whose family is not the default: a port that hardcoded v3 builds prowlarr's URLs wrong and would have had to fetch nothing at all.\n\nThe health anchors are two `Type` values on two rows of the SAME instance, deliberately differing — `error` and `warning` — because two rows that happened to agree would let a port that read the wrong item pass, and because Type is mirrored verbatim and never re-graded. The Message anchor is prowlarr's own sentence, whole: it is the one string in this pair that travels through the envelope's bounding and scrubbing (env.reason), so a port that clipped it, collapsed it differently or dropped it fails on the bytes. App `prowlarr` on that same row is the namespacing: every row in this subsystem carries the instance handle, and a fleet-blind port that published one flat set of health items would either collide the two apps' rows or lose the handle.\n\nThe four commit counts are anchored because absence is not the only way to lose a collection. apps is 2 — one row per configured instance, so a port that only published instances that answered would still be 2 here but a port that fanned out over one would be 1. health is 4 — 3 from radarr and 1 from prowlarr, so a port that asked only the first instance commits 3 and every fact anchor above still passes. queue and history are BOTH 0, and those two are anchored precisely because zero is the answer a broken port also gives: a commit of zero objects is a reading of an empty queue and an empty trail, and it must not be a decline (a decline of absent would also commit zero, and validate_anchors would still pass — which is why the expected stream carries no decline record at all and the port's replay test asserts that directly).\n\nDeliberately not anchored: the versions of prowlarr and the build times, start times and package strings of either app. They are in the payloads and in source_version, they move on every image update, and no fact this collection publishes reads them apart from Version — which is anchored once, on radarr, where a port that parsed `6.3.0.10514` as a number rather than carrying the string it was given fails typed equality. The wiki URLs are not anchored either: they are the product's own documentation links, and an anchor on one would pin this pair to servarr's website rather than to either app."
+}

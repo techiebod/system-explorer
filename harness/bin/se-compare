@@ -56,6 +56,7 @@ SERVES = {
     "unbound": ["daemon"],
     "logs": ["journal"],
     "bazarr": ["instance"],
+    "servarr": ["apps", "health", "queue", "history"],
 }
 
 REFERENCE = REPO / "harness" / "bin" / "se-live-reference"

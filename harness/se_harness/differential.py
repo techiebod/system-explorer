@@ -72,6 +72,7 @@ SEEDS = {
     "docker": "docker/healthy",
     "bazarr": "bazarr/healthy",
     "traefik": "traefik/healthy",
+    "servarr": "servarr/healthy",
 }
 
 # Names the operators mint. Constants rather than inline literals so the
@@ -159,6 +160,24 @@ TRAEFIK_ROUTER_ERROR = (
 )
 # The one figure that only exists if the serverStatus map was folded at all.
 TRAEFIK_SERVERS_DOWN = "'ServersDown': 1"
+# The one acquisition the servarr operator puts through an idle fleet, in the
+# three places a real one appears at once: the grab in the asking app's trail,
+# the download it created in that app's queue, and the indexer proxy's own
+# audit of the same release. Every string carries the `mut-` prefix or the
+# `Mut.` release-name convention this module uses for minted objects, so a
+# reader of a failing diff can tell a staged row from a captured one — and no
+# value here is anybody's media: the title is a release name that never existed.
+SERVARR_TITLE = "Mut.Release.2026.1080p.WEB-DL.MUTGRP"
+SERVARR_DOWNLOAD_ID = "3ab0000000000000000000000000000000c0ffee"
+SERVARR_INDEXER = "mut-indexer"
+SERVARR_CLIENT = "mut-transmission"
+# The two sentences the app writes to say WHY a completed download will not
+# import, and the error line beside them. They are the difference between a
+# row that says `warning` and a row that says what to do, and they are the only
+# members of the stuck shape a payload can take away without making the
+# reference publish a null — which is what the blind fixture rewrites.
+SERVARR_STUCK_MESSAGE = "Not an upgrade for existing movie file(s)"
+SERVARR_ERROR_MESSAGE = "The download is missing files"
 
 
 # ── nftables helpers, grammar-aware ──────────────────────────────────────
@@ -1184,6 +1203,112 @@ def _dynamic_provider(payloads: dict) -> dict:
     return payloads
 
 
+# ── the servarr fleet ────────────────────────────────────────────────────
+
+
+def _servarr_document(payloads: dict, stem: str) -> dict:
+    document = payloads.get(stem)
+    if not isinstance(document, dict):
+        raise MutatorError(f"the payload set carries no {stem} document")
+    return document
+
+
+def _grab_in_flight(payloads: dict) -> dict:
+    """CLASS stuck-reason-blind: a queue row that says `warning` and not why.
+
+    The captured fleet has never downloaded anything: its queue holds no
+    records, its trail holds no events, and /queue/status reports zero. So
+    every fact the queue and history collections publish is reached by no
+    committed capture, and a port that implemented neither collection's row
+    beyond its name reproduces the pair exactly. That is DESIGN 20's third
+    trap, and an idle fleet is the purest form of it — the collections that
+    answer the question are the two with nothing in them.
+
+    So put ONE acquisition through the fleet, in the three places a real one
+    appears at once, because a document whose members disagree with each other
+    is not one these apps produce:
+
+      · the grab in radarr's own trail, with the indexer and client that
+        carried it and the quality it was graded;
+      · the download it created in radarr's queue — completed, zero bytes
+        left, and the app's own verdict that it will not import, which is the
+        shape this collection exists to surface;
+      · the queue SUMMARY moving with it, because totalCount 0 beside a
+        record is not a reading any app produces;
+      · and the same release in prowlarr's history as `releaseGrabbed`, which
+        is what the indexer proxy files when it hands a link over. The
+        reference never reads that document — prowlarr excludes itself from
+        the trail by its own appName — so it is inert to both sides today and
+        is minted anyway: it is the tempting document a port that keyed the
+        exclusion on the instance name would read, and leaving it out would
+        make the mutated fleet a machine that could not exist.
+
+    The defect class this EXPOSES is narrower than what it mints, and
+    deliberately so. The stuck verdict itself rides members the reference
+    writes unconditionally, so a payload cannot take one away without making
+    the reference publish a null fact — unlawful under the contract's
+    recursive fact_value, and a REFUSED verdict about the reference rather
+    than a disagreement about the port. What a payload CAN take away is the
+    app's own explanation: statusMessages and errorMessage are conditional,
+    and a port that publishes the verdict without them leaves an operator
+    holding `warning` and no reason.
+    """
+    queue = _servarr_document(payloads, "radarr-api-v3-queue")
+    if queue.get("records"):
+        raise MutatorError(
+            "the captured queue already holds records, so a minted one would "
+            "be a second download rather than the first"
+        )
+    queue["records"] = [{
+        "id": 91,
+        "title": SERVARR_TITLE,
+        "status": "completed",
+        "trackedDownloadStatus": "warning",
+        "trackedDownloadState": "importPending",
+        "downloadClient": SERVARR_CLIENT,
+        "indexer": SERVARR_INDEXER,
+        "protocol": "torrent",
+        "downloadId": SERVARR_DOWNLOAD_ID,
+        "size": 8589934592,
+        "sizeleft": 0,
+        "errorMessage": SERVARR_ERROR_MESSAGE,
+        "statusMessages": [{
+            "title": SERVARR_TITLE,
+            "messages": [SERVARR_STUCK_MESSAGE],
+        }],
+    }]
+    queue["totalRecords"] = 1
+
+    summary = _servarr_document(payloads, "radarr-api-v3-queue-status")
+    summary["totalCount"] = 1
+    summary["count"] = 1
+    summary["warnings"] = True
+
+    trail = _servarr_document(payloads, "radarr-api-v3-history")
+    trail["records"] = [{
+        "id": 4711,
+        "eventType": "grabbed",
+        "sourceTitle": SERVARR_TITLE,
+        "downloadId": SERVARR_DOWNLOAD_ID,
+        "date": "2026-08-19T09:58:11Z",
+        "quality": {"quality": {"id": 7, "name": "Bluray-1080p"},
+                    "revision": {"version": 1, "real": 0, "isRepack": False}},
+        "data": {"indexer": SERVARR_INDEXER, "downloadClient": SERVARR_CLIENT,
+                 "releaseGroup": "MUTGRP"},
+    }]
+    trail["totalRecords"] = 1
+
+    audit = _servarr_document(payloads, "prowlarr-api-v1-history")
+    audit["records"] = [{
+        "id": 812,
+        "eventType": "releaseGrabbed",
+        "date": "2026-08-19T09:58:10Z",
+        "data": {"source": "Prowlarr", "grabTitle": SERVARR_TITLE},
+    }]
+    audit["totalRecords"] = 1
+    return payloads
+
+
 @dataclass(frozen=True)
 class Operator:
     """One structural transformation, bound to the defect class it exposes."""
@@ -1226,6 +1351,8 @@ OPERATORS: tuple[Operator, ...] = (
              _wired_managers),
     Operator("traefik-dynamic-provider", "traefik", "dynamic-provider-blind",
              _dynamic_provider),
+    Operator("servarr-grab-in-flight", "servarr", "stuck-reason-blind",
+             _grab_in_flight),
 )
 
 

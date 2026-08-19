@@ -224,6 +224,18 @@ CASES = (
          # id and a port that published the twelve-character form would satisfy
          # a bare "ScopeUnit" and still resolve to no unit at all.
          ("ScopeUnit", differential.RESTARTING_SCOPE)),
+    Case("stuck-reason-blind", "servarr-grab-in-flight",
+         "a9_queue_reason_blind.py", differential.DISAGREE, "differences",
+         # Both sentences the app wrote and the fact that carries them. The
+         # captured fleet has never downloaded anything — its queue holds no
+         # records and its trail no events — so a port that publishes a
+         # download's verdict without the app's own explanation of it is
+         # invisible to every committed pair, and this operator is what puts
+         # one acquisition through the fleet. Bound to the pair because the
+         # facts dict is compared whole: a single spelling would also be
+         # satisfied by a port that had lost some other member entirely.
+         ("StatusMessages", differential.SERVARR_STUCK_MESSAGE,
+          differential.SERVARR_ERROR_MESSAGE)),
     Case("scoped-state-enum", "docker-paused-container",
          "a9_scope_state_blind.py", differential.DISAGREE, "differences",
          # The third member of the declared set, staged separately for the same

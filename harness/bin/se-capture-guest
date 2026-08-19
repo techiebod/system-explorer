@@ -102,6 +102,107 @@ sys.path.insert(0, "/tmp/secmp/src")
 from system_explorer.agent.adapters.logs import DEFAULT_LIMIT, _run_journalctl
 print(json.dumps(_run_journalctl(["-r", "-n", str(DEFAULT_LIMIT)])))
 '
+# servarr is a FLEET — several instances of one application, each its own HTTP
+# endpoint — so the acquisition list cannot be written down here: it depends on
+# what SE_SERVARR_INSTANCES names. It is discovered instead, from the adapter'"'"'s
+# own instance_specs(), and the whole capture is one remote call because three
+# of its outputs are not documents:
+#
+#   · the FLEET receipt (instances.json), which is configuration rather than an
+#     interface reading — captured as name, api and which receipts were absent,
+#     and never the URL (location) or the key (a credential DESIGN 21 says must
+#     never have been captured at all, since no scrub repairs a payload holding
+#     one);
+#   · the RESPONSE CODES (response-codes.json), because an app answers some
+#     requests with a status and no body — prowlarr'"'"'s /queue is 404 with
+#     Content-Length 0 — so the response'"'"'s whole content is its status line and
+#     a zero-byte file could not carry it;
+#   · the versions, which are per instance and come back with the documents
+#     rather than from a separate probe.
+#
+# The key rides the X-Api-Key header exactly as the adapter sends it, and the
+# params are the adapter'"'"'s own constants, so each captured document is the one
+# the adapter would have received rather than one this script composed.
+servarr_py='
+import json, sys, urllib.error, urllib.parse, urllib.request
+sys.path.insert(0, "/tmp/secmp/src")
+from system_explorer.agent.adapters import servarr
+
+def stem(name, api, path):
+    # The payload name the replay seam addresses a fleet document by: the
+    # instance and the request path together. Keep in step with slug() in
+    # harness/bin/se-reference-collector.
+    text = (name + "/api/" + api + path).strip("/")
+    keep = [c if (c.isalnum() or c in "-_.") else "-" for c in text]
+    return "".join(keep).strip("-").replace("--", "-") or "root"
+
+PATHS = [
+    ("/system/status", None),
+    ("/health", None),
+    ("/queue/status", None),
+    ("/queue", dict(page=1, pageSize=servarr.QUEUE_PAGE_SIZE,
+                    **servarr.INCLUDE_UNKNOWN)),
+    ("/history", servarr.HISTORY_PARAMS),
+]
+
+out = {"instances": [], "documents": {}, "response_codes": {}, "versions": []}
+for spec in servarr.instance_specs():
+    out["instances"].append({"name": spec["name"], "api": spec["api"],
+                             "missing": spec["missing"],
+                             "duplicates": spec["duplicates"]})
+    if spec["missing"]:
+        continue
+    for path, params in PATHS:
+        url = spec["url"] + "/api/" + spec["api"] + path
+        if params:
+            url = url + "?" + urllib.parse.urlencode(params)
+        key = stem(spec["name"], spec["api"], path)
+        request = urllib.request.Request(url, headers={"X-Api-Key": spec["key"]})
+        try:
+            with urllib.request.urlopen(request, timeout=10) as answer:
+                out["documents"][key] = json.load(answer)
+        except urllib.error.HTTPError as exc:
+            out["response_codes"][key] = exc.code
+    status = out["documents"].get(stem(spec["name"], spec["api"], "/system/status"))
+    if isinstance(status, dict):
+        out["versions"].append(str(status.get("appName")) + " "
+                               + str(status.get("version")))
+print(json.dumps(out))
+'
+# The local half: one bundle in, one file per document out. Splitting here
+# rather than on the guest keeps the remote side a single read-only call and
+# puts the refusals — a fleet that named nothing, an instance that answered
+# nothing — where the operator can read them.
+servarr_split_py='
+import json, os, sys
+bundle = json.load(sys.stdin)
+directory = sys.argv[1]
+if not bundle["instances"]:
+    sys.exit("SE_SERVARR_INSTANCES named no instances on that guest — a fleet "
+             "of nothing is a finding about the configuration, not a capture")
+if len(bundle["instances"]) < 2:
+    sys.exit("only one instance was configured: every collection fans out over "
+             "the fleet, so a one-instance capture cannot exercise the fan-out")
+if not bundle["documents"]:
+    sys.exit("no instance answered a single path — a finding about the guest, "
+             "not a payload to commit")
+for stem, document in sorted(bundle["documents"].items()):
+    with open(os.path.join(directory, stem + ".json"), "w") as out:
+        out.write(json.dumps(document, indent=2) + "\n")
+    print("  " + stem + ".json")
+for name, document in (("instances", bundle["instances"]),
+                       ("response-codes", bundle["response_codes"])):
+    with open(os.path.join(directory, name + ".json"), "w") as out:
+        out.write(json.dumps(document, indent=2) + "\n")
+    print("  " + name + ".json")
+'
+# The interface version is per instance here, so it comes out of the bundle
+# rather than from a probe of its own: "Radarr 6.3.0.10514, Prowlarr 2.5.2.5491"
+# names both apps and both releases, which is what a drift diff needs.
+servarr_version_py='
+import json, sys
+print(", ".join(json.load(sys.stdin)["versions"]))
+'
 declare -a acquisitions
 case "$collector" in
     storage)
@@ -184,6 +285,13 @@ case "$collector" in
             "stats_noreset.txt|sudo unbound-control stats_noreset"
         )
         ;;
+    servarr)
+        # No entries: the fleet's documents cannot be enumerated ahead of the
+        # capture, so the servarr branch below does the whole of it in one
+        # remote call. The empty list keeps the shared loop a no-op rather
+        # than growing a second dialect inside it.
+        acquisitions=()
+        ;;
     *)
         echo "unknown collector '$collector'" >&2
         exit 2
@@ -258,7 +366,27 @@ for entry in "${acquisitions[@]}"; do
     fi
 done
 
-source_version="$(ssh "${ssh_opts[@]}" -- "$target" "set -o pipefail; $remote_env$version_probe" | tr -d '\r')"
+# The fleet capture: one remote call, split locally. It is its own branch
+# rather than a row in the table above because what it writes is not one
+# document per acquisition — see servarr_py.
+source_version=""
+if [[ $collector == servarr ]]; then
+    echo "  the fleet  <-  python3 -c '<servarr_py>'  (instance_specs, then every path)"
+    if ! bundle="$(ssh "${ssh_opts[@]}" -- "$target" "$remote_env python3 -c '$servarr_py'")"; then
+        echo "  FAILED: the fleet capture did not run on $target" >&2
+        echo "  A collector that cannot read its interface on this guest is a" >&2
+        echo "  finding about the guest, not a payload to commit." >&2
+        exit 1
+    fi
+    if ! printf '%s' "$bundle" | python3 -c "$servarr_split_py" "$payload_dir"; then
+        exit 1
+    fi
+    source_version="$(printf '%s' "$bundle" | python3 -c "$servarr_version_py")"
+fi
+
+if [[ -n $version_probe ]]; then
+    source_version="$(ssh "${ssh_opts[@]}" -- "$target" "set -o pipefail; $remote_env$version_probe" | tr -d '\r')"
+fi
 if [[ -z $source_version ]]; then
     echo "could not read the interface version on $target — a capture whose" >&2
     echo "source_version is unknown cannot tell a drift diff what changed." >&2

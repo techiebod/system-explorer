@@ -136,6 +136,32 @@ NAMED_RESIDUALS = {
         "layer yet — so the tool is real and the SHAPE is still unvisited, and "
         "this truth stays owed."
     ),
+    # The four servarr apps facts that are about the OBSERVER rather than about
+    # any app: two of them state a fault in this process's own configuration,
+    # and two carry the text of a failure only the reference can spell.
+    "servarr/instance-config-and-failure": (
+        "ConfigMissing and ConfigDuplicate are read from SE_SERVARR_INSTANCES "
+        "and the per-instance receipts beside it, and StatusUnobservable and "
+        "QueueUnobservable carry the failure text of an app that stopped "
+        "answering. No committed capture reaches any of them — both instances "
+        "were configured and both answered — and no mutation operator mints "
+        "one, for two different reasons, each stated rather than shrugged at. "
+        "The two Config facts would be minted by editing the fleet RECEIPT, "
+        "which is this process's configuration and not the machine it "
+        "observes: every operator in this module rewrites what an interface "
+        "SAID, and a receipt is what the observer was told, so minting one "
+        "would be the guard mutating itself. The two Unobservable facts cannot "
+        "be minted at all, because their VALUE is the reference's own "
+        "rendering of an httpx exception — the exception class name and "
+        "httpx's message, with the request URL in it — which no independent "
+        "implementation can reproduce and no corpus should enshrine; the "
+        "replay seam therefore replays 404 and no other status, since 404 is "
+        "the one code whose effect on a row is independent of that text. "
+        "Venue: the live comparator (harness/bin/se-compare), run with an "
+        "instance named and its receipts withheld, and again with an app "
+        "stopped — where the two implementations' disagreement about the "
+        "failure text is the finding rather than a defect in either."
+    ),
     # The packages collector reads three interfaces and the corpus captures
     # one. A second variant would close this outright — which is why the entry
     # says so rather than dressing a gap as a boundary.

@@ -50,6 +50,7 @@ GO_COLLECTORS = {
     "docker": "./cmd/se-collect-docker",
     "bazarr": "./cmd/se-collect-bazarr",
     "traefik": "./cmd/se-collect-traefik",
+    "servarr": "./cmd/se-collect-servarr",
 }
 
 

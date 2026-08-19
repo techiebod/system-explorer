@@ -59,6 +59,7 @@ if os.environ.get("SE_REPLAY_DIR"):
 from system_explorer.agent import envelope as env  # noqa: E402
 from system_explorer.agent.adapters import (  # noqa: E402
     bazarr, docker, logs, network, packages, storage, traefik, unbound, vms,
+    docker, logs, network, packages, servarr, storage, traefik, unbound, vms,
 )
 
 # The collections each adapter serves live, and the capability attributes the
@@ -98,6 +99,14 @@ LIVE = {
     "logs": {"module": logs, "adapter": logs.Adapter,
              "interface": "systemd journal", "collections": ["journal"],
              "page": {"query": {}, "limit": None, "cursor": None}},
+    # The one adapter that fronts a FLEET. Nothing is pinned here on purpose:
+    # this tool reads the live host, so the instances it observes are the ones
+    # SE_SERVARR_INSTANCES names in the environment the comparator was given —
+    # which is exactly the half a replay must never take from its environment
+    # and exactly the half this side exists to read.
+    "servarr": {"module": servarr, "adapter": servarr.Adapter,
+                "interface": "servarr api",
+                "collections": ["apps", "health", "queue", "history"]},
 }
 
 
@@ -192,49 +201,66 @@ def run(collector: str, generations: dict[str, int]) -> None:
     out.begin()
 
     adapter = spec["adapter"]()
-    emitted = 0
-    for collection in generations:
-        at = time.clock_gettime(time.CLOCK_BOOTTIME)
-        try:
-            items = asyncio.run(materialise(adapter, collection, spec.get("page")))
-        except env.UnknownCollection:
-            # The adapter's capability gate said it does not serve this
-            # collection here — for storage that is `self._zfs`, which is
-            # false exactly when the host has no OpenZFS. Over the shipping
-            # agent's HTTP contract that becomes a 404; over the COLLECTOR
-            # contract the same reading is an absent decline, because "there
-            # are none" is a successful reading that must be able to retire
-            # what a previous batch published (DESIGN 19).
-            #
-            # Bridged here rather than in the adapter because the two
-            # contracts genuinely differ, and because leaving it as an
-            # exception made the reference exit 2 on every ZFS-less host —
-            # which read as "the comparator cannot run here" when the truth
-            # was "this host has no pools, and both implementations should
-            # say so".
-            # The interface's own name, not the collector's: the port and the
-            # replay shim both say "no zpool on this host", and a decline
-            # detail travels to a hub and out over MCP, so three spellings of
-            # one reading would reach an operator as three conditions.
-            out.decline(collection, "absent",
-                        f"no {spec['interface']} on this host")
-            out.commit(collection, objects=0, assertions=0, unobservable=0)
-            continue
-        except Exception as exc:  # noqa: BLE001
-            # Any other failure is not a statement about this machine that
-            # the reference is entitled to make. The three non-absent decline
-            # reasons are unmapped in the shipping adapter — an open item in
-            # the queue — so this says "I could not run" and shows the
-            # operator the exception rather than inventing an
-            # authority-bearing decline.
-            fail(
-                f"{collector}/{collection}: acquisition raised "
-                f"{type(exc).__name__}: {exc}"
-            )
-        for index in range(emitted, emitted + len(items)):
-            stamps[index] = at
-        emitted += len(items)
-        out.commit(collection, *out.items(collection, items))
+
+    # ONE event loop for the whole batch, not one per collection.
+    #
+    # An adapter that holds a live async client — servarr's per-instance httpx
+    # clients, traefik's single one — opens its connections on the loop that
+    # first used them, so a second asyncio.run() meets a pool bound to a loop
+    # that has been closed: `RuntimeError: Event loop is closed`, on the SECOND
+    # collection of every multi-collection fleet. The shipping agent runs one
+    # loop for the process and never sees it; the replay shim never sees it
+    # either, because its clients are stubbed and nothing dials. So this driver
+    # was the only place it could appear, and it appeared the first time a
+    # ported collector fronted an HTTP fleet — which is the comparator earning
+    # its place, on its own apparatus rather than on a port.
+    async def batch() -> None:
+        emitted = 0
+        for collection in generations:
+            at = time.clock_gettime(time.CLOCK_BOOTTIME)
+            try:
+                items = await materialise(adapter, collection, spec.get("page"))
+            except env.UnknownCollection:
+                # The adapter's capability gate said it does not serve this
+                # collection here — for storage that is `self._zfs`, which is
+                # false exactly when the host has no OpenZFS. Over the shipping
+                # agent's HTTP contract that becomes a 404; over the COLLECTOR
+                # contract the same reading is an absent decline, because
+                # "there are none" is a successful reading that must be able to
+                # retire what a previous batch published (DESIGN 19).
+                #
+                # Bridged here rather than in the adapter because the two
+                # contracts genuinely differ, and because leaving it as an
+                # exception made the reference exit 2 on every ZFS-less host —
+                # which read as "the comparator cannot run here" when the truth
+                # was "this host has no pools, and both implementations should
+                # say so".
+                # The interface's own name, not the collector's: the port and
+                # the replay shim both say "no zpool on this host", and a
+                # decline detail travels to a hub and out over MCP, so three
+                # spellings of one reading would reach an operator as three
+                # conditions.
+                out.decline(collection, "absent",
+                            f"no {spec['interface']} on this host")
+                out.commit(collection, objects=0, assertions=0, unobservable=0)
+                continue
+            except Exception as exc:  # noqa: BLE001
+                # Any other failure is not a statement about this machine that
+                # the reference is entitled to make. The three non-absent
+                # decline reasons are unmapped in the shipping adapter — an
+                # open item in the queue — so this says "I could not run" and
+                # shows the operator the exception rather than inventing an
+                # authority-bearing decline.
+                fail(
+                    f"{collector}/{collection}: acquisition raised "
+                    f"{type(exc).__name__}: {exc}"
+                )
+            for index in range(emitted, emitted + len(items)):
+                stamps[index] = at
+            emitted += len(items)
+            out.commit(collection, *out.items(collection, items))
+
+    asyncio.run(batch())
 
     out.end()
 

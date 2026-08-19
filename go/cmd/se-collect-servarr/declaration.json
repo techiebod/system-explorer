@@ -1,0 +1,388 @@
+{
+  "schema": "se.declaration/1",
+  "collector": "servarr",
+  "version": "0.7.0",
+  "authority": {
+    "read_paths": [
+      "/proc/sys/kernel/random/boot_id",
+      "/proc/self/timens_offsets"
+    ],
+    "credentials": [
+      "SE_SERVARR_INSTANCES",
+      "SE_<NAME>_URL",
+      "SE_<NAME>_API_KEY"
+    ]
+  },
+  "probe": "SE_SERVARR_INSTANCES names at least one instance. That is what this side can establish without spending a round trip on every app, and it is deliberately not a reachability test: an instance that is configured and dark is a ROW this collector serves — a configured manager that does not answer is a statement about the estate — rather than a reason it cannot run. No instance named is a host that fronts no media managers, which is an absence and commits empty.",
+  "collections": [
+    {
+      "name": "apps",
+      "question": "which media managers are configured here, and how does each one stand?",
+      "prefix": "app",
+      "freshness": "60s",
+      "perishability": "sampled",
+      "answer": ["AppName", "Version", "HealthErrors", "HealthWarnings", "QueueTotal"],
+      "ceiling": { "records": 100, "bytes": 262144 },
+      "facts": {
+        "App": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "content",
+          "sentence": "The instance's operator-chosen name — the filterable handle every row in this subsystem carries, and the namespace that keeps two readarrs from colliding. It is whatever SE_SERVARR_INSTANCES said, so it is a word somebody chose rather than anything the app states about itself."
+        },
+        "ApiFamily": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "nothing",
+          "from": "/api/<family>",
+          "sentence": "Which API family this instance speaks — v3 for sonarr and radarr, v1 for lidarr, readarr and prowlarr. Stated in configuration and never probed, because a wrong family means every request goes to a path that does not exist and there is nothing to discover from that."
+        },
+        "AppName": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/appName",
+          "sentence": "What the app calls itself, from its own status document. It is not the instance name: the operator picked that, and this is the product answering. The acquisition trail's exclusion of prowlarr turns on this member and never on the name."
+        },
+        "Version": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/version",
+          "sentence": "The release this instance is running, as it reports it — the build that is actually answering, which after an image pull without a restart is not the one on disk."
+        },
+        "HealthErrors": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "derived",
+          "derived_from": ["Type"],
+          "discloses": "nothing",
+          "sentence": "How many of the app's own health items this product mirrors as critical; each is a row on the health collection. Counted through the same evaluator that grades those rows, so the fleet number and the rows cannot disagree about what deserves attention."
+        },
+        "HealthWarnings": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "derived",
+          "derived_from": ["Type"],
+          "discloses": "nothing",
+          "sentence": "How many of the app's own health items mirror as warn. Notices and passing checks are not counted, so this number and the health rows judge alike — and an item graded with a word this product has never met still counts here, because it is still the app raising its hand."
+        },
+        "QueueTotal": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/totalCount",
+          "sentence": "How many downloads the instance is currently tracking, imported or not, orphans included — the app's own figure from its queue summary. An instance with no queue endpoint at all publishes no such fact and no reason either: prowlarr is not a media manager with an empty queue."
+        },
+        "QueueUnobservable": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "content",
+          "sentence": "Why the queue count could not be read, when it could not. A missing queue endpoint is NOT this — that is silence by design — so this fact appearing means the app has a queue and would not say how deep it is."
+        },
+        "StatusUnobservable": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "content",
+          "sentence": "Why the instance's API could not be asked, when it could not. The row stays, because a configured manager that does not answer is a statement rather than a gap — and the version and name it managed to state before it stopped stay beside this."
+        },
+        "ConfigMissing": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "content",
+          "sentence": "The receipts this named instance still needs before it can be observed, by variable name and never by value, or the fault in its own name. An instance named in configuration and never asked would be a typo vanishing into green, so it is a row wearing its fault."
+        },
+        "ConfigDuplicate": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "content",
+          "sentence": "Entries in SE_SERVARR_INSTANCES that duplicated this name and were dropped; the first entry won. Stated rather than silently deduplicated, because the second entry usually meant to be a different instance."
+        }
+      },
+      "redaction_exemption": "The evidence for an apps row is the instance's own /system/status and /health documents, and neither carries a credential: the API key travels in the X-Api-Key request header this collector sends, appears in no response body, and is never read back. What those documents do carry — a version, a build time, a database flavour, the app's own generic health sentences — is the app describing itself. The bound is stated because it is a decision and not a shape: an app configured with a root folder or an indexer names them in a health message, and a message is a path or an operator's word rather than a credential, which is why Message is classified content and not nothing.",
+      "reference_commands": [
+        {
+          "purpose": "the app's own account of itself — AppName and Version come from here",
+          "argv": ["curl", "-H", "X-Api-Key: <key>", "<url>/api/<family>/system/status"]
+        },
+        {
+          "purpose": "the items the two health counts are graded from",
+          "argv": ["curl", "-H", "X-Api-Key: <key>", "<url>/api/<family>/health"]
+        },
+        {
+          "purpose": "the queue depth, including the orphans the queue itself hides",
+          "argv": ["curl", "-H", "X-Api-Key: <key>", "<url>/api/<family>/queue/status"]
+        }
+      ]
+    },
+    {
+      "name": "health",
+      "question": "what does each app say is wrong with itself?",
+      "prefix": "health",
+      "freshness": "60s",
+      "perishability": "sampled",
+      "answer": ["App", "Source", "Type", "Message"],
+      "ceiling": { "records": 2000, "bytes": 1048576 },
+      "facts": {
+        "App": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "content",
+          "sentence": "Which instance raised this item — the operator-chosen handle, and the first half of the row's name, so two apps raising the same check are two rows."
+        },
+        "Source": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/source",
+          "sentence": "The app's own name for the check that fired (IndexerStatusCheck, DownloadClientCheck, RootFolderCheck). An item stating none is still an item, and its row is named `unknown` rather than dropped."
+        },
+        "Type": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/type",
+          "sentence": "The app's own grade for it — ok, notice, warning or error — mirrored verbatim and never re-judged by this product. Not declared as a closed set on purpose: a grade this collector has never met is still the app raising its hand, and an enum would refuse the reading rather than carry it."
+        },
+        "Message": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/message",
+          "sentence": "The app's own sentence describing the problem, bounded to one line on a word boundary. Content rather than nothing because the app writes an operator's own words into it — a missing root folder is named by its path, a failing indexer by the name somebody gave it."
+        },
+        "WikiUrl": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/wikiUrl",
+          "sentence": "The app's documentation link for this exact condition — the product's own public wiki, identical for everyone who meets the same item, which is what makes it the fastest way from a red row to what to do about it."
+        }
+      },
+      "redaction_exemption": "The evidence for a health row is the item the app published, and its members are a check name, a grade, a sentence and a link to a public wiki. No credential reaches it: the API key rides the request header and appears in no response body. The item's message is the app's own prose and may name a path or an indexer somebody chose, which is why Message declares content — a disclosure to be classified rather than a secret to be withheld.",
+      "reference_commands": [
+        {
+          "purpose": "the app's typed self-diagnosis, one row per item",
+          "argv": ["curl", "-H", "X-Api-Key: <key>", "<url>/api/<family>/health"]
+        }
+      ]
+    },
+    {
+      "name": "queue",
+      "question": "what is in flight, and what does the app itself say about it?",
+      "prefix": "queue",
+      "freshness": "30s",
+      "perishability": "perishable",
+      "answer": ["App", "Title", "Status", "TrackedDownloadStatus", "SizeLeftBytes"],
+      "ceiling": { "records": 10000, "bytes": 8388608 },
+      "facts": {
+        "App": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "content",
+          "sentence": "Which instance is tracking this download, and the namespace its id is minted under."
+        },
+        "Title": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/records/*/title",
+          "sentence": "What the download is, as the app titles it — a release name that arrived from outside the estate and names somebody's media."
+        },
+        "Status": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/records/*/status",
+          "sentence": "The transfer's state as the app sees it (downloading, paused, completed, failed). The client's own view is the downloaders subsystem's; this is what the manager believes."
+        },
+        "TrackedDownloadStatus": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/records/*/trackedDownloadStatus",
+          "sentence": "The app's verdict on the whole tracked download: ok, warning or error. Warning is where completed-but-not-imported lives, which is the failure that goes unnoticed for weeks because the transfer itself succeeded."
+        },
+        "TrackedDownloadState": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/records/*/trackedDownloadState",
+          "sentence": "Where in the pipeline the app says this item sits (downloading, importPending, importBlocked, imported) — the half of the verdict that says what to do about it."
+        },
+        "DownloadClient": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/records/*/downloadClient",
+          "sentence": "Which download client holds the transfer, in the app's own label — the operator's pet name for it, not the product's."
+        },
+        "Indexer": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/records/*/indexer",
+          "sentence": "Which indexer supplied the release, in the name the operator configured for it."
+        },
+        "Protocol": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/records/*/protocol",
+          "sentence": "Which transfer world the release came from: torrent or usenet. It decides how the download id is spelled, because an info-hash is case-insensitive and an nzo id is not."
+        },
+        "DownloadId": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "identity",
+          "from": "/records/*/downloadId",
+          "sentence": "The client's own id for the transfer — an info-hash or an nzo id, the join key both sides state, which is what lets this row and the downloaders subsystem's be the same transfer seen twice."
+        },
+        "SizeLeftBytes": {
+          "type": "integer",
+          "unit": "bytes",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/records/*/sizeleft",
+          "sentence": "Bytes still to fetch. Zero beside a warning verdict is the stuck-import shape, which is why the zero is published rather than dropped as uninteresting."
+        },
+        "ErrorMessage": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/records/*/errorMessage",
+          "sentence": "The app's own error line for this item, bounded to one line. It quotes what the client or the indexer said, so it carries their words and sometimes their URLs."
+        },
+        "StatusMessages": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/records/*/statusMessages",
+          "sentence": "The app's per-item status lines folded to one bounded line — the sentences that explain a warning verdict, which is the difference between knowing a download is stuck and knowing why."
+        }
+      },
+      "redaction_exemption": "The evidence for a queue row is the record the app published, and the API key this collector holds is not in it: the key rides the X-Api-Key request header and appears in no response body. What the record does carry is a release title, an indexer name, a client label and the app's own error text — content, declared as such, and substituted rather than withheld on the way to a public corpus. The bound: a queue record has no downloadUrl member, which is the one place an indexer credential lives, and that member belongs to the history's grab events, where this collector's sibling collection redacts it by path.",
+      "reference_commands": [
+        {
+          "purpose": "the queue, including the orphaned records every app hides by default",
+          "argv": ["curl", "-H", "X-Api-Key: <key>", "<url>/api/<family>/queue?page=1&pageSize=250&includeUnknownSeriesItems=true&includeUnknownMovieItems=true&includeUnknownArtistItems=true&includeUnknownAuthorItems=true"]
+        }
+      ]
+    },
+    {
+      "name": "history",
+      "question": "what was grabbed and what arrived recently, and via which client?",
+      "prefix": "history",
+      "freshness": "300s",
+      "perishability": "sampled",
+      "answer": ["App", "EventType", "Title", "Date"],
+      "ceiling": { "records": 5000, "bytes": 4194304 },
+      "facts": {
+        "App": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "content",
+          "sentence": "Which instance recorded this event, and the namespace its id is minted under."
+        },
+        "EventType": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/records/*/eventType",
+          "sentence": "What happened, in the app's own vocabulary — grabbed, downloadFolderImported, downloadFailed, trackFileImported and kin — served verbatim and never translated, because a vocabulary this product invented would be it re-grading events the app already named."
+        },
+        "Title": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/records/*/sourceTitle",
+          "sentence": "The release the event concerns, as the app recorded it — their sourceTitle member, which is the name the indexer published and not the one the library ends up with."
+        },
+        "Indexer": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/records/*/data/indexer",
+          "sentence": "Which indexer supplied the release, on the events where the app states one. A grab does; an import does not — an import names its client and its download id, and its indexer lives on the grab that preceded it, which this bounded tail may no longer hold."
+        },
+        "DownloadClient": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/records/*/data/downloadClient",
+          "sentence": "Which download client carried the transfer, in the app's own label, on the events that state one."
+        },
+        "DownloadId": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "identity",
+          "from": "/records/*/downloadId",
+          "sentence": "The client's own id for the transfer this event belongs to — the same join key the queue states while the download is still live, which is what lets an arrival be matched to the grab that asked for it."
+        },
+        "Quality": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/records/*/quality/quality/name",
+          "sentence": "The quality the app assigned the release, in its own definition vocabulary (Bluray-1080p, WEBDL-720p) — the product's words rather than the operator's profile names."
+        },
+        "Date": {
+          "type": "timestamp",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/records/*/date",
+          "sentence": "When the app recorded the event, its own timestamp served verbatim. The page is date-descending, so this is also the order the tail was read in."
+        }
+      },
+      "redactions": [
+        {
+          "path": "/records/*/data/*",
+          "discloses": "secret"
+        }
+      ],
+      "reference_commands": [
+        {
+          "purpose": "the newest page of the acquisition trail, date-descending",
+          "argv": ["curl", "-H", "X-Api-Key: <key>", "<url>/api/<family>/history?page=1&pageSize=100&sortKey=date&sortDirection=descending"]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+[
+  {
+    "name": "radarr",
+    "api": "v3",
+    "missing": [],
+    "duplicates": []
+  },
+  {
+    "name": "prowlarr",
+    "api": "v1",
+    "missing": [],
+    "duplicates": []
+  }
+]

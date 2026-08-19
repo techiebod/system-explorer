@@ -68,8 +68,16 @@ def pin_clock(when: str) -> None:
 if os.environ.get("SE_REPLAY_NOW"):
     pin_clock(os.environ["SE_REPLAY_NOW"])
 
+# The one third-party import this shim makes, and it is here for a reason the
+# fleet seam explains in full: an HTTP interface answers some requests with a
+# STATUS and no document, and the adapter branches on that status through
+# httpx's own exception type. Raising anything else would make the shim's
+# choice of exception the thing under test.
+import httpx  # noqa: E402
+
 from system_explorer.agent.adapters import (  # noqa: E402
     bazarr, docker, logs, network, packages, storage, traefik, unbound, vms,
+    docker, logs, network, packages, servarr, storage, traefik, unbound, vms,
 )
 
 # Which module-level acquisition each collector redirects, and what payload
@@ -205,6 +213,40 @@ SEAM = {
         # ambient environment is one seam edit away from dialling it.
         "instance": {"socket_path": "/replay.invalid/unbound.ctl"},
     },
+    # ── a fleet: one adapter, several instances of one application ───────
+    "servarr": {
+        "module": servarr,
+        "adapter": servarr.Adapter,
+        "interface": "servarr api",
+        "collections": ["apps", "health", "queue", "history"],
+        # The fleet is CONFIGURATION, not an interface reading, and
+        # instance_specs() is the zero-argument module-level acquisition that
+        # reads it — the same shape as packages' _detect, which names WHICH
+        # manager answered. Pinning it is what stops the environment of the
+        # machine REPLAYING the corpus deciding which fleet this capture is
+        # of: SE_SERVARR_INSTANCES is read at Adapter() construction, before
+        # any stub could intervene. The payload carries the half a public
+        # corpus may hold — each instance's name, its API family, and which
+        # receipts were missing — and `fleet` completes the two it may not;
+        # see fleet_specs() for why no URL is captured and no key ever can be.
+        "fleet": {"instance_specs": "instances"},
+        # _get(spec, path, params) takes the INSTANCE SPEC first, so the
+        # dispatched-on-the-first-argument seam would key all six of an
+        # instance's documents on one spec dict and hand back whichever
+        # happened to slug the same. WHICH document comes back is decided by
+        # the instance and the path together — which is precisely the URL this
+        # adapter builds, `<url>/api/<family><path>` — so the payload is keyed
+        # on the instance name plus that path, and a reviewer reading
+        # radarr-api-v3-system-status.json can see the request it answers.
+        #
+        # The params are deliberately NOT part of the key. The one dispatched
+        # call that varies them is the queue walk's page number, and a capture
+        # whose queue exceeds one 250-record page would replay page 1 forever
+        # until QUEUE_MAX_PAGES stopped it — a bound worth stating rather than
+        # a key nobody could read.
+        "fleet_methods": ["_get"],
+        "instance": {},
+    },
     # ── the one collector with no acquire(), and the shape that follows ──
     "logs": {
         "module": logs,
@@ -300,6 +342,68 @@ def uncaptured(payload_name: str):
     return read
 
 
+# The statuses a fleet capture records, in the payload that carries them. An
+# HTTP interface answers some requests with a status and NO document —
+# prowlarr's /queue is 404 with Content-Length 0 — so the response's whole
+# content is its status line, and a zero-byte file could not carry it (the
+# capture tool refuses one, rightly, as an interface that answered with
+# nothing). Recording the code is therefore not a transcription of a document;
+# it is the document. Deny-by-default is untouched: an uncaptured request
+# still raises, and only a request this file NAMES answers with a status.
+RESPONSE_CODES = "response-codes"
+
+# And only 404 may be named. 404 is the one status whose effect on the adapter
+# is independent of the exception's own text — both handlers branch on the
+# code and nothing else — while every other status lands in a FACT VALUE
+# spelled by httpx (`QueueUnobservable`, `f"{type(exc).__name__}: {exc}"`),
+# which no independent implementation can reproduce and no corpus should
+# therefore enshrine. A capture that met one is a finding for the adjudication
+# queue, not a payload to commit.
+REPLAYABLE_CODES = (404,)
+
+
+def fleet_specs(captured: object, payload_name: str) -> list[dict]:
+    """instance_specs()'s answer, completed with what a public corpus may not
+    hold.
+
+    The capture carries name, api, missing and duplicates — everything
+    instance_specs() derives from SE_SERVARR_INSTANCES that is safe to
+    publish. The two it withholds are the two that are not: the URL is where
+    an instance sits in an estate (location), and the API key is a credential,
+    which DESIGN 21 says must never have been captured at all — no amount of
+    scrubbing repairs a payload that holds one.
+
+    So they are supplied HERE, in code, rather than committed: a
+    replay-invalid URL and a placeholder key, exactly as the traefik seam pins
+    `http://replay.invalid`. Nothing dials either, because _get is stubbed —
+    but Adapter.__init__ builds its per-instance client from them, and an
+    instance with no client is not `_ready`, so a fleet whose receipts were
+    complete at capture must replay as complete or the fan-out would find
+    nothing to fan out over. An instance the capture recorded as MISSING its
+    receipts keeps them missing, which is the whole of what that half of the
+    payload is for.
+    """
+    if not isinstance(captured, list):
+        raise RuntimeError(
+            f"payload {payload_name!r} is not a list of instance receipts"
+        )
+    specs = []
+    for entry in captured:
+        missing = list(entry.get("missing") or [])
+        specs.append({
+            "name": entry["name"],
+            "api": entry.get("api") or "v3",
+            # A withheld receipt is withheld from the client too: the row this
+            # instance gets is the ConfigMissing one, and a fabricated URL
+            # would turn a stated fault into an instance that silently worked.
+            "url": None if missing else f"http://{entry['name']}.replay.invalid",
+            "key": None if missing else "replay-not-a-key",
+            "missing": missing,
+            "duplicates": list(entry.get("duplicates") or []),
+        })
+    return specs
+
+
 class CapturedResponse:
     """A captured document wearing an httpx.Response's face.
 
@@ -385,6 +489,58 @@ def run(collector: str, generations: dict[str, int], payload_dir: Path) -> None:
             return async_response
         return async_answer if kind == "method" else answer
 
+    def fleet_dispatched(label: str):
+        """A stub for a fetcher whose first argument is the INSTANCE.
+
+        One adapter fronts a fleet — several instances of one application,
+        each its own HTTP endpoint — so the document that comes back is
+        decided by the instance and the request path together, and a stub
+        keyed on the first argument alone would key on the instance and hand
+        every path the same document. The key is what the adapter itself
+        builds: the instance's name and `/api/<family><path>`.
+
+        Deny-by-default, twice. A request the variant did not capture raises,
+        exactly as the dispatched seam does. And a request the capture
+        recorded as answering with a STATUS and no body raises the error the
+        adapter branches on — httpx's own, because the adapter catches
+        httpx.HTTPStatusError by type and a stand-in of this shim's own
+        invention would be testing the shim.
+        """
+        codes = payloads.get(RESPONSE_CODES) or {}
+        for name, status in sorted(codes.items()):
+            if status not in REPLAYABLE_CODES:
+                fail(
+                    f"{RESPONSE_CODES}.json records {status} for {name!r}, and "
+                    f"this seam replays {list(REPLAYABLE_CODES)} only: every "
+                    "other status reaches a fact value spelled by httpx's own "
+                    "exception rendering, which no independent implementation "
+                    "can reproduce"
+                )
+
+        async def answer(instance: dict, path: str, params: dict | None = None):
+            request = f"{instance['name']}/api/{instance['api']}{path}"
+            name = slug(request)
+            if name in payloads:
+                return payloads[name]
+            status = codes.get(name)
+            if status is not None:
+                # The URL is the replay-invalid one this shim pinned, so the
+                # error carries no estate address even where an adapter
+                # stringifies it into a reason.
+                url = f"{instance['url']}/api/{instance['api']}{path}"
+                raise httpx.HTTPStatusError(
+                    f"{status} for {url} (replayed from {RESPONSE_CODES}.json)",
+                    request=httpx.Request("GET", url),
+                    response=httpx.Response(status),
+                )
+            raise RuntimeError(
+                f"{label} {request!r} (payload {name!r}) was not captured in "
+                "this variant; the fleet seam refuses to read the live "
+                "interface of the machine replaying the corpus"
+            )
+
+        return answer
+
     # Decline only when EVERY interface acquisition is missing. A storage
     # capture with status but no list is a partially-readable interface, and
     # the shipping adapter degrades through it on purpose — declining there
@@ -395,7 +551,8 @@ def run(collector: str, generations: dict[str, int], payload_dir: Path) -> None:
     # this collector uses — a dispatched seam has no fixed payload names, so
     # its presence test is whether the variant staged anything.
     present = [n for n in spec.get("acquisitions", {}).values() if n in payloads]
-    if spec.get("methods") or spec.get("arg_acquisitions"):
+    if spec.get("methods") or spec.get("arg_acquisitions") \
+            or spec.get("fleet_methods"):
         present = present or list(payloads)
     absent = not present
 
@@ -412,6 +569,16 @@ def run(collector: str, generations: dict[str, int], payload_dir: Path) -> None:
     # _load(path), hardware's _read(path), logs' _run_journalctl(args).
     for attribute in spec.get("arg_acquisitions", ()):
         setattr(module, attribute, dispatched("module", attribute))
+    # The fleet, before the adapter is constructed: Adapter.__init__ calls
+    # instance_specs() itself, so a stub set afterwards would arrive one line
+    # too late and the constructor would have read the replaying machine's
+    # environment.
+    for attribute, payload_name in spec.get("fleet", {}).items():
+        if payload_name in payloads:
+            value = fleet_specs(payloads[payload_name], payload_name)
+            setattr(module, attribute, lambda _v=value, *a, **k: list(_v))
+        else:
+            setattr(module, attribute, uncaptured(payload_name))
 
     out = Emitter(
         sys.stdout,
@@ -467,6 +634,8 @@ def run(collector: str, generations: dict[str, int], payload_dir: Path) -> None:
     for attribute in spec.get("methods", ()):
         kind = "response" if attribute in spec.get("response_methods", ()) else "method"
         setattr(adapter, attribute, dispatched(kind, attribute))
+    for attribute in spec.get("fleet_methods", ()):
+        setattr(adapter, attribute, fleet_dispatched(attribute))
 
     for collection in generations:
         try:
