@@ -258,9 +258,21 @@ ESTATE_EXEMPT_FILES = {"README.md", "AGENTS.md", "pyproject.toml",
 
 
 def _repo_sources():
-    """Tracked files only — .venv, result symlinks and build output are not the
-    repository, and scanning them produces nothing but false positives (httpx
-    has a cookie `jar`).
+    """Everything git considers part of the repository — tracked, PLUS
+    untracked-and-not-ignored. .venv, result symlinks and build output are not
+    the repository, and scanning them produces nothing but false positives
+    (httpx has a cookie `jar`); --exclude-standard honours .gitignore, so the
+    second list keeps that exclusion while closing the hole the first one had.
+
+    THE HOLE, because it has now cost two pushes to a public repository. Listing
+    only tracked files makes this lint blind to a file that has just been
+    WRITTEN, which is the state every leak is in at the moment it could still be
+    caught for free. It read as green for `harness/scrub/servarr.json` carrying
+    `jar`, and again for a protection manifest and meta carrying `silo` — both
+    times because the suite was run before the files were staged, and both times
+    the leak was found by CI after the push. A guard that can only see what has
+    already been committed reports success about precisely the window in which
+    it is useful.
 
     A missing git BINARY is the same situation as a missing .git directory:
     no repository context, nothing to scan, the lint bites on developer
@@ -270,11 +282,14 @@ def _repo_sources():
     that has no git on PATH, and subprocess raised FileNotFoundError before
     check=False could matter — every hostname case failed the package build
     the first time SE_LOCAL was used after this lint landed (2026-08-12)."""
-    try:
-        listed = subprocess.run(["git", "ls-files"], cwd=PROJECT_DIR,
-                                capture_output=True, text=True, check=False).stdout.split()
-    except FileNotFoundError:
-        listed = []
+    listed: list[str] = []
+    for argv in (["git", "ls-files"],
+                 ["git", "ls-files", "--others", "--exclude-standard"]):
+        try:
+            listed += subprocess.run(argv, cwd=PROJECT_DIR, capture_output=True,
+                                     text=True, check=False).stdout.split()
+        except FileNotFoundError:
+            pass
     exts = {".py", ".js", ".mjs", ".md", ".sh", ".json", ".jsonl", ".yml", ".nix", ".css", ".html"}
     for name in listed:
         rel = pathlib.Path(name)
