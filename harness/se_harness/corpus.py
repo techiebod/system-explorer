@@ -409,23 +409,30 @@ NAMED_RESIDUALS = {
     # collector the corpus did not carry AT ALL — so the one collector in that
     # state was the one it could not see. The guard now denies by default and
     # this entry is what it found.
-    "logs/journal": (
-        "No committed variant, and the reason is that a journal capture "
-        "cannot currently clear the publish gate. Two values in every capture "
-        "taken so far survive BOTH halves of it and neither is a scrub bug. "
-        "MESSAGE_ID is a systemd catalogue constant — a 32-hex identifier that "
-        "the detectors cannot distinguish from a machine-id by shape, because "
-        "it has none that differs — so classifying it as `nothing` disarms the "
-        "machine-id detector for every payload, and substituting it destroys "
-        "the join to the catalogue that makes the field worth reading. The "
-        "second is an SSH public-key fingerprint in an sshd line: no shape a "
-        "detector can key on, no name a manifest can bind, and it identifies a "
-        "key rather than a host. Both sit in the adjudication queue awaiting a "
-        "ruling, and until one lands the honest state is a collector with a "
-        "port and no corpus, said out loud. Venue: the queue first, then a "
-        "capture; the live comparator (harness/bin/se-compare) can already run "
-        "this collector against a real journal and publishes nothing, so it "
-        "owns the port's behaviour today while the CORPUS half stays owed."
+    # Replaced 2026-08-19 when the corpus gained its first journal pair. The
+    # entry that stood here said "no committed variant" and named the two
+    # publish-gate blockers; both were ruled, the capture landed, and a residual
+    # that outlives its reason is worse than none — this is what is actually
+    # still unreached.
+    "logs/severity-and-truncation": (
+        "Two shapes the committed page does not hold, both of them properties "
+        "of a QUIET machine rather than of the collector. Every one of the 100 "
+        "entries is priority 5 or 6, so the whole severity ladder above notice "
+        "is evaluated by nothing: no err, crit, alert or emerg row exists in "
+        "any replayed stream, and the opinions rules/logs.py forms above notice "
+        "are therefore formed by nothing either. And all 100 entries fit one "
+        "page, so the bounding this collection exists to do never actually "
+        "bounds: no cursor is issued, no truncation is reported, and MAX_LIMIT "
+        "is not approached. A mutation operator could raise a PRIORITY member, "
+        "and deliberately does not: the severity ladder's readings are rules "
+        "output rather than facts, and the collector stream carries facts, so "
+        "an operator would perturb a number the differential can see while "
+        "leaving the judgement it feeds untested — which is the appearance of "
+        "coverage rather than coverage. Venue: a capture from a host that has "
+        "actually failed at something, and a second variant whose page exceeds "
+        "the limit; the live comparator (harness/bin/se-compare) reads a real "
+        "journal today and would surface a disagreement on either. The tool "
+        "exists, the machine state has not been staged, so this stays owed."
     ),
     # paperless's five fault facts. The archive answered, so none is reached —
     # and one of them could not be corpus-owned even if it were.
