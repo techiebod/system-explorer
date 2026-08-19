@@ -67,18 +67,24 @@ def receipts_dir() -> Path | None:
     return Path(configured) if configured else None
 
 
-def is_nixos() -> bool:
-    """Whether this host has a nix system closure to read facts out of.
+# ── the five filesystem primitives, and why they are functions ───────────
+#
+# Everything below this line reads the closure tree through exactly these
+# five calls, and nothing in this file or in adapters/nix.py touches the
+# filesystem any other way. That is not tidiness: it is the replay seam.
+# A collector whose interface answers a WALK is replayed by transcribing the
+# filesystem it walked (DESIGN's tree ruling), and the transcription can only
+# be substituted where the walk goes through named module-level functions.
+# Until 2026-08-19 these reads were spread across this module and the adapter
+# as inline Path(...) and os.* calls, so `nix` could not be captured at all —
+# a replay would have read the tree of whichever machine was replaying.
+#
+# Each is deliberately tolerant, because on a non-NixOS host absence is the
+# correct and expected answer, not an error.
 
-    /run/current-system is the activated-closure pointer, and it exists only
-    where something activated one. Nix-derived facts are omitted entirely off
-    such a host rather than emitted as nulls: a null "NixosVersion" on Debian
-    reads as *unknown*, when the truth is *not applicable*, and four null rows
-    on the boot card is what a non-Nix user saw first (ROADMAP section 5,
-    phase 2). Absence with a reason is the rule (SPEC section 2, rule 7);
-    for individual facts, the honest form of that is not to claim the fact.
-    """
-    return os.path.exists(CURRENT_SYSTEM)
+
+def exists(path: str) -> bool:
+    return os.path.exists(path)
 
 
 def read(path: str) -> str:
@@ -91,9 +97,56 @@ def read(path: str) -> str:
 
 def realpath(path: str) -> str | None:
     try:
-        return os.path.realpath(path) if os.path.exists(path) else None
+        return os.path.realpath(path) if exists(path) else None
     except OSError:
         return None
+
+
+def listdir(path: str) -> list[str]:
+    """Directory entries, sorted, or [] — a directory that is not there is a
+    reading, not a failure. Sorted here rather than at each caller so two
+    hosts with the same tree emit the same order."""
+    try:
+        return sorted(os.listdir(path))
+    except OSError:
+        return []
+
+
+def readlink(path: str) -> str | None:
+    """The link's IMMEDIATE target, unresolved.
+
+    Distinct from realpath and both are needed: a profile link's own target is
+    the store path the generation IS, while resolving it would follow into
+    whatever that path in turn points at.
+    """
+    try:
+        return os.readlink(path)
+    except OSError:
+        return None
+
+
+def mtime(path: str) -> float | None:
+    """The link's own mtime, not its target's — lstat, because a generation's
+    creation time is when the LINK was made and every closure under it is
+    immutable and shares whatever timestamp nix gave it."""
+    try:
+        return os.lstat(path).st_mtime
+    except OSError:
+        return None
+
+
+def is_nixos() -> bool:
+    """Whether this host has a nix system closure to read facts out of.
+
+    /run/current-system is the activated-closure pointer, and it exists only
+    where something activated one. Nix-derived facts are omitted entirely off
+    such a host rather than emitted as nulls: a null "NixosVersion" on Debian
+    reads as *unknown*, when the truth is *not applicable*, and four null rows
+    on the boot card is what a non-Nix user saw first (ROADMAP section 5,
+    phase 2). Absence with a reason is the rule (SPEC section 2, rule 7);
+    for individual facts, the honest form of that is not to claim the fact.
+    """
+    return exists(CURRENT_SYSTEM)
 
 
 def epoch_to_iso(ts: float) -> str:
@@ -155,10 +208,14 @@ def read_json(path: str | Path) -> dict | None:
     that exists but does not parse is also None. A half-written manifest is not
     evidence of anything, and the caller's honest answer for both cases is that
     it has no manifest — not a partially-populated one.
+
+    Through read(), so the JSON readers ride the same seam the plain ones do
+    rather than being a sixth way to touch the tree. read() answers "" for an
+    absent file and "" is not JSON, so both cases still arrive here as None.
     """
     try:
-        data = json.loads(Path(path).read_text())
-    except (OSError, ValueError):
+        data = json.loads(read(str(path)))
+    except ValueError:
         return None
     return data if isinstance(data, dict) else None
 
@@ -177,16 +234,27 @@ def deployment_receipt(number: int) -> dict | None:
     return read_json(directory / f"{number}.json")
 
 
-def generation_links() -> list[tuple[int, Path, str]]:
-    """(generation number, profile link, store path), newest first."""
+def generation_links() -> list[tuple[int, str, str]]:
+    """(generation number, profile link PATH, store path), newest first.
+
+    Through listdir and readlink rather than Path.glob and Path.readlink, so
+    the whole walk rides the seam; the link is carried as a string for the
+    same reason — a Path would invite a caller to stat it directly and put a
+    sixth read back outside the five primitives. A link that is not a symlink,
+    or whose number does not parse, is skipped: the profile directory holds
+    `system` and `per-user` beside the numbered links.
+    """
     out = []
-    for link in PROFILES.glob("system-*-link"):
+    for name in listdir(str(PROFILES)):
+        if not (name.startswith("system-") and name.endswith("-link")):
+            continue
         try:
-            number = int(link.name[len("system-"):-len("-link")])
+            number = int(name[len("system-"):-len("-link")])
         except ValueError:
             continue
-        try:
-            out.append((number, link, os.readlink(link)))
-        except OSError:
+        path = f"{PROFILES}/{name}"
+        target = readlink(path)
+        if target is None:
             continue
+        out.append((number, path, target))
     return sorted(out, reverse=True)

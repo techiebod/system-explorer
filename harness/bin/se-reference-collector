@@ -80,10 +80,17 @@ from system_explorer.agent import envelope as env  # noqa: E402
 # module function, so the seam needs the interface constant it keys on.
 from system_explorer.agent.sysbus import PROPERTIES  # noqa: E402
 from system_explorer.agent.adapters import (  # noqa: E402
-    bazarr, docker, downloaders, hardware, kea, logs, network, packages,
+    bazarr, docker, downloaders, hardware, kea, logs, network, nix, packages,
     paperless, plex, protection, resources, servarr, storage, traefik,
     unbound, units, vms,
 )
+# nix is the one collector whose walk lives in a module OTHER than its
+# adapter: agent/nixos.py is the complete inventory of what this agent reads
+# that exists only on NixOS, shared with `system` and `packages`, and putting
+# a copy of it in the adapter to satisfy the seam would make the ownership
+# arbitrary and the sharing invisible. So the seam's `module` and `adapter`
+# come from different files here, which they have always been free to.
+from system_explorer.agent import nixos  # noqa: E402
 
 # Which module-level acquisition each collector redirects, and what payload
 # file feeds it. This table is the whole of the replay seam for the reference
@@ -148,6 +155,37 @@ SEAM = {
             "_nix_store_paths": "nixstore",
         },
         "instance": {},
+    },
+    "nix": {
+        "module": nixos,
+        "adapter": nix.Adapter,
+        "interface": "nix profile",
+        "collections": ["generations"],
+        # The tree seam, over the five primitives agent/nixos.py exposes and
+        # the JSON reader that rides `read`. Everything the collection needs
+        # is one of these: the profile link farm (listdir + readlink), the
+        # three closure pointers (realpath), each generation's small files
+        # (read), the link's own creation time (mtime), and whether this host
+        # activated a closure at all (exists).
+        "path_acquisitions": {
+            "read": "read",
+            "listdir": "listdir",
+            "realpath": "realpath",
+            "readlink": "readlink",
+            "mtime": "mtime",
+            "exists": "exists",
+        },
+        # Deltas OFF under replay, and this is the 2026-08-19 ruling rather
+        # than a convenience. What CHANGED between two generations left the
+        # rewrite's scope, to a plugin once a plugin surface exists; the walk
+        # that computes it goes through `_etc_entries`, `_tree_entries` and
+        # `store_paths`, none of which ride these primitives, so a replay with
+        # deltas on would walk the filesystem of the machine REPLAYING and put
+        # its /etc into committed facts. The consequence is named and accepted
+        # in the parity report: the live adapter and the ported collector
+        # disagree by construction on the five delta facts and must agree on
+        # every other fact in the collection.
+        "instance": {"_deltas": False},
     },
     "docker": {
         "module": docker,

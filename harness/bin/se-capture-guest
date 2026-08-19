@@ -448,6 +448,58 @@ print(json.dumps(seen.get(want, {}), indent=1, sort_keys=True))
 # `hostname`, because env.HOST reads it that way and the object id is minted
 # from it — a capture taken one way and replayed against the other would name
 # the object twice.
+# The nix generations acquisition, instrumented.
+#
+# One bundle, not six runs: the profile link farm, the pointers and each
+# closure's small files are ONE reading of one tree, and a `nixos-rebuild`
+# landing between two ssh calls would produce a payload set that disagrees
+# with itself — a generation in the listing whose closure the next run cannot
+# find. hardware takes the six-run risk because a quiescent guest's /sys does
+# not move; a profile directory is exactly the thing that does.
+#
+# Deltas OFF, matching the replay seam, and for the reason the seam states:
+# what CHANGED between two generations left the rewrite's scope by the
+# 2026-08-19 ruling, and the walk that computes it does not ride these five
+# primitives — so capturing with deltas on would record a read set the replay
+# can never reproduce, while the delta facts themselves would still come from
+# the trees rather than from anything captured.
+#
+# Every read is recorded INCLUDING its negative answer, because on a
+# filesystem walk "there is no such file" is an ordinary reading the adapter
+# degrades through. A path the variant did not record is refused at replay
+# rather than falling through to the replaying machine's own tree.
+nix_py='
+import asyncio, json, sys
+sys.path.insert(0, "/tmp/secmp/src")
+from system_explorer.agent import nixos
+from system_explorer.agent.adapters import nix
+
+seen = {}
+
+def record(name, fn):
+    def call(argument):
+        answer = fn(argument)
+        container, _, member = str(argument).rpartition("/")
+        seen.setdefault(name, {}).setdefault(container, {})[member] = answer
+        return answer
+    return call
+
+for name in ("read", "listdir", "realpath", "readlink", "mtime", "exists"):
+    setattr(nixos, name, record(name, getattr(nixos, name)))
+
+adapter = nix.Adapter()
+adapter._deltas = False
+
+async def walk():
+    for collection in adapter.collections():
+        await adapter.acquire(collection)
+
+asyncio.run(walk())
+print(json.dumps({name + ".json": seen.get(name, {})
+                  for name in ("read", "listdir", "realpath",
+                               "readlink", "mtime", "exists")},
+                 indent=1, sort_keys=True))
+'
 hostname_py='
 import socket
 print(socket.gethostname().split(".")[0])
@@ -750,6 +802,9 @@ case "$collector" in
         # the per-unit half is chosen by what the listing said.
         acquisitions=("@bundle|python3 -c '$units_py'")
         ;;
+    nix)
+        acquisitions=("@bundle|python3 -c '$nix_py'")
+        ;;
     unbound)
         # unbound-control speaks the control socket for us, and prints the
         # reply verbatim — which is exactly what the adapter's _command
@@ -834,6 +889,11 @@ case "$collector" in
     # its property set are facts about — and it is the same binary the capture
     # reads through, so a guest that can produce a payload can always answer.
     units) version_probe="busctl --version | head -1" ;;
+    # The interface is the profile tree, and its version is the NixOS release
+    # that built the activated closure — not nix's own version, which says
+    # nothing about the shape of what is being read. `nixos-version` is a file
+    # inside the closure, so this is the same read the adapter makes.
+    nix) version_probe="cat /run/current-system/nixos-version" ;;
     traefik) version_probe="curl -s \"\$SE_TRAEFIK_URL/api/version\" | head -c 120" ;;
     # The instance reporting on itself, which is the build that actually
     # answered — a container tag or a package name would say what was deployed,

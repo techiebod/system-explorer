@@ -1,0 +1,16 @@
+{
+  "/nix/store/31i784rx1cpbqw5jd8nbhsp7bfi9a570-nixos-system-nixos-26.05pre-git": {
+    "specialisation": []
+  },
+  "/nix/store/fpz72mwmm0331by0q504x35d288ndrrm-nixos-system-nixos-qcow2-26.05.20260807.ee48b14": {
+    "specialisation": []
+  },
+  "/nix/var/nix": {
+    "profiles": [
+      "per-user",
+      "system",
+      "system-1-link",
+      "system-2-link"
+    ]
+  }
+}

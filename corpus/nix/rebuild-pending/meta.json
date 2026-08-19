@@ -1,0 +1,128 @@
+{
+  "collector": "nix",
+  "collections": [
+    "generations"
+  ],
+  "variant": "healthy",
+  "provenance": "captured",
+  "os": "nixos",
+  "os_version": "26.05",
+  "source_version": "26.05pre-git",
+  "captured": "2026-08-19T22:12:00Z",
+  "regenerable": true,
+  "regenerable_on": "a NixOS guest with at least two system generations where the profile's default is NOT the running one \u2014 `nixos-rebuild boot` produces exactly that and `switch` does not, which is the whole point of the variant. The payload is the six filesystem primitives in agent/nixos.py, captured by one instrumented run, so the guest needs a python3 carrying the agent's runtime dependencies; the vm-lab NixOS image ships neither and both go into the USER profile (nix-env), which leaves the system generations this collection reads untouched.",
+  "canaries": [],
+  "anonymised": true,
+  "note": "The variant KIND is `healthy` and the directory name is the specific state: nothing here is degraded. A profile pointing at a closure the machine has not booted into is an ordinary intermediate state, and the rulebook agrees \u2014 `generation-pending` is info, not warn \u2014 so the kind records that this is the positive case while the directory records which positive case it is.\n\nTwo system generations on a lab guest, with a rebuild built and made the boot default but not yet booted into. Scrubbed against harness/scrub/nix.json, which classifies every leaf and substitutes NONE of them \u2014 zero substitutions, deliberately and with the reasoning written down rather than assumed: a /nix/store path is a build hash over a derivation's inputs, identical on every machine that builds the same closure from the same nixpkgs, so it identifies a build and never a machine. Substituting it would be the actively wrong move, because that hash is exactly what makes two hosts' generations comparable.\n\nWhat it exists to teach is that the three closure POINTERS disagree, which is the only interesting state this collection has. `current-system` and `booted-system` both point at generation 1; the profile's `system` link points at generation 2. So generation 1 is Current and Booted and not the Profile, generation 2 is the Profile and neither Current nor Booted, and a reader can tell from the row alone that this machine is running something other than what it would boot. A collector that read one pointer and derived the other two \u2014 or that assumed the highest-numbered generation is the running one, which is true on almost every host and false here \u2014 produces a confidently wrong answer on both rows and passes any variant where the three agree.\n\nThe DELTA facts are absent from this pair by ruling rather than by omission (DESIGN, 2026-08-19): what CHANGED between two generations left the rewrite's scope, to a plugin once a plugin surface exists, and the capture was taken with the adapter's `_deltas` off to match the replay seam. The reason it must match is mechanical: the delta is a function of two closure TREES, walked through primitives that do not ride this seam, so a replay with deltas on would walk the filesystem of whichever machine is replaying and put its /etc into committed facts. The consequence is named and accepted in docs/PARITY-REPORT.md \u2014 the live adapter and the ported collector disagree by construction on ComparedWithGeneration, DeltaCounts, DeltaFromPrevious, DeltaFromPreviousPartial and DeltaFromPreviousUnobservable, and must agree on every other fact in the collection.\n\nStated bounds, because a specimen shows one machine on one day. Neither generation carries `se-generation.json` or a `configuration-revision` \u2014 both read as the empty string and both facts are therefore absent from the rows \u2014 so the deployment half of this collection (ReceiptsExpected, Deployment, and the receipts directory the agent is pointed at) is exercised by nothing here, and neither is the manifest-derived half. Neither generation has a `specialisation` directory with anything in it, so Specialisations is [] on both rows and a port that mis-sorted or mis-typed that list would pass. Both generations were built from the same nixpkgs and share one kernel, so a port that read Kernel from the wrong generation's closure also passes. And there are exactly two generations, so a garbage-collected gap in the numbering \u2014 where `previous` is not `number - 1` \u2014 is unvisited.",
+  "anchors": [
+    {
+      "collection": "generations",
+      "object": "2",
+      "fact": "NixosVersion",
+      "value": "26.05pre-git"
+    },
+    {
+      "collection": "generations",
+      "object": "2",
+      "fact": "Kernel",
+      "value": "linux-6.18.43"
+    },
+    {
+      "collection": "generations",
+      "object": "2",
+      "fact": "Created",
+      "value": "2026-08-19T22:04:11Z"
+    },
+    {
+      "collection": "generations",
+      "object": "2",
+      "fact": "Current",
+      "value": false
+    },
+    {
+      "collection": "generations",
+      "object": "2",
+      "fact": "Booted",
+      "value": false
+    },
+    {
+      "collection": "generations",
+      "object": "2",
+      "fact": "Profile",
+      "value": true
+    },
+    {
+      "collection": "generations",
+      "object": "2",
+      "fact": "Specialisations",
+      "value": []
+    },
+    {
+      "collection": "generations",
+      "object": "2",
+      "fact": "StorePath",
+      "value": "/nix/store/31i784rx1cpbqw5jd8nbhsp7bfi9a570-nixos-system-nixos-26.05pre-git"
+    },
+    {
+      "collection": "generations",
+      "object": "2",
+      "absent_fact": "ConfigurationRevision"
+    },
+    {
+      "collection": "generations",
+      "object": "2",
+      "absent_fact": "ReceiptsExpected"
+    },
+    {
+      "collection": "generations",
+      "object": "1",
+      "fact": "NixosVersion",
+      "value": "qcow2-26.05.20260807.ee48b14"
+    },
+    {
+      "collection": "generations",
+      "object": "1",
+      "fact": "Created",
+      "value": "2026-08-19T13:30:33Z"
+    },
+    {
+      "collection": "generations",
+      "object": "1",
+      "fact": "Current",
+      "value": true
+    },
+    {
+      "collection": "generations",
+      "object": "1",
+      "fact": "Booted",
+      "value": true
+    },
+    {
+      "collection": "generations",
+      "object": "1",
+      "fact": "Profile",
+      "value": false
+    },
+    {
+      "collection": "generations",
+      "object": "1",
+      "fact": "StorePath",
+      "value": "/nix/store/fpz72mwmm0331by0q504x35d288ndrrm-nixos-system-nixos-qcow2-26.05.20260807.ee48b14"
+    },
+    {
+      "collection": "generations",
+      "object": "1",
+      "absent_fact": "DeltaCounts"
+    },
+    {
+      "collection": "generations",
+      "object": "1",
+      "absent_fact": "ComparedWithGeneration"
+    },
+    {
+      "collection": "generations",
+      "commit_objects": 2
+    }
+  ],
+  "anchors_note": "Read off the six payload files by hand at staging, before any stream was generated, which is what makes them an authority the reference-generated half is not. Nothing here is transcribed from the reference's output.\n\nThe three pointer flags are the variant's whole point and every one of them is anchored on BOTH rows, because each is a claim about a different file. Current and Booted come from realpath.json's /run entries, which both name generation 1's closure; Profile comes from realpath.json's /nix/var/nix/profiles.system, which names generation 2's. A port that resolved the profile link with readlink instead of realpath, or that took the newest generation as the running one, disagrees with at least three of these six.\n\nCreated is anchored as the ISO rendering of each link's own mtime from mtime.json \u2014 1787146233.4414785 and 1787177051.9985075, truncated to the second in UTC. Truncated and not rounded: 22:04:11 rather than :12. It is the LINK's mtime and not the closure's, which matters because every file under a store path carries whatever timestamp nix gave it and they are all the same.\n\nNixosVersion is anchored on both rows and they differ \u2014 `qcow2-26.05.20260807.ee48b14` against `26.05pre-git` \u2014 which is what refuses a port that read the running system's version onto every row. Kernel is anchored on one row only, because both closures resolve to the same kernel and an anchor on the second would assert nothing a wrong reading could fail.\n\nThe absences are anchored as absences rather than as empty values. ConfigurationRevision and ReceiptsExpected are absent because the files that would carry them read as the empty string, and a port that published \"\" or null instead of omitting the fact fails here \u2014 which is the null-fact family this repository has now found six times. DeltaCounts and ComparedWithGeneration are anchored absent on generation 1 specifically: it is the oldest generation still present, so it is the row where the live adapter emits the `nothing to compare against` unobservable, and anchoring the absence is how the delta ruling is enforced against a port that helpfully reproduced the reference's other half.\n\ncommit_objects 2 is the count of numbered links in listdir.json. It is anchored because absent is not the only way to lose a collection: a port that emitted a row per closure FILE, or that skipped the `system` and `per-user` entries by position rather than by name, gets a different number while every fact anchor above still passes."
+}

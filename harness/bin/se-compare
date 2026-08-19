@@ -52,6 +52,7 @@ SERVES = {
     "network": ["nft-chains", "nft-rules"],
     "vms": ["domains"],
     "packages": ["packages"],
+    "nix": ["generations"],
     "docker": ["containers", "volumes", "networks"],
     "traefik": ["overview", "routers", "services"],
     "unbound": ["daemon"],

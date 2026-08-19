@@ -428,6 +428,25 @@ class Adapter:
                 "unavailable_collections": unavailable}
 
     # ── generations ──────────────────────────────────────────
+    # Whether to compute the per-generation delta at all.
+    #
+    # True on a live agent, which is what the estate runs today. False under
+    # the replay seam, and that is a RULING rather than a convenience
+    # (2026-08-19): what CHANGED between two generations left the rewrite's
+    # scope, to a plugin once a plugin surface exists, while the list of
+    # generations ports. The delta is a function of two closure TREES —
+    # `_etc_entries`, `_tree_entries`, `store_paths` — which no capture
+    # stages and which do not ride agent/nixos.py's five primitives, so
+    # computing it under replay would walk the filesystem of whichever
+    # machine is replaying and put its /etc into committed facts.
+    #
+    # The consequence is stated rather than discovered: the live adapter and
+    # the ported collector disagree BY CONSTRUCTION on ComparedWithGeneration,
+    # DeltaCounts, DeltaFromPrevious, DeltaFromPreviousPartial and
+    # DeltaFromPreviousUnobservable, and must agree on every other fact in the
+    # collection. That divergence is named and accepted in the parity report.
+    _deltas = True
+
     def __init__(self) -> None:
         # See _generation_items: keyed by immutable store paths, so these are
         # memoised arithmetic rather than cached observations.
@@ -581,25 +600,29 @@ class Adapter:
             kernel = nx.realpath(f"{target}/kernel")
             kernel_match = STORE_RE.match(kernel or "")
             revision = nx.read(f"{target}/configuration-revision")
-            try:
-                specialisations = sorted(os.listdir(f"{target}/specialisation"))
-            except OSError:
-                specialisations = []
+            # Through the seam's primitive, which already sorts and already
+            # answers [] for a directory that is not there.
+            specialisations = nx.listdir(f"{target}/specialisation")
             facts = {
                 "NixosVersion": nx.read(f"{target}/nixos-version") or None,
                 "Kernel": kernel_match.group(2) if kernel_match else None,
                 "ConfigurationRevision": revision or None,
-                "Created": nx.epoch_to_iso(link.lstat().st_mtime),
+                # Set below: a link that vanished between the listing and the
+                # stat has no creation time, and 1970 is a false one.
                 "Current": target == pointers["current"],
                 "Booted": target == pointers["booted"],
                 "Profile": target == pointers["default"],
                 "Specialisations": specialisations,
                 "StorePath": target,
             }
-            previous = links[index + 1][0] if index + 1 < len(links) else None
-            facts.update(self._delta_facts(number, previous, manifests,
-                                           sw_paths, etc_paths, environments,
-                                           etc_trees, aggregate_cache, detailed))
+            created = nx.mtime(link)
+            if created is not None:
+                facts["Created"] = nx.epoch_to_iso(created)
+            if self._deltas:
+                previous = links[index + 1][0] if index + 1 < len(links) else None
+                facts.update(self._delta_facts(number, previous, manifests,
+                                               sw_paths, etc_paths, environments,
+                                               etc_trees, aggregate_cache, detailed))
             # Deployment facts are absent on a generation that carries no manifest
             # — every generation on a host whose closures are built without one,
             # and the older ones on a host that started recently. Omitted, not

@@ -28,6 +28,26 @@ collector, as a manifest, and this tool guesses nothing:
   deny-by-default, because an unclassified field is a capture this tool does
   not understand, and the failure mode of passing it is publication.
 
+  A dot INSIDE a segment is written with a leading backslash, because a
+  filename is allowed one
+  and the tree seam keys payloads by filename: `nix` captures a generation's
+  optional `se-generation.json` beside its `nixos-version`, and without the
+  escape that member is addressable by no pattern at all — which under
+  deny-by-default means the whole payload is unscrubbable rather than
+  silently passed.
+
+  A key may be PREFIXED with a payload stem and a colon — "realpath:*.*" —
+  which scopes the entry exactly as the "payload" member does. Both exist
+  because the member cannot carry two entries for one pattern: a JSON object
+  holds a key once, so a collector whose payloads share a shape can classify
+  that shape for only one of them. `nix` is the first with four — realpath,
+  readlink, mtime and exists are all one container and one member deep, and
+  three of the four would have been unclassifiable. The prefix is recognised
+  ONLY when the text before the first colon is the stem of a payload in this
+  run, so a member that legitimately contains a colon (a PCI address, an
+  object path) still reads as part of the pattern. Naming the payload both
+  ways at once is refused rather than merged.
+
   One manifest covers every payload a collector captures, and those payloads
   do not all share a root. zpool's documents are keyed by fixed schema
   members (`pools`, `output_version`); the devlinks map's root keys ARE data,
@@ -774,10 +794,53 @@ def _scrub_encoded(value: str, fmt: str, path: tuple, ctx: Ctx) -> str:
 # ── the manifest, and the walk it governs ────────────────────────────────
 
 
-def load_manifest(path: Path) -> tuple[dict[tuple, dict], dict[str, dict]]:
-    """(path entries, whole-document entries keyed by payload stem)."""
+def parse_pattern(key: str, stems: set[str]) -> tuple[str | None, tuple]:
+    """(payload scope or None, the pattern's segments).
+
+    Two escapes, both forced by the first tree-shaped collector whose payloads
+    share a shape:
+
+    A leading "<stem>:" scopes the entry, exactly as the "payload" member
+    does, and exists because a JSON object holds a key ONCE — so a collector
+    with four one-container-one-member payloads could classify that shape for
+    only one of them. Recognised only when the prefix is a stem in this run,
+    so a member that legitimately contains a colon still reads as pattern.
+
+    A backslash-escaped dot is a literal dot inside one segment: a filename
+    may carry one, and the tree seam keys payloads by filename.
+    """
+    scope = None
+    head, colon, rest = key.partition(":")
+    if colon and head in stems:
+        scope, key = head, rest
+    segments, current, escaped = [], "", False
+    for char in key:
+        if escaped:
+            current += char
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        elif char == ".":
+            segments.append(current)
+            current = ""
+        else:
+            current += char
+    segments.append(current)
+    return scope, tuple(segments)
+
+
+def load_manifest(path: Path, stems: set[str] | None = None
+                  ) -> tuple[list[tuple[tuple, dict]], dict[str, dict]]:
+    """(path entries as (pattern, spec) pairs, whole-document entries).
+
+    A LIST rather than a dict because two entries may carry one pattern when
+    they are scoped to different payloads; entries_for narrows to a dict, and
+    two surviving there is the ordinary two-entries refusal.
+    """
     raw = json.loads(path.read_text())
-    entries: dict[tuple, dict] = {}
+    stems = stems or set()
+    entries: list[tuple[tuple, dict]] = []
+    seen: set[tuple] = set()
     wholes: dict[str, dict] = {}
     problems = []
     for key, spec in raw.items():
@@ -834,7 +897,25 @@ def load_manifest(path: Path) -> tuple[dict[tuple, dict], dict[str, dict]]:
                 "entry is scoped to, as a non-empty string"
             )
             continue
-        entries[tuple(key.split("."))] = spec
+        scope, pattern = parse_pattern(key, stems)
+        if scope is not None:
+            if "payload" in spec:
+                problems.append(
+                    f"{key}: scoped by a prefix AND by a payload member — "
+                    "exactly one must say which document this governs"
+                )
+                continue
+            spec = dict(spec, payload=scope)
+        identity = (spec.get("payload"), pattern)
+        if identity in seen:
+            problems.append(
+                f"{key}: a second entry for this pattern under the same "
+                "payload — one of them would silently govern and which is "
+                "this file's iteration order"
+            )
+            continue
+        seen.add(identity)
+        entries.append((pattern, spec))
     if problems:
         raise SystemExit(f"{path}: not a usable manifest:\n  " + "\n  ".join(problems))
     return entries, wholes
@@ -855,7 +936,7 @@ def whole_for(wholes: dict[str, dict], payload: str) -> tuple[dict | None, list[
     return (wholes[matched[0]] if len(matched) == 1 else None), matched
 
 
-def entries_for(entries: dict[tuple, dict], payload: str) -> dict[tuple, dict]:
+def entries_for(entries: list[tuple[tuple, dict]], payload: str) -> dict[tuple, dict]:
     """The entries that govern ONE payload document.
 
     Scoping is applied before any matching, so a `payload`-scoped entry is
@@ -865,7 +946,7 @@ def entries_for(entries: dict[tuple, dict], payload: str) -> dict[tuple, dict]:
     """
     return {
         pattern: spec
-        for pattern, spec in entries.items()
+        for pattern, spec in entries
         if spec.get("payload") in (None, payload)
     }
 
@@ -1153,18 +1234,19 @@ def scrub_whole(text: str, spec: dict, payload: str, ctx: Ctx) -> str:
 # ── entry points ─────────────────────────────────────────────────────────
 
 
-def _declares_addresses(entries: dict[tuple, dict], wholes: dict[str, dict]) -> bool:
+def _declares_addresses(entries: list[tuple[tuple, dict]],
+                        wholes: dict[str, dict]) -> bool:
     # whole-document entries count too: a text payload classified as an
     # address is exactly as much of an address field as any JSON leaf
     return any(
         e.get("format") in detectors.ADDRESS_BEARING_FORMATS
         and e["discloses"] != "nothing"
-        for e in (*entries.values(), *wholes.values())
+        for e in (*(spec for _, spec in entries), *wholes.values())
     )
 
 
 def _require_names(
-    entries: dict[tuple, dict],
+    entries: list[tuple[tuple, dict]],
     wholes: dict[str, dict],
     hostnames: list[str],
 ) -> None:
@@ -1179,7 +1261,7 @@ def _require_names(
     if hostnames:
         return
     named = [
-        ".".join(pat) for pat, e in entries.items()
+        ".".join(pat) for pat, e in entries
         if e.get("format") == "name"
         and e["discloses"] in ("identity", "location", "content")
     ] + [
@@ -1208,7 +1290,8 @@ def run_check(args, hostnames: list[str]) -> None:
 
     declares = False
     if args.manifest:
-        entries, wholes = load_manifest(args.manifest)
+        entries, wholes = load_manifest(
+            args.manifest, {path.stem for path in args.payloads})
         # the check is as blind to unnamed operator words as the scrub is:
         # a manifest that declares name fields demands a names source here too
         _require_names(entries, wholes, hostnames)
@@ -1269,7 +1352,8 @@ def main() -> None:
             "inside a git working tree. Write it somewhere private."
         )
 
-    entries, wholes = load_manifest(args.manifest)
+    entries, wholes = load_manifest(
+        args.manifest, {path.stem for path in args.payloads})
     _require_names(entries, wholes, hostnames)
     mapping: dict[str, str] = {}
     if args.map and args.map.exists():

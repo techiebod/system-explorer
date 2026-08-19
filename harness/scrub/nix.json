@@ -1,0 +1,41 @@
+{
+  "#": "Scrub manifest for the nix collector. Its interface is a TREE — the profile link farm and the handful of small files inside each system closure — so its payloads are the filesystem transcribed (DESIGN, adjudication queue, 2026-08-19): read.json is every file the walk opened, listdir.json every directory it enumerated, realpath.json every link it resolved to a final target, readlink.json every link's own immediate target, mtime.json each profile link's creation time, and exists.json the presence questions the walk asked. Each is keyed the way a filesystem is — the directory, then the name inside it.",
+
+  "#scoping": "Four of the six payloads are exactly one container and one member deep, so they all want the pattern '*.*' and a JSON object holds a key once. Every entry here therefore carries the payload-prefix scope ('realpath:*.*'), which exists for this case; without it three of the four would be classifiable by nothing and the run would refuse the variant outright.",
+
+  "#store_paths_are_nothing_and_that_is_a_claim_about_the_interface": "Almost every key and value here is a /nix/store path. A store path is a BUILD hash over a derivation's inputs — public, reproducible, and identical on every machine that builds the same closure from the same nixpkgs — so it identifies a build and never a machine. That is why these are `nothing` rather than `identity`, and it is also why substituting them would be actively WRONG: the hash is exactly what makes two hosts' generations comparable, and a scrubbed one would teach a reader that two identical closures are two different ones.",
+
+  "#the_one_identifying_token_inside_a_store_path": "A system closure is named `nixos-system-<hostname>-<version>`, so the host's OWN name sits inside the path. No pattern here scrubs it, because it is not a field — it is a substring of a value whose other half must survive — and the tool's mechanism for an operator-chosen word inside free text is the run's --hostnames pass, exactly as it is for a libvirt domain name. ON THIS CAPTURE it did not need to fire: the guest carries nixpkgs' default hostname, the literal string `nixos`, which discloses nothing about any estate and could not be substituted anyway without mangling `nixos-version`, `nixos-system` and the distribution's own vocabulary. A re-stage on a host with a real hostname MUST pass it through --hostnames, and this paragraph is the only thing that says so.",
+
+  "#nixos_version_is_a_release_not_a_machine": "nixos-version is the closure's record of which nixpkgs built it, the same string on every host running that release. configuration-revision and se-generation.json are the other half: a VCS revision and a build manifest naming the repository that builds the estate, which is estate-authored content whatever it happens to be on this guest — both are empty here because nothing wrote them, and classifying by what a capture happens to contain is how a manifest comes to be wrong on the next host.",
+
+  "#mtime_is_a_measurement": "A profile link's mtime is when that generation was activated: a measurement of an event, not a property of a machine, and already published verbatim as the Created fact.",
+
+  "#member_keys": "Every payload's second level is keyed by a FILENAME — nixos-version, kernel, system-2-link, specialisation — so each needs its own '*.~key' beside the container one. They are the names nix and nixpkgs give their own files, identical on every host, with one thing in them that varies: a profile link carries its generation NUMBER, which is a counter of how many times this machine has been rebuilt and not an identifier of it.",
+
+  "read:~key": {"discloses": "nothing"},
+  "read:*.~key": {"discloses": "nothing"},
+  "read:*.nixos-version": {"discloses": "nothing"},
+  "read:*.configuration-revision": {"discloses": "content"},
+  "read:*.se-generation\\.json": {"discloses": "content"},
+
+  "listdir:~key": {"discloses": "nothing"},
+  "listdir:*.~key": {"discloses": "nothing"},
+  "listdir:*.*.*": {"discloses": "nothing"},
+
+  "realpath:~key": {"discloses": "nothing"},
+  "realpath:*.~key": {"discloses": "nothing"},
+  "realpath:*.*": {"discloses": "nothing"},
+
+  "readlink:~key": {"discloses": "nothing"},
+  "readlink:*.~key": {"discloses": "nothing"},
+  "readlink:*.*": {"discloses": "nothing"},
+
+  "mtime:~key": {"discloses": "nothing"},
+  "mtime:*.~key": {"discloses": "nothing"},
+  "mtime:*.*": {"discloses": "nothing"},
+
+  "exists:~key": {"discloses": "nothing"},
+  "exists:*.~key": {"discloses": "nothing"},
+  "exists:*.*": {"discloses": "nothing"}
+}

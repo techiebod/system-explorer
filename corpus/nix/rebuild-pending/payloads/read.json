@@ -1,0 +1,12 @@
+{
+  "/nix/store/31i784rx1cpbqw5jd8nbhsp7bfi9a570-nixos-system-nixos-26.05pre-git": {
+    "configuration-revision": "",
+    "nixos-version": "26.05pre-git",
+    "se-generation.json": ""
+  },
+  "/nix/store/fpz72mwmm0331by0q504x35d288ndrrm-nixos-system-nixos-qcow2-26.05.20260807.ee48b14": {
+    "configuration-revision": "",
+    "nixos-version": "qcow2-26.05.20260807.ee48b14",
+    "se-generation.json": ""
+  }
+}

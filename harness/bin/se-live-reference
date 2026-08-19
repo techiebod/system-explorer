@@ -58,7 +58,7 @@ if os.environ.get("SE_REPLAY_DIR"):
 
 from system_explorer.agent import envelope as env  # noqa: E402
 from system_explorer.agent.adapters import (  # noqa: E402
-    bazarr, docker, downloaders, hardware, kea, logs, network, packages,
+    bazarr, docker, downloaders, hardware, kea, logs, network, nix, packages,
     paperless, plex, protection, resources, servarr, storage, traefik,
     unbound, units, vms,
 )
@@ -82,6 +82,14 @@ LIVE = {
             "interface": "libvirt", "collections": ["domains"]},
     "packages": {"module": packages, "adapter": packages.Adapter,
                  "interface": "package manager", "collections": ["packages"]},
+    # LIVE, the deltas are ON — this is the shipping adapter reading a real
+    # machine, and turning them off here would make the two sides agree by
+    # construction on the one thing the ruling says they disagree about. The
+    # comparator's report names the five delta facts as an accepted
+    # divergence instead, which keeps every other fact in the collection
+    # under the comparison it exists for.
+    "nix": {"module": nix, "adapter": nix.Adapter,
+            "interface": "nix profile", "collections": ["generations"]},
     "docker": {"module": docker, "adapter": docker.Adapter,
                "interface": "docker socket",
                "collections": ["containers", "volumes", "networks"]},
