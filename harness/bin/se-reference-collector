@@ -68,7 +68,9 @@ def pin_clock(when: str) -> None:
 if os.environ.get("SE_REPLAY_NOW"):
     pin_clock(os.environ["SE_REPLAY_NOW"])
 
-from system_explorer.agent.adapters import network, storage  # noqa: E402
+from system_explorer.agent.adapters import (  # noqa: E402
+    docker, network, packages, storage, traefik, vms,
+)
 
 # Which module-level acquisition each collector redirects, and what payload
 # file feeds it. This table is the whole of the replay seam for the reference
@@ -102,6 +104,60 @@ SEAM = {
         # than re-run against the wrong host.
         "instance": {"_zfs": True},
     },
+    # ── drop-ins: one or two zero-argument module-level readers ──────────
+    "vms": {
+        "module": vms,
+        "adapter": vms.Adapter,
+        "interface": "libvirt",
+        "collections": ["domains"],
+        # The cleanest seam of the seventeen: one function that opens the
+        # read-only libvirt connection, walks every domain, and returns plain
+        # dicts with the XML as a string.
+        "acquisitions": {"_domains_raw": "domains"},
+        "instance": {},
+    },
+    "packages": {
+        "module": packages,
+        "adapter": packages.Adapter,
+        "interface": "package manager",
+        "collections": ["packages"],
+        # _detect names WHICH manager this host has, and it is the capability
+        # probe as well as an acquisition — pinning it is what lets one host
+        # replay a dpkg capture and an rpm capture without either reading the
+        # other's interface. The row readers are captured per manager, so a
+        # variant stages exactly the one its _detect names.
+        "acquisitions": {
+            "_detect": "manager",
+            "_dpkg_rows": "dpkg",
+            "_rpm_rows": "rpm",
+            "_nix_store_paths": "nixstore",
+        },
+        "instance": {},
+    },
+    "docker": {
+        "module": docker,
+        "adapter": docker.Adapter,
+        "interface": "docker socket",
+        "collections": ["containers", "volumes", "networks"],
+        # _get returns an httpx.Response and the adapter calls .json() on it,
+        # so the captured document is wrapped on the way out — see the
+        # response shim below. Three paths, three documents.
+        "methods": ["_get"],
+        "response_methods": ["_get"],
+        "instance": {},
+    },
+    "traefik": {
+        "module": traefik,
+        "adapter": traefik.Adapter,
+        "interface": "traefik api",
+        "collections": ["overview", "routers", "services"],
+        # Two fetchers, and both must be stubbed: _get is a single document,
+        # _get_list is the pagination loop that follows X-Next-Page. Stubbing
+        # only the first would leave the loop calling self._client against
+        # whatever URL the replaying machine has in its environment.
+        "methods": ["_get", "_get_list"],
+        "instance": {"url": "http://replay.invalid"},
+    },
     "network": {
         "module": network,
         "adapter": network.Adapter,
@@ -121,7 +177,34 @@ SEAM = {
 
 
 def load_payloads(directory: Path) -> dict[str, object]:
-    return {p.stem: json.loads(p.read_text()) for p in sorted(directory.glob("*.json"))}
+    """Every captured document, keyed by file stem.
+
+    `.json` is parsed; `.txt` is handed over as the exact text. The second
+    exists because not every native interface answers in JSON — unbound's
+    control socket replies in plain text, and wrapping that in a JSON string
+    would put a transcription between the capture and the parser it feeds.
+    """
+    payloads: dict[str, object] = {}
+    for path in sorted(directory.glob("*.json")):
+        payloads[path.stem] = json.loads(path.read_text())
+    for path in sorted(directory.glob("*.txt")):
+        payloads[path.stem] = path.read_text()
+    return payloads
+
+
+def slug(argument: object) -> str:
+    """A payload file name for a dispatched acquisition's argument.
+
+    An HTTP path, a control-socket command, a file path — all of them are the
+    argument that decides WHICH document comes back, so they are what the
+    payload is keyed on. Reversible enough to read: a reviewer looking at
+    `api-http-routers.json` can see which request it answers, which is most of
+    what a corpus is for.
+    """
+    text = str(argument).strip("/")
+    keep = [c if (c.isalnum() or c in "-_.") else "-" for c in text]
+    name = "".join(keep).strip("-").replace("--", "-")
+    return name or "root"
 
 
 def uncaptured(payload_name: str):
@@ -139,6 +222,30 @@ def uncaptured(payload_name: str):
         raise RuntimeError(f"payload {payload_name!r} was not captured in this variant")
 
     return read
+
+
+class CapturedResponse:
+    """A captured document wearing an httpx.Response's face.
+
+    Only the members an adapter actually uses on the acquisition path, and no
+    more: a fuller fake would be a second implementation of httpx that could
+    disagree with the real one about something nobody tested.
+    """
+
+    def __init__(self, document: object) -> None:
+        self._document = document
+        self.status_code = 200
+        self.headers: dict[str, str] = {}
+
+    def json(self) -> object:
+        return self._document
+
+    def raise_for_status(self) -> "CapturedResponse":
+        return self
+
+    @property
+    def text(self) -> str:
+        return json.dumps(self._document)
 
 
 def run(collector: str, generations: dict[str, int], payload_dir: Path) -> None:
@@ -163,16 +270,60 @@ def run(collector: str, generations: dict[str, int], payload_dir: Path) -> None:
     payloads = load_payloads(payload_dir)
     module = spec["module"]
 
+    def dispatched(kind: str, label: str):
+        """A stub that answers by ARGUMENT rather than by being called.
+
+        Ten of the seventeen adapters have no module-level acquisition at all
+        — they read through an httpx client, a unix socket or the D-Bus
+        singleton, held on the instance — so the whole document a stub must
+        return depends on which path, command or file was asked for. This is
+        the seam kind for those, and it is deny-by-default like the other one:
+        an argument the variant did not capture raises rather than reaching
+        the live interface of whichever machine is replaying.
+        """
+
+        def answer(*args, **kwargs):
+            argument = args[0] if args else next(iter(kwargs.values()), "")
+            name = slug(argument)
+            if name not in payloads:
+                raise RuntimeError(
+                    f"{label} {argument!r} (payload {name!r}) was not captured "
+                    f"in this variant; the {kind} seam refuses to read the live "
+                    "interface of the machine replaying the corpus"
+                )
+            return payloads[name]
+
+        async def async_answer(*args, **kwargs):
+            return answer(*args, **kwargs)
+
+        async def async_response(*args, **kwargs):
+            # Some adapters hold the HTTP response rather than its body —
+            # docker's _get returns an httpx.Response and the caller decides
+            # between .json() and the raw bytes. Handing back the parsed
+            # document there would fail on the first attribute access, so the
+            # captured document is wrapped in the smallest object that keeps
+            # the caller's own contract visible.
+            return CapturedResponse(answer(*args, **kwargs))
+
+        if kind == "response":
+            return async_response
+        return async_answer if kind == "method" else answer
+
     # Decline only when EVERY interface acquisition is missing. A storage
     # capture with status but no list is a partially-readable interface, and
     # the shipping adapter degrades through it on purpose — declining there
     # would make this a second implementation rather than the reference one,
     # in the direction that destroys data, since an absent decline retires
     # objects.
-    present = [n for n in spec["acquisitions"].values() if n in payloads]
+    # Absence is "no document at all was captured", across every seam kind
+    # this collector uses — a dispatched seam has no fixed payload names, so
+    # its presence test is whether the variant staged anything.
+    present = [n for n in spec.get("acquisitions", {}).values() if n in payloads]
+    if spec.get("methods") or spec.get("arg_acquisitions"):
+        present = present or list(payloads)
     absent = not present
 
-    for attribute, payload_name in spec["acquisitions"].items():
+    for attribute, payload_name in spec.get("acquisitions", {}).items():
         if payload_name in payloads:
             value = payloads[payload_name]
             setattr(module, attribute, lambda _v=value, *a, **k: _v)
@@ -181,6 +332,10 @@ def run(collector: str, generations: dict[str, int], payload_dir: Path) -> None:
     for attribute, (payload_name, default) in spec.get("auxiliary", {}).items():
         value = payloads.get(payload_name, default)
         setattr(module, attribute, lambda _v=value, *a, **k: _v)
+    # Module-level, but the document depends on the argument: protection's
+    # _load(path), hardware's _read(path), logs' _run_journalctl(args).
+    for attribute in spec.get("arg_acquisitions", ()):
+        setattr(module, attribute, dispatched("module", attribute))
 
     out = Emitter(
         sys.stdout,
@@ -227,6 +382,15 @@ def run(collector: str, generations: dict[str, int], payload_dir: Path) -> None:
     adapter = spec["adapter"]()
     for attribute, value in spec.get("instance", {}).items():
         setattr(adapter, attribute, value)
+    # The seam for the ten adapters that acquire through an instance rather
+    # than a module: an httpx client, a unix-socket command, the D-Bus
+    # singleton. Bound on the INSTANCE, not the class, so one replay cannot
+    # leak its stubs into another adapter constructed later in the same
+    # process — which the module-level seam is immune to only because each
+    # collector runs in its own process.
+    for attribute in spec.get("methods", ()):
+        kind = "response" if attribute in spec.get("response_methods", ()) else "method"
+        setattr(adapter, attribute, dispatched(kind, attribute))
 
     for collection in generations:
         try:

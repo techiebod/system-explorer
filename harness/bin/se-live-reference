@@ -57,7 +57,9 @@ if os.environ.get("SE_REPLAY_DIR"):
     )
 
 from system_explorer.agent import envelope as env  # noqa: E402
-from system_explorer.agent.adapters import network, storage  # noqa: E402
+from system_explorer.agent.adapters import (  # noqa: E402
+    docker, network, packages, storage, traefik, vms,
+)
 
 # The collections each adapter serves live, and the capability attributes the
 # comparator may need to set. Deliberately the same shape as the replay seam's
@@ -68,6 +70,16 @@ LIVE = {
                 "interface": "zpool", "collections": ["pools"]},
     "network": {"module": network, "adapter": network.Adapter,
                 "interface": "nft", "collections": ["nft-chains", "nft-rules"]},
+    "vms": {"module": vms, "adapter": vms.Adapter,
+            "interface": "libvirt", "collections": ["domains"]},
+    "packages": {"module": packages, "adapter": packages.Adapter,
+                 "interface": "package manager", "collections": ["packages"]},
+    "docker": {"module": docker, "adapter": docker.Adapter,
+               "interface": "docker socket",
+               "collections": ["containers", "volumes", "networks"]},
+    "traefik": {"module": traefik, "adapter": traefik.Adapter,
+                "interface": "traefik api",
+                "collections": ["overview", "routers", "services"]},
 }
 
 

@@ -49,6 +49,10 @@ from se_harness import live, replay  # noqa: E402
 SERVES = {
     "storage": ["pools"],
     "network": ["nft-chains", "nft-rules"],
+    "vms": ["domains"],
+    "packages": ["packages"],
+    "docker": ["containers", "volumes", "networks"],
+    "traefik": ["overview", "routers", "services"],
 }
 
 REFERENCE = REPO / "harness" / "bin" / "se-live-reference"

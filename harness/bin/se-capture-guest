@@ -61,6 +61,24 @@ for tree in ("/dev/disk/by-id", "/dev/disk/by-partuuid", "/dev/mapper"):
             links[path] = os.path.basename(os.readlink(path))
 print(json.dumps(links))
 '
+vms_py='
+import json, sys
+sys.path.insert(0, "/tmp/secmp/src")
+from system_explorer.agent.adapters.vms import _domains_raw
+print(json.dumps(_domains_raw()))
+'
+manager_py='
+import json, sys
+sys.path.insert(0, "/tmp/secmp/src")
+from system_explorer.agent.adapters.packages import _detect
+print(json.dumps(_detect()))
+'
+dpkg_py='
+import json, sys
+sys.path.insert(0, "/tmp/secmp/src")
+from system_explorer.agent.adapters.packages import _dpkg_rows
+print(json.dumps(_dpkg_rows()))
+'
 declare -a acquisitions
 case "$collector" in
     storage)
@@ -73,6 +91,38 @@ case "$collector" in
     network)
         acquisitions=("nft|nft -j list ruleset")
         ;;
+    vms)
+        # The adapter's own acquisition, run on the guest. _domains_raw is one
+        # function that opens the read-only libvirt connection and returns
+        # plain dicts — including each domain's XML as a string — so the
+        # payload is exactly what the seam hands back, and `virsh dumpxml` is
+        # the by-hand command that reproduces its interesting half.
+        acquisitions=("domains|python3 -c '$vms_py'")
+        ;;
+    packages)
+        acquisitions=(
+            "manager|python3 -c '$manager_py'"
+            "dpkg|python3 -c '$dpkg_py'"
+        )
+        ;;
+    docker)
+        # The engine API IS the native interface, so each path's response
+        # document is the payload, named by the path it answers.
+        acquisitions=(
+            "containers-json-all-1|sudo curl -s --unix-socket /var/run/docker.sock http://docker/containers/json?all=1"
+            "volumes|sudo curl -s --unix-socket /var/run/docker.sock http://docker/volumes"
+            "networks|sudo curl -s --unix-socket /var/run/docker.sock http://docker/networks"
+        )
+        ;;
+    traefik)
+        acquisitions=(
+            "api-overview|curl -s \"\$SE_TRAEFIK_URL/api/overview\""
+            "api-version|curl -s \"\$SE_TRAEFIK_URL/api/version\""
+            "api-entrypoints|curl -s \"\$SE_TRAEFIK_URL/api/entrypoints?page=1&per_page=100\""
+            "api-http-routers|curl -s \"\$SE_TRAEFIK_URL/api/http/routers?page=1&per_page=100\""
+            "api-http-services|curl -s \"\$SE_TRAEFIK_URL/api/http/services?page=1&per_page=100\""
+        )
+        ;;
     *)
         echo "unknown collector '$collector'" >&2
         exit 2
@@ -83,14 +133,35 @@ version_probe=""
 case "$collector" in
     storage) version_probe="zfs version | head -1" ;;
     network) version_probe="nft --version" ;;
+    vms) version_probe="virsh --version" ;;
+    packages) version_probe="dpkg-query --version 2>/dev/null | head -1 || rpm --version" ;;
+    docker) version_probe="sudo docker --version" ;;
+    traefik) version_probe="curl -s \"\$SE_TRAEFIK_URL/api/version\" | head -c 120" ;;
 esac
+
+# Forward the caller's SE_* variables to the guest. Every HTTP-interface
+# collector is addressed by environment — SE_TRAEFIK_URL, SE_SONARR_API_KEY —
+# exactly as the shipping agent addresses it, so a capture that could not
+# carry them would be able to reach only the credential-free interfaces. They
+# are passed as a prefix on the remote command rather than through
+# SendEnv/AcceptEnv, which needs sshd's cooperation on every guest.
+remote_env=""
+while IFS='=' read -r key value; do
+    [[ $key == SE_* ]] || continue
+    # `export K=V; cmd` and not `K=V cmd`: in the second form the shell
+    # expands $K inside cmd BEFORE the assignment takes effect, so an
+    # acquisition that names its own variable reads an empty string and
+    # curl cheerfully exits 0 having fetched nothing.
+    remote_env+="export $key=$(printf '%q' "$value"); "
+done < <(env)
+[[ -n $remote_env ]] && echo "  forwarding: $(echo "$remote_env" | tr ';' '\n' | sed -n 's/^ *export \([A-Z_]*\)=.*/\1/p' | tr '\n' ' ')"
 
 echo "capturing $collector from $target"
 for entry in "${acquisitions[@]}"; do
     name="${entry%%|*}"
     command="${entry#*|}"
     echo "  $name  <-  $command"
-    if ! ssh "${ssh_opts[@]}" -- "$target" "$command" > "$payload_dir/$name.json"; then
+    if ! ssh "${ssh_opts[@]}" -- "$target" "$remote_env$command" > "$payload_dir/$name.json"; then
         echo "  FAILED: $command" >&2
         echo "  A collector that cannot read its interface on this guest is a" >&2
         echo "  finding about the guest, not a payload to commit." >&2
@@ -103,7 +174,7 @@ for entry in "${acquisitions[@]}"; do
     fi
 done
 
-source_version="$(ssh "${ssh_opts[@]}" -- "$target" "set -o pipefail; $version_probe" | tr -d '\r')"
+source_version="$(ssh "${ssh_opts[@]}" -- "$target" "set -o pipefail; $remote_env$version_probe" | tr -d '\r')"
 if [[ -z $source_version ]]; then
     echo "could not read the interface version on $target — a capture whose" >&2
     echo "source_version is unknown cannot tell a drift diff what changed." >&2
