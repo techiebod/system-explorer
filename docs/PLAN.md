@@ -151,6 +151,42 @@ The second blocker was the seam, and it was the real one: **ten of the seventeen
 
 **Captured and replaying: `vms`, `packages`, `docker`, `traefik`.** traefik's pair is committed — the first capture this product has taken from an HTTP interface, and it found a null fact value on three of three services the moment it ran. `docker`'s payloads are captured and held OUT of the tree until its scrub manifest classifies them: its documents carry real MACs and host mount paths, and the deny-by-default walk is refusing an imperfect manifest, which is the gate working rather than an obstacle to route around.
 
+**Where gate 3 actually stands, 2026-08-19.** The parity report
+(`docs/PARITY-REPORT.md`) is **17 of 18 clean**, up from 8, after the lab gained
+the venues twelve collectors need to read anything at all
+(`harness/bin/se-provision-lab`). The remaining one is `vms`, and it is waiting
+on a ruling rather than on work.
+
+**Everything still blocking this gate is a ruling, not a task.** Five of them,
+each with a measurement behind it now rather than an argument:
+
+1. `vms` — whether a replay-only port counts as ported, and by what mechanism.
+2. Whether a missing **receipt** may decline `absent`, given `absent` retires.
+3. Whether the shipping adapters gain a decline vocabulary at all. Three
+   triggers measured: a receipt nobody set, an interface that answers *no*
+   (kea's unloaded `lease_cmds` hook costs the reference all four collections
+   where the port loses one), and a service that is simply down — which is any
+   container restart, and costs the reference everything.
+4. Whether a failed property read may spell itself as a fact's absence
+   (`units`' `Slice`).
+5. Whether an empty commit is ever the right statement, now that `plex` shows
+   it retiring every library on an unset variable.
+
+**Item 7's decline reasons are no longer unmapped.** All three non-absent
+reasons have now been observed live, each from a distinct real cause:
+`unauthorised` (nft read unprivileged), `unavailable` (a stopped traefik, plex
+or paperless-redis), and `unsupported` (kea without its lease hook). They are
+observations rather than committed variants, so item 7's corpus half is what
+remains of it.
+
+**What the round found in the shipping reference**, none of which any other tier
+could see: `units` lost 149 of 219 `Slice` facts non-deterministically, exiting
+0 each time; `bazarr` and `plex` published rows stamped `at: 0`, which parity
+called clean because the facts matched and only the clock check caught;
+`paperless` publishes the instance's host and port inside a committed fact; and
+`se-capture-guest`'s `kea` arm captured the downloaders adapter for two days
+while `bash -n` reported the file fine.
+
 **`nix` is deliberately deferred, and gate 3 must not be read as though it were
 not.** Nineteen of twenty collectors are ported. The twentieth is `nix`, and it
 is not blocked on the lab any more — the NixOS guest boots, is reachable, and
