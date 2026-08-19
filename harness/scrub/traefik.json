@@ -1,0 +1,158 @@
+{
+  "#": "Scrub manifest for the traefik collector: the five API documents the adapter fetches, keyed by the request path each answers (api-overview, api-version, api-entrypoints, api-http-routers, api-http-services). Traefik's API carries no credential of its own \u2014 there is deliberately no API key and no middlewares collection, because auth material lives in middleware documents this collector never reads.",
+  "#nothing": "Router, service and entrypoint NAMES are the operator's own configuration vocabulary and are the answer this collector exists to give, so they are published. In this variant they are Traefik's internal ones (api@internal, dashboard@internal, noop@internal, and the traefik/web entrypoints), which are identical on every install and disclose nothing about any estate. A capture from a Traefik fronting real backends would carry operator-chosen names and backend URLs, and THAT variant needs entries this one does not \u2014 see #unreached.",
+  "#unreached": "Not classified here because no path in this variant reaches them, and a manifest entry for a shape nobody captured is a claim nobody checked: services.*.loadBalancer.servers.*.url and services.*.serverStatus.* carry backend URLs, which may embed userinfo credentials \u2014 the adapter already redacts them on the way out (_redact_url_userinfo, _redact_service_evidence). The first capture from a Traefik with a dynamic provider must extend this file before it can be scrubbed, and the scrubber's own deny-by-default walk is what will force that rather than trusting anyone to remember.",
+  "api-entrypoints.*.address": {
+    "discloses": "nothing"
+  },
+  "api-entrypoints.*.http2.maxConcurrentStreams": {
+    "discloses": "nothing"
+  },
+  "api-entrypoints.*.name": {
+    "discloses": "nothing"
+  },
+  "api-entrypoints.*.transport.lifeCycle.graceTimeOut": {
+    "discloses": "nothing"
+  },
+  "api-entrypoints.*.transport.respondingTimeouts.idleTimeout": {
+    "discloses": "nothing"
+  },
+  "api-entrypoints.*.transport.respondingTimeouts.readTimeout": {
+    "discloses": "nothing"
+  },
+  "api-entrypoints.*.udp.timeout": {
+    "discloses": "nothing"
+  },
+  "api-http-routers.*.entryPoints.*": {
+    "discloses": "nothing"
+  },
+  "api-http-routers.*.middlewares.*": {
+    "discloses": "nothing"
+  },
+  "api-http-routers.*.name": {
+    "discloses": "nothing"
+  },
+  "api-http-routers.*.priority": {
+    "discloses": "nothing"
+  },
+  "api-http-routers.*.provider": {
+    "discloses": "nothing"
+  },
+  "api-http-routers.*.rule": {
+    "discloses": "nothing"
+  },
+  "api-http-routers.*.ruleSyntax": {
+    "discloses": "nothing"
+  },
+  "api-http-routers.*.service": {
+    "discloses": "nothing"
+  },
+  "api-http-routers.*.status": {
+    "discloses": "nothing"
+  },
+  "api-http-routers.*.using.*": {
+    "discloses": "nothing"
+  },
+  "api-http-services.*.name": {
+    "discloses": "nothing"
+  },
+  "api-http-services.*.provider": {
+    "discloses": "nothing"
+  },
+  "api-http-services.*.status": {
+    "discloses": "nothing"
+  },
+  "api-http-services.*.usedBy.*": {
+    "discloses": "nothing"
+  },
+  "api-overview.features.accessLog": {
+    "discloses": "nothing"
+  },
+  "api-overview.features.metrics": {
+    "discloses": "nothing"
+  },
+  "api-overview.features.tracing": {
+    "discloses": "nothing"
+  },
+  "api-overview.http.middlewares.errors": {
+    "discloses": "nothing"
+  },
+  "api-overview.http.middlewares.total": {
+    "discloses": "nothing"
+  },
+  "api-overview.http.middlewares.warnings": {
+    "discloses": "nothing"
+  },
+  "api-overview.http.routers.errors": {
+    "discloses": "nothing"
+  },
+  "api-overview.http.routers.total": {
+    "discloses": "nothing"
+  },
+  "api-overview.http.routers.warnings": {
+    "discloses": "nothing"
+  },
+  "api-overview.http.services.errors": {
+    "discloses": "nothing"
+  },
+  "api-overview.http.services.total": {
+    "discloses": "nothing"
+  },
+  "api-overview.http.services.warnings": {
+    "discloses": "nothing"
+  },
+  "api-overview.tcp.middlewares.errors": {
+    "discloses": "nothing"
+  },
+  "api-overview.tcp.middlewares.total": {
+    "discloses": "nothing"
+  },
+  "api-overview.tcp.middlewares.warnings": {
+    "discloses": "nothing"
+  },
+  "api-overview.tcp.routers.errors": {
+    "discloses": "nothing"
+  },
+  "api-overview.tcp.routers.total": {
+    "discloses": "nothing"
+  },
+  "api-overview.tcp.routers.warnings": {
+    "discloses": "nothing"
+  },
+  "api-overview.tcp.services.errors": {
+    "discloses": "nothing"
+  },
+  "api-overview.tcp.services.total": {
+    "discloses": "nothing"
+  },
+  "api-overview.tcp.services.warnings": {
+    "discloses": "nothing"
+  },
+  "api-overview.udp.routers.errors": {
+    "discloses": "nothing"
+  },
+  "api-overview.udp.routers.total": {
+    "discloses": "nothing"
+  },
+  "api-overview.udp.routers.warnings": {
+    "discloses": "nothing"
+  },
+  "api-overview.udp.services.errors": {
+    "discloses": "nothing"
+  },
+  "api-overview.udp.services.total": {
+    "discloses": "nothing"
+  },
+  "api-overview.udp.services.warnings": {
+    "discloses": "nothing"
+  },
+  "api-version.Codename": {
+    "discloses": "nothing"
+  },
+  "api-version.Version": {
+    "discloses": "nothing"
+  },
+  "api-version.startDate": {
+    "discloses": "nothing"
+  }
+}

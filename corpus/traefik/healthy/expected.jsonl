@@ -1,0 +1,11 @@
+{"batch":"replay","boot_id":"5e000000-0000-4000-8000-000000000001","declaration":"sha256:replay","generations":{"overview":809,"routers":826,"services":843},"instance":null,"record":"begin","request":"replay","timens":0}
+{"at":1.0,"collection":"overview","facts":{"EntryPoints":["traefik","web"],"MiddlewaresErrors":0,"MiddlewaresTotal":2,"MiddlewaresWarnings":0,"RoutersErrors":0,"RoutersTotal":2,"RoutersWarnings":0,"ServicesErrors":0,"ServicesTotal":3,"ServicesWarnings":0,"Version":"3.1.7"},"name":"traefik","record":"object"}
+{"assertions":0,"collection":"overview","generation":809,"objects":1,"record":"commit","unobservable":0}
+{"at":1.001,"collection":"routers","facts":{"EntryPoints":["traefik"],"Priority":9223372036854775806,"Provider":"internal","Rule":"PathPrefix(`/api`)","Service":"api@internal","Status":"enabled"},"name":"api@internal","record":"object"}
+{"at":1.002,"collection":"routers","facts":{"EntryPoints":["traefik"],"Middlewares":["dashboard_redirect@internal","dashboard_stripprefix@internal"],"Priority":9223372036854775805,"Provider":"internal","Rule":"PathPrefix(`/`)","Service":"dashboard@internal","Status":"enabled"},"name":"dashboard@internal","record":"object"}
+{"assertions":0,"collection":"routers","generation":826,"objects":2,"record":"commit","unobservable":0}
+{"at":1.003,"collection":"services","facts":{"Provider":"internal","Status":"enabled","UsedBy":["api@internal"]},"name":"api@internal","record":"object"}
+{"at":1.004,"collection":"services","facts":{"Provider":"internal","Status":"enabled","UsedBy":["dashboard@internal"]},"name":"dashboard@internal","record":"object"}
+{"at":1.005,"collection":"services","facts":{"Provider":"internal","Status":"enabled"},"name":"noop@internal","record":"object"}
+{"assertions":0,"collection":"services","generation":843,"objects":3,"record":"commit","unobservable":0}
+{"batch":"replay","cpu_ms":0.5,"record":"end","request":"replay","wall_ms":1.0}
