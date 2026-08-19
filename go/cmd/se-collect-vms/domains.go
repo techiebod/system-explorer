@@ -91,15 +91,33 @@ func buildDomain(domain *value) (domainRow, error) {
 	facts.set("Autostart", domain.get("autostart"))
 	facts.set("Persistent", domain.get("persistent"))
 	facts.set("HostTaps", stringArray(hostTaps(definition.text)))
+	if addresses == nil && domain.get("state").equalsString("running") {
+		facts.set("IPAddressesUnobservable", stringValue(addressUnobservable))
+	}
 
 	return domainRow{
 		name:  domainName(domain),
 		facts: facts,
 		// The pair the reference publishes as a null value with a reason
-		// beside it. A null fact is refused by the contract at any depth and
-		// by the judge that grades this binary, so the same statement travels
-		// on the channel DESIGN 19 gives it: the fact is not emitted, and one
-		// unobservable record says the address exists and could not be read.
+		// beside it. Only HALF of that pair is unlawful: `IPAddresses: null`
+		// is refused by the contract at any depth, and it is dropped. The
+		// reason is an ordinary non-null string fact and it is KEPT, because
+		// dropping it costs an opinion.
+		//
+		// This emitted an unobservable RECORD instead until 2026-08-19, on the
+		// reasoning that DESIGN 19 gives could-not-read its own channel. The
+		// live comparator disagreed with the reference on the first running
+		// guest either had ever seen, and the reason is the one that matters:
+		// `rules/vms.py` reads IPAddressesUnobservable as a FACT to decide
+		// whether a guest's blank address column is a gap or an answer. Rules
+		// are computed from facts and do not see the record channel, so a
+		// collector that moves this statement there deletes the rule's only
+		// input and the row loses the opinion that says "unknown rather than
+		// absent". `units` has the same shape in MissingReferenceUnobservable,
+		// which is what makes this a pattern rather than one collector's
+		// quirk: until the rules layer reads records, the FACT is the channel
+		// that works.
+		//
 		// A running guest with no address is the ORDINARY case for a bridged
 		// guest, not an exotic one, so this shape is reached in production
 		// even though no committed capture stages it.
@@ -222,21 +240,6 @@ func collectDomains(out *emitter, stderr io.Writer, src source, collection strin
 			At:         at,
 		})
 		*objects++
-		if row.addressUnobservable {
-			out.emit(unobservableRecord{
-				Record:     "unobservable",
-				Collection: collection,
-				Name:       row.name,
-				Fact:       "IPAddresses",
-				// unavailable, not unsupported: the ARP entry repopulates the
-				// moment something talks to the guest, so the next reading may
-				// well answer. unsupported would tell an operator to stop
-				// asking.
-				Reason: "unavailable",
-				Detail: addressUnobservable,
-			})
-			unobservable++
-		}
 	}
 	out.emit(commitRecord{
 		Record:       "commit",

@@ -172,7 +172,17 @@ func TestARunningDomainCarriesTheAddressesLibvirtSaw(t *testing.T) {
 // null value with a reason beside it; a null fact value is refused by the
 // contract at any depth and by the judge that grades this binary, so the same
 // statement travels on the channel DESIGN 19 gives it.
-func TestARunningDomainWithNoAnswerSaysSoOnItsOwnChannel(t *testing.T) {
+// A running guest nobody could get an address for. The null IPAddresses fact
+// is dropped — a null is refused at any depth — and the REASON is published as
+// an ordinary string fact, matching the reference.
+//
+// This asserted an unobservable RECORD until 2026-08-19. The live comparator
+// disagreed with the reference on the first running guest either had seen, and
+// the record lost the argument for a reason that is not about elegance:
+// rules/vms.py reads IPAddressesUnobservable as a FACT to decide whether a
+// blank address column is a gap or an answer, and rules do not see the record
+// channel. Moving it there deletes the opinion.
+func TestARunningDomainWithNoAnswerSaysSoAsAFact(t *testing.T) {
 	silent := strings.Replace(stagedRunning,
 		`"ips_by_mac": {"02:00:00:00:00:02": ["192.168.122.9"], "02:00:00:00:00:01": ["192.168.122.10", "192.168.122.9"]}`,
 		`"ips_by_mac": {}`, 1)
@@ -194,21 +204,15 @@ func TestARunningDomainWithNoAnswerSaysSoOnItsOwnChannel(t *testing.T) {
 			t.Errorf("a fact is null: %s (%v)", encoded, err)
 		}
 	}
-	missing := ofKind(records, "unobservable")
-	if len(missing) != 1 || missing[0]["fact"] != "IPAddresses" {
-		t.Fatalf("one unobservable record, naming the fact; got %v", missing)
+	if facts["IPAddressesUnobservable"] != addressUnobservable {
+		t.Fatalf("the reason is a fact and it is the constant, never the "+
+			"payload's own note; got %v", facts["IPAddressesUnobservable"])
 	}
-	if missing[0]["reason"] != "unavailable" {
-		t.Errorf("reason %v: the ARP entry repopulates the moment something "+
-			"talks to the guest, so the next reading may well answer",
-			missing[0]["reason"])
+	if missing := ofKind(records, "unobservable"); len(missing) != 0 {
+		t.Errorf("the reason travels as a fact, so no record is emitted: %v", missing)
 	}
-	if missing[0]["detail"] != addressUnobservable {
-		t.Errorf("the detail is the constant, never the payload's own note: %v",
-			missing[0]["detail"])
-	}
-	if ofKind(records, "commit")[0]["unobservable"] != 1.0 {
-		t.Error("the commit's count is what makes a dropped record detectable")
+	if ofKind(records, "commit")[0]["unobservable"] != 0.0 {
+		t.Error("no unobservable record, so the count is zero")
 	}
 }
 

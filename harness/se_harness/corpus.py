@@ -472,6 +472,32 @@ NAMED_RESIDUALS = {
     # publish-gate blockers; both were ruled, the capture landed, and a residual
     # that outlives its reason is worse than none — this is what is actually
     # still unreached.
+    # The one fact vms declares that a shutoff domain cannot reach, and the
+    # corpus holds exactly one shutoff domain.
+    "vms/address-unobservable": (
+        "IPAddressesUnobservable is what a RUNNING guest's row says when no "
+        "address source could answer for it, and the committed variant stages "
+        "a domain that is shut off — where an address does not apply at all, "
+        "so the fact is correctly absent and the branch is unreached. No "
+        "mutation operator mints it either: flipping the staged state word to "
+        "`running` would produce a guest that is running with no interfaces "
+        "and no lease, which is a machine nobody observed rather than a "
+        "perturbation of one that was. "
+        "The shape is not exotic — adapters/vms.py calls it the ORDINARY case "
+        "for a guest on a bridge this host manages no lease file for, because "
+        "libvirt refuses the guest agent outright on the read-only connection "
+        "this collector opens and ARP entries expire when a guest goes idle. "
+        "Venue: the live comparator (harness/bin/se-compare) on a host with a "
+        "running domain, which is where it was in fact first reached — on "
+        "2026-08-19, the first running guest either implementation had ever "
+        "been asked about, and the two disagreed. That run is what settled "
+        "which CHANNEL it travels on: the port emitted an unobservable record "
+        "and the reference a fact, and the fact won, because rules/vms.py "
+        "reads it to decide whether a blank address column is a gap or an "
+        "answer and rules are computed from facts. So this entry speaks for a "
+        "fact whose channel a live run chose, and which no replayed stream "
+        "carries."
+    ),
     "logs/severity-and-truncation": (
         "Two shapes the committed page does not hold, both of them properties "
         "of a QUIET machine rather than of the collector. Every one of the 100 "

@@ -118,7 +118,10 @@ func newSource(getenv func(string) string) source {
 
 // ── live ────────────────────────────────────────────────────────────────
 
-type liveSource struct{ started time.Time }
+type liveSource struct {
+	started time.Time
+	at      float64
+}
 
 func (*liveSource) bootID() (string, error) {
 	raw, err := os.ReadFile("/proc/sys/kernel/random/boot_id")
@@ -135,27 +138,37 @@ func (*liveSource) batch() (string, error) { return newUUIDv4() }
 func (*liveSource) declaration() string { return declarationDigest }
 
 func (*liveSource) domains() (*value, error) {
-	// Socket presence alone is optimistic — the reference opens the
-	// connection so its reason can tell a missing socket from an unanswering
-	// daemon — and this build cannot open it either way. What presence still
-	// decides is which of two true statements to make, and they are opposite
-	// in the one respect that matters: absence retires this host's domains,
-	// and unsupported leaves them standing.
+	// Socket presence decides ABSENCE and nothing else. A host with no
+	// libvirt socket runs no libvirt and defines no domains — a successful
+	// reading which must commit zero, because a host that HAD a hypervisor
+	// and lost it would otherwise serve its old domains forever.
 	if _, err := os.Stat(socketReadOnly); err != nil {
 		reason := declineNoLibvirt
 		return nil, &reason
 	}
-	reason := declineNoLibvirtReader
-	return nil, &reason
+	// And where it IS listening, this build now reads it. See live.go for why
+	// virsh turned out to be a lawful source after all: the objection was
+	// about `virsh list`, which renders state as prose, and `domstats`
+	// answers the enum.
+	return liveDomains()
 }
 
-// stamp reads the boot clock per object rather than once before the walk,
-// because this build has no live walk to read it before: both live paths
-// decline, so no object ever carries a stamp from here. When the domain walk
-// lands, this reading moves to just before it — `at` belongs to the oldest
-// byte a row rests on, and a walk stamped at completion reports itself
-// fresher than the reading it describes (DESIGN 19).
-func (*liveSource) stamp(int) (float64, error) { return bootClock() }
+// stamp is taken once, before the walk, and shared by every row — which is
+// what `at` means: the oldest byte a row rests on. It used to be read per
+// object with a comment saying that was harmless because no live path ever
+// produced one; the walk has landed, so the reading moved to where that
+// comment said it would. A stamp taken per row after the walk would report
+// each row fresher than the bytes it describes (DESIGN 19).
+func (s *liveSource) stamp(int) (float64, error) {
+	if s.at == 0 {
+		at, err := bootClock()
+		if err != nil {
+			return 0, err
+		}
+		s.at = at
+	}
+	return s.at, nil
+}
 
 func (s *liveSource) costs() (float64, float64) {
 	cpu := 0.0

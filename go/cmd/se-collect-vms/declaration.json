@@ -50,7 +50,7 @@
           "kind": "observed",
           "discloses": "location",
           "from": "/*/ips_by_mac",
-          "sentence": "Every address libvirt could see for this guest, across all of its interfaces, sorted and deduplicated. Present only when something answered: a guest that is not running has no address because it is off, so the fact is omitted rather than emptied, and a running guest nothing could answer for gets an unobservable record instead — an empty list would claim the guest has no address, which is a different and usually false thing to say."
+          "sentence": "Every address libvirt could see for this guest, across all of its interfaces, sorted and deduplicated. Present only when something answered: a guest that is not running has no address because it is off, so the fact is omitted rather than emptied, and a running guest nothing could answer for gets IPAddressesUnobservable instead \u2014 an empty list would claim the guest has no address, which is a different and usually false thing to say."
         },
         "MemoryMiB": {
           "type": "integer",
@@ -58,7 +58,7 @@
           "kind": "observed",
           "discloses": "nothing",
           "from": "/*/memory_mib",
-          "sentence": "The memory this domain currently has, in mebibytes. Current rather than maximum: a ballooned guest sits below its configured ceiling, and this is the figure that says what it is actually holding. Deliberately carries no unit member — the vocabulary has bytes and no mebibytes, and declaring bytes would be wrong by a factor of 1048576."
+          "sentence": "The memory this domain currently has, in mebibytes. Current rather than maximum: a ballooned guest sits below its configured ceiling, and this is the figure that says what it is actually holding. Deliberately carries no unit member \u2014 the vocabulary has bytes and no mebibytes, and declaring bytes would be wrong by a factor of 1048576."
         },
         "VCPUs": {
           "type": "integer",
@@ -91,7 +91,7 @@
           "kind": "observed",
           "discloses": "nothing",
           "from": "/*/persistent",
-          "sentence": "Whether this domain has a stored definition. A transient domain exists only while it runs, so stopping it destroys it — which is why a transient guest disappearing from this collection is not necessarily a fault."
+          "sentence": "Whether this domain has a stored definition. A transient domain exists only while it runs, so stopping it destroys it \u2014 which is why a transient guest disappearing from this collection is not necessarily a fault."
         },
         "HostTaps": {
           "type": "list",
@@ -99,7 +99,15 @@
           "kind": "observed",
           "discloses": "identity",
           "from": "/*/xml",
-          "sentence": "The host-side tap devices this domain owns, from the <target dev=…/> of each of its interfaces. It rides on the row because it is the ONLY authoritative answer to which domain owns a given vnet device: a tap carries no domain identity in sysfs, and the fe:54:/52:54: MAC resemblance is a QEMU convention rather than a record. Empty means this domain's interfaces name no host device, which is the ordinary shape for a guest on a libvirt-managed network."
+          "sentence": "The host-side tap devices this domain owns, from the <target dev=\u2026/> of each of its interfaces. It rides on the row because it is the ONLY authoritative answer to which domain owns a given vnet device: a tap carries no domain identity in sysfs, and the fe:54:/52:54: MAC resemblance is a QEMU convention rather than a record. Empty means this domain's interfaces name no host device, which is the ordinary shape for a guest on a libvirt-managed network."
+        },
+        "IPAddressesUnobservable": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/*/ip_note",
+          "sentence": "Why this running guest's addresses could not be read, when they could not. A blank address column is otherwise ambiguous between a guest that has no address and a guest whose address nobody could tell us, and only the second is a gap in the reading. It is a FACT rather than an unobservable record because the rulebook reads it to decide which of those two a row is showing, and rules are computed from facts. Absent on a guest whose addresses were read, and on one that is not running, where an address does not apply."
         }
       },
       "redactions": [

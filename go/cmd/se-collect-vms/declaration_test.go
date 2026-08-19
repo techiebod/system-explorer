@@ -70,7 +70,7 @@ func TestTheDeclarationNamesExactlyTheFactsThisCollectorEmits(t *testing.T) {
 	// Every key the emitter can put in `facts`, or name on an unobservable
 	// record, held beside the declaration so the two cannot drift.
 	emitted := []string{
-		"State", "IPAddresses", "MemoryMiB", "VCPUs",
+		"State", "IPAddresses", "IPAddressesUnobservable", "MemoryMiB", "VCPUs",
 		"Autostart", "Persistent", "HostTaps",
 	}
 	if len(collection.Facts) != len(emitted) {

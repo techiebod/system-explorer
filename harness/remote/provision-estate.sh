@@ -291,3 +291,41 @@ fi
 
 say "receipts now:"
 sed 's/=.*/=<set>/' "$RECEIPTS" >&2
+
+# ---------------------------------------------------------------- libvirt domain
+# A nested domain, so the `vms` collector has something to read.
+#
+# Without one the comparison is vacuous in the worst way: libvirtd answers,
+# both implementations walk it, both find nothing, and both commit zero — a
+# green run over an empty set, which is what "17 of 18 clean" hid until a
+# domain existed. It never boots anything useful and does not need to: a
+# defined domain carries name, uuid, state, memory, vcpus, autostart and
+# persistent, and a STARTED one adds the host tap and a DHCP lease, which is
+# the address path.
+if command -v virsh >/dev/null 2>&1 && systemctl is-active --quiet libvirtd; then
+    if ! sudo virsh dominfo se-nested-probe >/dev/null 2>&1; then
+        sudo tee /tmp/se-nested-probe.xml >/dev/null <<'XML'
+<domain type='qemu'>
+  <name>se-nested-probe</name>
+  <memory unit='KiB'>262144</memory>
+  <currentMemory unit='KiB'>262144</currentMemory>
+  <vcpu placement='static'>1</vcpu>
+  <os><type arch='x86_64' machine='pc'>hvm</type></os>
+  <devices>
+    <interface type='network'>
+      <mac address='52:54:00:ab:cd:ef'/>
+      <source network='default'/>
+      <model type='virtio'/>
+    </interface>
+  </devices>
+</domain>
+XML
+        sudo virsh define /tmp/se-nested-probe.xml >/dev/null && say "se-nested-probe defined"
+    fi
+    # Started, because a shutoff domain reaches neither HostTaps nor the
+    # address path — and those are half of what the collection publishes.
+    # TCG rather than KVM: this guest is itself a VM, so nested acceleration
+    # may be unavailable and is not needed for a domain that boots nothing.
+    sudo virsh start se-nested-probe >/dev/null 2>&1 || true
+    say "vms venue: $(sudo virsh list --all --name | grep -c . ) domain(s) defined"
+fi
