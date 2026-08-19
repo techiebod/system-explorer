@@ -106,6 +106,214 @@ UUID_SHAPE = re.compile(
     r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
 )
 NIL_UUID = "00000000-0000-0000-0000-000000000000"  # a non-value, not a leak
+# systemd's published message catalogue, as systemd itself lists it.
+#
+# THE PROBLEM THIS SOLVES, because it is the one shape §21's independence rule
+# makes structurally unfixable anywhere else. A journal entry carries BOTH a
+# `_MACHINE_ID` — a real identity that must be substituted — and a `MESSAGE_ID`,
+# systemd's catalogue id for the message TYPE, compiled into the software and
+# byte-identical on every machine on earth. Both are 32 hex. After a scrub the
+# first carries the 5cb0 marker and this checker passes it; the second is
+# untouched, correctly, and this checker flagged all of them. Every systemd host
+# emits catalogue ids, so no capture of the journal could ever pass, and `logs`
+# had no corpus at all.
+#
+# The repair could NOT be on the manifest side: §21 gives these detectors one
+# manifest-derived bit and forbids them the collector's vocabulary, because a
+# checker that knew what the collector knew would share its blind spots. So this
+# is not the collector's opinion — it is a published, external, closed set,
+# restated here exactly as REPLAY_BOOT_ID and NIL_UUID are restated rather than
+# imported. A reviewer can check any line of it against systemd.
+#
+# Deny-by-default survives intact, which is the whole reason this is a VALUE
+# allowlist and not a field one: a 32-hex value in any field that is not one of
+# these and carries no scrub marker is still a finding. A real machine-id that
+# landed in MESSAGE_ID would still be caught.
+#
+# Regenerate on a systemd host with:  journalctl --list-catalog | awk '{print $1}'
+# A newer systemd publishes more ids, and a capture carrying one this table does
+# not hold FAILS CLOSED — the fix is a reviewed line here, which is the point.
+SYSTEMD_CATALOGUE_IDS = {
+    "0027229ca0644181a76c4e92458afa2e":
+        "systemd: One or more messages could not be forwarded to syslog",
+    "010190138f494e29a0ef6669749531aa":
+        "systemd: No valid unit name can be generated for device @DE...",
+    "0e4284a0caca4bfc81c0bb6786972673": "systemd: Unit skipped",
+    "0e54470984ac419689743d957a119e2e": "systemd: Failed to allocate manager object",
+    "1675d7f172174098b1108bf8c7dc8f5d": "systemd: DNSSEC validation failed",
+    "187c62eb1e7f463bb530394f52cb090f": "systemd: A Portable Service has been attached",
+    "1b3bb94037f04bbf81028e135a12d293":
+        "systemd: Failed to generate valid unit name from path '@MOU...",
+    "1c0454c1bd2241e0ac6fefb4bc631433":
+        "systemd: systemd-udev-settle.service is deprecated.",
+    "1dee0369c7fc4736b7099b38ecb46ee7": "systemd: Mount point is not empty",
+    "1edabb4eda2a49c19bc0206f24b43889": "systemd: Mount point path contains symlinks",
+    "1f4e0a44a88649939aaea34fc6da8c95":
+        "systemd: Process @COREDUMP_PID@ (@COREDUMP_COMM@) terminate...",
+    "24d8d4452573402496068381a6312df2":
+        "systemd: A virtual machine or container has been started",
+    "267437d33fdd41099ad76221cc24a335":
+        "systemd: Battery level critically low, powering off",
+    "2ed18d4f78ca47f0a9bc25271c26adb4":
+        "systemd: Init received fatal signal but waitpid() failed",
+    "3354939424b4456d9802ca8333ed424a":
+        "systemd: Session @SESSION_ID@ has been terminated",
+    "3405205d368e49feb5ab3925fee13874":
+        "systemd: Non-system user or group used for device ownership",
+    "36db2dfa5a9045e1bd4af5f93e1cf057":
+        "systemd: DNSSEC mode has been turned off, as server doesn't...",
+    "375ac151ef9d4de39068b3efbfed0cee":
+        "systemd: Opening of the configure watchdog device failed",
+    "38e8b1e039ad469291b18b44c553a5b7": "systemd: Init failed to fork crash shell",
+    "39f53479d3a045ac8e11786248231fbf":
+        "systemd: A start job for unit @UNIT@ has finished successfully",
+    "3a73a98baf5b4b199929e3226c0be783":
+        "systemd: Init received fatal signal from other process",
+    "3ed0163e868a4417ab8b9e210407a96c": "systemd: System reboot failed after crash",
+    "3f7d5ef3e54f4302b4f0b143bb270cab": "systemd: TPM PCR Extended",
+    "42695b500df048298bee37159caa9f2e":
+        "systemd: Init failed to drop capability bounding set",
+    "438188861e0b427a9d638a90487a0ca6": "systemd: TPM clear requested",
+    "45f82f4aef7a4bbf942ce861d1f20990": "systemd: Time zone change to @TIMEZONE@",
+    "4ac7566d4d7548f4981f629a28f0f829":
+        "systemd: Init received fatal signal and dumped core",
+    "4c2e46d266a747c6ac1460aa54484fa7": "systemd: TPM NvPCR Extended",
+    "4d4408cfd0d144859184d1e65d7c8a65":
+        "systemd: A DNSSEC trust anchor has been revoked",
+    "5084367542f7472dbc6a94125d5debce":
+        "systemd: Unit job deleted due to an ordering cycle",
+    "50876a9db00f4c40bde1a2ad381c3a1b":
+        "systemd: The system is configured in a way that might cause...",
+    "56b1cd96f24246c5b607666fda952356":
+        "systemd: Init received fatal signal but coredump failed",
+    "58432bd3bace477cb514b56381b8a758":
+        "systemd: A virtual machine or container has been terminated",
+    "59288af523be43a28d494e41e26e4510":
+        "systemd: Manager failed to start default target",
+    "5aadd8e954dc4b1a8c954d63fd9e1137":
+        "systemd: Core file was truncated to @SIZE_LIMIT@ bytes.",
+    "5addb3a06a734d3396b794bf98fb2d01":
+        "systemd: Init received fatal signal while coredump is disabled",
+    "5c9e98de4ab94c6a9d04d0ad793bd903":
+        "systemd: Init received fatal signal but fork failed",
+    "5e6f1f5e4db64a0eaee3368249d20b94":
+        "systemd: Init received fatal signal from unknown sender pro...",
+    "5eb03494b6584870a536b337290809b3":
+        "systemd: Automatic restarting of a unit has been scheduled",
+    "5ed836f1766f4a8a9fc5da45aae23b29":
+        "systemd: Manager failed to collect passed file descriptors",
+    "641257651c1b4ec9a8624d7a40a9e1e7":
+        "systemd: Process @EXECUTABLE@ could not be executed",
+    "645c735537634ae0a32b15a7c6cba7d4": "systemd: Init execution froze",
+    "658a67adc1c940b3b3316e7e8628834a": "systemd: Manager failed to load SELinux policy",
+    "689b4fcc97b4486ea5da92db69c9e314":
+        "systemd: Manager failed to isolate default target",
+    "6a40fbfbd2ba4b8db02fb40c9cd090d7":
+        "systemd: Init failed to fix up environment variables",
+    "6bbd95ee977941e497c48be27c254128": "systemd: System sleep state @SLEEP@ entered",
+    "76c5c754d628490d8ecba4c9d042112b": "systemd: A Portable Service has been detached",
+    "79e05b67bc4545d1922fe47107ee60c5": "systemd: Manager failed to run main loop",
+    "7ad2d189f7e94e70a38c781354912448": "systemd: Unit succeeded",
+    "7b05ebc668384222baa8881179cfda54":
+        "systemd: A reload job for unit @UNIT@ has finished",
+    "7c8a41f37b764941a0e1780b1be2f037": "systemd: Initial clock synchronization",
+    "7d4958e842da4a758f6c1cdc7b36dcc5":
+        "systemd: A start job for unit @UNIT@ has begun execution",
+    "7db73c8af0d94eeb822ae04323fe6ab6": "systemd: The system clock has been changed",
+    "83f84b35ee264f74a3896a9717af34cb":
+        "systemd: Init received fatal signal from our own process",
+    "872729b47dbe473eb768ccecd477beda": "systemd: Crash shell failed to execute",
+    "8739789eca064325af15a8ed0ecfc556":
+        "systemd: Sending a keep-alive to the hardware watchdog devi...",
+    "8811e6df2a8e40f58a94cea26f8ebf14": "systemd: System sleep state @SLEEP@ left",
+    "8d45620c1a4348dbb17410da57c60c66":
+        "systemd: A new session @SESSION_ID@ has been created for us...",
+    "8f07a5b814ca4762b89fcc3082e48aed":
+        "systemd: TPM NV index backed PCRs not supported on the loca...",
+    "98268866d1d54a499c4e98921d93bc40": "systemd: System shutdown initiated",
+    "98e322203f7a4ed290d09fe03c09fe15": "systemd: Unit process exited",
+    "9cf56b8baf9546cf9478783a8de42113":
+        "systemd: A foreign process changed a sysctl systemd-network...",
+    "9d1aaa27d60140bd96365438aad20286":
+        "systemd: A stop job for unit @UNIT@ has finished",
+    "a596d6fe7bfa4994828e72309e95d61e":
+        "systemd: Messages from a service have been suppressed",
+    "a8fa8dacdb1d443e9503b8be367a6adb": "systemd: SysV Service Found",
+    "ab984ea008964fb88d6e389fb513fb94":
+        "systemd: TPM NV index space exhausted, unable to initialize...",
+    "ad7089f928ac4f7ea00c07457d47ba8a":
+        "systemd: Authorization failure while attempting to enroll S...",
+    "ae8f7b866b0347b9af31fe1c80b127c0": "systemd: Resources consumed by unit runtime",
+    "af55a6f75b544431b72649f36ff6d62c":
+        "systemd: Critical error while doing system shutdown",
+    "b07a249cd024414a82dd00cd181378ff": "systemd: System start-up is now complete",
+    "b2bcbaf5edf948e093ce50bbea0e81ec":
+        "systemd: The Secure Attention Key (SAK) was pressed on @SEA...",
+    "b3112ddad19045538c76685ba5918a80":
+        "systemd: Unable to break ordering cycle between units",
+    "b480325f9c394a7b802c231e51a2752c":
+        "systemd: Special user @OFFENDING_USER@ configured, this is ...",
+    "b61fdac612e94b9182285b998843061f":
+        "systemd: Accepting user/group name @USER_GROUP_NAME@, which...",
+    "be02cf6855d2428ba40df7e9d022f03d":
+        "systemd: A start job for unit @UNIT@ has failed",
+    "bfc2430724ab44499735b4f94cca9295":
+        "systemd: User manager failed to disable new privileges",
+    "c14aaf76ec284a5fa1f105f88dfb061c": "systemd: System factory reset initiated",
+    "c7a787079b354eaaa9e77b371893cd27": "systemd: Time change",
+    "d18e0339efb24a068d9c1060221048c2":
+        "systemd: Init failed to fork off valgrind helper",
+    "d34d037fff1847e6ae669a370e694725":
+        "systemd: A reload job for unit @UNIT@ has begun execution",
+    "d67fa9f847aa4b048a2ae33535331adb":
+        "systemd: Manager failed to write Smack onlycap list",
+    "d93fb3c9c24d451a97cea615ce59c00b": "systemd: The journal has been stopped",
+    "d989611b15e44c9dbf31e3c81256e4ed":
+        "systemd: systemd-oomd killed one or more processes in unit ...",
+    "d9b373ed55a64feb8242e02dbe79a49c": "systemd: Unit failed",
+    "d9ec5e95e4b646aaaea2fd05214edbda": "systemd: Container init crashed",
+    "dbb136b10ef4457ba47a795d62f108c9":
+        "systemd: User manager failed to determine $XDG_RUNTIME_DIR ...",
+    "de5b426a63be47a7b6ac3eaac82e2f6f":
+        "systemd: A stop job for unit @UNIT@ has begun execution",
+    "e6f456bd92004d9580160b2207555186":
+        "systemd: Battery level critically low, waiting for charger",
+    "e7852bfe46784ed0accde04bc864c2d5": "systemd: Seat @SEAT_ID@ has now been removed",
+    "e9bf28e6e834481bb6f48f548ad13606": "systemd: Journal messages have been missed",
+    "ec387f577b844b8fa948f33cad9a75e6": "systemd: Disk space used by the journal",
+    "ed158c2df8884fa584eead2d902c1032":
+        "systemd: Init failed to drop capability bounding set of use...",
+    "eed00a68ffd84e31882105fd973abdd1": "systemd: User manager start-up is now complete",
+    "f27a3f94406a4783b946a9bc849e9452": "systemd: Unit ordering cycle found",
+    "f77379a8490b408bbe5f6940505a777b": "systemd: The journal has been started",
+    "f9b0be465ad540d0850ad32172d57c21": "systemd: Memory Trimmed",
+    "fc2e22bc6ee647b6b90729ab34a250b1":
+        "systemd: Process @COREDUMP_PID@ (@COREDUMP_COMM@) dumped core",
+    "fcbefc5da23d428093f97c82a9290f7b": "systemd: A new seat @SEAT_ID@ is now available",
+    "fe6faa94e7774663a0da52717891d8ef":
+        "systemd: A process of @UNIT@ unit has been killed by the OO...",
+}
+
+# OpenSSH's fingerprint rendering, which is an identifier with no other shape.
+#
+# `Accepted publickey for ... ED25519 SHA256:<43 base64 chars>` survived both
+# the scrubber and these detectors verbatim: `prose` substitutes shapes and
+# `--hostnames` removes words somebody chose, and a base64 hash is neither — so
+# the only thing that reached it was naming it to the run, which means a capture
+# carrying a fingerprint nobody named passed SILENTLY. A green --check on that
+# payload was a false clean, which is the exact failure this gate exists to
+# prevent.
+#
+# It is not a secret — it is a hash of a public key — but it correlates: anyone
+# holding that key can recognise the estate it authenticates to. The `SHA256:`
+# and `MD5:` prefixes are what make it findable, and they are OpenSSH's own
+# spelling rather than anything this repository invented.
+SSH_FINGERPRINT_MARKER = "ANON"  # what a substituted one starts with
+SSH_FINGERPRINT = re.compile(
+    r"\b(?:SHA256:[A-Za-z0-9+/]{43}=?|MD5:(?:[0-9a-f]{2}:){15}[0-9a-f]{2})\b"
+)
+
+
 # The reference collector's published replay stand-in (DESIGN 19: a constant
 # boot_id is the honest bound of what replay can authenticate). Restated here,
 # not imported: it identifies the harness, never a machine.
@@ -338,10 +546,31 @@ def _scan_text(
     for m in HEX32.finditer(text):
         if in_spelled(m.span()) or m.group(0).lower().startswith(HEX32_MARKER):
             continue
+        # systemd's catalogue ids wear this exact shape and identify a MESSAGE
+        # TYPE rather than a machine — see SYSTEMD_CATALOGUE_IDS for why the
+        # allowlist is on the VALUE and could not be on the field.
+        if m.group(0).lower() in SYSTEMD_CATALOGUE_IDS:
+            continue
         findings.append(Finding(
             path, "machine-id",
             f"32-hex {m.group(0)} is the machine-id shape and carries no "
             f"{HEX32_MARKER}… scrub marker",
+        ))
+
+    # An identifier with no shape but its own prefix. Unconditional, and
+    # deliberately not gated on an id-ish key: the one this was written for sat
+    # in a journal MESSAGE, which is prose under a key that says nothing.
+    for m in SSH_FINGERPRINT.finditer(text):
+        # A scrubbed fingerprint announces itself, the same way a scrubbed
+        # 32-hex identifier carries 5cb0. Restated here rather than imported
+        # from the scrubber: this checker must be able to disagree with it.
+        body = m.group(0).partition(":")[2]
+        if body.startswith(SSH_FINGERPRINT_MARKER) or body.startswith("a0:a0:"):
+            continue
+        findings.append(Finding(
+            path, "key-fingerprint",
+            f"{m.group(0)} is an OpenSSH public-key fingerprint — not a secret, "
+            "but anyone holding the key recognises the estate it authenticates to",
         ))
 
     # Under an id-ish key the decimal floor drops to 16 digits: ~5% of real

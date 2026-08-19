@@ -376,6 +376,12 @@ EXPECTED = (
     # wires the instance to both. If this goes red here, the replay judge has
     # grown a rule that sees a wiring no committed capture holds — DESIGN 20's
     # trap statement and the case table move together, not this row alone.
+    Expectation("a9_container_blind.py", None, "logs/healthy", "GREEN",
+                "the container a line was written from, never lifted, which no "
+                "committed capture can expose: the captured guest ran no "
+                "containers so no entry carries CONTAINER_NAME at all, and "
+                "reading the member or never reading it give the same hundred "
+                "rows; the differential guard owns the red"),
     # ── GREEN, adjudicated: the third trap, three more spellings ──────
     #
     # Each of these three is a port that is wrong about a shape no committed
@@ -558,6 +564,11 @@ ADJUDICATED_GREEN = {
     "exited and a running-only scope rule agrees on both (DESIGN 20); the "
     "differential guard owns this red, under docker-restarting-container and "
     "docker-paused-container",
+    ("a9_container_blind.py", None): "the third trap: replay cannot see a "
+    "journal line written from a container, because the captured guest ran "
+    "none and systemd omits CONTAINER_NAME entirely on a line no runtime "
+    "forwarded (DESIGN 20); the differential guard owns this red, under "
+    "logs-containerised-entry",
     ("a9_absent_count_is_zero.py", None): "the third trap: replay cannot see a "
     "paperless whose API omits documents_total, because the only captured "
     "archive answers it (DESIGN 20); the differential guard owns this red, "

@@ -81,6 +81,7 @@ SEEDS = {
     "paperless": "paperless/healthy",
     "plex": "plex/healthy",
     "protection": "protection/healthy",
+    "logs": "logs/healthy",
 }
 
 # Names the operators mint. Constants rather than inline literals so the
@@ -1723,6 +1724,47 @@ def _machine_scope(payloads: dict) -> dict:
     return payloads
 
 
+# ── logs: a line written from inside a container ─────────────────────────
+
+LOGS_PAGE = "r---n--100"
+LOGS_CONTAINER = "media-frontend"
+
+
+def _containerised_entry(payloads: dict) -> dict:
+    """CLASS container-blind: a log line that cannot be attributed to what
+    wrote it.
+
+    systemd's journal carries `CONTAINER_NAME` on every entry forwarded by a
+    container runtime, and the adapter publishes it as `Container` — which is
+    the fact that answers "which of the twenty-three things on this host said
+    that". The captured guest ran no containers, so no entry carries the
+    member, and a port that never implemented the fact emits exactly the
+    committed rows.
+
+    That is the shape worth minting rather than naming: a journal on a host
+    running containers is the ordinary case, not an exotic one, and a
+    collection that reads the field on a bare guest and drops it on a busy one
+    is wrong precisely where the question is hard.
+
+    Added to ONE entry, so the mutated page still carries uncontainerised lines
+    beside it — a port that published a Container for every row would otherwise
+    be indistinguishable from one that reads the member.
+    """
+    page = payloads.get(LOGS_PAGE)
+    if not isinstance(page, list) or not page:
+        raise MutatorError("the payload carries no journal page")
+    entry = next((e for e in page if isinstance(e, dict) and e.get("__CURSOR")), None)
+    if entry is None:
+        raise MutatorError("the page carries no addressable entry")
+    if entry.get("CONTAINER_NAME"):
+        raise MutatorError(
+            "this entry already names a container, so staging one would be "
+            "overwriting a reading rather than minting the shape no capture holds"
+        )
+    entry["CONTAINER_NAME"] = LOGS_CONTAINER
+    return payloads
+
+
 # ── paperless: a count member the API did not answer ─────────────────────
 
 PAPERLESS_STATISTICS = "api-statistics"
@@ -1865,6 +1907,8 @@ class Operator:
 
 
 OPERATORS: tuple[Operator, ...] = (
+    Operator("logs-containerised-entry", "logs", "container-blind",
+             _containerised_entry),
     Operator("paperless-count-absent", "paperless", "absent-count-is-zero",
              _absent_document_count),
     Operator("plex-never-scanned-section", "plex", "epoch-zero-timestamp",

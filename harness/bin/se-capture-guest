@@ -105,9 +105,29 @@ print(json.dumps(_dpkg_rows()))
 # uid (measured on the lab guest: 200 of 200 entries _UID=1000, no kernel
 # transport at all), so an unprivileged capture would be a specimen of one
 # user'"'"'s session rather than of a machine'"'"'s journal.
+# The adapters package imports ALL TWENTY adapters in its __init__, so
+# importing one drags in every other one'"'"'s third-party dependency — httpx,
+# dbus_fast, libvirt — and a guest that has journalctl and python3 still cannot
+# run this capture. Installing those on the guest is the wrong repair twice
+# over: it makes a capture depend on distro mirrors (the reason this tool sets
+# no package_update), and it makes the payload contingent on packages that have
+# nothing to do with the interface being read.
+#
+# So the package is pre-bound in sys.modules as a real package object with a
+# __path__ and no body. Python then finds the submodule through that __path__
+# and never executes the registry __init__; `from .. import envelope` inside the
+# adapter still resolves, because system_explorer.agent is the genuine module.
+# What is loaded is exactly the one adapter being instrumented, which is also
+# what the capture claims to be running.
 logs_py='
-import json, sys
+import importlib, json, sys, types
 sys.path.insert(0, "/tmp/secmp/src")
+importlib.import_module("system_explorer.agent")
+PKG = "system_explorer.agent.adapters"
+if PKG not in sys.modules:
+    stub = types.ModuleType(PKG)
+    stub.__path__ = ["/tmp/secmp/src/system_explorer/agent/adapters"]
+    sys.modules[PKG] = stub
 from system_explorer.agent.adapters.logs import DEFAULT_LIMIT, _run_journalctl
 print(json.dumps(_run_journalctl(["-r", "-n", str(DEFAULT_LIMIT)])))
 '
@@ -870,6 +890,25 @@ if [[ $collector == kea ]]; then
         echo "  loaded, so the leases collection has no interface on this guest and" >&2
         echo "  no payload is captured for it. A variant staged here therefore opens" >&2
         echo "  three collections, not four." >&2
+    fi
+fi
+
+# Some acquisitions are the ADAPTER, instrumented — hardware's tree walk,
+# downloaders' two RPC clients, logs' journal query — and those import
+# system_explorer from /tmp/secmp/src on the guest. Nothing here used to put it
+# there: the path was referenced by five capture scripts and staged by hand,
+# which is a manual step that works until the person doing it is not the person
+# who knew about it, and then reads as "this collector cannot read its interface
+# on this guest". Staged from the acquisitions themselves rather than from a
+# list of collectors, so a new instrumented capture is covered the day it is
+# written.
+if printf '%s\n' "${acquisitions[@]}" | grep -q /tmp/secmp; then
+    echo "  staging src/ to ${target}:/tmp/secmp/src (an instrumented acquisition imports it)"
+    if ! tar czf - -C "$(dirname "$0")/../.." src \
+        | ssh "${ssh_opts[@]}" -- "$target" \
+            'rm -rf /tmp/secmp && mkdir -p /tmp/secmp && tar xzf - -C /tmp/secmp'; then
+        echo "  FAILED: could not stage the collector source on $target" >&2
+        exit 1
     fi
 fi
 

@@ -25,11 +25,15 @@
 
   "*._HOSTNAME": {"discloses": "location", "format": "hostname"},
 
-  "*.MESSAGE": {"discloses": "content"},
-  "*.SYSLOG_RAW": {"discloses": "content"},
-  "*._CMDLINE": {"discloses": "content"},
+  "*.MESSAGE": {"discloses": "content", "format": "prose"},
+  "*.SYSLOG_RAW": {"discloses": "content", "format": "prose"},
+  "*._CMDLINE": {"discloses": "content", "format": "prose"},
   "*.USER_ID": {"discloses": "content", "format": "name"},
 
+  "#later-leaves": "Three members the first capture host did not emit and this one does. `USER_INVOCATION_ID` is systemd's invocation id for a USER unit — the same 32-hex identity as INVOCATION_ID beside it, and deliberately not exempt just because it is rarer; it is not a catalogue constant, so the independent detectors flag it unless it is substituted, which is the deny-by-default property working. `USERSPACE_USEC` is how long userspace took to start, a duration. `_SELINUX_CONTEXT` is `unconfined` on a host with no policy loaded — a policy word, identical everywhere SELinux is not enforcing. STATED BOUND: on a host that IS enforcing, that member carries a user and role (`unconfined_u:unconfined_r:...`), which is identity, and this entry must be revisited before such a capture is scrubbed.",
+  "*.USER_INVOCATION_ID": {"discloses": "identity"},
+  "*.USERSPACE_USEC": {"discloses": "nothing"},
+  "*._SELINUX_CONTEXT": {"discloses": "nothing"},
   "*.MESSAGE_ID": {"discloses": "nothing"},
   "*.PRIORITY": {"discloses": "nothing"},
   "*.SYSLOG_FACILITY": {"discloses": "nothing"},

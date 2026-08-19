@@ -125,6 +125,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import hashlib
+import base64
 import hmac
 import ipaddress
 import json
@@ -280,6 +281,20 @@ KEEP_UNCHANGED_SHAPES = (
     re.compile(r"^@[\w-]+$"),
 )
 
+# The marker a substituted fingerprint carries so the independent checker can
+# tell it from a real one — the same job 5cb0 does for 32-hex identifiers.
+# Four base64 characters, which is exactly three bytes, so the rest of the
+# body stays aligned and the token keeps OpenSSH's own length.
+SSH_FINGERPRINT_MARKER = "ANON"
+MD5_FINGERPRINT_MARKER = "A0A0"
+
+# OpenSSH's own two renderings. Restated here rather than imported from the
+# detectors, for the same reason every other shape is: the checker and the
+# scrubber must be able to disagree, and a shared regex is a shared blind spot.
+SSH_FINGERPRINT = re.compile(
+    r"\b(?:SHA256:[A-Za-z0-9+/]{43}=?|MD5:(?:[0-9a-f]{2}:){15}[0-9a-f]{2})\b"
+)
+
 TAILNET_ULA = ipaddress.ip_network("fd7a:115c:a1e0::/48")
 ULA = ipaddress.ip_network("fc00::/7")
 CGNAT = ipaddress.ip_network("100.64.0.0/10")
@@ -393,6 +408,42 @@ def _serial_replacement(ctx: Ctx, serial: str) -> str:
     body = f"{n:026X}"
     keep = max(len(serial) - 4, 4)  # length preserved once past the marker
     return ctx.remember("serial", serial, lambda: "ANON" + body[:keep])
+
+
+def _fingerprint_replacement(ctx: Ctx, fingerprint: str) -> str:
+    """An OpenSSH key fingerprint, replaced by one of the same shape.
+
+    Not a secret — it is a hash of a PUBLIC key — but it correlates: anyone
+    holding the key recognises the estate it authenticates to, and the journal
+    prints it on every accepted login. It has no shape the free-text pass knew
+    and no name anybody would think to pass with --hostnames, so before this it
+    survived both the scrubber and the independent detectors verbatim.
+
+    The rendering is preserved rather than replaced with a marker, because the
+    surrounding sshd line is the payload: `Accepted publickey ... ED25519
+    SHA256:<44 chars>` has to go on reading like sshd wrote it, or the corpus
+    stops being a specimen of the interface. Base64 of the keyed digest, cut to
+    OpenSSH's own 43 characters, unpadded exactly as OpenSSH prints it.
+    """
+    algorithm, _, body = fingerprint.partition(":")
+    n = ctx.derive("fingerprint", fingerprint)
+
+    def build() -> str:
+        # A SCRUBBED fingerprint announces itself, exactly as a scrubbed 32-hex
+        # identifier announces itself with 5cb0. Without a marker the checker
+        # cannot tell a substituted fingerprint from a real one and flags the
+        # corpus forever — and the alternative, teaching it to recognise this
+        # scrubber's arithmetic, is the shared blind spot the two halves of the
+        # gate exist to avoid. ANON is this tool's own marker, already carried
+        # by substituted serials.
+        if algorithm.upper() == "MD5":
+            octets = MD5_FINGERPRINT_MARKER + f"{n:032X}"[:32 - len(MD5_FINGERPRINT_MARKER)]
+            return "MD5:" + ":".join(
+                octets[i:i + 2].lower() for i in range(0, 32, 2))
+        raw = base64.b64decode(SSH_FINGERPRINT_MARKER) + n.to_bytes(32, "big")[:29]
+        return "SHA256:" + base64.b64encode(raw).decode().rstrip("=")[:43]
+
+    return ctx.remember("fingerprint", fingerprint, build)
 
 
 def _mac_replacement(ctx: Ctx, mac: str) -> str:
@@ -568,6 +619,13 @@ def scrub_text(text: str, ctx: Ctx) -> str:
         if pattern.search(text):
             replacement = _host_replacement(ctx, host)
             text = pattern.sub(lambda _m, _r=replacement: park(_r), text)
+
+    # Before every other pattern: a base64 body is 43 characters of mixed
+    # alphanumerics, and the hex and serial patterns below will happily match
+    # inside one and leave a fingerprint that is half-substituted and no longer
+    # the shape sshd printed.
+    text = SSH_FINGERPRINT.sub(
+        lambda m: park(_fingerprint_replacement(ctx, m.group(0))), text)
 
     def spelled(match: re.Match) -> str:
         return park(match.group(1) + _hex16_replacement(ctx, match.group(2)))

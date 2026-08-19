@@ -297,6 +297,13 @@ CASES = (
          # the hard way still drops `paused`, and a closed set is closed member
          # by member or not at all.
          ("ScopeUnit", differential.PAUSED_SCOPE)),
+    Case("container-blind", "logs-containerised-entry",
+         "a9_container_blind.py", differential.DISAGREE, "differences",
+         # The fact name and the container's own name. A journal line from a
+         # container carries CONTAINER_NAME and the row publishes it as
+         # Container; a port blind to the member emits the row without it, so
+         # the disagreement is the fact appearing at all.
+         ("Container", differential.LOGS_CONTAINER)),
     # ── the three collectors ported on 2026-08-19 ───────────────────────
     Case("absent-count-is-zero", "paperless-count-absent",
          "a9_absent_count_is_zero.py", differential.DISAGREE, "differences",

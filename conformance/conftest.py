@@ -59,6 +59,7 @@ GO_COLLECTORS = {
     "paperless": "./cmd/se-collect-paperless",
     "plex": "./cmd/se-collect-plex",
     "protection": "./cmd/se-collect-protection",
+    "logs": "./cmd/se-collect-logs",
 }
 
 
