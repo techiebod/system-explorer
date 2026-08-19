@@ -81,6 +81,11 @@ REQUIRED = {
     # message that named the very scenario it was refusing. The opinion,
     # roll-up and answer halves of item 7 are gates 5, 4 and 5 — none of
     # those surfaces exists to be judged here.
+    # item 1's gate-3 half — two instances with identical native names never
+    # merge in one collator's store. The hub half is gate 4's. This scenario
+    # was the README's own worked example of the fixture format and had never
+    # been written as a fixture.
+    "two-instances-never-merge": 1,
     "declaration-unknown-holds-the-batch": 7,
     "undeclared-fact-reaches-no-join": 7,
 }

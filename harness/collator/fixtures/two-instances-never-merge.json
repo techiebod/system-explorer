@@ -1,0 +1,153 @@
+{
+  "name": "two-instances-never-merge",
+  "acceptance_item": 1,
+  "note": "radarr and sonarr both run in one compose project, both speak Servarr API v3, and both name their third indexer `indexer:3`. The minted id string is identical and the scope is what keeps them apart \u2014 so a collator keying on the native name alone publishes ONE object whose facts are whichever instance answered last, and nothing anywhere says a reading was lost. The third round is the half that makes the scope real rather than decorative: radarr re-commits with nothing, which retires radarr's row and must leave sonarr's untouched. A collator that scoped ids but not RETIREMENT passes the first two rounds and deletes another instance's objects on the third.",
+  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"servarr\",\"collections\":[{\"name\":\"indexers\",\"freshness\":\"1h\",\"prefix\":\"indexer\",\"facts\":{\"Port\":{\"type\":\"integer\",\"temperament\":\"configuration\"}}}]}",
+  "streams": [
+    {
+      "instance": "radarr",
+      "records": [
+        {
+          "record": "begin",
+          "request": "batch-radarr-1",
+          "batch": "batch-radarr-1",
+          "declaration": "sha256:1b5a7a3cd3ec37f0b18ad9e633e591cc63fea1ae11b3e0ecb7c560f89e334ed7",
+          "boot_id": "5e000000-0000-4000-8000-000000000001",
+          "timens": 0,
+          "instance": "radarr",
+          "generations": {
+            "indexers": 1
+          }
+        },
+        {
+          "record": "object",
+          "collection": "indexers",
+          "name": "indexer:3",
+          "facts": {
+            "Port": 7878
+          },
+          "at": 10.5
+        },
+        {
+          "record": "commit",
+          "collection": "indexers",
+          "generation": 1,
+          "objects": 1,
+          "assertions": 0,
+          "unobservable": 0,
+          "cpu_ms": 0.5
+        },
+        {
+          "record": "end",
+          "request": "batch-radarr-1",
+          "batch": "batch-radarr-1",
+          "cpu_ms": 0.5,
+          "wall_ms": 1.0
+        }
+      ]
+    },
+    {
+      "instance": "sonarr",
+      "records": [
+        {
+          "record": "begin",
+          "request": "batch-sonarr-1",
+          "batch": "batch-sonarr-1",
+          "declaration": "sha256:1b5a7a3cd3ec37f0b18ad9e633e591cc63fea1ae11b3e0ecb7c560f89e334ed7",
+          "boot_id": "5e000000-0000-4000-8000-000000000001",
+          "timens": 0,
+          "instance": "sonarr",
+          "generations": {
+            "indexers": 2
+          }
+        },
+        {
+          "record": "object",
+          "collection": "indexers",
+          "name": "indexer:3",
+          "facts": {
+            "Port": 8989
+          },
+          "at": 11.5
+        },
+        {
+          "record": "commit",
+          "collection": "indexers",
+          "generation": 2,
+          "objects": 1,
+          "assertions": 0,
+          "unobservable": 0,
+          "cpu_ms": 0.5
+        },
+        {
+          "record": "end",
+          "request": "batch-sonarr-1",
+          "batch": "batch-sonarr-1",
+          "cpu_ms": 0.5,
+          "wall_ms": 1.0
+        }
+      ]
+    },
+    {
+      "instance": "radarr",
+      "records": [
+        {
+          "record": "begin",
+          "request": "batch-radarr-2",
+          "batch": "batch-radarr-2",
+          "declaration": "sha256:1b5a7a3cd3ec37f0b18ad9e633e591cc63fea1ae11b3e0ecb7c560f89e334ed7",
+          "boot_id": "5e000000-0000-4000-8000-000000000001",
+          "timens": 0,
+          "instance": "radarr",
+          "generations": {
+            "indexers": 3
+          }
+        },
+        {
+          "record": "commit",
+          "collection": "indexers",
+          "generation": 3,
+          "objects": 0,
+          "assertions": 0,
+          "unobservable": 0,
+          "cpu_ms": 0.5
+        },
+        {
+          "record": "end",
+          "request": "batch-radarr-2",
+          "batch": "batch-radarr-2",
+          "cpu_ms": 0.5,
+          "wall_ms": 1.0
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "objects": [
+      {
+        "collection": "indexers",
+        "scope": "sonarr",
+        "id": "indexers:indexer:3",
+        "name": "indexer:3",
+        "facts": {
+          "Port": 8989
+        },
+        "at": 11.5
+      }
+    ],
+    "relations": [],
+    "collections": [
+      {
+        "name": "indexers",
+        "generation": 3,
+        "stale": false
+      }
+    ],
+    "rejected": [],
+    "acked": [
+      "batch-radarr-1",
+      "batch-sonarr-1",
+      "batch-radarr-2"
+    ]
+  }
+}
