@@ -1,8 +1,8 @@
 # Parity report — the reference and the port, one machine, one moment
 
 Gate 3 asks for this: *"the parity report per collection is clean or its diffs
-are named and accepted."* It is not clean. Every diff is named below, and three
-of the four classes are findings rather than noise.
+are named and accepted."* It is not clean. Every diff is named below, and each
+class is a finding rather than noise.
 
 Produced by `harness/bin/se-compare --json`, which runs the shipping Python
 adapter and the Go port against the same live interfaces in the same minute and
@@ -10,148 +10,143 @@ diffs their streams with the corpus's own comparator. Replay proves a port
 reproduces a *capture*; this proves it reproduces the *reference* on shapes
 nobody captured.
 
-## What this run covers, and what it does not
+## Two runs, and the second is the one that counts
 
-| | |
-|---|---|
-| Host | `se-test-debian`, the lab's **sparse** guest — Debian 13, systemd 257 |
-| Date | 2026-08-19 |
-| Collectors compared | 18 |
-| Ports built | `CGO_ENABLED=0 GOOS=linux GOARCH=amd64`, static, shipped rather than built in place |
-
-**The venue is the bound, and it is a large one.** The lab's own table calls
-Debian *"the sparse host: most collectors must decline here"*, and that is
-exactly what happened: no zpool, no nft, no docker socket, no libvirt, no
-unbound or kea socket, and no app receipts. So this run compares **decline
-correctness**, which is the half that retires objects, and it compares the
-positive path for only five collectors.
-
-A positive-path parity report wants the fully-provisioned Ubuntu 26.04 guest —
-zpool, nft, docker, libvirt, unbound, kea, smartctl. That guest does not
-currently exist, and this report does not stand in for it.
-
-**`system` is not here at all.** It has no Python adapter, so there is no
-reference to disagree with — already named in
-`test_differential.PORTED_WITHOUT_A_REFERENCE`, and not a gap this report can
-close. 18 compared, 19 ported, 20 collectors.
-
-## Per collector
-
-| Collector | Verdict | What the two sides did |
+| | sparse | provisioned |
 |---|---|---|
-| `hardware` | **clean** | 5 commits, 20 objects, identical |
-| `logs` | **clean** | 1 commit, **100 objects**, identical |
-| `packages` | **clean** | 1 commit, **348 objects**, identical |
-| `units` | **clean** | 1 commit, **280 objects**, identical |
-| `storage` | **clean** | both decline `absent`, identically |
-| `resources` | drift | 33 objects each, 4 rows differ — see class 4 |
-| `bazarr` | **disagree** | reference publishes a row; port declines |
-| `downloaders` | **disagree** | reference publishes 2 commits; port declines both |
-| `docker` | ref raised | reference `ConnectError`; port declines `absent` ×3 |
-| `kea` | ref raised | reference `ValueError`; port declines `absent` ×4 |
-| `network` | ref raised | reference `FileNotFoundError: nft`; port declines `absent` ×2 |
-| `vms` | ref raised | reference `libvirtError`; port declines `absent` |
-| `unbound` | ref raised | reference `ValueError`; port declines `absent` |
-| `protection` | ref raised | reference `RuntimeError`; port declines `absent` ×3 |
-| `servarr` | ref raised | reference `RuntimeError`; port declines `absent` ×4 |
-| `traefik` | ref raised | reference `UnsupportedProtocol`; port declines `absent` ×3 |
-| `paperless` | ref raised | reference `UnsupportedProtocol`; port declines `absent` |
-| `plex` | ref raised | reference `UnsupportedProtocol`; port declines `absent` ×3 |
+| Host | `se-test-debian` — Debian 13 | `se-test-ubuntu2604` — Ubuntu 26.04 |
+| Interfaces | journal, dpkg, busctl only | + zpool, nft, docker, libvirt, unbound, smartctl |
+| Compared | 18 | 18 |
+| **Clean** | **5** | **8** |
 
-Five clean, and four of those at real scale rather than on an empty machine.
+Both are kept because they answer different questions. The sparse host tests
+**decline correctness**, which is the half that retires objects. The provisioned
+host tests the readings, and it is where the interesting shapes live.
 
-## Class 1 — the reference raises where the port declines (ten collectors)
+Ports were cross-built `CGO_ENABLED=0 GOOS=linux GOARCH=amd64`, static, and
+**shipped rather than built in place** — the comparator must measure what would
+deploy, and a build hidden inside a measurement is how a stale binary gets
+measured twice.
+
+**`system` is absent from both.** It has no Python adapter, so there is no
+reference to disagree with — already named in
+`test_differential.PORTED_WITHOUT_A_REFERENCE`. 18 compared, 19 ported, 20
+collectors.
+
+## Clean on the provisioned host — eight, at real scale
+
+| Collector | Objects | What it read |
+|---|---|---|
+| `packages` | 936 | a real dpkg database |
+| `units` | 502 | a real systemd bus |
+| `logs` | 100 | a real journal |
+| `network` | 97 | a real ruleset — **including 13 rules with `OpaqueReason: xt`** |
+| `resources` | 58 | a real cgroup tree, docker scopes included |
+| `hardware` | 20 | a real sysfs walk |
+| `docker` | 6 | two running containers, volumes and networks |
+| `storage` | 1 | **a real pool: `mirror-0` plus a `spares` group** |
+
+Two of those deserve naming, because they are shapes the residual ledger has
+been waiting on.
+
+**`storage` was compared against a pool with a spare in it.** That is the
+configuration where the reference has lost three times, and where the group-vdev
+blindness was found after four layers agreed it was fine. Both sides agreed.
+
+**`network` was compared against a ruleset carrying `xt` statements.** The
+`network/nft-rules-opaque` residual names its venue as *"a capture from a host
+running iptables-nft compatibility (Docker, libvirt)"* and records that no lab
+guest ran that layer. This one does — docker and libvirt between them create 43
+chains across 7 tables — and 13 rule rows carried `OpaqueReason: xt`. Both sides
+agreed on all 97. **The `xt` spelling is now visited.** The bare-string spelling
+still is not, so that residual narrows rather than closes.
+
+## Class 1 — the reference raises where the port declines (seven)
+
+`kea`, `paperless`, `plex`, `protection`, `servarr`, `traefik`, `unbound`.
 
 The shipping adapter throws and produces **no reading at all**; the port
 declines and commits. This is the open queue item *"the three non-absent decline
 reasons are mapped by nothing"*, which recorded the asymmetry on **two**
-collectors and called it half-judged. It is ten, and the exception types are
-seven different ones — `ConnectError`, `ValueError`, `FileNotFoundError`,
-`UnsupportedProtocol`, `RuntimeError`, `libvirtError`.
+collectors and called it half-judged. It was ten on the sparse host and is seven
+here — the three that dropped off did so because the interface arrived, which is
+the point of provisioning.
 
-The asymmetry itself is deliberate and documented: bridging arbitrary exceptions
-into decline reasons inside the live reference would make the two agree *by
-construction* and destroy the comparator's independence on precisely the cases
-it exists to adjudicate.
+The asymmetry itself is deliberate: bridging arbitrary exceptions into decline
+reasons inside the live reference would make the two agree *by construction* and
+destroy the comparator's independence on the cases it exists to adjudicate.
 
-**What this run adds is the second half, and it is the part that needs a
-ruling.** Every one of the ten ports declines **`absent`** — and `absent` is the
-reason that commits zero and **retires**. That is right where the interface
-genuinely is not there: no docker socket, no `nft` binary, no libvirt, no
-protection manifest. It is questionable where the trigger is a **missing
-receipt** rather than a missing interface — `traefik`, `paperless`, `plex`,
-`servarr`, `kea` and `unbound` all decline `absent` because a URL or a socket
-path was never configured on this host. "This process was not told where to
-look" and "the thing is not here" are different statements, and only one of them
-should retire a row.
+**The half that needs a ruling is what the ports decline.** All seven decline
+**`absent`** — and `absent` commits zero and **retires**. On this host the
+trigger is a missing **receipt**, not a missing interface: unbound is installed
+and running, and the adapter still raises, because `SE_UNBOUND_SOCKET` was never
+set. "This process was not told where to look" and "the thing is not here" are
+different statements, and only one of them should retire a row.
 
-Nothing is currently harmed, because a host that never had the receipts never
+Nothing is harmed today, because a host that never had the receipts never
 published the objects. The shape that bites is a host that **loses** its
-configuration: the objects it published yesterday are retired today on the
-strength of an unset variable, and the decline record says `absent`, which reads
-as though the interface went away.
-
-This is the same family as the queue's *"an unrecognised package manager commits
-zero with no decline"* — silent in the retiring direction.
+configuration: yesterday's rows retired on the strength of an unset variable,
+under a decline record that reads as though the interface went away.
 
 ## Class 2 — the reference publishes a row where the port declines (two)
 
-`bazarr` and `downloaders` diverge the *other* way. The reference emits a real
-object — bazarr's `instance` row carrying `ConfigMissing`, downloaders' two
-commits — and the port declines instead.
+`bazarr` and `downloaders` diverge the *other* way, on both hosts. The reference
+emits a real object — bazarr's `instance` row carrying `ConfigMissing`,
+downloaders' two commits — and the port declines instead.
 
 Both are documented adapter behaviour: a configured-but-incomplete instance is
-supposed to produce a row that says *what is missing*, because a row saying
-"I was not told the API key" is a finding an operator can act on, and a decline
-is not. The ports do not reproduce it.
+supposed to produce a row saying *what is missing*, because "I was not told the
+API key" is a finding an operator can act on and a decline is not. The ports do
+not reproduce it.
 
-`servarr/instance-config-and-failure` and `downloaders/unconfigured-client` are
-already named residuals covering the fact-level half of this, and both name the
-live comparator as the venue. **This is that venue reporting.** The residuals
-should now record that the run happened and what it found.
+## Class 3 — `vms`, and the queue item is now demonstrated rather than asserted
 
-## Class 3 — a collector with no reference (one)
-
-`system` has no Python adapter. An agreement guard needs two parties and this
-collector has one. Named already; unchanged by this run.
-
-## Class 4 — the comparator cannot compare a live counter (one)
-
-`resources` shows 4 differing rows on every run, and none of them is a defect.
-The facts that differ are **monotonic CPU counters and instantaneous memory**:
+On the sparse host both sides declined and the comparison was vacuous. On this
+one **libvirtd is running**, and:
 
 ```
-CpuSystemUsec:  reference=10189299  port=10197299
-CpuUsageUsec:   reference=27764733  port=27792733
-MemoryCurrentBytes: reference=43409408  port=19333120
+reference:  begin, commit 1, end     — it read libvirt
+port:       begin, decline 1, end    — it declined
 ```
 
-The comparator runs the reference, then the port. Between the two the machine
-kept running, so every advancing counter differs by however long that took.
-Proved rather than assumed: two consecutive runs gave different absolute values
-(30700448, then 30928441) **and different deltas** (32000 µs, then 28000 µs). A
-logical defect would repeat; drift does not.
+The open queue item says `se-collect-vms` *"declines `unsupported` on any host
+where libvirt is listening"*. That was written from reasoning about the port's
+construction. It is now a measurement: on a host with libvirt up, the reference
+produces a reading and the port produces a decline. The ruling owed — whether a
+replay-only port counts as ported, and whether the mechanism is cgo, a
+hand-written RPC client, or Python past the cut — is unchanged, but it is no
+longer owed on an argument.
 
-**This is a defect in the comparator, not in `resources`.** As built, a
-collector whose facts are live readings can never show clean parity — which
-means a real disagreement in `resources` would arrive buried in four rows of
-noise that everybody has learned to ignore. That is the shape this project calls
-a guard reporting success about what it cannot see, inverted: a guard reporting
-failure about what it cannot measure.
+## Class 4 — closed: the comparator could not compare a live counter
 
-It wants a fix before `resources` parity means anything — either a declared
-class of time-varying facts compared for shape rather than value, or a
-comparison that brackets the two runs and accepts a value inside the window.
+`resources` reported four differing rows on every run of the sparse host and
+none was a defect: monotonic CPU counters and instantaneous memory, moving
+because the tool runs the reference and then the port. Proved rather than
+assumed — two consecutive runs gave different values **and different deltas**,
+32000 then 28000 µs, where a logical defect repeats.
+
+Fixed by reading each collector's own declaration: `temperament` is already a
+closed vocabulary carrying `counter` and `gauge`, so no new table was invented.
+The **committed** declaration is read, never `declare` at run time — a port
+asked at run time what to exempt could exempt everything. Value is excused;
+presence and type are not. `resources` is clean on both hosts now, 58 objects
+here.
+
+The failure mode it replaced is worth remembering: a guard reporting failure
+about what it cannot measure trains readers to ignore it, which is the same
+damage as one reporting success about what it cannot see.
 
 ## What gate 3 still needs
 
-1. A positive-path run on a fully-provisioned guest. This report is the sparse
-   host only, and five clean collectors is not the fleet.
-2. A ruling on class 1 — whether a missing *receipt* may decline `absent`, given
-   that `absent` retires.
-3. The comparator fix in class 4, or `resources` parity stays unreadable.
-4. Class 2 accepted or fixed: two ports do not reproduce a row the reference
-   publishes deliberately.
+1. **A ruling on class 1** — whether a missing *receipt* may decline `absent`,
+   given that `absent` retires. Seven collectors, and the provisioned host shows
+   it firing where the interface is present and merely unaddressed.
+2. **Class 2 accepted or fixed** — two ports do not reproduce a row the
+   reference publishes deliberately.
+3. **The `vms` ruling**, now with a measurement behind it.
+4. Receipts for the app collectors, so `traefik`, `paperless`, `plex`, `servarr`
+   and `bazarr` get a positive-path comparison rather than a decline one. That
+   is lab provisioning, not a decision.
 
-Until those, the honest statement is that parity is **established for five
-collectors, named for thirteen, and unavailable for one**.
+Parity is **established for eight collectors, named for ten, and unavailable for
+one**.

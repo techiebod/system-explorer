@@ -134,7 +134,18 @@ NAMED_RESIDUALS = {
         "(Docker, libvirt); the live comparator now exists and would surface a "
         "disagreement on such a host, but no lab guest runs that compatibility "
         "layer yet — so the tool is real and the SHAPE is still unvisited, and "
-        "this truth stays owed."
+        "this truth stays owed.\n\n"
+        "VENUE REPORTED 2026-08-19 (docs/PARITY-REPORT.md), and this entry "
+        "NARROWS rather than closes. A lab guest now runs that compatibility "
+        "layer — docker and libvirt between them create 43 chains across 7 "
+        "tables — and the live comparator read 97 network objects there, 13 "
+        "of them carrying OpaqueReason `xt`. Both implementations agreed on "
+        "every one, so the opaque comprehension path is exercised and the two "
+        "ports of it do not disagree. What is still unvisited is the OTHER "
+        "spelling: no rule anywhere has produced a bare-string statement, so "
+        "one of the two OpaqueReason values is reached by nothing. The corpus "
+        "also still holds no such ruleset, so this remains owned OUTSIDE the "
+        "replay tier rather than by it."
     ),
     # The four servarr apps facts that are about the OBSERVER rather than about
     # any app: two of them state a fault in this process's own configuration,
