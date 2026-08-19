@@ -332,6 +332,56 @@ ENTRIES = (
             "conformance/test_scrub_detectors.py::test_regression_check_is_no_longer_the_scrubbers_echo",
         ),
     ),
+    # se-capture-guest's dispatch fell through. The `kea)` arm closed neither
+    # its array nor itself, so bash let the next arm's label supply the missing
+    # `)` — `downloaders` surviving as a stray array element — and control fell
+    # into that arm, which reassigned `acquisitions` wholesale. A kea capture
+    # ran the downloaders adapter's RPC calls. `bash -n` passes on it: the file
+    # is VALID and merely dispatches to the wrong collector, which is why it
+    # outlived a repair pass whose whole purpose was parse errors.
+    Reversion(
+        guard="capture-arm-terminated",
+        file="harness/bin/se-capture-guest",
+        old='''"list-commands.json|sudo python3 -c '$kea_py' \\"\\$SE_KEA_SOCKET\\" list-commands"
+        )
+        ;;
+    downloaders)''',
+        new='''"list-commands.json|sudo python3 -c '$kea_py' \\"\\$SE_KEA_SOCKET\\" list-commands"
+    downloaders)''',
+        red_tests=(
+            "conformance/test_capture_dispatch.py::test_every_capture_arm_is_terminated",
+        ),
+    ),
+    # The sibling failure the terminator check does NOT cover: an arm that
+    # reaches `;;` but never assigns `acquisitions` inherits whatever the arm
+    # above it set, and captures that collector's interfaces instead. Same
+    # wrong outcome, different route, so it needs its own red target.
+    Reversion(
+        guard="capture-arm-assigns",
+        file="harness/bin/se-capture-guest",
+        old='''        acquisitions=("domains.json|python3 -c '$vms_py'")''',
+        new='''        # acquisitions assignment deliberately removed''',
+        red_tests=(
+            "conformance/test_capture_dispatch.py::test_every_capture_arm_decides_what_to_acquire",
+        ),
+    ),
+    # The claim vm-lab stamps into a domain's libvirt metadata is read by the
+    # homelab estate's vestige report, which distinguishes "another tool's
+    # scratch VM" from "an orphan nobody meant to leave" — and only the second
+    # is actionable, so a report that renders them alike invites deleting a lab
+    # guest in use. That consumer asked for the values as separate keys rather
+    # than one blob it would have to version-match; collapsing them is a silent
+    # break in a repository this suite cannot see.
+    Reversion(
+        guard="vm-lab-claim-separate-keys",
+        file="test/vm-lab/bin/vm-lab",
+        old='''  claim+="<staked>$(date -u +%Y-%m-%dT%H:%M:%SZ)</staked>"''',
+        new='''  claim+="<info>staked $(date -u +%Y-%m-%dT%H:%M:%SZ)</info>"''',
+        red_tests=(
+            "conformance/test_vm_lab_claim.py::test_each_value_is_its_own_element",
+        ),
+        extra_trees=("test",),
+    ),
 )
 
 
