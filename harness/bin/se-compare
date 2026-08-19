@@ -175,6 +175,44 @@ class CouldNotRun(Exception):
         super().__init__(f"{argv[-1]} exited {code}")
 
 
+# Divergences a ruling put there, per collector: the facts the reference emits
+# and the port is not asked to, with the ruling that says so.
+#
+# Removed from the REFERENCE before the diff and never from the port, which is
+# the whole of what keeps this from being a hole. If both sides were stripped,
+# a port that emitted a delta fact — wrongly, since the ruling puts them out of
+# its scope — would be invisible; stripping one side means the port publishing
+# any of them is itself reported, under port_emitted_accepted. And a divergence
+# on any fact NOT listed here still fails, which is the property the acceptance
+# must not widen into.
+ACCEPTED_DIVERGENCES = {
+    "nix": {
+        "facts": frozenset({
+            "ComparedWithGeneration", "DeltaCounts", "DeltaFromPrevious",
+            "DeltaFromPreviousPartial", "DeltaFromPreviousUnobservable",
+        }),
+        "ruling": (
+            "what CHANGED between two generations left the rewrite's scope on "
+            "2026-08-19 and becomes a plugin once a plugin surface exists "
+            "(DESIGN, adjudication queue). The shipping adapter keeps emitting "
+            "these five until the cut because it is what the estate runs; the "
+            "port declares and emits none of them, and must agree on every "
+            "other fact in the collection"
+        ),
+    },
+}
+
+
+def _without(record: dict, facts: frozenset) -> dict:
+    """One record with the accepted facts removed from its facts mapping."""
+    if not isinstance(record.get("facts"), dict):
+        return record
+    kept = {k: v for k, v in record["facts"].items() if k not in facts}
+    if len(kept) == len(record["facts"]):
+        return record
+    return {**record, "facts": kept}
+
+
 def compare(collector: str, twice: bool) -> dict:
     collections = SERVES[collector]
     result: dict = {"collector": collector, "collections": collections}
@@ -211,6 +249,23 @@ def compare(collector: str, twice: bool) -> dict:
     # machine between the two runs.
     moving = moving_facts(collector)
     result["moving_facts"] = sorted(moving)
+    # An ACCEPTED divergence is removed from the reference, and only from the
+    # reference. Gate 3's clause is "clean or its diffs are named and
+    # accepted", and a comparator that could not express the second half would
+    # report a ruled scope decision as a defect on every future run — which is
+    # how a report stops being read. See ACCEPTED_DIVERGENCES for why removing
+    # one side rather than both is what keeps this discriminating.
+    accepted = ACCEPTED_DIVERGENCES.get(collector)
+    if accepted:
+        result["accepted_divergence"] = {
+            "facts": sorted(accepted["facts"]), "ruling": accepted["ruling"]}
+        reference = [_without(record, accepted["facts"]) for record in reference]
+        result["port_emitted_accepted"] = sorted({
+            name
+            for record in port
+            for name in (record.get("facts") or {})
+            if name in accepted["facts"]
+        })
     result["differences"] = replay.diff(reference, port, moving)
 
     # Clock truth, per side. The REFERENCE is judged too — it is the thing
@@ -330,7 +385,13 @@ def render(result: dict) -> str:
         mark = " " if ref.get(kind) == port.get(kind) else "!"
         lines.append(f"  {mark} {kind:<20} reference {ref.get(kind, 0):>5}"
                      f"   port {port.get(kind, 0):>5}")
+    accepted = result.get("accepted_divergence")
+    if accepted:
+        lines.append("  · accepted divergence: "
+                     + ", ".join(accepted["facts"]))
+        lines.append(f"      {accepted['ruling']}")
     for label, key in (
+        ("port stayed out of the accepted divergence", "port_emitted_accepted"),
         ("parity", "differences"),
         ("reference clock", "reference_clock"),
         ("port clock", "port_clock"),

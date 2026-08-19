@@ -124,13 +124,26 @@ class Adapter:
         if manager == "nix":
             for name_version, store_path in sorted(_nix_store_paths().items()):
                 match = NAME_VERSION_RE.match(name_version)
-                items.append(env.item_summary(
+                item = env.item_summary(
                     f"package:{name_version}", "package", name_version, {
                         "Name": match.group(1) if match else name_version,
                         "Version": match.group(2) if match else None,
                         "Manager": "nix",
                         "StorePath": store_path,
-                    }))
+                    })
+                # A store path whose name carries no version — `nixos-version`,
+                # `nix-info`, the nixos-* tools — genuinely HAS no version, and
+                # that is has-no-such-property rather than a reading nobody
+                # took. It goes to the absent list, which is the same ruling
+                # os-release's missing keys took: a manufactured value sits at
+                # no path in the evidence document, and an omitted fact says
+                # the question does not arise when here it does and the answer
+                # is none. Found by the live comparator on the NixOS guest,
+                # 2026-08-19, on ten of 102 packages — the port had it right
+                # and the reference said nothing.
+                if match is None or match.group(2) is None:
+                    item["absent"] = ["Version"]
+                items.append(item)
         elif manager == "dpkg":
             for row in _dpkg_rows():
                 name, version, arch, status = (row + ["", "", ""])[:4]

@@ -14,9 +14,32 @@ to discriminate. The lab proves the tool RUNS; this proves it JUDGES.
 
 from __future__ import annotations
 
+import importlib.machinery
+import importlib.util
+import sys
+from pathlib import Path
+
 import pytest
 
+
+def _load_script(name: str):
+    """Import one of harness/bin's scripts by path, under a module name of
+    its own so two of them cannot collide in sys.modules."""
+    path = Path(__file__).resolve().parent.parent / "harness" / "bin" / name
+    spec = importlib.util.spec_from_loader(
+        name.replace("-", "_"), importlib.machinery.SourceFileLoader(
+            name.replace("-", "_"), str(path)))
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
 from se_harness import live
+
+# se-compare is a script rather than a module, so it is loaded by path. The
+# rules this file exercises are pure functions and tables in it — CI has no
+# lab guest, and a guard only ever seen to pass is not a guard.
+compare = _load_script("se-compare")
 
 
 def window(before: float = 100.0, after: float = 100.5,
@@ -194,6 +217,47 @@ def test_a_stream_with_no_begin_authenticates_nothing() -> None:
 # quietly covered a subset would report a clean parity over the half it looked
 # at, which is this repository's most repeated defect and the exact shape that
 # let nft-rules sit served-but-uncaptured behind a residual.
+
+
+def test_an_accepted_divergence_is_stripped_from_the_reference_only() -> None:
+    """Gate 3's clause is "clean OR its diffs are named and accepted", and a
+    comparator that could not express the second half would report a ruled
+    scope decision as a defect on every future run.
+
+    The reversion, which is the whole reason this is one-sided: strip BOTH
+    streams and a port that emitted a delta fact — wrongly, since the ruling
+    puts them out of its scope — becomes invisible. So the reference loses
+    them and the port does not, and the port carrying one is itself reported.
+    """
+    accepted = compare.ACCEPTED_DIVERGENCES["nix"]["facts"]
+    record = {"record": "object", "collection": "generations", "name": "3",
+              "facts": {"Current": True, "DeltaCounts": {"etc": 5}}}
+
+    stripped = compare._without(record, accepted)
+    assert stripped["facts"] == {"Current": True}
+    assert record["facts"] == {"Current": True, "DeltaCounts": {"etc": 5}}, (
+        "the record is rewritten, never mutated in place — the same records "
+        "are handed to the clock check afterwards"
+    )
+
+    # A record carrying none of them is returned unchanged, identity included,
+    # so the common case allocates nothing and cannot reorder anything.
+    untouched = {"record": "object", "facts": {"Current": True}}
+    assert compare._without(untouched, accepted) is untouched
+
+
+def test_the_accepted_divergence_names_only_facts_the_ruling_covers() -> None:
+    """An acceptance that widened would quietly stop the comparator seeing a
+    real disagreement, which is the one direction this must not fail in."""
+    assert set(compare.ACCEPTED_DIVERGENCES) == {"nix"}
+    assert compare.ACCEPTED_DIVERGENCES["nix"]["facts"] == frozenset({
+        "ComparedWithGeneration", "DeltaCounts", "DeltaFromPrevious",
+        "DeltaFromPreviousPartial", "DeltaFromPreviousUnobservable",
+    })
+    assert "2026-08-19" in compare.ACCEPTED_DIVERGENCES["nix"]["ruling"], (
+        "an acceptance carries the ruling that authorised it, dated, or it is "
+        "indistinguishable from a defect somebody got tired of"
+    )
 
 
 def test_the_comparator_drives_every_collection_the_seam_serves() -> None:
