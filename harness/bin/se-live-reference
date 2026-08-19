@@ -58,14 +58,9 @@ if os.environ.get("SE_REPLAY_DIR"):
 
 from system_explorer.agent import envelope as env  # noqa: E402
 from system_explorer.agent.adapters import (  # noqa: E402
-    bazarr, docker, logs, network, packages, storage, traefik, unbound, vms,
-    docker, logs, network, packages, servarr, storage, traefik, unbound, vms,
-    docker, kea, logs, network, packages, storage, traefik, unbound, vms,
-    docker, logs, network, packages, resources, storage, traefik, unbound, vms,
-    docker, downloaders, logs, network, packages, storage, traefik, unbound,
-    vms,
-    docker, hardware, logs, network, packages, storage, traefik, unbound, vms,
-    docker, logs, network, packages, storage, traefik, unbound, units, vms,
+    bazarr, docker, downloaders, hardware, kea, logs, network, packages,
+    paperless, plex, protection, resources, servarr, storage, traefik,
+    unbound, units, vms,
 )
 
 # The collections each adapter serves live, and the capability attributes the
@@ -102,6 +97,25 @@ LIVE = {
     # are answering about different instances.
     "bazarr": {"module": bazarr, "adapter": bazarr.Adapter,
                "interface": "bazarr api", "collections": ["instance"]},
+    "paperless": {"module": paperless, "adapter": paperless.Adapter,
+                  "interface": "paperless api", "collections": ["instance"]},
+    # THREE collections, matching the replay seam rather than the adapter's
+    # four. `requests` is seerr's, and it is absent from both sides for the
+    # same reason: seerr's first-run setup authenticates against a Plex
+    # ACCOUNT. Listing it here would make the comparator report a defect on
+    # every run against a host with no seerr — and against one WITH seerr it
+    # would compare a collection no corpus can stage.
+    "plex": {"module": plex, "adapter": plex.Adapter,
+             "interface": "plex api",
+             "collections": ["server", "libraries", "sessions"]},
+    # Reads files this host publishes, so live means literally that — and it
+    # is the one adapter here whose LIVE run is the interesting one: the
+    # replayed corpus is a single host's documents, while the estate's
+    # protection spans several, and only a run beside the real files can say
+    # whether the ownerHost join still holds.
+    "protection": {"module": protection, "adapter": protection.Adapter,
+                   "interface": "homelab protection surfaces",
+                   "collections": ["targets", "jobs", "destinations"]},
     "kea": {"module": kea, "adapter": kea.Adapter,
             "interface": "kea control socket",
             "collections": ["daemon", "subnets", "reservations", "leases"]},

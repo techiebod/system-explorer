@@ -1,0 +1,8 @@
+{"batch":"replay","boot_id":"5e000000-0000-4000-8000-000000000001","declaration":"sha256:replay","generations":{"libraries":78443,"server":78460,"sessions":78477},"instance":null,"record":"begin","request":"replay","timens":0}
+{"at":1.0,"collection":"libraries","facts":{"ItemCount":2,"Refreshing":false,"ScannedAt":"2026-08-19T12:13:06Z","Title":"Movies","Type":"movie","UpdatedAt":"2026-08-19T12:12:54Z"},"name":"1","record":"object"}
+{"at":1.001,"collection":"libraries","facts":{"ItemCount":1,"Refreshing":false,"ScannedAt":"2026-08-19T12:14:17Z","Title":"TV Shows","Type":"show","UpdatedAt":"2026-08-19T12:14:16Z"},"name":"3","record":"object"}
+{"assertions":0,"collection":"libraries","generation":78443,"objects":2,"record":"commit","unobservable":0}
+{"at":1.002,"collection":"server","facts":{"FriendlyName":"host-e56b83","Platform":"Linux","SessionCount":0,"Version":"1.43.3.10896-cb3ebc72d"},"name":"plex","record":"object"}
+{"assertions":0,"collection":"server","generation":78460,"objects":1,"record":"commit","unobservable":0}
+{"assertions":0,"collection":"sessions","generation":78477,"objects":0,"record":"commit","unobservable":0}
+{"batch":"replay","cpu_ms":0.5,"record":"end","request":"replay","wall_ms":1.0}

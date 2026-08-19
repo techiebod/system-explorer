@@ -1,0 +1,4 @@
+{"batch":"replay","boot_id":"5e000000-0000-4000-8000-000000000001","declaration":"sha256:replay","generations":{"instance":76913},"instance":null,"record":"begin","request":"replay","timens":0}
+{"at":1.0,"collection":"instance","facts":{"CeleryStatus":"OK","ClassifierError":"No classifier training tasks found","ClassifierStatus":"WARNING","CorrespondentCount":1,"DatabaseStatus":"OK","DocumentCount":3,"DocumentTypeCount":1,"InboxCount":1,"IndexStatus":"OK","PngxVersion":"3.0.5","RedisStatus":"OK","StorageAvailableBytes":54911987712,"StorageTotalBytes":63195054080,"TagCount":2},"name":"paperless","record":"object"}
+{"assertions":0,"collection":"instance","generation":76913,"objects":1,"record":"commit","unobservable":0}
+{"batch":"replay","cpu_ms":0.5,"record":"end","request":"replay","wall_ms":1.0}

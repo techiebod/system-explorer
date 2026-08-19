@@ -182,10 +182,17 @@ def test_every_served_collection_is_captured_or_named() -> None:
 
     orphans = []
     for collector, collections in sorted(served.items()):
-        if collector not in captured:
-            continue  # a collector the corpus does not carry at all is phase-3 work
+        # A collector the corpus does not carry AT ALL used to `continue` here,
+        # described as phase-3 work. That made this guard report success about
+        # precisely the case it could not see — and a wholly-uncaptured
+        # collector is the most likely way to add one, because adding a seam
+        # entry is the first step of a port and capturing is the second. The
+        # docstring above already claimed deny-by-default; this is the code
+        # that makes the claim true. An uncaptured collector is now every one
+        # of its collections orphaned at once, so the failure names what is
+        # missing rather than how far the work got.
         for collection in collections:
-            if collection in captured[collector]:
+            if collection in captured.get(collector, ()):
                 continue
             if any(key.startswith(f"{collector}/{collection}") for key in residuals):
                 continue

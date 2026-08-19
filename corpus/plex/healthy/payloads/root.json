@@ -1,0 +1,178 @@
+{
+  "MediaContainer": {
+    "size": 25,
+    "allowCameraUpload": false,
+    "allowChannelAccess": true,
+    "allowMediaDeletion": true,
+    "allowSharing": true,
+    "allowSync": false,
+    "allowTuners": true,
+    "apiVersion": "1.2.2",
+    "backgroundProcessing": true,
+    "companionProxy": true,
+    "countryCode": "",
+    "diagnostics": "logs,databases,streaminglogs",
+    "eventStream": true,
+    "friendlyName": "host-e56b83",
+    "hubSearch": true,
+    "itemClusters": true,
+    "livetv": 7,
+    "machineIdentifier": "ANONC2903F9347B4CE39EF7737176D4B484E",
+    "mediaProviders": true,
+    "multiuser": true,
+    "musicAnalysis": 2,
+    "myPlex": true,
+    "myPlexMappingState": "mapped",
+    "myPlexSigninState": "none",
+    "myPlexSubscription": false,
+    "ownerFeatures": "00077925-6031-401b-8679-f6617ed0cec6,007fb90d-2224-4d24-bd42-e87ffde13558,06d14b9e-2af8-4c2b-a4a1-ea9d5c515824,1417df52-986e-4e4b-8dcd-3997fbc5c976,22b27e12-472e-4383-92ea-2ec3976d8e72,24b4cf36-b296-4002-86b7-f1adb657e76a,2c3311e6-a303-4c24-b560-f498a24e08ac,2ea0e464-ea4f-4be2-97c1-ce6ed4b377dd,300231e0-69aa-4dce-97f4-52d8c00e3e8c,34ddfac9-3a76-459a-974d-591520b809dd,34e182bd-2f62-4678-a9e9-d13b3e25019d,359796ce-d614-427f-8165-19ff62ca053a,39dbdd84-8339-4736-96a1-0eb105cc2e08,3ae06d3a-a76b-435e-8cef-2d2008610ba2,3eb2789b-200c-4a15-91d2-dedfe560953c,3f6baa76-7488-479a-9e4f-49ff2c0d3711,4b522f91-ae89-4f62-af9c-76f44d8ef61c,547514ab-3284-46e5-af77-bbaff247e3fc,567033ef-ffee-44fb-8f90-f678077445f9,5b6190a9-77a4-477e-9fbc-c8118e35a4c1,5d819d02-5d04-4116-8eec-f49def4e2d6f,5e2a89ec-fb26-4234-b66e-14d37f35dff2,64adaa4e-aa7e-457d-b385-51438216d7fe,65685ff8-4375-4e4c-a806-ec1f0b4a8b7f,68747f3a-ce13-46ce-9274-1e0544c9f500,6b85840c-d79d-40c2-8d8f-dfc0b7d26776,6c4d66d9-729d-49dc-b70d-ab2652abf15a,6d7be725-9a96-42c7-8af4-01e735138822,7b392594-6949-4736-9894-e57a9dfe4037,7f46bf17-fabf-4f96-99a2-cf374f6eed71,81c8d5fa-8d90-4833-aa10-a31a51310e2f,849433b0-ef60-4a71-9dd9-939bc01f5362,85ebfb7b-77fb-4afd-bb1a-2fe2fefdddbe,86da2200-58db-4d78-ba46-f146ba25906b,96cac76e-c5bc-4596-87eb-4fdfef9aaa11,9e93f8a8-7ccd-4d15-99fa-76a158027660,a3d2d5c4-46a0-436e-a2d6-80d26f32b369,abd37b14-706c-461f-8255-fa9563882af3,adaptive_bitrate,af291e9e-813f-4467-8779-5d215abc3b5f,b227c158-e062-4ff1-95d8-8ed11cecafb1,b2403ac6-4885-4971-8b96-59353fd87c72,b25b878c-4f60-4337-9f6b-2d97ef41d036,b46d16ae-cbd6-4226-8ee9-ab2b27e5dd42,b5874ecb-6610-47b2-8906-1b5a897acb02,b77e6744-c18d-415a-8e7c-7aac5d7a7750,bec2ba97-4b25-472b-9cfc-674f5c68c2ae,c36a6985-eee3-4400-a394-c5787fad15b5,c7ae6f8f-05e6-48bb-9024-c05c1dc3c43e,c9d9b7ee-fdd9-474e-b143-5039c04e9b9b,ce8f644e-87ce-4ba5-b165-fadd69778019,collections,d1477307-4dac-4e57-9258-252e5b908693,d29f0ee0-3d3a-46c3-b582-4bc69bc17c29,dab501df-5d99-48ef-afc2-3e839e4ddc9a,dd69b465-7eb3-4c18-a1c0-7bc0015969e8,de65add8-2782-4bb8-b156-e0b57a844479,e4a9fd6f-4105-476b-bc57-adccd009323b,eb9e316f-f3f7-48cc-83d6-d2d31c7ca453,f1ac7a53-c524-4311-9a27-713562fc24fa,f83450e2-759a-4de4-8b31-e4a163896d43,fec722a0-a6d4-4fbd-96dc-4ffb02b072c5,federated-auth,home,kevin-bacon,livetv,radio,tuner-sharing,unsupportedtuners",
+    "platform": "Linux",
+    "platformVersion": "6.12.101+deb13-amd64",
+    "pluginHost": true,
+    "pushNotifications": false,
+    "readOnlyLibraries": false,
+    "streamingBrainABRVersion": 3,
+    "streamingBrainVersion": 2,
+    "sync": true,
+    "transcoderActiveVideoSessions": 0,
+    "transcoderAudio": true,
+    "transcoderLyrics": true,
+    "transcoderPhoto": true,
+    "transcoderSubtitles": true,
+    "transcoderVideo": true,
+    "transcoderVideoBitrates": "64,96,208,320,720,1500,2000,3000,4000,8000,10000,12000,20000",
+    "transcoderVideoQualities": "0,1,2,3,4,5,6,7,8,9,10,11,12",
+    "transcoderVideoResolutions": "128,128,160,240,320,480,768,720,720,1080,1080,1080,1080",
+    "updatedAt": 1787141656,
+    "updater": true,
+    "version": "1.43.3.10896-cb3ebc72d",
+    "voiceSearch": true,
+    "Directory": [
+      {
+        "count": 1,
+        "key": "actions",
+        "title": "actions"
+      },
+      {
+        "count": 1,
+        "key": "activities",
+        "title": "activities"
+      },
+      {
+        "count": 1,
+        "key": "butler",
+        "title": "butler"
+      },
+      {
+        "count": 1,
+        "key": "channels",
+        "title": "channels"
+      },
+      {
+        "count": 1,
+        "key": "clients",
+        "title": "clients"
+      },
+      {
+        "count": 1,
+        "key": "devices",
+        "title": "devices"
+      },
+      {
+        "count": 1,
+        "key": "diagnostics",
+        "title": "diagnostics"
+      },
+      {
+        "count": 1,
+        "key": "downloadQueue",
+        "title": "downloadQueue"
+      },
+      {
+        "count": 1,
+        "key": "hubs",
+        "title": "hubs"
+      },
+      {
+        "count": 3,
+        "key": "library",
+        "title": "library"
+      },
+      {
+        "count": 3,
+        "key": "livetv",
+        "title": "livetv"
+      },
+      {
+        "count": 3,
+        "key": "media",
+        "title": "media"
+      },
+      {
+        "count": 1,
+        "key": "neighborhood",
+        "title": "neighborhood"
+      },
+      {
+        "count": 1,
+        "key": "playQueues",
+        "title": "playQueues"
+      },
+      {
+        "count": 1,
+        "key": "playlists",
+        "title": "playlists"
+      },
+      {
+        "count": 1,
+        "key": "resources",
+        "title": "resources"
+      },
+      {
+        "count": 1,
+        "key": "search",
+        "title": "search"
+      },
+      {
+        "count": 1,
+        "key": "server",
+        "title": "server"
+      },
+      {
+        "count": 1,
+        "key": "servers",
+        "title": "servers"
+      },
+      {
+        "count": 1,
+        "key": "service",
+        "title": "service"
+      },
+      {
+        "count": 1,
+        "key": "statistics",
+        "title": "statistics"
+      },
+      {
+        "count": 1,
+        "key": "system",
+        "title": "system"
+      },
+      {
+        "count": 1,
+        "key": "transcode",
+        "title": "transcode"
+      },
+      {
+        "count": 1,
+        "key": "updater",
+        "title": "updater"
+      },
+      {
+        "count": 1,
+        "key": "user",
+        "title": "user"
+      }
+    ]
+  }
+}

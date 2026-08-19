@@ -1,0 +1,46 @@
+{
+  "pngx_version": "3.0.5",
+  "server_os": "Linux-6.12.101+deb13-amd64-x86_64-with-glibc2.41",
+  "install_type": "docker",
+  "storage": {
+    "total": 63195054080,
+    "available": 54911987712
+  },
+  "database": {
+    "type": "sqlite",
+    "url": "/usr/src/paperless/data/db.sqlite3",
+    "status": "OK",
+    "error": null,
+    "migration_status": {
+      "latest_migration": "paperless_mail.0001_squashed",
+      "unapplied_migrations": []
+    }
+  },
+  "tasks": {
+    "redis_url": "redis://paperless-redis:6379",
+    "redis_status": "OK",
+    "redis_error": null,
+    "celery_status": "OK",
+    "celery_url": "celery@689c8a4c0b8c",
+    "celery_error": null,
+    "index_status": "OK",
+    "index_last_modified": "2026-08-19T13:27:40.535034+01:00",
+    "index_error": null,
+    "classifier_status": "WARNING",
+    "classifier_last_trained": null,
+    "classifier_error": "No classifier training tasks found",
+    "sanity_check_status": "WARNING",
+    "sanity_check_last_run": null,
+    "sanity_check_error": "No sanity check tasks found",
+    "llmindex_status": "DISABLED",
+    "llmindex_last_modified": null,
+    "llmindex_error": null,
+    "summary": {
+      "days": 30,
+      "total_count": 4,
+      "pending_count": 0,
+      "success_count": 4,
+      "failure_count": 0
+    }
+  }
+}

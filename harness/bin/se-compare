@@ -62,6 +62,9 @@ SERVES = {
     "downloaders": ["clients", "transfers"],
     "hardware": ["platform", "pci", "usb", "scsi", "nvme"],
     "units": ["units"],
+    "paperless": ["instance"],
+    "plex": ["server", "libraries", "sessions"],
+    "protection": ["targets", "jobs", "destinations"],
 }
 
 REFERENCE = REPO / "harness" / "bin" / "se-live-reference"

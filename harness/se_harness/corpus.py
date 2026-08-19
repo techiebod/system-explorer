@@ -404,6 +404,74 @@ NAMED_RESIDUALS = {
         "exception's own text and the port writes a constant phrase, because "
         "that text is a channel carrying the client URL and sabnzbd's key."
     ),
+    # logs has a seam entry, a built Go port and no committed pair. That was
+    # invisible until 2026-08-19, because the coverage guard skipped any
+    # collector the corpus did not carry AT ALL — so the one collector in that
+    # state was the one it could not see. The guard now denies by default and
+    # this entry is what it found.
+    "logs/journal": (
+        "No committed variant, and the reason is that a journal capture "
+        "cannot currently clear the publish gate. Two values in every capture "
+        "taken so far survive BOTH halves of it and neither is a scrub bug. "
+        "MESSAGE_ID is a systemd catalogue constant — a 32-hex identifier that "
+        "the detectors cannot distinguish from a machine-id by shape, because "
+        "it has none that differs — so classifying it as `nothing` disarms the "
+        "machine-id detector for every payload, and substituting it destroys "
+        "the join to the catalogue that makes the field worth reading. The "
+        "second is an SSH public-key fingerprint in an sshd line: no shape a "
+        "detector can key on, no name a manifest can bind, and it identifies a "
+        "key rather than a host. Both sit in the adjudication queue awaiting a "
+        "ruling, and until one lands the honest state is a collector with a "
+        "port and no corpus, said out loud. Venue: the queue first, then a "
+        "capture; the live comparator (harness/bin/se-compare) can already run "
+        "this collector against a real journal and publishes nothing, so it "
+        "owns the port's behaviour today while the CORPUS half stays owed."
+    ),
+    # The three protection collections, named together because one decision
+    # governs all three: whether this public repository may carry a document
+    # describing a private estate's backups.
+    "protection/targets": (
+        "No committed variant, and NOT because the interface is hard to reach "
+        "— it was captured cleanly from a host that publishes these documents "
+        "on 2026-08-19, 35 payloads, and the capture is what this entry is "
+        "written from. It is not committed because of what it IS. Every one of "
+        "the corpus's other variants comes from a disposable lab guest; this "
+        "one would be the first from a real estate, and the manifest's 191 "
+        "leaves are that estate's entire protection posture — every target it "
+        "declares, what each protects, where copies land, which host owns "
+        "which, and hand-written security prose about who may delete. "
+        "Scrubbing substitutes the hostnames and leaves the SHAPE, and the "
+        "shape is the disclosure: a reader learns what a named person backs up "
+        "and what they do not. That is an estate record, and estate records "
+        "live in the private repository, so the boundary rather than the "
+        "tooling is what stops this. Venue: the live comparator "
+        "(harness/bin/se-compare), run on a host that publishes the three "
+        "documents, where the real manifest is read and nothing is published. "
+        "The alternative venue — a variant over an INVENTED estate, shaped "
+        "from the real capture and marked authored rather than captured — is "
+        "a decision about this corpus's standards and is not taken here."
+    ),
+    "protection/jobs": (
+        "Uncommitted for the reason stated under protection/targets, and this "
+        "collection loses the most to it. The staleness verdict and the "
+        "receipts are the only place the five states are distinguishable — "
+        "declared, implemented, running-green, proven by restore, and "
+        "TRIED-AND-FAILED — and no replayed stream exercises any of them, so "
+        "the one-row-one-vintage rule (the verdict's own as-of stamp beside "
+        "the receipt that outranks it) is checked by nothing here. Venue: the "
+        "live comparator on a host with both documents, which reads sixteen "
+        "real jobs and their receipts."
+    ),
+    "protection/destinations": (
+        "Uncommitted for the reason stated under protection/targets, and here "
+        "the reason is at its sharpest: the collection's whole content is the "
+        "Immutability and PruneAuthority prose, carried VERBATIM because "
+        "paraphrasing a security property would be inventing a new claim. "
+        "Verbatim security prose about a private estate is the single thing in "
+        "this capture least suitable for a public corpus, and a scrub that "
+        "rewrote it would produce a claim nobody made. Venue: the live "
+        "comparator, which reads the sentences and publishes none of them."
+    ),
 }
 
 

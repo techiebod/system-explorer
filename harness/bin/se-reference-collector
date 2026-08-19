@@ -81,7 +81,8 @@ from system_explorer.agent import envelope as env  # noqa: E402
 from system_explorer.agent.sysbus import PROPERTIES  # noqa: E402
 from system_explorer.agent.adapters import (  # noqa: E402
     bazarr, docker, downloaders, hardware, kea, logs, network, packages,
-    resources, servarr, storage, traefik, unbound, units, vms,
+    paperless, plex, protection, resources, servarr, storage, traefik,
+    unbound, units, vms,
 )
 
 # Which module-level acquisition each collector redirects, and what payload
@@ -193,6 +194,55 @@ SEAM = {
         # variant whose payloads are the API answering.
         "instance": {"url": "http://replay.invalid",
                      "_key_set": True, "_key_problem": None},
+    },
+    "paperless": {
+        "module": paperless,
+        "adapter": paperless.Adapter,
+        "interface": "paperless api",
+        "collections": ["instance"],
+        # One fetcher dispatched on the path, two documents. `_get` parses
+        # inside itself and hands back the document, so this is bazarr's plain
+        # method seam and not docker's response one.
+        "methods": ["_get"],
+        # All four pinned, and the two token members are the load-bearing
+        # pair. capability() reads _token_set and _token_problem BEFORE any
+        # fetch, so an unpinned replay would read SE_PAPERLESS_TOKEN from the
+        # environment of the machine REPLAYING the corpus, find none, and
+        # declare the whole subsystem unavailable — from a variant whose
+        # payloads are the API answering. display_url is pinned beside url
+        # because capability() echoes it into the envelope.
+        "instance": {"url": "http://replay.invalid",
+                     "display_url": "http://replay.invalid",
+                     "_token_set": True, "_token_problem": None},
+    },
+    "plex": {
+        "module": plex,
+        "adapter": plex.Adapter,
+        "interface": "plex api",
+        # THREE collections, not the adapter's four. `requests` is seerr's,
+        # and seerr cannot be stood up in the lab: its first-run setup
+        # authenticates against a Plex ACCOUNT, and the estate's account is
+        # exactly what a test may not touch. Leaving it out of this list is
+        # what stops `collect requests:1` reaching the live seerr of whichever
+        # machine replays; the gap itself is carried in NAMED_RESIDUALS rather
+        # than by this silence, because a collection nobody could ask about
+        # must not render the same as one that had nothing to say.
+        "collections": ["server", "libraries", "sessions"],
+        # _plex_get(path, params) — dispatched on the path, which is what
+        # decides the document; params carry only the zero-size container
+        # window and would key five files onto one name. The seerr half of
+        # this adapter reads through `self._seerr` DIRECTLY rather than
+        # through a method, so it has no seam here at all — another reason
+        # `requests` is not in the list above.
+        "methods": ["_plex_get"],
+        # seerr_url pinned to None so `requests` declines as unavailable for
+        # the stated reason rather than dialling anything, and the token
+        # members pinned for the same reason as paperless's: capability()
+        # reads them before any fetch.
+        "instance": {"plex_url": "http://replay.invalid",
+                     "seerr_url": None,
+                     "_plex_token_set": True, "_plex_problem": None,
+                     "_seerr_key_set": False},
     },
     "unbound": {
         "module": unbound,
@@ -348,6 +398,30 @@ SEAM = {
         # from the adapter is what stops this table, se-capture-guest and the
         # ported binary from each holding their own copy of it.
         "page": {"query": {}, "limit": None, "cursor": None},
+        "instance": {},
+    },
+    "protection": {
+        "module": protection,
+        "adapter": protection.Adapter,
+        "interface": "homelab protection surfaces",
+        "collections": ["targets", "jobs", "destinations"],
+        # _load(path) is module-level and dispatched on the path, so the
+        # payload is keyed on slug(path) and a reviewer reading
+        # `var-lib-homelab-protection-receipts-checkin.last.json.json` can see
+        # which file it is. The whole collect path goes through it: jobs are
+        # enumerated from status.json's own list, never from a directory
+        # walk, so the os.listdir in _receipt_jobs sits on the EVIDENCE path
+        # alone and no collection depends on it.
+        "arg_acquisitions": ["_load"],
+        # The load-bearing pin, and the reason this entry is not just the two
+        # lines above. A target's opinions fire only where its ownerHost
+        # matches THIS host — `env.HOST["hostname"]` — so an unpinned replay
+        # would judge the capture against whichever machine happened to be
+        # replaying it: every target unowned on a workstation, every target
+        # owned on a host that shares the captured name. Severity would move
+        # with the replaying machine while the payloads sat still. Pinned from
+        # the capture, like hardware's.
+        "host": {"hostname": "hostname"},
         "instance": {},
     },
     # ── the one TREE-shaped interface: the document is the filesystem ────

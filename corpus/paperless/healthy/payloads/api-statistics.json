@@ -1,0 +1,20 @@
+{
+  "documents_total": 3,
+  "documents_inbox": 1,
+  "inbox_tag": 1,
+  "inbox_tags": [
+    1
+  ],
+  "document_file_type_counts": [
+    {
+      "mime_type": "text/plain",
+      "mime_type_count": 3
+    }
+  ],
+  "character_count": 223,
+  "tag_count": 2,
+  "correspondent_count": 1,
+  "document_type_count": 1,
+  "storage_path_count": 0,
+  "current_asn": 0
+}
