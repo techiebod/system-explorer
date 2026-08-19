@@ -231,6 +231,18 @@ CASES = (
          # the hard way still drops `paused`, and a closed set is closed member
          # by member or not at all.
          ("ScopeUnit", differential.PAUSED_SCOPE)),
+    Case("manager-version-blind", "bazarr-wired-managers",
+         "a9_manager_version_blind.py", differential.DISAGREE, "differences",
+         # Both facts, by name AND value. bazarr spells "wired to nothing" as
+         # an empty string, so the captured instance carries both members
+         # present and empty, the reference's truthiness gate drops both, and a
+         # port blind to either emits exactly the committed row. Bound to the
+         # pair because the facts dict is compared whole — one spelling alone
+         # would also be satisfied by a port that had lost some other fact
+         # entirely — and to the values because these facts are pass-through:
+         # a port that published the member's presence rather than its content
+         # would satisfy a name-only row.
+         (differential.BAZARR_SONARR_VERSION, differential.BAZARR_RADARR_VERSION)),
 )
 
 

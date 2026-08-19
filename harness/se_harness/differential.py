@@ -70,6 +70,7 @@ SEEDS = {
     "packages": "packages/healthy",
     "unbound": "unbound/healthy",
     "docker": "docker/healthy",
+    "bazarr": "bazarr/healthy",
 }
 
 # Names the operators mint. Constants rather than inline literals so the
@@ -125,6 +126,17 @@ UNBOUND_THREAD1 = {
 # variant's anchors, and the case that binds to them fails by name when it does.
 UNBOUND_QUERY_TOTAL = "'NumQueries': 58"
 UNBOUND_THREAD_SHARE = "'NumQueries': 21"
+# The two managers the bazarr operator wires this instance to. Real release
+# strings from the two projects, because the mutated document must be one
+# bazarr could have answered with — and these facts are pass-through, so an
+# invented shape would be exercising the wrong thing. The evidence spellings
+# below carry the fact and its value together, which is how a facts-dict
+# difference renders, and they are built FROM the releases the operator writes
+# so the two cannot drift into disagreeing about what was minted.
+BAZARR_SONARR_RELEASE = "4.0.15.2941"
+BAZARR_RADARR_RELEASE = "5.27.5.10198"
+BAZARR_SONARR_VERSION = f"'SonarrVersion': '{BAZARR_SONARR_RELEASE}'"
+BAZARR_RADARR_VERSION = f"'RadarrVersion': '{BAZARR_RADARR_RELEASE}'"
 
 
 # ── nftables helpers, grammar-aware ──────────────────────────────────────
@@ -980,6 +992,48 @@ def _paused_container(payloads: dict) -> dict:
     )
 
 
+# ── bazarr's managers ────────────────────────────────────────────────────
+
+
+def _wired_managers(payloads: dict) -> dict:
+    """CLASS manager-version-blind: an instance row that never says what it is
+    wired to.
+
+    `/api/system/status` reports the sonarr and radarr this bazarr fetches its
+    metadata from, and reports them as EMPTY STRINGS when it is wired to
+    neither. The captured instance is wired to neither, so both members are
+    present and empty, the reference's truthiness gate drops both, and a port
+    that never implemented either fact emits exactly the same row. The
+    blindness is invisible under replay by construction, which is DESIGN 20's
+    third trap — and it is blindness about the thing bazarr exists to do,
+    since a subtitle manager wired to no manager has nothing to fetch
+    subtitles for.
+
+    So wire it to both. The reference lifts each member because it is now
+    truthy and publishes two more facts; a manager-blind port publishes the
+    same row without them. Both at once rather than one operator each: the
+    two members are read by one loop over one pairing, so a port blind to
+    either is blind to both, and splitting them would claim a member-by-member
+    closure this class does not have.
+    """
+    status = payloads.get("api-system-status")
+    if not isinstance(status, dict):
+        raise MutatorError("the payload carries no status document")
+    data = status.get("data")
+    if not isinstance(data, dict):
+        raise MutatorError("the status document carries no data mapping")
+    for member in ("sonarr_version", "radarr_version"):
+        if data.get(member):
+            raise MutatorError(
+                f"{member} is already populated in this capture, so wiring a "
+                "manager in would be overwriting a reading rather than "
+                "minting the shape no capture holds"
+            )
+    data["sonarr_version"] = BAZARR_SONARR_RELEASE
+    data["radarr_version"] = BAZARR_RADARR_RELEASE
+    return payloads
+
+
 @dataclass(frozen=True)
 class Operator:
     """One structural transformation, bound to the defect class it exposes."""
@@ -1018,6 +1072,8 @@ OPERATORS: tuple[Operator, ...] = (
              _restarting_container),
     Operator("docker-paused-container", "docker", "scoped-state-enum",
              _paused_container),
+    Operator("bazarr-wired-managers", "bazarr", "manager-version-blind",
+             _wired_managers),
 )
 
 

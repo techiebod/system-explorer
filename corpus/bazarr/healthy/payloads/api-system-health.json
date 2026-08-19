@@ -1,0 +1,8 @@
+{
+  "data": [
+    {
+      "object": "Missing languages profile",
+      "issue": "You must create at least one languages profile and assign it to your content."
+    }
+  ]
+}

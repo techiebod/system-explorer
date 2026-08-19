@@ -137,6 +137,22 @@ case "$collector" in
             "networks.json|sudo curl -s --unix-socket /var/run/docker.sock http://docker/networks"
         )
         ;;
+    bazarr)
+        # The app's REST API IS the native interface, so each path's response
+        # document is the payload, named by the path that answers it — the same
+        # addressing the replay seam derives with slug(), so a reviewer reading
+        # api-system-status.json is reading the request it answers.
+        #
+        # The key rides the header and never the file name, the echo or the
+        # query string: `$SE_BAZARR_API_KEY` below is LITERAL in this script and
+        # is expanded only by the remote shell, so what this tool prints as it
+        # runs is the variable's name. bazarr accepts the key as a header only,
+        # which is the posture that keeps a 401 from being a credential channel.
+        acquisitions=(
+            "api-system-status.json|curl -s -H \"X-API-KEY: \$SE_BAZARR_API_KEY\" \"\$SE_BAZARR_URL/api/system/status\""
+            "api-system-health.json|curl -s -H \"X-API-KEY: \$SE_BAZARR_API_KEY\" \"\$SE_BAZARR_URL/api/system/health\""
+        )
+        ;;
     traefik)
         acquisitions=(
             "api-overview.json|curl -s \"\$SE_TRAEFIK_URL/api/overview\""
@@ -190,6 +206,10 @@ case "$collector" in
     # a different build from the one running.
     unbound) version_probe="sudo unbound-control status | sed -n '1s/^version: /unbound /p'" ;;
     traefik) version_probe="curl -s \"\$SE_TRAEFIK_URL/api/version\" | head -c 120" ;;
+    # The instance reporting on itself, which is the build that actually
+    # answered — a container tag or a package name would say what was deployed,
+    # and those two disagree the moment an image is repulled without a restart.
+    bazarr) version_probe="curl -s -H \"X-API-KEY: \$SE_BAZARR_API_KEY\" \"\$SE_BAZARR_URL/api/system/status\" | python3 -c 'import json,sys; print(\"bazarr\", json.load(sys.stdin)[\"data\"][\"bazarr_version\"])'" ;;
 esac
 
 # Forward the caller's SE_* variables to the guest. Every HTTP-interface

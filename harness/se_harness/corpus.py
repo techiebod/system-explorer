@@ -153,6 +153,37 @@ NAMED_RESIDUALS = {
         "StorePath it yields is compared. The tool exists and no such run has "
         "been taken, so this truth stays owed rather than owned."
     ),
+    # Two facts of the bazarr instance row that no PAYLOAD can reach, which is
+    # what makes them residuals rather than an operator's job: one is decided
+    # by the deployment's environment before any document is fetched, and the
+    # other by whether the network answered. A mutation operator rewrites the
+    # documents a capture holds and can mint neither.
+    "bazarr/config-missing": (
+        "ConfigMissing is published where SE_BAZARR_URL names an instance and "
+        "SE_BAZARR_API_KEY is absent or unfit to send in a header. It is read "
+        "off the process environment BEFORE either document is fetched, so no "
+        "captured payload reaches it and no mutation operator mints it — the "
+        "replay seam pins the receipts precisely so a replaying workstation's "
+        "own environment cannot decide a committed row. Venue: the live "
+        "comparator (harness/bin/se-compare), run against a host with the URL "
+        "configured and the key withheld, where the reference and the port "
+        "build the row from the same environment. The tool exists and no such "
+        "run has been taken, so this truth stays owed rather than owned."
+    ),
+    "bazarr/status-unobservable": (
+        "StatusUnobservable is published where the configured instance did not "
+        "answer, which is a property of the network and the daemon rather than "
+        "of any document — so no captured payload reaches it and no mutation "
+        "operator mints it. It carries a further asymmetry the venue must "
+        "adjudicate rather than merely observe: the reference's value is "
+        "`f\"{type(exc).__name__}: {exc}\"` over a Python exception, which no "
+        "port in another language can reproduce, and the Go collector states "
+        "the request and the HTTP status instead. Venue: the live comparator, "
+        "run against a host whose bazarr is stopped, where the two readings sit "
+        "beside each other and the difference is a finding rather than a "
+        "verdict (DESIGN 20). The tool exists and no such run has been taken, "
+        "so this truth stays owed rather than owned."
+    ),
 }
 
 

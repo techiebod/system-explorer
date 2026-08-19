@@ -1,0 +1,83 @@
+{
+  "schema": "se.declaration/1",
+  "collector": "bazarr",
+  "version": "0.7.0",
+  "authority": {
+    "read_paths": [
+      "/proc/sys/kernel/random/boot_id",
+      "/proc/self/timens_offsets"
+    ],
+    "credentials": ["SE_BAZARR_API_KEY"]
+  },
+  "probe": "the bazarr API answers. WHERE that instance is, and the key that opens it, are deployment configuration and not constants, so they are named by SE_BAZARR_URL and SE_BAZARR_API_KEY rather than declared here — a URL this file invented would address somebody else's instance on every host that runs one elsewhere. Under socket activation systemd holds the credential and applies it to the unit; nothing in this collector reads it from a file and nothing writes it anywhere. No URL configured is a host that fronts no bazarr, which is an absence and retires the row; a URL with no usable key is a receipts gap, which publishes the row and names the receipt. The two are different verdicts and the collection says which.",
+  "collections": [
+    {
+      "name": "instance",
+      "question": "is the subtitle manager up, which release is it, and is it complaining about anything?",
+      "prefix": "instance",
+      "freshness": "60s",
+      "perishability": "sampled",
+      "answer": ["Version", "HealthIssues", "ConfigMissing", "StatusUnobservable"],
+      "ceiling": { "records": 1, "bytes": 65536 },
+      "facts": {
+        "Version": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/data/bazarr_version",
+          "sentence": "The bazarr release answering the API, from the instance's own `bazarr_version`. It is the build that is actually serving, which is not always the build that was deployed — a repulled image without a restart leaves the two disagreeing, and this is the half answering requests. Deliberately not `package_version`, which sits beside it in the same document spelling the same release as a packager's tag."
+        },
+        "SonarrVersion": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/data/sonarr_version",
+          "sentence": "The sonarr this instance is wired to, as bazarr reports it — bazarr's own reading of the manager it fetches series metadata from, so a disagreement with what sonarr says about itself is a statement about the wiring rather than about either release. Absent where this bazarr is wired to no sonarr, which the interface spells as an empty string rather than as a missing member."
+        },
+        "RadarrVersion": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/data/radarr_version",
+          "sentence": "The radarr this instance is wired to, as bazarr reports it, on the same terms as SonarrVersion — bazarr's reading of the movie manager rather than radarr's own. Absent where this bazarr is wired to no radarr, spelled as an empty string by the interface and omitted here."
+        },
+        "HealthIssues": {
+          "type": "list",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/data",
+          "sentence": "The app's own health list, mirrored whole and ungraded because bazarr does not grade it: its health endpoint answers with a flat array of problems and assigns no severity to any of them, so each entry becomes one sentence, `object: issue`, and the count is all this collector adds. An EMPTY list is a reading and not an absence — it is the instance raising nothing, which is what a healthy one does."
+        },
+        "ConfigMissing": {
+          "type": "list",
+          "temperament": "existence",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The receipts this instance still needs before it can be observed at all. Present only where a URL was configured and the key was not, or the key that was configured cannot travel in a header — so a row carrying it is an instance the estate asked for and this deployment cannot open, which is a different statement from a host that fronts no bazarr. It names variables and never their values."
+        },
+        "StatusUnobservable": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Why the instance's API could not be asked, when it could not. The row stays rather than the collection declining, because a configured manager that does not answer is a statement rather than a gap — and it is published beside whatever WAS read, so an instance whose health endpoint alone went dark keeps its version facts. The text names the request and the HTTP status and nothing else: no URL, no errno, no library message."
+        }
+      },
+      "redaction_exemption": "This collector serves no evidence payload it does not first strip, and the two documents it reads carry no credential of bazarr's own: `/api/system/status` reports the instance's release, the managers' releases, its platform and its own start time, and `/api/system/health` reports the app's complaints about itself. bazarr's config holds its own API key and those of every manager and provider it is wired to, and neither of these paths exposes any of them — which is why this collector reads these two and no others. The bound is stated because it is a decision rather than a shape: a health issue interpolates operator-chosen text where one exists (a media path in a permissions complaint, a provider's name in a login complaint), so those sentences are declared `content` above and travel as third-party text; a capture from an instance with real providers configured needs harness/scrub/bazarr.json revisited rather than inherited.",
+      "reference_commands": [
+        {
+          "purpose": "the instance's own account of itself — the version facts come from here",
+          "argv": ["curl", "-s", "-H", "X-API-KEY: <key>", "<url>/api/system/status"]
+        },
+        {
+          "purpose": "the app's own health list, ungraded, exactly as HealthIssues mirrors it",
+          "argv": ["curl", "-s", "-H", "X-API-KEY: <key>", "<url>/api/system/health"]
+        }
+      ]
+    }
+  ]
+}

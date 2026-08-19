@@ -55,6 +55,7 @@ SERVES = {
     "traefik": ["overview", "routers", "services"],
     "unbound": ["daemon"],
     "logs": ["journal"],
+    "bazarr": ["instance"],
 }
 
 REFERENCE = REPO / "harness" / "bin" / "se-live-reference"

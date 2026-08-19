@@ -69,7 +69,7 @@ if os.environ.get("SE_REPLAY_NOW"):
     pin_clock(os.environ["SE_REPLAY_NOW"])
 
 from system_explorer.agent.adapters import (  # noqa: E402
-    docker, logs, network, packages, storage, traefik, unbound, vms,
+    bazarr, docker, logs, network, packages, storage, traefik, unbound, vms,
 )
 
 # Which module-level acquisition each collector redirects, and what payload
@@ -157,6 +157,28 @@ SEAM = {
         # whatever URL the replaying machine has in its environment.
         "methods": ["_get", "_get_list"],
         "instance": {"url": "http://replay.invalid"},
+    },
+    "bazarr": {
+        "module": bazarr,
+        "adapter": bazarr.Adapter,
+        "interface": "bazarr api",
+        "collections": ["instance"],
+        # One fetcher, dispatched on the path — `/api/system/status` and
+        # `/api/system/health`, two documents from one httpx client. The plain
+        # method seam and not docker's response one: this adapter calls .json()
+        # inside _get and hands back the parsed document, so wrapping it in a
+        # CapturedResponse would fail on the first attribute the caller does not
+        # use.
+        "methods": ["_get"],
+        # All three pinned, and none of them is decoration. `url` is what _get
+        # would dial the moment the stub were removed, which is the same reason
+        # traefik and unbound pin theirs. The other two are read by
+        # _instance_items BEFORE any fetch: unpinned, the adapter reads
+        # SE_BAZARR_API_KEY from the environment of the machine REPLAYING the
+        # corpus, finds none, and publishes a receipts-incomplete row from a
+        # variant whose payloads are the API answering.
+        "instance": {"url": "http://replay.invalid",
+                     "_key_set": True, "_key_problem": None},
     },
     "unbound": {
         "module": unbound,

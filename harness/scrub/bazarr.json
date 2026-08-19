@@ -1,0 +1,72 @@
+{
+  "#": "bazarr collector: two JSON documents from the app's own REST API, keyed by the request path each answers (api-system-status, api-system-health). Every entry is payload-SCOPED, and that is not tidiness: `data` is a dict of fixed schema members in the status document and a list of issue records in the health one, so an unscoped `data.*.object` pattern would make _keys_are_data read the status document's schema roots as named data and demand a ~key classification for `bazarr_version`.",
+  "#credential": "The key is a HEADER and never reaches a document. bazarr's config.yaml holds its own API key and those of every manager and provider it is wired to; `/api/system/status` and `/api/system/health` expose none of it — no URL, no token, no provider credential, not even the manager addresses — which is why this collector reads those two paths and no others. A capture that ever carries one is refused outright by the `secret` class rather than substituted, because scrubbing does not repair a credential that was captured.",
+  "#nothing": "Almost every status member is a build constant or a self-report: the bazarr release, the image's package string, the Python and SQLite versions, the platform tuple, the migration state, and the core count. None correlates one machine across two captures, none says where anything sits, and none is a word an operator chose.",
+  "#paths": "THE BOUND IS STATED, because these two are `nothing` only because of what this guest happens to run. `bazarr_directory` (/app/bazarr/bin) and `bazarr_config_directory` (/config) are paths INSIDE the linuxserver.io container image — identical for everyone who pulls the tag, and locating nothing in any estate. A bazarr installed natively reports the operator's own install and config directories here, which are location by DESIGN 21 and must be reclassified before such a capture can be scrubbed. This is the same shape as docker.json's #argv-and-labels bound, written up front rather than after an audit.",
+  "#timezone": "Also bounded. `Etc/UTC` is the container default and says nothing about anybody. A host set to a regional zone is telling a reader roughly where it is, which is the question `location` asks — so a capture from a machine with a real zone configured needs this entry revisited rather than inherited.",
+  "#start_time": "The epoch second the process started, and deliberately not `identity`. It names one run of one process and is reassigned on every restart, so it correlates nothing across captures — the same test unbound.json applies to the pid. It is also a float, and the scrubber has no numeric format but guid_u64, so `nothing` is the only classification a float can honestly take here; a value that DID need substituting would have to be refused rather than classified.",
+  "#health": "The health list is the app's own prose about itself, and it is classified `content` with format `prose` — the ruling of 2026-08-19. bazarr writes these sentences, so they arrive from outside the estate, and they routinely carry nothing identifying at all: the one in this capture is a stock 'create a languages profile' notice. `prose` takes the same free-text pass every formatless entry takes, so a hostname or an address written inside a message is still substituted; what it exempts is only the refusal for having found nothing, which for a health list is the ordinary outcome. It matters because bazarr DOES interpolate: a path-mapping or permissions issue names the operator's own media directory in `issue`, and a provider issue names a third-party site in `object`. Those are content the moment they appear, and this classification already covers them.",
+  "#unreached": "`sonarr_version` and `radarr_version` are empty strings in this capture because this bazarr is wired to neither manager. They are release strings when populated, which is the same `nothing` this entry declares — the classification does not move, and it is written now rather than when the first wired capture arrives, because a leaf no entry classifies is a capture the tool refuses.",
+  "data.bazarr_version": {
+    "discloses": "nothing",
+    "payload": "api-system-status"
+  },
+  "data.package_version": {
+    "discloses": "nothing",
+    "payload": "api-system-status"
+  },
+  "data.sonarr_version": {
+    "discloses": "nothing",
+    "payload": "api-system-status"
+  },
+  "data.radarr_version": {
+    "discloses": "nothing",
+    "payload": "api-system-status"
+  },
+  "data.operating_system": {
+    "discloses": "nothing",
+    "payload": "api-system-status"
+  },
+  "data.python_version": {
+    "discloses": "nothing",
+    "payload": "api-system-status"
+  },
+  "data.database_engine": {
+    "discloses": "nothing",
+    "payload": "api-system-status"
+  },
+  "data.database_migration": {
+    "discloses": "nothing",
+    "payload": "api-system-status"
+  },
+  "data.bazarr_directory": {
+    "discloses": "nothing",
+    "payload": "api-system-status"
+  },
+  "data.bazarr_config_directory": {
+    "discloses": "nothing",
+    "payload": "api-system-status"
+  },
+  "data.start_time": {
+    "discloses": "nothing",
+    "payload": "api-system-status"
+  },
+  "data.timezone": {
+    "discloses": "nothing",
+    "payload": "api-system-status"
+  },
+  "data.cpu_cores": {
+    "discloses": "nothing",
+    "payload": "api-system-status"
+  },
+  "data.*.object": {
+    "discloses": "content",
+    "format": "prose",
+    "payload": "api-system-health"
+  },
+  "data.*.issue": {
+    "discloses": "content",
+    "format": "prose",
+    "payload": "api-system-health"
+  }
+}

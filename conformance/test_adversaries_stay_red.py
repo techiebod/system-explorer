@@ -329,6 +329,23 @@ EXPECTED = (
                 "committed capture can expose: every captured container is "
                 "running or exited and the narrow rule agrees with the "
                 "reference on both, so the differential guard owns the red"),
+    # ── GREEN, adjudicated: the third trap, the empty-member spelling ──
+    #
+    # The manager-version-blind port never lifts the sonarr and radarr releases
+    # bazarr reports. The only committed instance is wired to NEITHER manager,
+    # and the interface spells that as an empty string rather than as a missing
+    # member — so the reference's truthiness gate drops both facts and the two
+    # implementations emit the same row. The judge honestly passes it. Its RED
+    # lives in test_differential.py, where the bazarr-wired-managers operator
+    # wires the instance to both. If this goes red here, the replay judge has
+    # grown a rule that sees a wiring no committed capture holds — DESIGN 20's
+    # trap statement and the case table move together, not this row alone.
+    Expectation("a9_manager_version_blind.py", None, "bazarr/healthy", "GREEN",
+                "the manager releases never lifted, which no committed capture "
+                "can expose: the captured instance is wired to neither sonarr "
+                "nor radarr and the interface spells that as an empty string, "
+                "so both implementations drop both facts and the differential "
+                "guard owns the red"),
 )
 
 # The closed set of adjudicated greens, and the DESIGN clause each rests
@@ -359,6 +376,11 @@ ADJUDICATED_GREEN = {
     "exited and a running-only scope rule agrees on both (DESIGN 20); the "
     "differential guard owns this red, under docker-restarting-container and "
     "docker-paused-container",
+    ("a9_manager_version_blind.py", None): "the third trap: replay cannot see "
+    "a bazarr wired to a manager, because the only captured instance is wired "
+    "to neither and the interface spells that as an empty string both "
+    "implementations drop (DESIGN 20); the differential guard owns this red, "
+    "under bazarr-wired-managers",
 }
 
 

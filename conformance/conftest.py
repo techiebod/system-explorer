@@ -48,6 +48,7 @@ GO_COLLECTORS = {
     "packages": "./cmd/se-collect-packages",
     "unbound": "./cmd/se-collect-unbound",
     "docker": "./cmd/se-collect-docker",
+    "bazarr": "./cmd/se-collect-bazarr",
 }
 
 

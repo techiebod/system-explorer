@@ -58,7 +58,7 @@ if os.environ.get("SE_REPLAY_DIR"):
 
 from system_explorer.agent import envelope as env  # noqa: E402
 from system_explorer.agent.adapters import (  # noqa: E402
-    docker, logs, network, packages, storage, traefik, unbound, vms,
+    bazarr, docker, logs, network, packages, storage, traefik, unbound, vms,
 )
 
 # The collections each adapter serves live, and the capability attributes the
@@ -83,6 +83,12 @@ LIVE = {
     "unbound": {"module": unbound, "adapter": unbound.Adapter,
                 "interface": "unbound control socket",
                 "collections": ["daemon"]},
+    # Addressed by environment, like every HTTP-interface adapter here:
+    # SE_BAZARR_URL and SE_BAZARR_API_KEY are read in __init__, so the
+    # comparator must be given the same receipts the port is or the two sides
+    # are answering about different instances.
+    "bazarr": {"module": bazarr, "adapter": bazarr.Adapter,
+               "interface": "bazarr api", "collections": ["instance"]},
     # The one adapter with no acquire(): a bounded journal query has no "all
     # items" to materialise, so `page` names the collect() call to drive and
     # emission.materialise dispatches on it. Declared here as well as in the
