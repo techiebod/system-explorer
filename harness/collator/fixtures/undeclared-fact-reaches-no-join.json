@@ -1,0 +1,68 @@
+{
+  "name": "undeclared-fact-reaches-no-join",
+  "acceptance_item": 7,
+  "note": "The batch is structurally perfect \u2014 counts echo, the generation is the issued one, the object is well formed \u2014 and one fact carries a name the declaration does not. Nothing in the estate has a sentence, a kind or a temperament for that name, so no consumer could be told what it means, and it would nonetheless be stored, joined and answered with. The whole batch is refused rather than the one fact dropped: silently discarding part of a reading is how a collection comes to be believed while being incomplete. The contract check owns this at the collector; this is the authority declining to depend on its caller's diligence, which is what the relation-type check one tier down already says in its own comment. The collection row exists at generation 0 because the generation was issued and made durable BEFORE the request went out \u2014 a crash from there on may waste a number, never reuse one \u2014 so \"reaches no join\" is the row still standing at zero with nothing applied, not the row being absent.",
+  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"pools\",\"freshness\":\"1h\",\"prefix\":\"pool\",\"facts\":{\"Health\":{\"type\":\"string\",\"temperament\":\"state\"}}}]}",
+  "streams": [
+    {
+      "records": [
+        {
+          "record": "begin",
+          "request": "batch-1",
+          "batch": "batch-1",
+          "declaration": "sha256:e86204501b4fc47d28577033cc38aac138e594ec44548639105c8749682c9999",
+          "boot_id": "5e000000-0000-4000-8000-000000000001",
+          "timens": 0,
+          "instance": null,
+          "generations": {
+            "pools": 1
+          }
+        },
+        {
+          "record": "object",
+          "collection": "pools",
+          "name": "tank",
+          "facts": {
+            "Health": "ONLINE",
+            "Capacity": 92
+          },
+          "at": 10.5
+        },
+        {
+          "record": "commit",
+          "collection": "pools",
+          "generation": 1,
+          "objects": 1,
+          "assertions": 0,
+          "unobservable": 0,
+          "cpu_ms": 0.5
+        },
+        {
+          "record": "end",
+          "request": "batch-1",
+          "batch": "batch-1",
+          "cpu_ms": 0.5,
+          "wall_ms": 1.0
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "objects": [],
+    "relations": [],
+    "collections": [
+      {
+        "name": "pools",
+        "generation": 0,
+        "stale": false
+      }
+    ],
+    "rejected": [
+      {
+        "reason": "undeclared-fact",
+        "collection": ""
+      }
+    ],
+    "acked": []
+  }
+}

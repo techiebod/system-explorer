@@ -73,6 +73,16 @@ REQUIRED = {
     "relation-parallel-edges-survive-their-discriminator": 6,
     "relation-confirmed-contradicted-and-unconfirmable": 6,
     "relation-retired-by-a-committed-collection": 6,
+    # item 7's gate-3 half — a batch under an unknown declaration hash is
+    # held rather than applied, and an undeclared fact reaches no join. Both
+    # were judged only in-process until 2026-08-19, and the loader's own
+    # integrity checks were what stopped the black-box tier expressing them:
+    # a deliberately wrong hash was refused as a defective fixture, on a
+    # message that named the very scenario it was refusing. The opinion,
+    # roll-up and answer halves of item 7 are gates 5, 4 and 5 — none of
+    # those surfaces exists to be judged here.
+    "declaration-unknown-holds-the-batch": 7,
+    "undeclared-fact-reaches-no-join": 7,
 }
 
 REQUIRED_SELF_TESTS = {"self-test-unlisted-object", "self-test-wrong-fact",
@@ -112,7 +122,9 @@ def test_the_judge_reds_the_must_fail_fixture(fixture: driver.Fixture) -> None:
 # mistakable for a judged red, or the must-fail self-test above becomes
 # circular.
 
-_DECL = '{"schema":"se.declaration/1","collector":"fixture","collections":[{"name":"pools","freshness":"1h"}]}'
+_DECL = ('{"schema":"se.declaration/1","collector":"fixture","collections":'
+         '[{"name":"pools","freshness":"1h",'
+         '"facts":{"Health":{"type":"string","temperament":"state"}}}]}')
 _HASH = "sha256:" + hashlib.sha256(_DECL.encode()).hexdigest()
 
 
@@ -185,6 +197,42 @@ def test_loader_refuses_a_wrong_declaration_hash(tmp_path: Path) -> None:
     doc = _valid_doc()
     doc["streams"][0]["records"][0]["declaration"] = "sha256:" + "0" * 64
     with pytest.raises(driver.FixtureError, match="hash"):
+        driver.load_fixture(_write(tmp_path, doc))
+
+
+def test_loader_refuses_a_declaration_that_declares_no_facts(tmp_path: Path) -> None:
+    """se.declaration/1 requires facts and the collator checks the stream
+    against them, so a fixture without them would switch that check off for
+    itself — silently, and exactly on the scenarios most worth judging."""
+    doc = _valid_doc()
+    decl = json.loads(doc["declaration"])
+    del decl["collections"][0]["facts"]
+    doc["declaration"] = json.dumps(decl, separators=(",", ":"))
+    doc["streams"][0]["records"][0]["declaration"] = (
+        "sha256:" + hashlib.sha256(doc["declaration"].encode()).hexdigest())
+    with pytest.raises(driver.FixtureError, match="declares no facts"):
+        driver.load_fixture(_write(tmp_path, doc))
+
+
+def test_loader_accepts_a_hash_mismatch_the_fixture_declares(tmp_path: Path) -> None:
+    """The reversion for the refusal above it: a loader that refused every
+    mismatch would pass test_loader_refuses_a_wrong_declaration_hash and make
+    the held-batch scenario inexpressible, which is what it did until
+    2026-08-19 — on a message that named the scenario it was refusing."""
+    doc = _valid_doc()
+    doc["streams"][0]["records"][0]["declaration"] = "sha256:" + "be" * 32
+    doc["streams"][0]["declaration_unknown"] = True
+    fixture = driver.load_fixture(_write(tmp_path, doc))
+    assert fixture.streams[0].declaration_unknown
+
+
+def test_loader_refuses_declaration_unknown_over_a_matching_hash(tmp_path: Path) -> None:
+    """The opt-in states a scenario, so it must not be settable over a batch
+    the collator would apply normally — that fixture would argue with itself
+    and green while judging the opposite of what it claims."""
+    doc = _valid_doc()
+    doc["streams"][0]["declaration_unknown"] = True
+    with pytest.raises(driver.FixtureError, match="argues with itself"):
         driver.load_fixture(_write(tmp_path, doc))
 
 

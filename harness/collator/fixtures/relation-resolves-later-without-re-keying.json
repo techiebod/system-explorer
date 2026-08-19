@@ -2,7 +2,7 @@
   "name": "relation-resolves-later-without-re-keying",
   "acceptance_item": 6,
   "note": "An edge is asserted while nothing on this host publishes its target, then the target arrives. The relation must be MINTED unresolved in round one \u2014 dropping an edge into open space is identical in effect to never having looked, and the founding incident is exactly a far end nobody read \u2014 and must then upgrade IN PLACE. The driver's key-stability invariant is what judges the second half: keying on the resolved id, which is the obvious choice everywhere else in this product, produces two keys for one edge, so the relation looks new and every finding hanging off it is re-raised as a fresh condition.",
-  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"chains\",\"freshness\":\"1h\",\"prefix\":\"chain\"},{\"name\":\"rules\",\"freshness\":\"1h\",\"prefix\":\"rule\",\"relations\":[{\"type\":\"member-of\",\"carries_facts\":false,\"inverse_observable\":false}]}]}",
+  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"chains\",\"freshness\":\"1h\",\"prefix\":\"chain\",\"facts\":{\"Family\":{\"type\":\"string\",\"temperament\":\"state\"}}},{\"name\":\"rules\",\"freshness\":\"1h\",\"prefix\":\"rule\",\"relations\":[{\"type\":\"member-of\",\"carries_facts\":false,\"inverse_observable\":false}],\"facts\":{\"Handle\":{\"type\":\"integer\",\"temperament\":\"state\"}}}]}",
   "streams": [
     {
       "records": [
@@ -10,7 +10,7 @@
           "record": "begin",
           "request": "batch-1",
           "batch": "batch-1",
-          "declaration": "sha256:340e3334f2b8c1b78261ecc98d33b8c3837853094d52378e93de7d1576fd909b",
+          "declaration": "sha256:88d47348a8a70615c755a6aca2a4051c8d94f7f047834504a916c803308638f1",
           "boot_id": "5e000000-0000-4000-8000-000000000001",
           "timens": 0,
           "instance": null,
@@ -78,7 +78,7 @@
           "record": "begin",
           "request": "batch-2",
           "batch": "batch-2",
-          "declaration": "sha256:340e3334f2b8c1b78261ecc98d33b8c3837853094d52378e93de7d1576fd909b",
+          "declaration": "sha256:88d47348a8a70615c755a6aca2a4051c8d94f7f047834504a916c803308638f1",
           "boot_id": "5e000000-0000-4000-8000-000000000001",
           "timens": 0,
           "instance": null,

@@ -2,7 +2,7 @@
   "name": "cross-boot-age-is-stated",
   "acceptance_item": 5,
   "note": "a monotonic reading means nothing outside the boot that produced it (DESIGN 09): when the serving collator's own boot id differs from the one the applied batch carried, the read API must OMIT age_s and state cross_boot: true. The defect this pins: now - oldest_at was subtracted across boot domains and a negative age was served with stale: false \u2014 garbage wearing a row's clothes.",
-  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"pools\",\"freshness\":\"1h\"}]}",
+  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"pools\",\"freshness\":\"1h\",\"facts\":{\"Health\":{\"type\":\"string\",\"temperament\":\"state\"}}}]}",
   "streams": [
     {
       "records": [
@@ -10,7 +10,7 @@
           "record": "begin",
           "request": "batch-1",
           "batch": "batch-1",
-          "declaration": "sha256:8e656604f17878845d33006b5006ace4aa821c059c189fa84eec034b48903478",
+          "declaration": "sha256:c9266849d5a21f80c0bf770f9f732fa99b609499c86506a8f385caab9c514d6d",
           "boot_id": "5e000000-0000-4000-8000-000000000001",
           "timens": 0,
           "instance": null,

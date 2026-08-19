@@ -161,6 +161,22 @@ type DeclarationCollection struct {
 	// instances apart, and whether the far end can confirm this type at
 	// all (DESIGN 19).
 	Relations []DeclarationRelation `json:"relations"`
+	// Facts is the declared fact table, read for its NAMES only — the
+	// collator does not judge a fact's sentence, kind or temperament, and
+	// the contract suite is what refuses a declaration that omits them.
+	// What the collator does with the names is acceptance item 7's second
+	// half: a value under a name the collector never declared reaches no
+	// join here, because nothing downstream has a sentence for it, no
+	// consumer can be told what it means, and the batch is refused rather
+	// than half-applied.
+	//
+	// Contract-required and minProperties 1, so a real declaration always
+	// carries this. A collection that declares none is not checked, which
+	// is a seam and not a hole: the contract suite refuses that
+	// declaration, the harness loader refuses a fixture that writes one,
+	// and the two tiers compose. In-process Go tests that hand-write a stub
+	// declaration are the deliberate exception — they judge other tiers.
+	Facts map[string]json.RawMessage `json:"facts"`
 }
 
 type DeclarationRelation struct {

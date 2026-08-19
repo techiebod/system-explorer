@@ -2,7 +2,7 @@
   "name": "relation-retired-by-a-committed-collection",
   "acceptance_item": 6,
   "note": "Deletion is expressed by absence for relations exactly as it is for objects: a collection that commits and asserts nothing has authoritatively said the edge is gone. The rule the same commit must not break is the object's \u2014 the pool is still there, only its membership ended \u2014 so a collator that retired the source with the edge would pass a fixture listing neither.",
-  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"chains\",\"freshness\":\"1h\",\"prefix\":\"chain\"},{\"name\":\"rules\",\"freshness\":\"1h\",\"prefix\":\"rule\",\"relations\":[{\"type\":\"member-of\",\"carries_facts\":false,\"inverse_observable\":false}]}]}",
+  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"chains\",\"freshness\":\"1h\",\"prefix\":\"chain\",\"facts\":{\"Family\":{\"type\":\"string\",\"temperament\":\"state\"}}},{\"name\":\"rules\",\"freshness\":\"1h\",\"prefix\":\"rule\",\"relations\":[{\"type\":\"member-of\",\"carries_facts\":false,\"inverse_observable\":false}],\"facts\":{\"Handle\":{\"type\":\"integer\",\"temperament\":\"state\"}}}]}",
   "streams": [
     {
       "records": [
@@ -10,7 +10,7 @@
           "record": "begin",
           "request": "batch-1",
           "batch": "batch-1",
-          "declaration": "sha256:340e3334f2b8c1b78261ecc98d33b8c3837853094d52378e93de7d1576fd909b",
+          "declaration": "sha256:88d47348a8a70615c755a6aca2a4051c8d94f7f047834504a916c803308638f1",
           "boot_id": "5e000000-0000-4000-8000-000000000001",
           "timens": 0,
           "instance": null,
@@ -81,7 +81,7 @@
           "record": "begin",
           "request": "batch-2",
           "batch": "batch-2",
-          "declaration": "sha256:340e3334f2b8c1b78261ecc98d33b8c3837853094d52378e93de7d1576fd909b",
+          "declaration": "sha256:88d47348a8a70615c755a6aca2a4051c8d94f7f047834504a916c803308638f1",
           "boot_id": "5e000000-0000-4000-8000-000000000001",
           "timens": 0,
           "instance": null,

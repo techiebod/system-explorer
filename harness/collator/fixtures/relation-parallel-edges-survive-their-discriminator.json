@@ -2,7 +2,7 @@
   "name": "relation-parallel-edges-survive-their-discriminator",
   "acceptance_item": 6,
   "note": "An engaged spare occupies two positions in one pool: inside the spare-0 pseudo-vdev where it is doing the work, and under the spares key where it is accounted for. Both are true, and keyed on (source, type, target) alone the second assertion silently replaces the first \u2014 a lost edge with no error anywhere, and a pool that reports its spare as either standing by or working rather than both. The driver matches on the assertion's facts for this reason: a match that ignored them would call these one edge and green a collator that had dropped one.",
-  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"devices\",\"freshness\":\"1h\",\"prefix\":\"device\"},{\"name\":\"pools\",\"freshness\":\"1h\",\"prefix\":\"pool\",\"relations\":[{\"type\":\"backed-by\",\"carries_facts\":true,\"discriminator\":[\"VdevPath\"],\"inverse_observable\":false}]}]}",
+  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"devices\",\"freshness\":\"1h\",\"prefix\":\"device\",\"facts\":{\"State\":{\"type\":\"string\",\"temperament\":\"state\"}}},{\"name\":\"pools\",\"freshness\":\"1h\",\"prefix\":\"pool\",\"relations\":[{\"type\":\"backed-by\",\"carries_facts\":true,\"discriminator\":[\"VdevPath\"],\"inverse_observable\":false}],\"facts\":{\"Health\":{\"type\":\"string\",\"temperament\":\"state\"}}}]}",
   "streams": [
     {
       "records": [
@@ -10,7 +10,7 @@
           "record": "begin",
           "request": "batch-1",
           "batch": "batch-1",
-          "declaration": "sha256:0780435365699b75719836577122a5909c1bbf93838e1f855addee83d7211a48",
+          "declaration": "sha256:8ef3c0080af54394e88a5be0f659cae51b02becb6aee09c04d494fb2d71a754f",
           "boot_id": "5e000000-0000-4000-8000-000000000001",
           "timens": 0,
           "instance": null,

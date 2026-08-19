@@ -1,17 +1,16 @@
 {
-  "name": "concurrent-newest-wins",
-  "acceptance_item": 4,
-  "note": "the live hazard DESIGN 19 names: a batch that began first (generation 1) finishes after a later one (generation 2). Distinct batch ids make this LOOK handled; only the generation rule actually is. The older reading must be refused when it finally lands, and the newer state must stand.",
-  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"pools\",\"freshness\":\"1h\",\"facts\":{\"Reading\":{\"type\":\"string\",\"temperament\":\"state\"}}}]}",
-  "concurrent": true,
+  "name": "declaration-unknown-holds-the-batch",
+  "acceptance_item": 7,
+  "note": "A batch whose begin commits to a declaration hash the collector cannot serve is HELD, not applied. The remedy the contract prescribes is one refetch \u2014 the collector may have been upgraded between declare and collect \u2014 and a hash that still matches nothing fetchable means the collator does not know what the values in this stream MEAN. Applying it anyway would key and join facts under a vocabulary nobody holds. The round-one objects must survive untouched: held is not a failed reading of the machine, so nothing about the previous state may change, and the collection must not even be marked stale.",
+  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"pools\",\"freshness\":\"1h\",\"prefix\":\"pool\",\"facts\":{\"Health\":{\"type\":\"string\",\"temperament\":\"state\"}}}]}",
   "streams": [
     {
       "records": [
         {
           "record": "begin",
-          "request": "batch-early",
-          "batch": "batch-early",
-          "declaration": "sha256:7a274d8cf869cddd16bc880dcba96023c702236a7754bc1dfb53133893447d99",
+          "request": "batch-1",
+          "batch": "batch-1",
+          "declaration": "sha256:e86204501b4fc47d28577033cc38aac138e594ec44548639105c8749682c9999",
           "boot_id": "5e000000-0000-4000-8000-000000000001",
           "timens": 0,
           "instance": null,
@@ -24,7 +23,7 @@
           "collection": "pools",
           "name": "tank",
           "facts": {
-            "Reading": "older"
+            "Health": "ONLINE"
           },
           "at": 10.5
         },
@@ -39,20 +38,21 @@
         },
         {
           "record": "end",
-          "request": "batch-early",
-          "batch": "batch-early",
+          "request": "batch-1",
+          "batch": "batch-1",
           "cpu_ms": 0.5,
           "wall_ms": 1.0
         }
       ]
     },
     {
+      "declaration_unknown": true,
       "records": [
         {
           "record": "begin",
-          "request": "batch-late",
-          "batch": "batch-late",
-          "declaration": "sha256:7a274d8cf869cddd16bc880dcba96023c702236a7754bc1dfb53133893447d99",
+          "request": "batch-2",
+          "batch": "batch-2",
+          "declaration": "sha256:bebebebebebebebebebebebebebebebebebebebebebebebebebebebebebebebe",
           "boot_id": "5e000000-0000-4000-8000-000000000001",
           "timens": 0,
           "instance": null,
@@ -65,7 +65,7 @@
           "collection": "pools",
           "name": "tank",
           "facts": {
-            "Reading": "newer"
+            "Health": "DEGRADED"
           },
           "at": 20.5
         },
@@ -80,8 +80,8 @@
         },
         {
           "record": "end",
-          "request": "batch-late",
-          "batch": "batch-late",
+          "request": "batch-2",
+          "batch": "batch-2",
           "cpu_ms": 0.5,
           "wall_ms": 1.0
         }
@@ -95,29 +95,27 @@
         "id": "pools:tank",
         "name": "tank",
         "facts": {
-          "Reading": "newer"
+          "Health": "ONLINE"
         },
-        "at": 20.5
+        "at": 10.5
       }
     ],
     "relations": [],
     "collections": [
       {
         "name": "pools",
-        "generation": 2,
+        "generation": 1,
         "stale": false
       }
     ],
     "rejected": [
       {
-        "collection": "pools",
-        "reason": "refused-below-applied",
-        "batch": "batch-early"
+        "reason": "declaration-unknown",
+        "collection": ""
       }
     ],
     "acked": [
-      "batch-early",
-      "batch-late"
+      "batch-1"
     ]
   }
 }

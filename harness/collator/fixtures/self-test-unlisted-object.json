@@ -3,7 +3,7 @@
   "acceptance_item": 0,
   "note": "the judge's own reversion: the stream mints two objects and expect lists one. A judge that only checked what it expected would pass this \u2014 and would never catch an invented object. It must fail.",
   "must_fail": "the collator mints pools:spare, which expect does not list \u2014 the exhaustiveness rule must refuse it",
-  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"pools\",\"freshness\":\"1h\"}]}",
+  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"pools\",\"freshness\":\"1h\",\"facts\":{\"Health\":{\"type\":\"string\",\"temperament\":\"state\"}}}]}",
   "streams": [
     {
       "records": [
@@ -11,7 +11,7 @@
           "record": "begin",
           "request": "batch-1",
           "batch": "batch-1",
-          "declaration": "sha256:8e656604f17878845d33006b5006ace4aa821c059c189fa84eec034b48903478",
+          "declaration": "sha256:c9266849d5a21f80c0bf770f9f732fa99b609499c86506a8f385caab9c514d6d",
           "boot_id": "5e000000-0000-4000-8000-000000000001",
           "timens": 0,
           "instance": null,

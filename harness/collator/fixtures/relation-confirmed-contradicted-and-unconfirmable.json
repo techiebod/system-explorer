@@ -2,7 +2,7 @@
   "name": "relation-confirmed-contradicted-and-unconfirmable",
   "acceptance_item": 6,
   "note": "The distinction the product did not have when it replicated for months over data with no off-site copy: an edge observed at both ends is not the same statement as an edge observed at one. /srv is asserted from both vantages with the same facts and is confirmed; /var is asserted from both and they disagree, which is contradicted \u2014 a STATE, not a merge conflict and not a silent win for either vantage; and the devices side declares it cannot be confirmed from the far end, so it stays honestly asserted even though a mount did assert back at it. A type is judged by its own declaration, never by whether some other assertion happens to point the right way.",
-  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"mounts\",\"freshness\":\"1h\",\"prefix\":\"mount\",\"relations\":[{\"type\":\"mounted-from\",\"carries_facts\":true,\"discriminator\":[\"Fs\"],\"inverse_observable\":true,\"confirmed_by\":\"carries\"}]},{\"name\":\"devices\",\"freshness\":\"1h\",\"prefix\":\"device\",\"relations\":[{\"type\":\"carries\",\"carries_facts\":true,\"discriminator\":[\"Fs\"],\"inverse_observable\":false}]}]}",
+  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"mounts\",\"freshness\":\"1h\",\"prefix\":\"mount\",\"relations\":[{\"type\":\"mounted-from\",\"carries_facts\":true,\"discriminator\":[\"Fs\"],\"inverse_observable\":true,\"confirmed_by\":\"carries\"}],\"facts\":{\"X\":{\"type\":\"integer\",\"temperament\":\"state\"}}},{\"name\":\"devices\",\"freshness\":\"1h\",\"prefix\":\"device\",\"relations\":[{\"type\":\"carries\",\"carries_facts\":true,\"discriminator\":[\"Fs\"],\"inverse_observable\":false}],\"facts\":{\"X\":{\"type\":\"integer\",\"temperament\":\"state\"}}}]}",
   "streams": [
     {
       "records": [
@@ -10,7 +10,7 @@
           "record": "begin",
           "request": "batch-1",
           "batch": "batch-1",
-          "declaration": "sha256:7383f4d841452ed2de6062e486b5bc86780dc0124ebc57651cf9feecebcb8d96",
+          "declaration": "sha256:a5f4100e7a555d1bcaebad771814aa6a60a21a60092fe168dcf22adb79aa0273",
           "boot_id": "5e000000-0000-4000-8000-000000000001",
           "timens": 0,
           "instance": null,

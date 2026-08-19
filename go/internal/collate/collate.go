@@ -125,6 +125,26 @@ func AcquireOnce(ctx context.Context, st *store.Store, client *wire.Client) erro
 		return err
 	}
 
+	// Acceptance item 7's second half, checked here because this is the tier
+	// that holds both the declaration and the stream. A value under a name
+	// the collector never declared has no sentence, no kind and no
+	// temperament anywhere in the estate, so nothing downstream could tell a
+	// consumer what it means — and it would nonetheless be joined, keyed and
+	// answered with. The whole batch is refused rather than the fact dropped:
+	// a stream this wrong is authoritative for nothing, and silently
+	// discarding part of a reading is how a collection comes to be believed
+	// while being incomplete.
+	//
+	// The same reasoning the relation-type check already states one tier
+	// down: the contract check owns this at the collector, but the authority
+	// must not depend on its caller's diligence.
+	if err := checkDeclaredFacts(decl, batch); err != nil {
+		if v, ok := err.(*wire.Violation); ok {
+			recordFailure(st, "", v.Reason, fmt.Errorf("%s", v.Detail))
+		}
+		return err
+	}
+
 	var firstErr error
 	for _, name := range names {
 		if err := applyCollection(st, name, scope, batch); err != nil && firstErr == nil {
@@ -275,4 +295,66 @@ func recordFailure(st *store.Store, collection, reason string, err error) {
 	// Recording is best-effort by design: the loop must never die because
 	// its own bookkeeping write lost a race with a reader.
 	_ = st.RecordRejection(collection, "", reason, err.Error())
+}
+
+// checkDeclaredFacts refuses a batch that names a fact its declaration does
+// not, across ALL THREE of DESIGN 19's channels — the measured value, the
+// absent list, and the unobservable record. Covering only the first would
+// leave two ways to smuggle an undeclared name past a check that reported
+// success, and the absent list is the easier of the two: a collector cannot
+// state "this object has no such property" about a property the estate has
+// never heard of.
+//
+// A collection whose declaration carries no fact table is not checked. That
+// is the seam this file does not close alone: se.declaration/1 requires
+// `facts` with at least one entry, the contract suite refuses a declaration
+// without it, and the fixture loader refuses a fixture that writes one. The
+// exception is a hand-written stub in an in-process Go test, which judges a
+// different tier and is not a route a collector can take.
+func checkDeclaredFacts(decl *wire.Declaration, batch *wire.Batch) error {
+	for _, c := range decl.Collections {
+		if len(c.Facts) == 0 {
+			continue
+		}
+		stream := batch.Collections[c.Name]
+		if stream == nil {
+			continue
+		}
+		for _, o := range stream.Objects {
+			var facts map[string]json.RawMessage
+			if len(o.Facts) > 0 {
+				if err := json.Unmarshal(o.Facts, &facts); err != nil {
+					return violation("undeclared-fact",
+						"%s/%s: facts do not parse: %v", c.Name, o.Name, err)
+				}
+			}
+			for name := range facts {
+				if _, declared := c.Facts[name]; !declared {
+					return violation("undeclared-fact",
+						"%s/%s: fact %q was never declared", c.Name, o.Name, name)
+				}
+			}
+			for _, name := range o.Absent {
+				if _, declared := c.Facts[name]; !declared {
+					return violation("undeclared-fact",
+						"%s/%s: absent names %q, which was never declared",
+						c.Name, o.Name, name)
+				}
+			}
+		}
+		for _, u := range stream.Unobservables {
+			if _, declared := c.Facts[u.Fact]; !declared {
+				return violation("undeclared-fact",
+					"%s/%s: unobservable names %q, which was never declared",
+					c.Name, u.Name, u.Fact)
+			}
+		}
+	}
+	return nil
+}
+
+// violation mirrors wire's own constructor. The reason is recorded verbatim
+// in the store, so it is spelled once and never formatted into.
+func violation(reason, format string, args ...any) *wire.Violation {
+	return &wire.Violation{Reason: reason, Detail: fmt.Sprintf(format, args...)}
 }

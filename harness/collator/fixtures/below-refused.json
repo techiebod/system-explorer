@@ -2,7 +2,7 @@
   "name": "below-refused",
   "acceptance_item": 4,
   "note": "a commit whose generation is below the applied one is refused, not applied: wind_issued makes the authority re-mint generation 1 after 2 has been applied \u2014 the reuse event DESIGN 19's rule names \u2014 and the stale reading must be refused with the refusal recorded, prior state standing.",
-  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"pools\",\"freshness\":\"1h\"}]}",
+  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"pools\",\"freshness\":\"1h\",\"facts\":{\"Health\":{\"type\":\"string\",\"temperament\":\"state\"}}}]}",
   "streams": [
     {
       "records": [
@@ -10,7 +10,7 @@
           "record": "begin",
           "request": "batch-1",
           "batch": "batch-1",
-          "declaration": "sha256:8e656604f17878845d33006b5006ace4aa821c059c189fa84eec034b48903478",
+          "declaration": "sha256:c9266849d5a21f80c0bf770f9f732fa99b609499c86506a8f385caab9c514d6d",
           "boot_id": "5e000000-0000-4000-8000-000000000001",
           "timens": 0,
           "instance": null,
@@ -51,7 +51,7 @@
           "record": "begin",
           "request": "batch-2",
           "batch": "batch-2",
-          "declaration": "sha256:8e656604f17878845d33006b5006ace4aa821c059c189fa84eec034b48903478",
+          "declaration": "sha256:c9266849d5a21f80c0bf770f9f732fa99b609499c86506a8f385caab9c514d6d",
           "boot_id": "5e000000-0000-4000-8000-000000000001",
           "timens": 0,
           "instance": null,
@@ -92,7 +92,7 @@
           "record": "begin",
           "request": "batch-3",
           "batch": "batch-3",
-          "declaration": "sha256:8e656604f17878845d33006b5006ace4aa821c059c189fa84eec034b48903478",
+          "declaration": "sha256:c9266849d5a21f80c0bf770f9f732fa99b609499c86506a8f385caab9c514d6d",
           "boot_id": "5e000000-0000-4000-8000-000000000001",
           "timens": 0,
           "instance": null,

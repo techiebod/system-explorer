@@ -159,6 +159,10 @@ class Stream:
     records: list[dict]
     instance: str | None = None
     wind_issued: dict[str, int] = field(default_factory=dict)
+    # This round's begin commits to a hash the fixture's declaration does not
+    # produce, deliberately. Stated rather than inferred: a hash that differs
+    # by accident is a defective fixture and stays refused.
+    declaration_unknown: bool = False
 
     @property
     def batch(self) -> str:
@@ -264,6 +268,18 @@ def _load_declaration(doc: dict, where: str) -> bytes:
             raise FixtureError(f"{where}: every declared collection carries name and freshness")
         if not _COLLECTION_NAME.match(col["name"]):
             raise FixtureError(f"{where}: collection name {col['name']!r}")
+        # se.declaration/1 requires `facts` with at least one entry, and the
+        # collator refuses a stream naming a fact its declaration does not.
+        # A fixture declaring none would switch that check off for itself —
+        # silently, and exactly on the scenarios most worth judging — so the
+        # loader demands here what the contract demands of a real collector.
+        if not isinstance(col.get("facts"), dict) or not col["facts"]:
+            raise FixtureError(
+                f"{where}: collection {col['name']!r} declares no facts. The "
+                "contract requires them and the collator checks the stream "
+                "against them; a fixture without them is judged more weakly "
+                "than the collector it stands in for"
+            )
     return declaration
 
 
@@ -279,7 +295,12 @@ def _load_streams(
         label = f"{where} stream {i}"
         if not isinstance(raw, dict):
             raise FixtureError(f"{label}: a stream is an object")
-        _refuse_unknown(raw, {"records", "instance", "collector", "wind_issued"}, label)
+        _refuse_unknown(
+            raw,
+            {"records", "instance", "collector", "wind_issued",
+             "declaration_unknown"},
+            label,
+        )
         records = raw.get("records")
         if not isinstance(records, list) or not records:
             raise FixtureError(f"{label}: records must be a non-empty list")
@@ -296,11 +317,19 @@ def _load_streams(
                 "a severed stream is the crash harness's subject, not a fixture's"
             )
         begin = records[0]
-        if begin["declaration"] != decl_hash:
+        unknown_declaration = bool(raw.get("declaration_unknown"))
+        if begin["declaration"] != decl_hash and not unknown_declaration:
             raise FixtureError(
                 f"{label}: begin declares {begin['declaration']} but the fixture's "
                 f"declaration bytes hash to {decl_hash} — the collator would hold "
-                "this batch as unknown, which is a different scenario"
+                "this batch as unknown, which is a different scenario. Set "
+                "declaration_unknown on this stream to make that scenario the point"
+            )
+        if begin["declaration"] == decl_hash and unknown_declaration:
+            raise FixtureError(
+                f"{label}: declaration_unknown is set but begin's hash is the "
+                "fixture's own — the fixture argues with itself, and the "
+                "collator would apply this batch normally"
             )
         instance = raw.get("instance")
         if begin["instance"] != instance:
@@ -327,7 +356,10 @@ def _load_streams(
                     raise FixtureError(f"{label}: wind_issued names undeclared collection {name!r}")
                 if not isinstance(value, int) or value < 0:
                     raise FixtureError(f"{label}: wind_issued.{name} must be a non-negative integer")
-        streams.append(Stream(records=records, instance=instance, wind_issued=dict(wind)))
+        streams.append(Stream(
+            records=records, instance=instance, wind_issued=dict(wind),
+            declaration_unknown=unknown_declaration,
+        ))
     return streams
 
 
@@ -1026,6 +1058,11 @@ def _run_sequential(fixture: Fixture, binary: Path, state_dir: str) -> list[dict
             for collection, value in stream.wind_issued.items():
                 wind_issued(db_path(state_dir), collection, value)
             fake.queue(render(stream.records))
+            # Zero even for a REFUSED round, and that is the measured
+            # behaviour rather than an assumption: SE_ONESHOT logs a failed
+            # acquisition to stderr and returns 0 regardless, so the durable
+            # rejection is the only channel a caller can read. Asserted here
+            # so the day that changes, it changes deliberately.
             proc = run_oneshot(binary, state_dir, {"c0": fake.socket_path})
             assert proc.returncode == 0, (
                 f"{fixture.name}: round {i} exited {proc.returncode}:\n{proc.stderr}"

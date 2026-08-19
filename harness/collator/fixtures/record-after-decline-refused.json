@@ -2,7 +2,7 @@
   "name": "record-after-decline-refused",
   "acceptance_item": 2,
   "note": "the second direction of the decline-ordering guard: decline, THEN an object. A decline is a statement about the whole collection and closes it to everything except absent's zero commit, so the batch must be refused with a recorded record-after-decline and nothing applied \u2014 not even the staleness the decline would have marked, because an invalid stream is authoritative for nothing. The defect this pins: the stream was accepted, the post-decline object vanished silently, and the batch acked with rejections=[].",
-  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"pools\",\"freshness\":\"1h\"}]}",
+  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"pools\",\"freshness\":\"1h\",\"facts\":{\"Health\":{\"type\":\"string\",\"temperament\":\"state\"}}}]}",
   "streams": [
     {
       "records": [
@@ -10,7 +10,7 @@
           "record": "begin",
           "request": "batch-1",
           "batch": "batch-1",
-          "declaration": "sha256:8e656604f17878845d33006b5006ace4aa821c059c189fa84eec034b48903478",
+          "declaration": "sha256:c9266849d5a21f80c0bf770f9f732fa99b609499c86506a8f385caab9c514d6d",
           "boot_id": "5e000000-0000-4000-8000-000000000001",
           "timens": 0,
           "instance": null,

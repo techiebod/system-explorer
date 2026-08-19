@@ -2,7 +2,7 @@
   "name": "oldest-read-wins",
   "acceptance_item": 5,
   "note": "a six-second acquisition never reports itself fresher than its oldest contributing read: spanning's objects carry at values six seconds apart, anchor's single object sits at the newest of them. The served age must derive from oldest_at \u2014 age_s + oldest_at reconstructs the same now on both rows \u2014 and oldest_at must be the MINIMUM at, not the newest and not arrival time. The stamps are single-digit seconds on purpose: the daemon serves age against its own live boot clock, and a CI runner is a freshly booted VM \u2014 stamps around 100s sat in the runner's future, the age went negative, and the F2 rule correctly refused to serve it. A serving host older than ten seconds is the one assumption a booted daemon cannot violate.",
-  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"anchor\",\"freshness\":\"1h\"},{\"name\":\"spanning\",\"freshness\":\"1h\"}]}",
+  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"anchor\",\"freshness\":\"1h\",\"facts\":{\"Role\":{\"type\":\"string\",\"temperament\":\"state\"}}},{\"name\":\"spanning\",\"freshness\":\"1h\",\"facts\":{\"Role\":{\"type\":\"string\",\"temperament\":\"state\"}}}]}",
   "streams": [
     {
       "records": [
@@ -10,7 +10,7 @@
           "record": "begin",
           "request": "batch-1",
           "batch": "batch-1",
-          "declaration": "sha256:4507f99904bffcfe44c3cb508d81ad58148e074d421e02ba88c516f706487d25",
+          "declaration": "sha256:eb1931fd6df0c841b81ee9f1af31abf5b266509573c32b49ed1f644530298bb7",
           "boot_id": "5e000000-0000-4000-8000-000000000001",
           "timens": 0,
           "instance": null,
