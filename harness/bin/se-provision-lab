@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+"""Provision a lab guest with the venues the parity comparator needs.
+
+Gate 3 wants the parity report to compare READINGS, not declines. Twelve of the
+twenty collectors read something a bare guest does not have — an app API, a
+control socket, a manifest — and against a bare guest the comparator only ever
+shows two implementations agreeing that nothing is there, which proves nothing
+about either. This brings those venues up and writes the receipts.
+
+    se-provision-lab se-test-ubuntu2604 --ssh-config test/vm-lab/.state/ssh_config
+
+Two remote scripts do the work, both shipped as FILES rather than quoted
+strings: harness/remote/provision-apps.sh for the containerised apps, and
+harness/remote/provision-estate.sh for unbound, kea and the protection
+documents. This driver exists for the one part that cannot run on the guest —
+staging protection's payloads out of the committed corpus.
+
+WHAT THE PROTECTION VENUE IS AND IS NOT. Its bytes are the corpus's own
+`authored` payloads, so the live comparison reads content that replay already
+covers. It is not a new shape and is not claimed as one. What it adds is the
+path replay cannot reach: a real open() at a real path with real permissions,
+the receipts directory walked rather than enumerated by the seam, and the
+manifest-to-receipt join run at full size against the filesystem. Every other
+venue here is a live service and does carry shapes nobody captured.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent.parent
+REMOTE = REPO / "harness" / "remote"
+CORPUS = REPO / "corpus" / "protection" / "healthy" / "payloads"
+
+# The corpus encodes a payload's path by dropping the leading slash and
+# replacing every separator with a dash, which is not reversible in general —
+# `photo-library.last.json` has dashes of its own. So the roots are taken from
+# the adapter, which is where they are declared, and matched longest-first.
+MANIFEST = "etc-homelab-protection-manifest.json"
+STATUS = "var-lib-homelab-protection-status.json"
+RECEIPTS = "var-lib-homelab-protection-receipts-"
+
+
+def stage_protection(into: Path) -> int:
+    """Write the corpus's protection documents into into/, real names restored.
+
+    Each payload is the LIST of responses that acquisition returned across the
+    capture; element 0 is the document. Writing element 0 rather than the list
+    is what turns a replay payload back into a file.
+    """
+    if not CORPUS.is_dir():
+        print(f"  no protection corpus at {CORPUS} — skipping that venue",
+              file=sys.stderr)
+        return 0
+
+    receipts = into / "receipts"
+    receipts.mkdir(parents=True, exist_ok=True)
+    written = 0
+    for payload in sorted(CORPUS.iterdir()):
+        if payload.suffix != ".json":
+            continue  # `hostname` is a plain-text seam member, not a document
+        stem = payload.name[: -len(".json")]
+        if stem == MANIFEST:
+            target = into / "manifest.json"
+        elif stem == STATUS:
+            target = into / "status.json"
+        elif stem.startswith(RECEIPTS):
+            target = receipts / stem[len(RECEIPTS):]
+        else:
+            print(f"  unrecognised protection payload {payload.name} — not"
+                  " staged, because guessing its path would install a"
+                  " document at a path nothing reads", file=sys.stderr)
+            continue
+        responses = json.loads(payload.read_text())
+        if responses[0] is None:
+            # A null response is the capture recording that this path did NOT
+            # open — the job never wrote that receipt. Writing the null out
+            # would create a file that exists and holds nothing, which is a
+            # different statement about the estate and a shape the corpus does
+            # not contain. It cost a false parity diff on 2026-08-19: two jobs
+            # came back ReceiptsUnobservable from the port because this staged
+            # `null\n` into their receipts.
+            continue
+        target.write_text(json.dumps(responses[0], indent=2) + "\n")
+        written += 1
+    return written
+
+
+def ssh_argv(host: str, config: str | None) -> list[str]:
+    argv = ["ssh"]
+    if config:
+        argv += ["-F", config]
+    return argv + [host]
+
+
+def run_remote(host: str, config: str | None, script: Path) -> int:
+    """Ship one script and run it, with its output passed straight through.
+
+    The exit status is the SCRIPT's. An earlier version of this pipeline read
+    the status of the thing it was piped into, which reports success for a
+    payload that never ran — the failure this repository has hit five times.
+    """
+    print(f"── {script.name}", file=sys.stderr)
+    with script.open("rb") as body:
+        completed = subprocess.run(
+            ssh_argv(host, config) + ["bash -s"], stdin=body)
+    return completed.returncode
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("host")
+    parser.add_argument("--ssh-config", default=None)
+    parser.add_argument("--skip-apps", action="store_true",
+                        help="only the estate venues (unbound, kea, protection)")
+    args = parser.parse_args()
+
+    staged = Path(tempfile.mkdtemp(prefix="se-protection-"))
+    try:
+        count = stage_protection(staged)
+        print(f"  staged {count} protection documents", file=sys.stderr)
+        if count:
+            tar = subprocess.Popen(
+                ["tar", "czf", "-", "-C", str(staged), "."],
+                stdout=subprocess.PIPE)
+            assert tar.stdout is not None
+            placed = subprocess.run(
+                ssh_argv(args.host, args.ssh_config) +
+                ["rm -rf /tmp/se-lab/protection-payloads && "
+                 "mkdir -p /tmp/se-lab/protection-payloads && "
+                 "tar xzf - -C /tmp/se-lab/protection-payloads"],
+                stdin=tar.stdout)
+            tar.stdout.close()
+            tar.wait()
+            if tar.returncode or placed.returncode:
+                print("  staging the protection payloads FAILED — that venue"
+                      " will be skipped on the guest", file=sys.stderr)
+    finally:
+        shutil.rmtree(staged, ignore_errors=True)
+
+    worst = 0
+    scripts = ([] if args.skip_apps else [REMOTE / "provision-apps.sh"])
+    scripts.append(REMOTE / "provision-estate.sh")
+    for script in scripts:
+        code = run_remote(args.host, args.ssh_config, script)
+        if code:
+            print(f"  {script.name} exited {code}", file=sys.stderr)
+            worst = max(worst, code)
+    return worst
+
+
+if __name__ == "__main__":
+    sys.exit(main())

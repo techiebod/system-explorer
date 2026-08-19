@@ -1,0 +1,169 @@
+#!/usr/bin/env bash
+# The venues that are not containers: unbound's control socket, kea's, and the
+# protection manifest.
+#
+# Runs ON the guest, shipped as a FILE. Appends to the receipts file that
+# provision-apps.sh writes, so run that one first.
+#
+# STATED COVERAGE: this makes three collectors reach their positive path. It
+# does NOT settle what any of them should do when the receipt is missing —
+# unbound declining `absent` while unbound is installed and running is the
+# open class-1 question, and provisioning it here removes the symptom from
+# this host without answering it.
+set -euo pipefail
+
+RECEIPTS=/tmp/se-lab/receipts.env
+PAYLOADS=/tmp/se-lab/protection-payloads
+
+mkdir -p /tmp/se-lab
+touch "$RECEIPTS"
+
+say() { printf '  %s\n' "$*" >&2; }
+emit() { printf 'export %s=%s\n' "$1" "$2" >>"$RECEIPTS"; }
+
+# Drop any prior line for this name before re-emitting, so a re-run replaces a
+# receipt rather than appending a second one that a later `source` would win.
+forget() { sed -i "/^export $1=/d" "$RECEIPTS"; }
+
+# ---------------------------------------------------------------- unbound
+# A unix control socket, not the TCP interface: over TCP unbound-control wants
+# a key pair, and the adapter connects to a socket path.
+if command -v unbound >/dev/null 2>&1; then
+    sudo mkdir -p /etc/unbound/unbound.conf.d
+    sudo tee /etc/unbound/unbound.conf.d/se-lab-control.conf >/dev/null <<'CONF'
+# Lab only. Written by harness/remote/provision-estate.sh so the unbound
+# collector has a control socket to read; not a configuration to copy.
+remote-control:
+    control-enable: yes
+    control-interface: /run/unbound.ctl
+CONF
+    sudo systemctl restart unbound || say "unbound restart failed"
+    for _ in $(seq 20); do
+        [ -S /run/unbound.ctl ] && break
+        sleep 1
+    done
+    if [ -S /run/unbound.ctl ]; then
+        # Connectable, not merely present: the adapter distinguishes a missing
+        # socket from one that refuses, and so should the receipt.
+        if sudo unbound-control -s /run/unbound.ctl status >/dev/null 2>&1; then
+            forget SE_UNBOUND_SOCKET
+            emit SE_UNBOUND_SOCKET /run/unbound.ctl
+            say "unbound control socket answered"
+        else
+            say "unbound.ctl exists but did not answer status — receipt omitted"
+        fi
+    else
+        say "no /run/unbound.ctl appeared — receipt omitted"
+    fi
+else
+    say "unbound is not installed — receipt omitted"
+fi
+
+# ---------------------------------------------------------------- kea
+if ! command -v kea-dhcp4 >/dev/null 2>&1; then
+    say "installing kea-dhcp4-server"
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q kea-dhcp4-server \
+        >/dev/null 2>&1 || say "kea install failed"
+fi
+if command -v kea-dhcp4 >/dev/null 2>&1; then
+    sudo mkdir -p /run/kea /var/lib/kea
+    # lease4-get-all lives in the lease_cmds hook, which Ubuntu ships but does
+    # not load. Without it the reference raises and loses ALL FOUR collections
+    # while the port declines `leases: unsupported` and serves the other three
+    # — measured here on 2026-08-19, and a kea with no hooks is an ordinary
+    # kea rather than a broken one. Loaded here so the readings can be
+    # compared; the disagreement about the unhooked case is recorded in
+    # docs/PARITY-REPORT.md and is not repaired by this line.
+    HOOK=$(\ls /usr/lib/*/kea/hooks/libdhcp_lease_cmds.so 2>/dev/null | head -1)
+    if [ -n "$HOOK" ]; then
+        HOOKS="\"hooks-libraries\": [ { \"library\": \"$HOOK\" } ],"
+    else
+        HOOKS=""
+        say "no libdhcp_lease_cmds.so — kea leases will decline unsupported"
+    fi
+    # A minimal but real server: one subnet, one reservation, one pool, so the
+    # subnets and reservations collections have something to report. The
+    # interface is deliberately none — this must never answer DHCP on the lab
+    # network, only hold a control socket.
+    sudo tee /etc/kea/kea-dhcp4.conf >/dev/null <<CONF
+{
+"Dhcp4": {
+    "interfaces-config": { "interfaces": [ ] },
+    $HOOKS
+    "control-socket": {
+        "socket-type": "unix",
+        "socket-name": "/run/kea/kea4-ctrl-socket"
+    },
+    "lease-database": {
+        "type": "memfile",
+        "persist": true,
+        "name": "/var/lib/kea/kea-leases4.csv"
+    },
+    "valid-lifetime": 3600,
+    "subnet4": [
+        {
+            "id": 1,
+            "subnet": "192.0.2.0/24",
+            "pools": [ { "pool": "192.0.2.100 - 192.0.2.200" } ],
+            "reservations": [
+                {
+                    "hw-address": "02:00:00:00:00:01",
+                    "ip-address": "192.0.2.50",
+                    "hostname": "lab-reserved"
+                }
+            ]
+        }
+    ],
+    "loggers": [ {
+        "name": "kea-dhcp4",
+        "severity": "ERROR",
+        "output_options": [ { "output": "stdout" } ]
+    } ]
+}
+}
+CONF
+    sudo systemctl restart kea-dhcp4-server || say "kea restart failed"
+    # Tested through sudo, deliberately. /run/kea is 0750 owned by _kea, so a
+    # bare `[ -S ... ]` as the login user cannot stat inside it and returns
+    # false for a socket that is present and working — reporting "not there"
+    # for "could not look", which is the one confusion this whole repository
+    # exists to prevent. It cost a run here on 2026-08-19.
+    for _ in $(seq 20); do
+        sudo test -S /run/kea/kea4-ctrl-socket && break
+        sleep 1
+    done
+    if sudo test -S /run/kea/kea4-ctrl-socket; then
+        forget SE_KEA_SOCKET
+        emit SE_KEA_SOCKET /run/kea/kea4-ctrl-socket
+        say "kea control socket present"
+    elif sudo test -e /run/kea; then
+        say "kea is up but no control socket appeared — receipt omitted"
+    else
+        say "no /run/kea at all — receipt omitted"
+    fi
+fi
+
+# ---------------------------------------------------------------- protection
+# Not a service: three documents at fixed paths. The bytes come from the
+# committed corpus, whose provenance is `authored` — an estate that was read
+# once for its SHAPES and whose content is fiction. Installing them here is
+# what gives the port a positive path to be compared on; it asserts nothing
+# about this guest, which protects nothing.
+if [ -d "$PAYLOADS" ]; then
+    # Cleared, not merged. A receipt the staging no longer produces must not
+    # survive from a previous run: copying over the top leaves it in place and
+    # the next comparison reads a job state nothing staged.
+    sudo rm -rf /var/lib/homelab/protection/receipts
+    sudo mkdir -p /etc/homelab /var/lib/homelab/protection/receipts
+    sudo cp "$PAYLOADS/manifest.json" /etc/homelab/protection-manifest.json
+    sudo cp "$PAYLOADS/status.json" /var/lib/homelab/protection/status.json
+    if compgen -G "$PAYLOADS/receipts/*" >/dev/null; then
+        sudo cp "$PAYLOADS"/receipts/* /var/lib/homelab/protection/receipts/
+    fi
+    say "protection documents installed: $(sudo \ls /var/lib/homelab/protection/receipts | wc -l) receipts"
+else
+    say "no protection payloads staged at $PAYLOADS — skipped"
+fi
+
+say "receipts now:"
+sed 's/=.*/=<set>/' "$RECEIPTS" >&2
