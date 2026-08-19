@@ -311,6 +311,13 @@ load_image() {
   # SHA256SUMS URL 404'd and took the whole `up` with it).
   IMAGE_CHECKSUM_ALGO="sha256"
   IMAGE_BOOT="uefi"
+  # The login shell cloud-init gives the test user. Per-distro because it is a
+  # PATH, and a path is a property of the image: sshd refuses an account whose
+  # shell does not exist — "User henry not allowed because shell /bin/bash does
+  # not exist" — before it ever consults authorized_keys, so the wrong value
+  # here presents as a publickey rejection on a guest whose user, key and sudo
+  # rule are all correctly in place.
+  GUEST_SHELL="/bin/bash"
 
   case "${distro}" in
     fedora)
@@ -345,6 +352,11 @@ load_image() {
     nixos)
       IMAGE_FILE="nixos-26.05-cloud-x86_64.qcow2"
       IMAGE_BOOT="bios"
+      # NixOS has no /bin/bash — /bin holds sh and nothing else, and every
+      # other interpreter lives in the store behind the system profile. This
+      # path is what the guest's own /etc/shells lists, checked on the guest
+      # rather than assumed.
+      GUEST_SHELL="/run/current-system/sw/bin/bash"
       ;;
   esac
 }
@@ -472,7 +484,7 @@ ssh_pwauth: false
 users:
   - name: ${LAB_USER}
     gecos: VM install test user
-    shell: /bin/bash
+    shell: ${GUEST_SHELL}
     lock_passwd: true
     sudo: "ALL=(ALL) NOPASSWD:ALL"
     ssh_authorized_keys:
@@ -598,7 +610,17 @@ wait_until_ready() {
   log "waiting for ${LAB_USER}@${ip}, cloud-init, and passwordless sudo"
 
   while (( SECONDS < deadline )); do
-    if ssh_to_guest "${distro}" "${ip}" "sudo -n cloud-init status --wait >/dev/null && sudo -n true && test \"\$(id -un)\" = '${LAB_USER}'" >/dev/null 2>&1; then
+    # The STATUS WORD, not the exit code. `cloud-init status --wait` exits 2 for
+    # "done, with recoverable errors", and a guest can be perfectly ready in that
+    # state: the NixOS image reaches it because the keys-to-console module cannot
+    # find a helper that prints host-key fingerprints to a console, which is
+    # cosmetic and unrelated to anything this lab promises. Gating on exit 0 made
+    # that guest wait out the full deadline and then be declared a failure while
+    # ssh, the user and passwordless sudo all worked — the readiness check
+    # disagreeing with the three things it exists to verify. Those three are
+    # still verified, in this same command, so nothing is being taken on trust:
+    # what is ignored is only cloud-init's opinion of its own warnings.
+    if ssh_to_guest "${distro}" "${ip}" "[ \"\$(sudo -n cloud-init status --wait 2>/dev/null | sed -n 's/^status: //p')\" = done ] && sudo -n true && test \"\$(id -un)\" = '${LAB_USER}'" >/dev/null 2>&1; then
       log "${distro} ready at ${ip}"
       return
     fi
