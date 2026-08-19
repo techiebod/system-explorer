@@ -8,13 +8,6 @@ import (
 	"strings"
 )
 
-// The group vdevs, closed (storage.py:47). A cache or log device leaving is
-// not the pool leaving and a spare standing by protects nothing yet, so a
-// group labels its whole subtree and is graded by nothing. Membership is by
-// NAME and nothing else — the containers zpool emits carry no vdev_type at
-// all — which is why this is a set of keys and never a type test.
-var zfsGroupVdevs = map[string]bool{"logs": true, "l2cache": true, "spares": true}
-
 // Parity comes from the vdev's NAME. zpool reports vdev_type "raidz" for
 // raidz1, raidz2 and raidz3 alike and carries no nparity member anywhere in
 // the document, so the only place the number exists is the name zpool
@@ -119,15 +112,21 @@ func flattenPoolVdevs(pool *value, out *[]*vdevRow, links *aliasTree) {
 }
 
 // The group keys in a fixed order, so two hosts with the same pool emit the
-// same rows in the same sequence.
+// same rows in the same sequence. Closed (storage.py:47), and read at POOL
+// depth only: a cache or log device leaving is not the pool leaving and a
+// spare standing by protects nothing yet, so a group labels its whole subtree
+// and is graded by nothing. Membership is by NAME because the containers
+// zpool emits carry no vdev_type at all — which is also why the same three
+// names must NOT be tested inside the tree, where a name is a device's.
 var sortedGroupVdevs = []string{"l2cache", "logs", "spares"}
 
-// flattenVdevs is the depth-first walk of storage.py:338-418, in document
-// order. Two rules carry all the weight:
+// flattenVdevs is the depth-first walk of storage.py's _flatten_vdevs, in
+// document order. Two rules carry all the weight:
 //
 // A node is a CONTAINER — emitting no row — iff its vdev_type is the string
-// "root" or its map key is a group name. There is no depth condition on
-// either, at any level.
+// "root". That is the only container inside the tree: the group keys are
+// containers too, but they are POOL members, read by flattenPoolVdevs above,
+// and never arrive here as nodes.
 //
 // A container does not advance depth, so the pool's root is transparent and
 // its children are Depth 1. Depth is therefore "emitted ancestors + 1", not
@@ -139,11 +138,20 @@ func flattenVdevs(nodes *value, out *[]*vdevRow, links *aliasTree, group string,
 	}
 	for _, name := range tree.keys {
 		node := tree.byKey[name]
-		isContainer := node.get("vdev_type").equalsString("root") || zfsGroupVdevs[name]
+		// The ROOT vdev is namespace and nothing else, so it is the only
+		// container this walk recognises. A group key is a container too,
+		// but at POOL DEPTH ONLY, and the caller reads it there: zpool puts
+		// spares, logs and l2cache beside `vdevs` as top-level pool keys, so
+		// the key itself never arrives here as a node.
+		//
+		// Treating those three NAMES as containers wherever they appeared —
+		// which this did until 2026-08-19, matching the reference — dropped
+		// any leaf so named with its state and error counters, leaving a
+		// FAULTED disk out of UnhealthyVdevs silently. vdev_id.conf gives an
+		// admin arbitrary by-vdev aliases, so a disk really can be called
+		// `logs`.
+		isContainer := node.get("vdev_type").equalsString("root")
 		nextGroup := group
-		if zfsGroupVdevs[name] {
-			nextGroup = name
-		}
 		childDepth := depth
 		if !isContainer {
 			*out = append(*out, buildRow(name, node, links, nextGroup, depth, parent))

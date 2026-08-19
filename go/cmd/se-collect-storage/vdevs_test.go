@@ -41,36 +41,70 @@ func equal(a, b []string) bool {
 	return true
 }
 
-// A node is dropped iff its vdev_type is "root" or its key is a group name —
-// no depth condition on either. The dropped node does not advance depth, so
-// the pool's root is transparent and its children are Depth 1.
-func TestTheContainerRuleHasNoDepthCondition(t *testing.T) {
+// Inside the tree a node is dropped iff its vdev_type is "root", with no
+// depth condition. The dropped node does not advance depth, so the pool's
+// root is transparent and its children are Depth 1.
+//
+// Ruled 2026-08-19, and this test pinned the defect until then: the three
+// group NAMES were treated as containers wherever they appeared, so a leaf
+// so keyed inside a raidz was dropped with its state and its error counters
+// and a FAULTED disk there reached no derived list. vdev_id.conf gives an
+// admin arbitrary by-vdev aliases, so a disk really can be called `logs`.
+func TestOnlyTheRootIsAContainerInsideTheTree(t *testing.T) {
 	rows := walk(t, `{
 	  "pool": {"vdev_type": "root", "vdevs": {
 	     "raidz1-0": {"vdev_type": "raidz", "vdevs": {
 	        "a": {"vdev_type": "disk"},
 	        "spares": {"vdev_type": "disk", "state": "FAULTED"}
-	     }},
-	     "logs": {"vdevs": {"lg": {"vdev_type": "disk"}}}
+	     }}
 	  }}
 	}`, nil)
 
-	if got := names(rows); !equal(got, []string{"raidz1-0", "a", "lg"}) {
+	if got := names(rows); !equal(got, []string{"raidz1-0", "a", "spares"}) {
 		t.Fatalf("walk order/membership: %v", got)
 	}
 	if rows[0].depth != 1 || rows[1].depth != 2 {
 		t.Errorf("the root is transparent: depths were %d/%d", rows[0].depth, rows[1].depth)
 	}
-	// A leaf keyed `spares` inside a raidz is dropped along with its state,
-	// so a FAULTED disk so keyed reaches no derived list. That is what the
-	// reference does; the docstring implies otherwise.
-	if len(unhealthyVdevs(rows).items) != 0 {
-		t.Error("a group-keyed leaf emits no row and can therefore be in no list")
+	// The whole point: the FAULTED disk reaches the list an operator reads.
+	unhealthy := unhealthyVdevs(rows)
+	if len(unhealthy.items) != 1 {
+		t.Fatalf("a disk named for a group key is still a disk: %+v", unhealthy.items)
 	}
-	// A group container does not advance depth either: its member sits
-	// beside the data vdevs at Depth 1, labelled by the group.
-	if rows[2].depth != 1 || rows[2].group != "logs" {
-		t.Errorf("group member: depth %d group %q", rows[2].depth, rows[2].group)
+	// And it carries no Group, because nothing inside the tree is one: the
+	// row's group field is "" for a data vdev.
+	if rows[2].group != "" {
+		t.Errorf("a leaf's NAME never labels a group: %q", rows[2].group)
+	}
+}
+
+// The other half of the same rule: at POOL depth the group keys are exactly
+// what zpool calls the containers, they label their whole subtree, and they
+// do not advance depth — a log device sits beside the data vdevs at Depth 1.
+func TestAGroupKeyIsAContainerAtPoolDepth(t *testing.T) {
+	var rows []*vdevRow
+	flattenPoolVdevs(mustDecode(t, `{
+	  "vdevs": {"raidz1-0": {"vdev_type": "raidz", "vdevs": {"a": {"vdev_type": "disk"}}}},
+	  "logs":  {"lg": {"vdev_type": "disk"}},
+	  "spares": {"sp": {"vdev_type": "disk", "state": "AVAIL"}}
+	}`), &rows, nil)
+
+	if got := names(rows); !equal(got, []string{"raidz1-0", "a", "lg", "sp"}) {
+		t.Fatalf("walk order/membership: %v", got)
+	}
+	for _, want := range []struct {
+		index int
+		group string
+	}{{2, "logs"}, {3, "spares"}} {
+		if rows[want.index].group != want.group || rows[want.index].depth != 1 {
+			t.Errorf("%s: group %q depth %d, want %q at depth 1",
+				rows[want.index].name, rows[want.index].group,
+				rows[want.index].depth, want.group)
+		}
+	}
+	// A spare standing by protects nothing yet and is graded by nothing.
+	if len(unhealthyVdevs(rows).items) != 0 {
+		t.Error("AVAIL in the spares group is the healthy state for a spare")
 	}
 }
 
@@ -213,14 +247,7 @@ func TestRedundancyIsGradedByTheWeakestDataVdev(t *testing.T) {
 			root(`"raidz1-0": {"vdev_type":"raidz","vdevs":{"a":` + disk + `}}, "z": ` + disk),
 			"raidz1 + stripe", 0, true,
 		},
-		{
-			// Groups are skipped and do not close a pending mirror.
-			"groups are not data",
-			root(`"raidz1-0": {"vdev_type":"raidz","vdevs":{"a":` + disk + `}},
-			      "logs": {"vdevs": {"lg": ` + disk + `}},
-			      "spares": {"vdevs": {"sp": ` + disk + `}}`),
-			"raidz1", 1, true,
-		},
+
 		{"empty pool", root(``), "", 0, false},
 		{"raidz with no parity digit", root(`"raidz-0": {"vdev_type":"raidz","vdevs":{"a":` + disk + `}}`), "", 0, false},
 		{"a raidz name typed something else", root(`"raidz1-0": {"vdev_type":"weird","vdevs":{"a":` + disk + `}}`), "", 0, false},

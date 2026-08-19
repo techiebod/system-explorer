@@ -405,8 +405,23 @@ def _flatten_vdevs(nodes: dict | None, out: list[dict],
     because the row dicts ARE the emitted Vdevs fact.
     """
     for name, vdev in (nodes or {}).items():
-        is_container = vdev.get("vdev_type") == "root" or name in ZFS_GROUP_VDEVS
-        next_group = name if name in ZFS_GROUP_VDEVS else group
+        # The ROOT vdev is namespace and nothing else, so it is the only
+        # container this walk recognises. A group key is a container too, but
+        # at POOL DEPTH ONLY, and it is the caller above that reads it there:
+        # zpool puts spares, logs and l2cache beside `vdevs` as top-level pool
+        # keys, so the key itself never arrives here as a node.
+        #
+        # Treating those three NAMES as containers wherever they appeared —
+        # which this did until 2026-08-19 — dropped any leaf so named, with
+        # its state and its error counters, and a FAULTED disk there left
+        # UnhealthyVdevs silently. Unusual but reachable: vdev_id.conf gives
+        # an admin arbitrary by-vdev aliases, so a disk really can be called
+        # `logs`. The branch existed for a nesting zpool does not produce, and
+        # the two mutation operators that claimed to cover group vdevs minted
+        # exactly that shape, so the guard was closing a class against a
+        # placement that does not exist while opening a real one.
+        is_container = vdev.get("vdev_type") == "root"
+        next_group = group
         child_depth = depth
         if not is_container:
             # Stripe pools omit the "vdev_type" (and "state") keys on their
@@ -1067,11 +1082,23 @@ class Adapter:
             stable: dict[str, object] = {}
             if pool.get("pool_guid") is not None:
                 stable["guid"] = str(pool["pool_guid"])
-            devices = [str(entry["Name"]) for entry in leaves]
+            # A NAME FAMILY IS A SET (ruled 2026-08-19), deduplicated in
+            # first-seen order rather than sorted, so the published order is
+            # still the walk's. An engaged spare occupies two positions in one
+            # pool — inside the spare-N pseudo-vdev where it is doing the work
+            # and under the `spares` key where it is accounted for — so this
+            # list held one device twice, and a hub joining estate identity on
+            # `stable` could read one device as two. Listing it twice added no
+            # denotation: what the multiplicity MEANS is the pool's layout,
+            # and the backed-by relation assertions carry that properly now,
+            # discriminated by VdevPath. The multiplicity has a home, and it
+            # is not this one.
+            devices = list(dict.fromkeys(str(entry["Name"]) for entry in leaves))
             if devices:
                 stable["devices"] = devices
-            kernels = [entry["Names"]["ephemeral"]["kernel"] for entry in leaves
-                       if "ephemeral" in entry.get("Names", {})]
+            kernels = list(dict.fromkeys(
+                entry["Names"]["ephemeral"]["kernel"] for entry in leaves
+                if "ephemeral" in entry.get("Names", {})))
             if stable:
                 item["names"] = {"stable": stable}
                 if kernels:

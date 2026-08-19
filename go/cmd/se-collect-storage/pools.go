@@ -371,13 +371,26 @@ func poolNames(pool *value, rows []*vdevRow) json.RawMessage {
 	if guid := pool.get("pool_guid"); !isNone(guid) {
 		stable.set("guid", stringValue(pyStr(guid)))
 	}
+	// A NAME FAMILY IS A SET (ruled 2026-08-19), deduplicated in first-seen
+	// order rather than sorted, so the published order is still the walk's.
+	// An engaged spare occupies two positions in one pool — inside the
+	// spare-N pseudo-vdev where it is doing the work and under the `spares`
+	// key where it is accounted for — so this list held one device twice and
+	// a hub joining estate identity on `stable` could read one device as two.
+	// What the multiplicity MEANS is the pool's layout, and the backed-by
+	// assertions carry that properly, discriminated by VdevPath.
 	devices, kernels := newArray(), newArray()
+	seenDevice, seenKernel := map[string]bool{}, map[string]bool{}
 	for _, row := range rows {
 		if !row.isDisk {
 			continue
 		}
-		devices.append(stringValue(row.name))
-		if row.kernel != "" {
+		if !seenDevice[row.name] {
+			seenDevice[row.name] = true
+			devices.append(stringValue(row.name))
+		}
+		if row.kernel != "" && !seenKernel[row.kernel] {
+			seenKernel[row.kernel] = true
 			kernels.append(stringValue("/dev/" + row.kernel))
 		}
 	}
