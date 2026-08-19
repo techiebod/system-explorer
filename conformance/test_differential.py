@@ -297,6 +297,31 @@ CASES = (
          # the hard way still drops `paused`, and a closed set is closed member
          # by member or not at all.
          ("ScopeUnit", differential.PAUSED_SCOPE)),
+    # ── the three collectors ported on 2026-08-19 ───────────────────────
+    Case("absent-count-is-zero", "paperless-count-absent",
+         "a9_absent_count_is_zero.py", differential.DISAGREE, "differences",
+         # By NAME, because the disagreement is a fact existing at all. The
+         # reference omits DocumentCount when the API does not answer the
+         # member; the zero-defaulting subject publishes it holding 0, which
+         # the rules judge critical. The evidence is the fact name rather than
+         # the value, so a subject that defaulted to some other number fails
+         # here too.
+         ("DocumentCount",)),
+    Case("epoch-zero-timestamp", "plex-never-scanned-section",
+         "a9_epoch_zero_scan.py", differential.DISAGREE, "differences",
+         # The fact name and the year together. A section Plex has never
+         # scanned reports 0, the reference's `> 0` gate drops it, and the
+         # subject publishes a date in 1970 — so the disagreement names
+         # ScannedAt and carries the epoch that makes it obviously not a
+         # reading.
+         ("ScannedAt", "1970")),
+    Case("receiptless-job-dropped", "protection-receiptless-job",
+         "a9_receiptless_job_dropped.py", differential.DISAGREE, "differences",
+         # The row itself, by the job's name: a job that has never written a
+         # receipt still has a verdict, and the subject drops it entirely. The
+         # evidence is the missing object rather than any fact on it, because
+         # what the defect costs is the whole row.
+         ("runtime-state",)),
     Case("manager-version-blind", "bazarr-wired-managers",
          "a9_manager_version_blind.py", differential.DISAGREE, "differences",
          # Both facts, by name AND value. bazarr spells "wired to nothing" as

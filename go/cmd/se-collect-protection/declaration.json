@@ -1,0 +1,441 @@
+{
+  "schema": "se.declaration/1",
+  "collector": "protection",
+  "version": "0.7.0",
+  "authority": {
+    "read_paths": [
+      "/proc/sys/kernel/random/boot_id",
+      "/proc/self/timens_offsets",
+      "/etc/homelab/protection-manifest.json",
+      "/var/lib/homelab/protection/status.json",
+      "/var/lib/homelab/protection/receipts"
+    ]
+  },
+  "probe": "the rendered protection manifest at /etc/homelab/protection-manifest.json opens and is a mapping. No credential is asked for and none is declared, which is the design rather than an omission: the repositories these jobs write to are deliberately never reached, because reading the off-site one needs the delete-capable credential that lives with the maintenance identity, and an observer holding it would break the estate's own rule that a source cannot prune its own history. A host with no manifest declares no protection inventory — an absence, which commits and retires. A manifest that will not open is a fault to state — unavailable, which commits nothing, because a half-written render must never retire an estate's declared targets. A readable manifest with no staleness verdict beside it is a YES here and a jobs collection that declines unavailable: the same declaration that renders the manifest installs the checker, so a missing verdict is one nobody has written yet or one that stopped, never a host that protects nothing.",
+  "collections": [
+    {
+      "name": "targets",
+      "question": "what does the estate promise to protect, is each promise actually built, and has anything ever been restored from it?",
+      "prefix": "target",
+      "freshness": "300s",
+      "perishability": "reconstructible",
+      "answer": [
+        "Class",
+        "Kind",
+        "OwnerHost",
+        "Cadence",
+        "Destinations",
+        "IndependentDestinations",
+        "ImplementedHops",
+        "UnimplementedHops",
+        "ProvenRungs",
+        "UnprovenRungs",
+        "FailedProofRungs",
+        "LastFailedProofAt"
+      ],
+      "ceiling": { "records": 512, "bytes": 1048576 },
+      "facts": {
+        "Class": {
+          "type": "enum",
+          "values": ["backup", "replicate", "recreate"],
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "nothing",
+          "from": "/targets/*/class",
+          "sentence": "What losing this data would mean, in the estate's own three words: backup is irreplaceable, replicate is replaceable at a cost in time, recreate is rebuilt from the estate's own definitions."
+        },
+        "Kind": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "nothing",
+          "from": "/targets/*/kind",
+          "sentence": "How the artifact is produced (a ZFS send, a file mirror, the application's own exporter) — orthogonal to the class, which is about the loss, not the method."
+        },
+        "OwnerHost": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "location",
+          "from": "/targets/*/ownerHost",
+          "sentence": "The host that owns the authority and therefore runs the job; execution lives with the data, never on an admin machine. It is also the scope of every verdict about this target: the declaration is identical on every host, so a coverage gap judged everywhere it can be read would mint one condition once per host."
+        },
+        "Source": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "content",
+          "from": "/targets/*/source",
+          "sentence": "The dataset, path, container or domain the protected artifact is captured from. It is prose in the general case and an object id in the lucky one, and it is carried as the declaration wrote it rather than parsed into a join that may lead nowhere."
+        },
+        "Retention": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "nothing",
+          "from": "/targets/*/retention",
+          "sentence": "The named retention policy, resolved by whoever administers the destination — a source cannot state how long its copies are kept."
+        },
+        "Cadence": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "nothing",
+          "from": "/targets/*/cadence",
+          "sentence": "The frequency this target's capture is promised at, as a calendar expression. It is the contract a window is derived from and never the window itself: stating one is what makes a target expected at all, while the threshold a run is actually measured against is the job's separately registered MaxAgeSeconds, set from this promise plus deliberate grace."
+        },
+        "Destinations": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "content",
+          "from": "/targets/*/destinations",
+          "sentence": "The logical destinations this target's copies are declared to reach, by name."
+        },
+        "IndependentDestinations": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": ["Destinations", "destinations/Independent"],
+          "discloses": "content",
+          "sentence": "Which of those destinations share no failure domain with this host or either site — the ones that decide whether the data survives losing the site, rather than merely surviving a disk. Independence is declared on the destination and crossed with the target's own hop list here."
+        },
+        "ImplementedHops": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": ["Destinations"],
+          "discloses": "content",
+          "sentence": "Which of those destinations actually have a job behind them, estate-wide — the declaration's own account of what is built."
+        },
+        "HopImplementedBy": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": ["ImplementedHops"],
+          "discloses": "content",
+          "sentence": "Which job builds each implemented hop, and on which host, one row per hop naming the destination it carries data to — execution splits by verb, so the host holding the data is often not the host that pushes its off-site copy, and a hop claimed built with no job named is a claim with nothing to go and look at. The host is stated separately from the job because a job name is unique only within a host, and a reference that names no host is left unattributed rather than assumed local."
+        },
+        "UnimplementedHops": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": ["Destinations", "ImplementedHops"],
+          "discloses": "content",
+          "sentence": "Destinations this target declares and nothing implements: a promise with no job behind it, which is worse than an admitted gap because the target's other hops can look green while it holds."
+        },
+        "ProvenRungs": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "content",
+          "from": "/targets/*/lastProvenAt",
+          "sentence": "The rungs of the recovery ladder a restore has actually been performed from and matched against an independent copy. It may name a rung that is not a destination at all — the source host's own snapshot history is the rung an operator reaches for first — so it is not the complement of UnprovenRungs."
+        },
+        "UnprovenRungs": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": ["Destinations", "ProvenRungs"],
+          "discloses": "content",
+          "sentence": "Declared destinations with no passing restore behind them — an attempt somebody made and could not match leaves its rung unproven too, so FailedProofRungs says which of these were actually tried. Running green proves a job ran, never that its artifact can be read back, so an unproven rung beside a green job is a stated fact rather than an absence."
+        },
+        "LastProvenAt": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "content",
+          "from": "/targets/*/lastProvenAt",
+          "sentence": "When each rung was last proven, stated per rung as `rung: date` and deliberately never collapsed into one date: the newest proof belongs to exactly one rung and says nothing about the others, and the rung reached for first survives neither the disk nor the site."
+        },
+        "FailedProofRungs": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "content",
+          "from": "/targets/*/proofs",
+          "sentence": "Rungs where a restore was attempted, compared, and did not come back correct, with no passing proof since — tried and failed, which is a different and worse answer than never having tried. A later pass on the same rung answers a failure and clears it from here; an earlier one does not."
+        },
+        "LastFailedProofAt": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "nothing",
+          "from": "/targets/*/proofs",
+          "sentence": "The date of the newest failed attempt no later pass has answered, at the day resolution the declaration records proofs in rather than as a full timestamp; the record named by ProofRecord is where what went wrong is written down."
+        },
+        "ProofScope": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "content",
+          "from": "/targets/*/proofs/*/scope",
+          "sentence": "What each passing restore actually recovered, in the declaration's own words and prefixed by the rung and date it belongs to — a sampled restore is worth having and worth not reading as broader than it was, so the caveat travels beside the date rather than behind a link."
+        },
+        "ProofComparedAgainst": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "content",
+          "from": "/targets/*/proofs/*/comparedAgainst",
+          "sentence": "The independent copy each passing restore was checked against; a restore compared against nothing is a download rather than a proof."
+        },
+        "ProofRecord": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "content",
+          "from": "/targets/*/proofs/*/record",
+          "sentence": "Where the evidence for those attempts is written down — the commands, hashes and caveats behind each recorded proof, passing or failed. One record is carried as the string itself; a target whose proofs name several distinct records carries the list of them instead, which is the one shape of this fact a consumer switching on the declared type will not be expecting."
+        }
+      },
+      "redaction_exemption": "The single document behind this collection is the estate's rendered declaration of what it protects, and it holds no credential of any kind — that is the subsystem's design and not an accident of this file. The repositories these targets reach are never opened: the off-site one needs the delete-capable credential that lives with the maintenance identity, and an observer holding it would break the estate's own invariant that a source cannot prune its own history. So the declaration, the verdict and the receipts are the honest proxies, and none of the three is a place a key can appear. This is a statement about credentials and NOT a claim that the document is publishable: target names, destination names and a source's prose are words an operator chose for what is worth protecting, they are declared `content` above, and a capture from a real host is refused on judgement rather than on this exemption. harness/scrub/protection.json classifies every leaf for the capture that judgement would otherwise permit.",
+      "reference_commands": [
+        {
+          "purpose": "the whole declaration this collection is folded from — every target, its class, its hops and its recorded proofs",
+          "argv": ["cat", "/etc/homelab/protection-manifest.json"]
+        }
+      ]
+    },
+    {
+      "name": "jobs",
+      "question": "did the protection actually run, and when did it last succeed?",
+      "prefix": "job",
+      "freshness": "60s",
+      "perishability": "perishable",
+      "answer": [
+        "State",
+        "Basis",
+        "AgeSeconds",
+        "MaxAgeSeconds",
+        "CheckedAt",
+        "CheckedAgeSeconds",
+        "LastResult",
+        "LastFinishedAt",
+        "LastSuccessAt",
+        "ExitStatus",
+        "TargetClass",
+        "ReceiptsUnobservable"
+      ],
+      "ceiling": { "records": 512, "bytes": 1048576 },
+      "facts": {
+        "Job": {
+          "type": "string",
+          "temperament": "existence",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/jobs/*/job",
+          "sentence": "The registered protection job this row describes, keyed by the target it protects where one exists and by the hop it carries where the two differ. The rows come from the verdict's own job list and never from a walk of the receipt directory, so a receipt left behind by a job the declaration has dropped mints no row."
+        },
+        "Unit": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/last/unit",
+          "sentence": "The systemd unit whose completion writes this job's receipt, taken from the receipt rather than from the declaration — it is the unit that actually wrote, which is what an operator needs to go and look at."
+        },
+        "State": {
+          "type": "enum",
+          "values": ["ok", "stale"],
+          "temperament": "state",
+          "kind": "derived",
+          "derived_from": ["AgeSeconds", "MaxAgeSeconds"],
+          "discloses": "nothing",
+          "sentence": "The staleness verdict in the checker's own words, as of the moment it last ran: ok means a success receipt was inside the job's declared window then, stale means it was not. It says nothing about whether the last run failed — a job can be ok and have just failed, and LastResult beside it is the row that says so."
+        },
+        "Basis": {
+          "type": "enum",
+          "values": ["last-success", "registered-never-succeeded"],
+          "temperament": "state",
+          "kind": "derived",
+          "derived_from": ["LastSuccessAt"],
+          "discloses": "nothing",
+          "sentence": "What the verdict was measured from — the last success receipt, or the job's registration when it has never succeeded at all. The second is the one that separates a stale job with an older copy behind it from one with no copy at all."
+        },
+        "AgeSeconds": {
+          "type": "integer",
+          "unit": "seconds",
+          "temperament": "gauge",
+          "kind": "derived",
+          "derived_from": ["LastSuccessAt", "CheckedAt"],
+          "discloses": "nothing",
+          "sentence": "How old the basis was when the checker last ran, in seconds; against MaxAgeSeconds this is the staleness arithmetic itself, and against CheckedAgeSeconds it is how long ago that arithmetic was done."
+        },
+        "MaxAgeSeconds": {
+          "type": "integer",
+          "unit": "seconds",
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "nothing",
+          "from": "/jobs/*/maxAgeSeconds",
+          "sentence": "The oldest a success may be before this job counts as stale, set from the protection contract rather than from the job's own timer."
+        },
+        "CheckedAt": {
+          "type": "timestamp",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/checkedAt",
+          "sentence": "When the staleness checker last completed and rewrote its verdict; the state, basis and age beside it are what it saw at that moment rather than what is true now."
+        },
+        "CheckedAgeSeconds": {
+          "type": "integer",
+          "unit": "seconds",
+          "temperament": "gauge",
+          "kind": "derived",
+          "derived_from": ["CheckedAt"],
+          "discloses": "nothing",
+          "sentence": "How long ago that was, measured now. A large value means the checker itself stopped writing rather than that nothing has changed — the document keeps its last verdict either way, which is how a dead timer renders as a green board. It is the one figure on this row derived against a clock rather than read off a file."
+        },
+        "LastResult": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/last/result",
+          "sentence": "How the most recent run ended, in systemd's own vocabulary, taken from the RECEIPT that run wrote — the checker's copy of the same answer can be an hour older, so a run that failed since the last check must not read as success. The verdict's copy is the fallback for a receipt this host cannot open, and nothing else."
+        },
+        "LastFinishedAt": {
+          "type": "timestamp",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/last/finishedAt",
+          "sentence": "When the most recent run finished, successful or not, from the receipt it wrote."
+        },
+        "LastSuccessAt": {
+          "type": "timestamp",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/last-success/finishedAt",
+          "sentence": "When this job most recently SUCCEEDED — kept in its own receipt so a later failure cannot overwrite the evidence of the last good run. Its absence is a job that has never got there, which is not the same as a receipt nobody can read."
+        },
+        "ExitStatus": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/last/exitStatus",
+          "sentence": "The exit status the last run reported, as the receipt recorded it — a string because that is how the receipt spells it, and beside a State of ok it is the pair that says a green job has just failed."
+        },
+        "ReceiptsUnobservable": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "content",
+          "sentence": "Why a receipt this job has already written could not be read, when one exists and will not open, naming each receipt and the reason. The last run's facts are missing for that reason and not because no run happened — a receipt that is simply not there is a job that never got there and sets nothing here, which is the distinction that stops this fact alarming on every job that has never succeeded."
+        },
+        "TargetClass": {
+          "type": "enum",
+          "values": ["backup", "replicate", "recreate"],
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": ["Target", "targets/Class"],
+          "discloses": "nothing",
+          "sentence": "The class of the data this job protects, joined from the declaration by the job's own stated target where it has one and by the hops this host implements where it does not — a job that has never succeeded matters differently for irreplaceable data than for derived state."
+        },
+        "TargetNotScoped": {
+          "type": "boolean",
+          "labels": ["no single target", "one target"],
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": ["Target"],
+          "discloses": "nothing",
+          "sentence": "The declaration states this job has no single subject — pool-scoped work such as a scrub, which is a stated answer rather than a join that failed, and the reason no class appears beside it. A checker that predates the member says nothing at all and gets neither this fact nor a class."
+        },
+        "Target": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "content",
+          "from": "/jobs/*/target",
+          "sentence": "The target this job protects, as the job itself declares it — a job keyed for the hop it delivers rather than the data it moves still knows its own subject, and this is where it says so. It outranks the joins, because it is stated beside the job where those are inference from the other end."
+        },
+        "ImplementsHops": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": ["targets/HopImplementedBy"],
+          "discloses": "content",
+          "sentence": "The declared hops this job is the stated implementation of, one row per hop naming the target and the destination it carries data between — the join that makes the class above credible, and the reason a job named for its hop rather than its target is not a job about nothing. Only hops this host owns: a job key is unique within a host and nowhere wider."
+        }
+      },
+      "redaction_exemption": "The two documents behind this collection are the estate's own staleness verdict and the receipts its jobs write when they finish. A receipt holds a job name, a unit name, a finish time and an exit status; the verdict holds ages against thresholds. Neither holds a credential, and no repository is opened to build this row — the run's own record is the honest proxy, precisely because reading the artifact back would need the delete-capable identity this collector must never hold. ReceiptsUnobservable is the one value here that is not the estate's own closed vocabulary: it is a parser's words about a file that would not open, it names the receipt, and it is declared `content` above for that reason.",
+      "reference_commands": [
+        {
+          "purpose": "the hourly staleness verdict — every registered job, its state, its basis and the age it rests on",
+          "argv": ["cat", "/var/lib/homelab/protection/status.json"]
+        },
+        {
+          "purpose": "what has ever written a receipt on this host, which is what tells an unwritten verdict from a dead checker",
+          "argv": ["ls", "-l", "/var/lib/homelab/protection/receipts"]
+        },
+        {
+          "purpose": "the last run's own record: the authority for LastResult, LastFinishedAt and ExitStatus",
+          "argv": ["cat", "/var/lib/homelab/protection/receipts/<job>.last.json"]
+        },
+        {
+          "purpose": "the last SUCCESS's own record, kept apart so a later failure cannot overwrite it",
+          "argv": ["cat", "/var/lib/homelab/protection/receipts/<job>.last-success.json"]
+        },
+        {
+          "purpose": "whether the checker that writes the verdict is running at all",
+          "argv": ["systemctl", "status", "homelab-protection-staleness.service"]
+        }
+      ]
+    },
+    {
+      "name": "destinations",
+      "question": "where do copies land, who may delete them, and what protects history from a compromised source?",
+      "prefix": "destination",
+      "freshness": "300s",
+      "perishability": "reconstructible",
+      "answer": ["Kind", "Independent", "PruneAuthority", "Immutability"],
+      "ceiling": { "records": 64, "bytes": 65536 },
+      "facts": {
+        "Kind": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "nothing",
+          "from": "/destinations/*/kind",
+          "sentence": "How artifacts reach this destination — a ZFS receive, or a restic repository over REST or S3."
+        },
+        "Independent": {
+          "type": "boolean",
+          "labels": ["survives the site", "shares a failure domain"],
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "nothing",
+          "from": "/destinations/*/independent",
+          "sentence": "Whether this destination shares no failure domain with any estate host or site; it is declared rather than inferred, because it is a fact about the world. False is a reading and not an absence — it is the destination that looks like a second copy and is not one, which is exactly the row an operator must be able to see."
+        },
+        "Immutability": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "content",
+          "from": "/destinations/*/immutability",
+          "sentence": "How history here is protected from a compromised source, in the operator's own words — carried verbatim, because a paraphrase of a security property is a new claim. Nothing here parses it into a verdict, and no opinion is formed from it."
+        },
+        "PruneAuthority": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "declared",
+          "discloses": "content",
+          "from": "/destinations/*/pruneAuthority",
+          "sentence": "Which identity may delete here; never a source host, or a source that malfunctions becomes a mirror of its own mistakes. It names the identity and never its credential — the credential is what this collector is built not to hold."
+        }
+      },
+      "redaction_exemption": "This collection is four members of the same rendered declaration the targets come from, and it opens no repository: the destination is described, never reached. PruneAuthority names WHICH identity may delete and carries no key, and Immutability is a sentence a person wrote about a posture. Neither is a credential and neither is derived from one. It is not a claim that either is publishable — both are operator prose about a private estate's off-site posture, they are declared `content` above, and harness/scrub/protection.json's own bound says a capture from a real host is refused on judgement rather than permitted by a manifest.",
+      "reference_commands": [
+        {
+          "purpose": "the destinations half of the declaration, carried verbatim including the immutability prose",
+          "argv": ["cat", "/etc/homelab/protection-manifest.json"]
+        }
+      ]
+    }
+  ]
+}

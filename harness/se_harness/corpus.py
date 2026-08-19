@@ -427,6 +427,56 @@ NAMED_RESIDUALS = {
         "this collector against a real journal and publishes nothing, so it "
         "owns the port's behaviour today while the CORPUS half stays owed."
     ),
+    # paperless's five fault facts. The archive answered, so none is reached —
+    # and one of them could not be corpus-owned even if it were.
+    "paperless/instance-faults": (
+        "DatabaseError, RedisError, CeleryError and IndexError carry what a "
+        "component check said WHEN IT FAILED, and StatusUnobservable carries "
+        "why /api/status/ could not be read at all. The committed capture is "
+        "of an archive whose four components all answered OK, so no replayed "
+        "stream publishes any of them. Two different reasons they are named "
+        "here rather than minted. The four errors would need a paperless with "
+        "a broken component — an operator CAN rewrite a status word, but the "
+        "matching error string is written by the app about its own failure and "
+        "inventing one would enshrine a sentence paperless never said.\n\n"
+        "StatusUnobservable is the one that cannot be owned by this tier at "
+        "all, and the reason is worth stating because it is a DISCLOSURE "
+        "difference rather than a wording one. The reference's value is "
+        "httpx's HTTPStatusError rendering, and env.reason strips userinfo and "
+        "query strings but not the HOST — so the reference's fact carries the "
+        "instance URL. The Go port emits a URL-free sentence naming the path "
+        "instead. A corpus pair would have to enshrine one of those two, and "
+        "the safer one is not the reference's. Venue: the live comparator "
+        "(harness/bin/se-compare), run against an instance with a "
+        "non-superuser token, where the two implementations' disagreement is "
+        "the finding rather than a defect in either — the same shape as "
+        "servarr/instance-config-and-failure. The tool exists and no such run "
+        "has been made, so this stays owed."
+    ),
+    # plex's nine unreached facts, and they split cleanly into two groups with
+    # two quite different reasons.
+    "plex/failure-statements-and-sessions": (
+        "Three of the nine are failure statements the capture never reaches: "
+        "server/ConfigMissing (the receipts were incomplete), "
+        "server/StatusUnobservable (the server went dark mid-sweep) and "
+        "libraries/ItemCountUnobservable (one section's count would not read "
+        "while the rest of its row stood). The captured server answered "
+        "everything, and the last of the three is the interesting one — it is "
+        "a PER-ROW narrowing, so a port that let one section's failure sink "
+        "the whole collection would still replay this variant correctly.\n\n"
+        "The other six — sessions/Title, Type, User, Player, State and "
+        "VideoDecision — are unreached for a reason that is not going to "
+        "change. They exist only in a session document describing something "
+        "actually playing, which names a PERSON and what they were watching. "
+        "harness/scrub/plex.json deliberately classifies none of it, so such a "
+        "capture is refused leaf by leaf rather than scrubbed, and that is the "
+        "correct outcome for a document of that kind. No mutation operator "
+        "mints one either: an operator rewrites what an interface SAID, and "
+        "inventing a viewer and a title would be composing the reading rather "
+        "than perturbing it. Venue: the live comparator, run against a server "
+        "while something is playing — it publishes nothing, which is exactly "
+        "why it is the venue that can own this and the corpus cannot."
+    ),
     # protection carries an AUTHORED variant, so all three of its collections
     # are covered and none is orphaned. What is not covered is anything a
     # written document cannot be evidence of, and that is one thing rather

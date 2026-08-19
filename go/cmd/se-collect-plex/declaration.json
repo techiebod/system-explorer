@@ -1,0 +1,229 @@
+{
+  "schema": "se.declaration/1",
+  "collector": "plex",
+  "version": "0.7.0",
+  "authority": {
+    "read_paths": [
+      "/proc/sys/kernel/random/boot_id",
+      "/proc/self/timens_offsets"
+    ],
+    "credentials": ["SE_PLEX_TOKEN"]
+  },
+  "probe": "the Plex Media Server API answers. WHERE that server is, and the token that opens it, are deployment configuration and not constants, so they are named by SE_PLEX_URL and SE_PLEX_TOKEN rather than declared here — a URL this file invented would address somebody else's server on every host that runs one elsewhere. The token rides the X-Plex-Token header and the Accept header asks for JSON, because Plex answers XML by default. Under socket activation systemd holds the credential and applies it to the unit; nothing in this collector reads it from a file and nothing writes it anywhere. No URL configured is a host that fronts no Plex, which is an absence and retires the rows; a URL with no usable token is a receipts gap, which publishes the server row naming the receipt and asks the other two collections nothing at all — guessing would only manufacture 401s, and a config gap must not dress as an outage. The three are different verdicts and each collection says which. This collector does NOT serve seerr's `requests` collection: that is a second application reached with a second credential, whose first-run setup authenticates against a Plex ACCOUNT, and nothing in this repository has ever read it.",
+  "collections": [
+    {
+      "name": "server",
+      "question": "is the thing every stream in the house depends on up, and which release is answering?",
+      "prefix": "server",
+      "freshness": "60s",
+      "perishability": "sampled",
+      "answer": ["FriendlyName", "Version", "Platform", "SessionCount", "ConfigMissing", "StatusUnobservable"],
+      "ceiling": { "records": 1, "bytes": 65536 },
+      "facts": {
+        "FriendlyName": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "identity",
+          "from": "/root/MediaContainer/friendlyName",
+          "sentence": "The name the server calls itself in every Plex client — the word an administrator will recognise it by, and on a deployed server a word they chose. It is a fact on this row and never the row's identity: the object is named `plex` whatever the server is renamed to, because a rename is not a new server."
+        },
+        "Version": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/root/MediaContainer/version",
+          "sentence": "The Plex Media Server release actually answering the API. That is not always the release that was deployed — a repulled image without a restart leaves the two disagreeing, and this is the half serving requests."
+        },
+        "Platform": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/root/MediaContainer/platform",
+          "sentence": "The operating system the server reports it runs on, in Plex's own vocabulary. It is the server's account of itself rather than the host's, so a disagreement with what the host says is a statement about the packaging — a container image, say — and not about either reading being wrong."
+        },
+        "SessionCount": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/status-sessions/MediaContainer/size",
+          "sentence": "How many streams are playing right now, read from the session document's own `size`. Zero is published like any other reading: a server with nothing playing has said so, and a row that carried this only when it was non-zero would leave the state most often checked indistinguishable from a count nobody took. The same document feeds the `sessions` collection its rows — one request, two collections — so this count and that row set cannot disagree."
+        },
+        "ConfigMissing": {
+          "type": "list",
+          "temperament": "existence",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The receipts this deployment still needs before the server can be observed at all. Present only where a URL was configured and the token was not, or the token that was configured cannot travel in a header — so a row carrying it is a server the estate asked for and this process cannot open, which is a different statement from a host that fronts no Plex. It names variables and never their values, and the row stays rather than the collection declining, because the gap is in this deployment and not in the machine."
+        },
+        "StatusUnobservable": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Why the server's API could not be asked, when it could not. The row stays rather than the collection declining, because a configured media server that does not answer is a statement and not a gap — and it is published beside whatever WAS read, so a server whose session list alone went dark keeps its identity and version facts and loses only the count. The text names the request and the HTTP status and nothing else: no URL, no errno, no library message."
+        }
+      },
+      "redaction_exemption": "The token is an X-Plex-Token HEADER and reaches no document, so nothing this collection reads can carry it: the root document is the server's own account of itself — its name, its machine identifier, the release, the platform tuple, the thirty transcoder and capability booleans, and a fixed feature list identical on every server of a release. Two members in it are per-instance IDENTITIES rather than secrets, and they are handled as identities: `friendlyName` is declared `identity` above, and `machineIdentifier` — the value plex.tv keys an account's server list on — reaches no fact at all, which is the design rather than an oversight. A capture of this document is scrubbed by substituting both (harness/scrub/plex.json); nothing here is withheld from the estate's own administrator.",
+      "reference_commands": [
+        {
+          "purpose": "the server's own account of itself — FriendlyName, Version and Platform come from here",
+          "argv": ["curl", "-s", "-H", "X-Plex-Token: $SE_PLEX_TOKEN", "-H", "Accept: application/json", "$SE_PLEX_URL/"]
+        },
+        {
+          "purpose": "the session document, read here for its size alone — SessionCount",
+          "argv": ["curl", "-s", "-H", "X-Plex-Token: $SE_PLEX_TOKEN", "-H", "Accept: application/json", "$SE_PLEX_URL/status/sessions"]
+        }
+      ]
+    },
+    {
+      "name": "libraries",
+      "question": "does each library section still hold what it held, and when was it last scanned?",
+      "prefix": "library",
+      "freshness": "300s",
+      "perishability": "sampled",
+      "answer": ["Title", "Type", "ItemCount", "Refreshing", "ScannedAt", "UpdatedAt", "ItemCountUnobservable"],
+      "ceiling": { "records": 256, "bytes": 1048576 },
+      "facts": {
+        "Title": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/library-sections/MediaContainer/Directory/*/title",
+          "sentence": "The section's name as every client shows it. Declared `content` rather than `nothing` because on a deployed server it is a word the operator chose and can be genuinely revealing — a lab whose libraries carry Plex's own proposed names is the exception, and harness/scrub/plex.json states that bound where a capture is scrubbed."
+        },
+        "Type": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/library-sections/MediaContainer/Directory/*/type",
+          "sentence": "What the section holds, in Plex's own word for it: movie, show, artist or photo. It is the only member that tells two video libraries apart, so a reader deciding whether a count is plausible needs it beside the count. Left as a string rather than an enum: Plex adds section types with releases, and a closed vocabulary here would refuse one this collector could otherwise report faithfully."
+        },
+        "ItemCount": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/library-sections-<key>-all/MediaContainer/totalSize",
+          "sentence": "How many items the section reports holding — zero on a section that held things is the emptied-library shape, worth ruling out before anything else. It costs one request PER SECTION beyond the section listing, asked with a zero-size container window so the server counts without sending a library, and it is read from that answer's `totalSize`: the window makes `size` zero by construction, so a reading taken from `size` would report every section empty."
+        },
+        "ItemCountUnobservable": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Why this section's count could not be read, when it could not. An unreadable count is not an empty library, and the emptied-library shape cannot be ruled out without one — so this is its own statement rather than a zero, and the rest of the row stands beside it. The text names the request and the HTTP status and nothing else."
+        },
+        "Refreshing": {
+          "type": "boolean",
+          "labels": ["scanning", "idle"],
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/library-sections/MediaContainer/Directory/*/refreshing",
+          "sentence": "Whether the server says a scan of this section is running right now. Published whenever the member is stated, INCLUDING when it is false: false is the reading that says a count can be trusted, and dropping it as merely falsy would leave every idle library — which is nearly every library, nearly always — silent about the one thing that qualifies its count."
+        },
+        "ScannedAt": {
+          "type": "timestamp",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/library-sections/MediaContainer/Directory/*/scannedAt",
+          "sentence": "When the section last completed a scan, per the server, converted from its epoch seconds to UTC. A count is only as current as this: a section scanned days ago reports what it held days ago, whatever has happened to the files since."
+        },
+        "UpdatedAt": {
+          "type": "timestamp",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/library-sections/MediaContainer/Directory/*/updatedAt",
+          "sentence": "When the section's contents last changed, per the server, converted from its epoch seconds to UTC. Read beside ScannedAt it separates a library nothing has been added to from one nothing has looked at."
+        }
+      },
+      "redaction_exemption": "Nothing this collection reads is a credential: the section listing is Plex's own description of its libraries, and the per-section count answers a window asked for zero rows precisely so no item metadata travels. Two shapes in the listing are declared rather than withheld — the section `title`, which is `content` above because an operator chose it, and the section `uuid`, which identifies a section across renames and reaches no fact at all. The media root under `Location` is `location` on a native install and reaches no fact either; a capture of this document substitutes the uuid and bounds the rest (harness/scrub/plex.json).",
+      "reference_commands": [
+        {
+          "purpose": "the section listing — every fact on a library row except its item count",
+          "argv": ["curl", "-s", "-H", "X-Plex-Token: $SE_PLEX_TOKEN", "-H", "Accept: application/json", "$SE_PLEX_URL/library/sections"]
+        },
+        {
+          "purpose": "one section's item count, asked with a zero-size window so the server counts and no rows travel — read totalSize, never size",
+          "argv": ["curl", "-s", "-H", "X-Plex-Token: $SE_PLEX_TOKEN", "-H", "Accept: application/json", "$SE_PLEX_URL/library/sections/<key>/all?X-Plex-Container-Start=0&X-Plex-Container-Size=0"]
+        }
+      ]
+    },
+    {
+      "name": "sessions",
+      "question": "what is playing right now, by whom, and is the server transcoding it?",
+      "prefix": "session",
+      "freshness": "30s",
+      "perishability": "perishable",
+      "answer": ["Title", "Type", "User", "Player", "State", "VideoDecision"],
+      "ceiling": { "records": 512, "bytes": 1048576 },
+      "facts": {
+        "Title": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/status-sessions/MediaContainer/Metadata/*/title",
+          "sentence": "What is playing, with its series named when there is one: an episode reads as `<series> — <episode>`, folded from the item's grandparent title, and a film keeps its own name. It is what somebody was watching, which is why it is declared `content`."
+        },
+        "Type": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/status-sessions/MediaContainer/Metadata/*/type",
+          "sentence": "The kind of item playing, in Plex's own word: episode, movie, track, clip. Left as a string rather than an enum for the reason the library type is — the vocabulary grows with releases."
+        },
+        "User": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "identity",
+          "from": "/status-sessions/MediaContainer/Metadata/*/User/title",
+          "sentence": "Who is watching, by their Plex account name. It names a PERSON, which is why it is declared `identity` and why no capture of a live session may be published — a corpus payload carrying it identifies somebody and what they were watching in one document."
+        },
+        "Player": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/status-sessions/MediaContainer/Metadata/*/Player/product",
+          "sentence": "The client product doing the playing, as it identifies itself: Plex Web, Plex for Apple TV, and so on. It is the product name and not the device, which is what makes it a statement about the app rather than about the room."
+        },
+        "State": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/status-sessions/MediaContainer/Metadata/*/Player/state",
+          "sentence": "The player's own state: playing, paused or buffering. Buffering beside a transcoding decision is the pair that says the server cannot keep up, which is the reading this collection exists to make possible."
+        },
+        "VideoDecision": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/status-sessions/MediaContainer/Metadata/*/TranscodeSession/videoDecision",
+          "sentence": "The server's verdict for this stream's video: `copy` is a direct play the CPU barely notices, `transcode` is the expensive path. Absent where the server opened no transcode session at all, which is the cheapest case and states itself by saying nothing."
+        }
+      },
+      "redaction_exemption": "Nothing here is a credential — the token is a header and reaches no document, and a session document carries no key of any kind. What it does carry is a PERSON and what they are watching, and that is declared rather than withheld: `User` is `identity` and `Title` is `content` above, because an administrator asking what is playing on their own server is entitled to both, and a consumer deciding whether to render them needs the classes to decide with. The bound this exemption states is on PUBLICATION rather than on service: harness/scrub/plex.json classifies no member of a live session, so a capture holding one is refused leaf by leaf and cannot be committed to a public corpus — which is why every fact of this collection is declared here and reached by no corpus variant.",
+      "reference_commands": [
+        {
+          "purpose": "the session list — every row of this collection, and the same document the server row reads its count from",
+          "argv": ["curl", "-s", "-H", "X-Plex-Token: $SE_PLEX_TOKEN", "-H", "Accept: application/json", "$SE_PLEX_URL/status/sessions"]
+        }
+      ]
+    }
+  ]
+}

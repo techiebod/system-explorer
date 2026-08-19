@@ -1,0 +1,217 @@
+{
+  "schema": "se.declaration/1",
+  "collector": "paperless",
+  "version": "0.7.0",
+  "authority": {
+    "read_paths": [
+      "/proc/sys/kernel/random/boot_id",
+      "/proc/self/timens_offsets"
+    ],
+    "credentials": ["SE_PAPERLESS_TOKEN"]
+  },
+  "probe": "the paperless API answers. WHERE that archive is, and the token that opens it, are deployment configuration and not constants, so they are named by SE_PAPERLESS_URL and SE_PAPERLESS_TOKEN rather than declared here — a URL this file invented would address somebody else's archive on every host that runs one elsewhere. Under socket activation systemd holds the credential and applies it to the unit; nothing in this collector reads it from a file and nothing writes it anywhere. No URL configured is a host that fronts no paperless, which is an absence and retires the row. A missing or unusable token is NOT an absence and must not retire anything: the archive is still there and its documents are still in it, so the collection declines unavailable, commits nothing, and lets the last readable row stand and go stale — which is what somebody rotating a token needs to see rather than an archive that appears to have been emptied.",
+  "collections": [
+    {
+      "name": "instance",
+      "question": "how many documents does the archive hold, and are the app's own components healthy enough to be believed about that?",
+      "prefix": "instance",
+      "freshness": "60s",
+      "perishability": "sampled",
+      "answer": [
+        "DocumentCount",
+        "InboxCount",
+        "TagCount",
+        "CorrespondentCount",
+        "DocumentTypeCount",
+        "PngxVersion",
+        "DatabaseStatus",
+        "RedisStatus",
+        "CeleryStatus",
+        "IndexStatus",
+        "ClassifierStatus",
+        "StatusUnobservable"
+      ],
+      "ceiling": { "records": 1, "bytes": 65536 },
+      "facts": {
+        "DocumentCount": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/statistics/documents_total",
+          "sentence": "How many documents the TOKEN'S USER can see — the archive total only when the token has global visibility (owner, superuser, or the view_global_statistics grant), because the statistics endpoint scopes every count by permission. A dedicated low-privilege user sees 0 in an archive of 38 and nothing in the response says so. Zero is the emptied-library shape this subsystem exists to catch, judged critical, and ruling out a narrowed token comes before believing anything else on the screen."
+        },
+        "InboxCount": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/statistics/documents_inbox",
+          "sentence": "Documents carrying the inbox tag — ingested but not yet filed. Permission-scoped exactly as DocumentCount is, so the two move together when a token is narrowed and the pair is worth reading as one."
+        },
+        "TagCount": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/statistics/tag_count",
+          "sentence": "How many tags the instance defines. A count of the archive's own vocabulary rather than of its contents, which is why it survives a permission narrowing that empties the document counts."
+        },
+        "CorrespondentCount": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/statistics/correspondent_count",
+          "sentence": "How many correspondents the instance defines — the senders and recipients filing is organised by, not the documents themselves."
+        },
+        "DocumentTypeCount": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/statistics/document_type_count",
+          "sentence": "How many document types the instance defines: invoice, contract, whatever this archive sorts by. Another count of the vocabulary rather than of the library."
+        },
+        "PngxVersion": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/status/pngx_version",
+          "sentence": "The paperless-ngx release answering the API. It is the build that is actually serving, which is not always the image the deployment names — a pulled tag that nothing restarted leaves the two disagreeing, and this is the half answering requests."
+        },
+        "StorageTotalBytes": {
+          "type": "integer",
+          "unit": "bytes",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/status/storage/total",
+          "sentence": "Size of the media volume as the app sees it from INSIDE its own mount, which can differ from any host row when a bind has diverged — and a diverged data path with no snapshots under it is one of the two incidents this subsystem was built for. Judged against the same 90/95 capacity ladder the storage rulebook uses, so the app's view and the host's view of the same bytes cannot disagree about severity."
+        },
+        "StorageAvailableBytes": {
+          "type": "integer",
+          "unit": "bytes",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/status/storage/available",
+          "sentence": "Free space on that same media volume, from the same vantage inside the container. Paired with StorageTotalBytes it is what the capacity ladder is computed from; alone it says nothing, because free space means nothing without the size it is free out of."
+        },
+        "DatabaseStatus": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/status/database/status",
+          "sentence": "The app's own database connectivity check, in the app's own word. OK is the passing one; anything else — ERROR, WARNING, or a word a later release invents — means the archive cannot be trusted to answer, which is why this is carried as the native string rather than folded into a closed set this collector would have to keep up with."
+        },
+        "DatabaseError": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/status/database/error",
+          "sentence": "What the database check said when it failed, bounded to one line. paperless writes this sentence itself and interpolates into it — a check that cannot reach its database names the DSN it tried — so the text is third-party content and its URL userinfo and query string are stripped before it travels. Present only where the check actually failed: the member is spelled and holds null on a healthy instance, and a null is not a reading."
+        },
+        "RedisStatus": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/status/tasks/redis_status",
+          "sentence": "The app's broker connectivity check, in the app's own word. Ingestion and every background task stop without it, so this is the early warning that precedes documents silently ceasing to arrive."
+        },
+        "RedisError": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/status/tasks/redis_error",
+          "sentence": "What the broker check said when it failed, bounded to one line and scrubbed of any credential a broker URL carried into it. Present only where the check failed; the member is spelled and holds null on a healthy instance."
+        },
+        "CeleryStatus": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/status/tasks/celery_status",
+          "sentence": "Whether the background worker answers. Documents queue but do not process while it is down, which is the failure that looks like nothing at all from outside — the API keeps answering and the counts keep being true."
+        },
+        "CeleryError": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/status/tasks/celery_error",
+          "sentence": "What the worker check said when it failed, bounded to one line. Present only where the check failed; the member is spelled and holds null on a healthy instance."
+        },
+        "IndexStatus": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/status/tasks/index_status",
+          "sentence": "Whether the search index passes the app's check. Search degrades while the archive itself stays intact, so this one is a warning rather than a critical: the documents are all still there and only finding them is harder."
+        },
+        "IndexError": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/status/tasks/index_error",
+          "sentence": "What the index check said when it failed, bounded to one line. Present only where the check failed; the member is spelled and holds null on a healthy instance."
+        },
+        "ClassifierStatus": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/status/tasks/classifier_status",
+          "sentence": "Whether the auto-tagging classifier loads. WARNING on an instance with too little training data is the app being HONEST about a young archive rather than broken, and it is the state a fresh deployment sits in until enough documents have been filed by hand to train on."
+        },
+        "ClassifierError": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/status/tasks/classifier_error",
+          "sentence": "What the classifier check said when it failed, bounded to one line. 'No classifier training tasks found' is the stock sentence a young archive carries and it is the honest half of a WARNING that is not a fault. Present only where the check said something; the member is spelled and holds null once the classifier is training."
+        },
+        "StatusUnobservable": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Why the component checks could not be read when they could not. /api/status/ is admin-only, so a token that opens the statistics endpoint may still be refused here — and the honest outcome is a row carrying every inventory number with this fact beside them, not a collection that declines. The text names the request and the HTTP status and nothing else: no URL, no errno, no library message. Its PRESENCE means the component half is a failure report rather than a reading, so a port that fell into this arm on every run would still emit a row and still commit one object, which is why its absence is anchored on the healthy capture."
+        }
+      },
+      "redactions": [
+        {
+          "path": "/status/database/url",
+          "discloses": "secret"
+        },
+        {
+          "path": "/status/tasks/redis_url",
+          "discloses": "secret"
+        }
+      ],
+      "reference_commands": [
+        {
+          "purpose": "the archive's inventory numbers — every count on the row comes from here",
+          "argv": ["curl", "-s", "-H", "Authorization: Token <token>", "<url>/api/statistics/"]
+        },
+        {
+          "purpose": "the app's own account of its components; admin-only, and a token without that grant narrows the row rather than breaking it",
+          "argv": ["curl", "-s", "-H", "Authorization: Token <token>", "<url>/api/status/"]
+        }
+      ]
+    }
+  ]
+}

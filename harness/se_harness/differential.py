@@ -78,6 +78,9 @@ SEEDS = {
     "downloaders": "downloaders/healthy",
     "hardware": "hardware/qemu-guest",
     "units": "units/healthy",
+    "paperless": "paperless/healthy",
+    "plex": "plex/healthy",
+    "protection": "protection/healthy",
 }
 
 # Names the operators mint. Constants rather than inline literals so the
@@ -1720,6 +1723,137 @@ def _machine_scope(payloads: dict) -> dict:
     return payloads
 
 
+# ── paperless: a count member the API did not answer ─────────────────────
+
+PAPERLESS_STATISTICS = "api-statistics"
+
+
+def _absent_document_count(payloads: dict) -> dict:
+    """CLASS absent-count-is-zero: an archive reported empty because the API
+    said nothing about it.
+
+    statistics_facts publishes DocumentCount only when the member is an int, so
+    a paperless too old to carry `documents_total` — or one answering a
+    permission-scoped view that omits it — produces a row with NO count. The
+    committed capture answers 3, so the member is always present and a port
+    that defaulted a missing member to 0 emits exactly the committed row.
+
+    The blindness is invisible under replay and it is blindness about the one
+    fact this subsystem exists for: zero documents is the emptied-archive shape,
+    judged CRITICAL. A port that mints 0 from silence manufactures that alarm on
+    every paperless whose API is older than its collector — the precise
+    inversion of the incident the collector was written after, where a real
+    38 -> 0 went unseen.
+
+    Removed rather than nulled: the API omits the member, it does not answer
+    null, and staging a null would be a specimen of a document paperless does
+    not produce.
+    """
+    statistics = payloads.get(PAPERLESS_STATISTICS)
+    if not isinstance(statistics, dict):
+        raise MutatorError("the payload carries no statistics document")
+    if "documents_total" not in statistics:
+        raise MutatorError(
+            "documents_total is already absent from this capture, so removing "
+            "it would be staging nothing"
+        )
+    del statistics["documents_total"]
+    return payloads
+
+
+# ── plex: a library section that has never been scanned ──────────────────
+
+PLEX_SECTIONS = "library-sections"
+
+
+def _never_scanned_section(payloads: dict) -> dict:
+    """CLASS epoch-zero-timestamp: a scan date invented out of a zero.
+
+    library_facts publishes ScannedAt and UpdatedAt only for an int GREATER
+    THAN ZERO, because Plex spells "this section has never been scanned" as 0
+    rather than by omitting the member. Every committed section has been
+    scanned, so no capture carries the zero and a port that converted it
+    faithfully to 1970-01-01T00:00:00Z emits the committed rows unchanged.
+
+    What such a port then says about a fresh library is that it was last
+    scanned during the Unix epoch — a value that sorts oldest, reads as
+    catastrophically stale, and is not a reading at all. Absence is the honest
+    answer and the gate exists to give it.
+
+    Set on the FIRST section only, so the mutated capture still carries a
+    scanned section beside the unscanned one: a port that dropped the fact for
+    every section would otherwise be indistinguishable from one that handles
+    the zero correctly.
+    """
+    sections = payloads.get(PLEX_SECTIONS)
+    if not isinstance(sections, dict):
+        raise MutatorError("the payload carries no sections document")
+    directory = (sections.get("MediaContainer") or {}).get("Directory")
+    if not isinstance(directory, list) or not directory:
+        raise MutatorError("the sections document lists no libraries")
+    first = directory[0]
+    if not isinstance(first, dict):
+        raise MutatorError("the first library is not an object")
+    if not first.get("scannedAt"):
+        raise MutatorError(
+            "the first library already reports scannedAt 0 or absent, so "
+            "staging a never-scanned section would overwrite a reading"
+        )
+    first["scannedAt"] = 0
+    return payloads
+
+
+# ── protection: a registered job that has left no receipt at all ─────────
+
+PROTECTION_STATUS = "var-lib-homelab-protection-status.json"
+PROTECTION_RECEIPTS = "var-lib-homelab-protection-receipts-"
+
+
+def _job_without_receipts(payloads: dict) -> dict:
+    """CLASS receiptless-job-dropped: a registered job that vanishes from the
+    collection because it has never written anything.
+
+    Every committed job has at least one readable receipt. A job that has NEVER
+    RUN has neither — both files are absent, which is the pair [null, null] —
+    and the row is then built from the staleness verdict alone: state, basis,
+    age and threshold, with no Unit, no LastFinishedAt, no ExitStatus and no
+    LastSuccessAt. That row is the most alarming one this collection can carry,
+    because a registered job with no receipt at all is a promise nothing has
+    ever kept.
+
+    A port that treated the receipt as the row's source rather than as its
+    detail simply omits the job, and under replay that is invisible: with every
+    committed job carrying a receipt, reading the verdict first and reading the
+    receipt first give the same seven rows.
+
+    `runtime-state` is chosen because it has a `last` and no `last-success`, so
+    only one payload has to become absent for it to have none — and its class
+    is `replicate`, which keeps the mutation away from the irreplaceable
+    targets whose rows other operators may want.
+    """
+    status = payloads.get(PROTECTION_STATUS)
+    if not isinstance(status, list) or not isinstance(status[0], dict):
+        raise MutatorError("the payload carries no status document pair")
+    jobs = status[0].get("jobs")
+    if not isinstance(jobs, list):
+        raise MutatorError("the status document lists no jobs")
+    names = [row.get("job") for row in jobs if isinstance(row, dict)]
+    if "runtime-state" not in names:
+        raise MutatorError("this capture registers no runtime-state job")
+    emptied = 0
+    for suffix in ("last", "last-success"):
+        key = f"{PROTECTION_RECEIPTS}runtime-state.{suffix}.json"
+        if key in payloads:
+            payloads[key] = [None, None]
+            emptied += 1
+    if not emptied:
+        raise MutatorError(
+            "runtime-state already has no receipt payloads, so emptying them "
+            "would be staging nothing"
+        )
+    return payloads
+
+
 @dataclass(frozen=True)
 class Operator:
     """One structural transformation, bound to the defect class it exposes."""
@@ -1731,6 +1865,12 @@ class Operator:
 
 
 OPERATORS: tuple[Operator, ...] = (
+    Operator("paperless-count-absent", "paperless", "absent-count-is-zero",
+             _absent_document_count),
+    Operator("plex-never-scanned-section", "plex", "epoch-zero-timestamp",
+             _never_scanned_section),
+    Operator("protection-receiptless-job", "protection",
+             "receiptless-job-dropped", _job_without_receipts),
     Operator("nft-netdev-ingress", "network", "family-enum", _add_netdev_ingress),
     Operator("nft-bridge-family", "network", "family-enum", _add_bridge_family),
     Operator("nft-arp-family", "network", "family-enum", _add_arp_family),

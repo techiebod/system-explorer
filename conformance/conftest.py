@@ -56,6 +56,9 @@ GO_COLLECTORS = {
     "downloaders": "./cmd/se-collect-downloaders",
     "hardware": "./cmd/se-collect-hardware",
     "units": "./cmd/se-collect-units",
+    "paperless": "./cmd/se-collect-paperless",
+    "plex": "./cmd/se-collect-plex",
+    "protection": "./cmd/se-collect-protection",
 }
 
 

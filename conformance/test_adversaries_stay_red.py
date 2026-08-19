@@ -376,6 +376,31 @@ EXPECTED = (
     # wires the instance to both. If this goes red here, the replay judge has
     # grown a rule that sees a wiring no committed capture holds — DESIGN 20's
     # trap statement and the case table move together, not this row alone.
+    # ── GREEN, adjudicated: the third trap, three more spellings ──────
+    #
+    # Each of these three is a port that is wrong about a shape no committed
+    # capture holds, so the replay judge honestly passes it and the
+    # differential guard owns the red. If any goes red HERE, the judge has
+    # grown a rule about a machine the corpus does not contain.
+    Expectation("a9_absent_count_is_zero.py", None, "paperless/healthy", "GREEN",
+                "a count defaulted to zero instead of omitted, which no "
+                "committed capture can expose: the captured archive answers "
+                "documents_total 3, so the default is never consulted and both "
+                "implementations publish the same count; the differential "
+                "guard owns the red"),
+    Expectation("a9_epoch_zero_scan.py", None, "plex/healthy", "GREEN",
+                "a never-scanned section read as a 1970 date, which no "
+                "committed capture can expose: both captured sections have "
+                "been scanned, so the reference's greater-than-zero gate never "
+                "fires and treating the zero as a date is unreachable; the "
+                "differential guard owns the red"),
+    Expectation("a9_receiptless_job_dropped.py", None, "protection/healthy",
+                "GREEN",
+                "a job dropped for having written no receipt, which no "
+                "committed capture can expose: every job in the variant has at "
+                "least one readable receipt, so building rows from the verdict "
+                "and building them from the receipts give the same seven; the "
+                "differential guard owns the red"),
     Expectation("a9_manager_version_blind.py", None, "bazarr/healthy", "GREEN",
                 "the manager releases never lifted, which no committed capture "
                 "can expose: the captured instance is wired to neither sonarr "
@@ -533,6 +558,19 @@ ADJUDICATED_GREEN = {
     "exited and a running-only scope rule agrees on both (DESIGN 20); the "
     "differential guard owns this red, under docker-restarting-container and "
     "docker-paused-container",
+    ("a9_absent_count_is_zero.py", None): "the third trap: replay cannot see a "
+    "paperless whose API omits documents_total, because the only captured "
+    "archive answers it (DESIGN 20); the differential guard owns this red, "
+    "under paperless-count-absent",
+    ("a9_epoch_zero_scan.py", None): "the third trap: replay cannot see a "
+    "never-scanned Plex library, because both captured sections carry a real "
+    "scan time and Plex spells never-scanned as a zero the reference gates out "
+    "(DESIGN 20); the differential guard owns this red, under "
+    "plex-never-scanned-section",
+    ("a9_receiptless_job_dropped.py", None): "the third trap: replay cannot see "
+    "a protection job that has never written a receipt, because every job in "
+    "the committed variant has written at least one (DESIGN 20); the "
+    "differential guard owns this red, under protection-receiptless-job",
     ("a9_manager_version_blind.py", None): "the third trap: replay cannot see "
     "a bazarr wired to a manager, because the only captured instance is wired "
     "to neither and the interface spells that as an empty string both "
