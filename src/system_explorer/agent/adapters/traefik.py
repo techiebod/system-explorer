@@ -133,11 +133,28 @@ def _redact_service_evidence(payload: dict) -> tuple[dict, list[str]]:
 
 
 def service_facts(raw: dict) -> dict:
-    facts: dict = {
-        "Type": raw.get("type"),
-        "Provider": raw.get("provider"),
-        "Status": raw.get("status"),
-    }
+    # A member the document does not carry is left OFF the row rather than
+    # nulled (DESIGN 19): a fact's value is never null at any depth, because
+    # value, absent and unobservable are three statements with three channels
+    # and a null names none of them.
+    #
+    # This is not hypothetical tidying. Traefik's own internal services —
+    # api@internal, dashboard@internal, noop@internal, present on every
+    # Traefik that has ever run — carry no `type` member at all, so the row
+    # published `"Type": null` for three of three services on a stock
+    # install. The contract's recursive fact_value refuses it and the replay
+    # judge refuses it, which is how a real capture from a real Traefik found
+    # it the first time one was taken.
+    #
+    # It also falsifies the premise of the queue's provisional null-fact
+    # ruling, which rested on the shape being "reachable from no real
+    # interface, no committed capture and no mutation operator". It is
+    # reachable from the first Traefik anybody points this at.
+    facts: dict = {}
+    for fact, member in (("Type", "type"), ("Provider", "provider"),
+                         ("Status", "status")):
+        if raw.get(member) is not None:
+            facts[fact] = raw[member]
     if raw.get("usedBy"):
         facts["UsedBy"] = raw["usedBy"]
     balancer = raw.get("loadBalancer")
