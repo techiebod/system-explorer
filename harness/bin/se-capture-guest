@@ -783,6 +783,8 @@ case "$collector" in
             "statistic-get-all.json|sudo python3 -c '$kea_py' \"\$SE_KEA_SOCKET\" statistic-get-all"
             "config-get.json|sudo python3 -c '$kea_py' \"\$SE_KEA_SOCKET\" config-get"
             "list-commands.json|sudo python3 -c '$kea_py' \"\$SE_KEA_SOCKET\" list-commands"
+        )
+        ;;
     downloaders)
         # Four documents, and every one of them is on the ACQUISITION path.
         # Both clients are asked, because the instance gates in the replay
