@@ -1,0 +1,119 @@
+{
+  "name": "self-test-unlisted-relation",
+  "acceptance_item": 0,
+  "note": "the judge's reversion for relations: the stream asserts one edge and expect lists none. Every object, collection, rejection and ack is stated correctly, so a judge that read the new member permissively \u2014 or the loader that refused every relation expectation until 2026-08-19 \u2014 greens this run while an edge it never looked at sits in the store.",
+  "must_fail": "the collator mints one member-of edge, which expect does not list \u2014 the exhaustiveness rule must refuse it",
+  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"chains\",\"freshness\":\"1h\",\"prefix\":\"chain\"},{\"name\":\"rules\",\"freshness\":\"1h\",\"prefix\":\"rule\",\"relations\":[{\"type\":\"member-of\",\"carries_facts\":false,\"inverse_observable\":false}]}]}",
+  "streams": [
+    {
+      "records": [
+        {
+          "record": "begin",
+          "request": "batch-1",
+          "batch": "batch-1",
+          "declaration": "sha256:340e3334f2b8c1b78261ecc98d33b8c3837853094d52378e93de7d1576fd909b",
+          "boot_id": "5e000000-0000-4000-8000-000000000001",
+          "timens": 0,
+          "instance": null,
+          "generations": {
+            "chains": 1,
+            "rules": 1
+          }
+        },
+        {
+          "record": "object",
+          "collection": "chains",
+          "name": "ip filter INPUT",
+          "facts": {
+            "Family": "ip"
+          },
+          "at": 10.5
+        },
+        {
+          "record": "commit",
+          "collection": "chains",
+          "generation": 1,
+          "objects": 1,
+          "assertions": 0,
+          "unobservable": 0,
+          "cpu_ms": 0.5
+        },
+        {
+          "record": "object",
+          "collection": "rules",
+          "name": "ip filter INPUT handle 58",
+          "facts": {
+            "Handle": 58
+          },
+          "at": 10.6
+        },
+        {
+          "record": "relation_assertion",
+          "collection": "rules",
+          "name": "ip filter INPUT handle 58",
+          "type": "member-of",
+          "vantage": "rules",
+          "target": {
+            "kind": "chain",
+            "name": "ip filter INPUT"
+          }
+        },
+        {
+          "record": "commit",
+          "collection": "rules",
+          "generation": 1,
+          "objects": 1,
+          "assertions": 1,
+          "unobservable": 0,
+          "cpu_ms": 0.5
+        },
+        {
+          "record": "end",
+          "request": "batch-1",
+          "batch": "batch-1",
+          "cpu_ms": 0.5,
+          "wall_ms": 1.0
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "objects": [
+      {
+        "collection": "chains",
+        "id": "chains:ip filter INPUT",
+        "name": "ip filter INPUT",
+        "facts": {
+          "Family": "ip"
+        },
+        "at": 10.5
+      },
+      {
+        "collection": "rules",
+        "id": "rules:ip filter INPUT handle 58",
+        "name": "ip filter INPUT handle 58",
+        "facts": {
+          "Handle": 58
+        },
+        "at": 10.6
+      }
+    ],
+    "relations": [],
+    "collections": [
+      {
+        "name": "chains",
+        "generation": 1,
+        "stale": false
+      },
+      {
+        "name": "rules",
+        "generation": 1,
+        "stale": false
+      }
+    ],
+    "rejected": [],
+    "acked": [
+      "batch-1"
+    ]
+  }
+}

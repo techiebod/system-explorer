@@ -1,0 +1,164 @@
+{
+  "name": "relation-parallel-edges-survive-their-discriminator",
+  "acceptance_item": 6,
+  "note": "An engaged spare occupies two positions in one pool: inside the spare-0 pseudo-vdev where it is doing the work, and under the spares key where it is accounted for. Both are true, and keyed on (source, type, target) alone the second assertion silently replaces the first \u2014 a lost edge with no error anywhere, and a pool that reports its spare as either standing by or working rather than both. The driver matches on the assertion's facts for this reason: a match that ignored them would call these one edge and green a collator that had dropped one.",
+  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"devices\",\"freshness\":\"1h\",\"prefix\":\"device\"},{\"name\":\"pools\",\"freshness\":\"1h\",\"prefix\":\"pool\",\"relations\":[{\"type\":\"backed-by\",\"carries_facts\":true,\"discriminator\":[\"VdevPath\"],\"inverse_observable\":false}]}]}",
+  "streams": [
+    {
+      "records": [
+        {
+          "record": "begin",
+          "request": "batch-1",
+          "batch": "batch-1",
+          "declaration": "sha256:0780435365699b75719836577122a5909c1bbf93838e1f855addee83d7211a48",
+          "boot_id": "5e000000-0000-4000-8000-000000000001",
+          "timens": 0,
+          "instance": null,
+          "generations": {
+            "devices": 1,
+            "pools": 1
+          }
+        },
+        {
+          "record": "object",
+          "collection": "devices",
+          "name": "virtio-selab6",
+          "facts": {
+            "State": "ONLINE"
+          },
+          "at": 10.5
+        },
+        {
+          "record": "commit",
+          "collection": "devices",
+          "generation": 1,
+          "objects": 1,
+          "assertions": 0,
+          "unobservable": 0,
+          "cpu_ms": 0.5
+        },
+        {
+          "record": "object",
+          "collection": "pools",
+          "name": "tank",
+          "facts": {
+            "Health": "DEGRADED"
+          },
+          "at": 10.6
+        },
+        {
+          "record": "relation_assertion",
+          "collection": "pools",
+          "name": "tank",
+          "type": "backed-by",
+          "vantage": "pools",
+          "target": {
+            "kind": "device",
+            "name": "virtio-selab6"
+          },
+          "facts": {
+            "VdevPath": "spare-0"
+          }
+        },
+        {
+          "record": "relation_assertion",
+          "collection": "pools",
+          "name": "tank",
+          "type": "backed-by",
+          "vantage": "pools",
+          "target": {
+            "kind": "device",
+            "name": "virtio-selab6"
+          },
+          "facts": {
+            "VdevPath": "spares"
+          }
+        },
+        {
+          "record": "commit",
+          "collection": "pools",
+          "generation": 1,
+          "objects": 1,
+          "assertions": 2,
+          "unobservable": 0,
+          "cpu_ms": 0.5
+        },
+        {
+          "record": "end",
+          "request": "batch-1",
+          "batch": "batch-1",
+          "cpu_ms": 0.5,
+          "wall_ms": 1.0
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "objects": [
+      {
+        "collection": "devices",
+        "id": "devices:virtio-selab6",
+        "name": "virtio-selab6",
+        "facts": {
+          "State": "ONLINE"
+        },
+        "at": 10.5
+      },
+      {
+        "collection": "pools",
+        "id": "pools:tank",
+        "name": "tank",
+        "facts": {
+          "Health": "DEGRADED"
+        },
+        "at": 10.6
+      }
+    ],
+    "relations": [
+      {
+        "collection": "pools",
+        "source_name": "tank",
+        "type": "backed-by",
+        "vantage": "pools",
+        "target_kind": "device",
+        "target_name": "virtio-selab6",
+        "target_id": "devices:virtio-selab6",
+        "resolved": true,
+        "facts": {
+          "VdevPath": "spare-0"
+        },
+        "observability": "asserted"
+      },
+      {
+        "collection": "pools",
+        "source_name": "tank",
+        "type": "backed-by",
+        "vantage": "pools",
+        "target_kind": "device",
+        "target_name": "virtio-selab6",
+        "target_id": "devices:virtio-selab6",
+        "resolved": true,
+        "facts": {
+          "VdevPath": "spares"
+        },
+        "observability": "asserted"
+      }
+    ],
+    "collections": [
+      {
+        "name": "devices",
+        "generation": 1,
+        "stale": false
+      },
+      {
+        "name": "pools",
+        "generation": 1,
+        "stale": false
+      }
+    ],
+    "rejected": [],
+    "acked": [
+      "batch-1"
+    ]
+  }
+}

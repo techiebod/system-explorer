@@ -143,6 +143,7 @@
         "at": 20.5
       }
     ],
+    "relations": [],
     "collections": [
       {
         "name": "pools",

@@ -1,7 +1,7 @@
 {
   "name": "batch-id-retry-noop",
   "acceptance_item": 4,
-  "note": "the one safe retry: same batch id, same echoed generations, same bytes. The second round re-serves round one verbatim (wind_issued re-mints generation 1, as a re-delivery re-carries it) and must be a silent no-op — applied once, acknowledged once, no rejection. This is the direction that must STAY silent while its twin fixture, fresh-batch-same-id-is-an-error, must red the loud one.",
+  "note": "the one safe retry: same batch id, same echoed generations, same bytes. The second round re-serves round one verbatim (wind_issued re-mints generation 1, as a re-delivery re-carries it) and must be a silent no-op \u2014 applied once, acknowledged once, no rejection. This is the direction that must STAY silent while its twin fixture, fresh-batch-same-id-is-an-error, must red the loud one.",
   "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"pools\",\"freshness\":\"1h\"}]}",
   "streams": [
     {
@@ -102,6 +102,7 @@
         "at": 10.5
       }
     ],
+    "relations": [],
     "collections": [
       {
         "name": "pools",

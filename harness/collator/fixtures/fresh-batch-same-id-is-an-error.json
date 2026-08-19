@@ -1,7 +1,7 @@
 {
   "name": "fresh-batch-same-id-is-an-error",
   "acceptance_item": 4,
-  "note": "a fresh, valid batch — correctly echoing the newly issued generation 2, carrying a new reading — arrives under a batch id already acknowledged. A transport retry is same-bytes-same-id; this is a second look at the system, so it must be a recorded batch-id-reused protocol error with nothing applied. The defect this pins: an ack table that answered only 'seen' silently discarded every future acquisition from a collector minting stable batch ids, loop green.",
+  "note": "a fresh, valid batch \u2014 correctly echoing the newly issued generation 2, carrying a new reading \u2014 arrives under a batch id already acknowledged. A transport retry is same-bytes-same-id; this is a second look at the system, so it must be a recorded batch-id-reused protocol error with nothing applied. The defect this pins: an ack table that answered only 'seen' silently discarded every future acquisition from a collector minting stable batch ids, loop green.",
   "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"pools\",\"freshness\":\"1h\"}]}",
   "streams": [
     {
@@ -99,6 +99,7 @@
         "at": 10.5
       }
     ],
+    "relations": [],
     "collections": [
       {
         "name": "pools",

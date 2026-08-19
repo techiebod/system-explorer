@@ -93,10 +93,19 @@ WAIT_S = 30.0
 
 _COLLECTION_NAME = re.compile(r"^[a-z][a-z0-9-]*$")
 
-# Phase 2's store holds objects, generations, rejections and acks; joins
-# and opinions are later phases. A fixture expecting them would be judged
-# by nothing, so the loader refuses it rather than passing it vacuously.
-_UNJUDGEABLE_YET = ("relations", "opinions")
+# Opinions are a later phase's surface. A fixture expecting them would be
+# judged by nothing, so the loader refuses it rather than passing it
+# vacuously.
+#
+# `relations` was in this tuple until 2026-08-19 and should not have been:
+# store/relations.go landed with phase 3, the collator mints, keys and
+# resolves edges, and `GET /v1/collections/{name}/relations` serves them —
+# so the reason printed ("the phase-2 store holds none") had been false for
+# as long as there was anything to judge. The effect was that acceptance
+# item 6 was judged only in-process, by tests written in the same language
+# and against the same assumptions as the subject, while the tier built to
+# be independent of it refused every fixture that would have exercised it.
+_UNJUDGEABLE_YET = ("opinions",)
 
 
 class FixtureError(Exception):
@@ -332,10 +341,26 @@ def _load_expect(expect: dict, where: str) -> dict:
          "age_from_oldest", "cross_boot"},
         label,
     )
-    # objects, collections, rejected and acked are REQUIRED, even when empty:
-    # an omitted key would be an unjudged surface, and a fixture that could
-    # pass while the store held something unlisted is the subset guard again.
-    _require(expect, {"objects", "collections", "rejected", "acked"}, label)
+    # objects, collections, rejected, acked and relations are REQUIRED, even
+    # when empty: an omitted key would be an unjudged surface, and a fixture
+    # that could pass while the store held something unlisted is the subset
+    # guard again. `relations: []` on a fixture that mints none is therefore
+    # a real assertion — it is what fails if the collator invents an edge.
+    _require(expect, {"objects", "collections", "rejected", "acked", "relations"}, label)
+    for entry in expect["relations"]:
+        _refuse_unknown(
+            entry,
+            {"collection", "scope", "source_id", "source_name", "type", "vantage",
+             "target_kind", "target_name", "target_id", "resolved", "facts",
+             "observability"},
+            f"{label} relation",
+        )
+        _require(
+            entry,
+            {"collection", "source_name", "type", "target_kind", "target_name",
+             "resolved", "observability"},
+            f"{label} relation",
+        )
     for key in _UNJUDGEABLE_YET:
         if expect.get(key, []) != []:
             raise FixtureError(
@@ -602,6 +627,28 @@ def snapshot(path: str) -> dict:
                 "FROM rejections ORDER BY seq"
             )
         ]
+        relations = [
+            {
+                "collection": row[0],
+                "scope": row[1],
+                "key": row[2],
+                "source_id": row[3],
+                "source_name": row[4],
+                "type": row[5],
+                "vantage": row[6],
+                "target_kind": row[7],
+                "target_name": row[8],
+                "target_id": row[9],
+                "resolved": bool(row[10]),
+                "facts": json.loads(row[11]) if row[11] is not None else None,
+                "observability": row[12],
+            }
+            for row in con.execute(
+                "SELECT collection, scope, key, source_id, source_name, type, vantage, "
+                "target_kind, target_name, target_id, resolved, facts, observability "
+                "FROM relations ORDER BY collection, scope, key"
+            )
+        ]
         acked = {row[0] for row in con.execute("SELECT batch FROM acks")}
         oldest = {
             row[0]: row[1]
@@ -610,6 +657,7 @@ def snapshot(path: str) -> dict:
         return {
             "collections": collections,
             "objects": objects,
+            "relations": relations,
             "rejections": rejections,
             "acked": acked,
             "oldest": oldest,
@@ -691,6 +739,58 @@ def assert_expect(fixture: Fixture, state: dict) -> None:
                 f"{label}: object {key}: at {got['at']!r}, want {want['at']!r} — "
                 "the stamp is carried verbatim, never re-derived"
             )
+
+    # Relations: both directions, keyed by everything that is NOT a
+    # property — collection, scope, source name, type, target kind, target
+    # name and the assertion's own facts. Resolution, the target id and the
+    # observability state are all judged as VALUES on the matched row rather
+    # than being part of the match, because each of them changes as the
+    # estate learns and a match that moved with them could never catch an
+    # edge that silently changed state.
+    #
+    # Facts are inside the match because parallel relations differ by
+    # nothing else: one pool asserts backed-by to one device twice, and a
+    # match ignoring facts would call those the same edge and pass while the
+    # collator lost one of them.
+    def _rel_key(entry: dict) -> tuple:
+        return (entry["collection"], entry.get("scope", ""), entry["source_name"],
+                entry["type"], entry["target_kind"], entry["target_name"],
+                _canon(entry.get("facts")))
+
+    actual_rels = {_rel_key(r): r for r in state["relations"]}
+    expected_rels = {_rel_key(e): e for e in expect["relations"]}
+    assert len(actual_rels) == len(state["relations"]), (
+        f"{label}: the store holds two relations with one identity — "
+        "the driver's own match would hide one of them"
+    )
+    invented = sorted(set(actual_rels) - set(expected_rels))
+    assert not invented, (
+        f"{label}: the collator minted relations the fixture does not list: {invented} — "
+        "an unlisted minted edge is a failure for the same reason an unlisted "
+        "object is (README.md)"
+    )
+    missing = sorted(set(expected_rels) - set(actual_rels))
+    assert not missing, f"{label}: expected relations are not in the store: {missing}"
+    for key, want in expected_rels.items():
+        got = actual_rels[key]
+        assert got["resolved"] == want["resolved"], (
+            f"{label}: relation {key}: resolved is {got['resolved']}, want {want['resolved']}"
+        )
+        assert got["target_id"] == want.get("target_id"), (
+            f"{label}: relation {key}: target_id {got['target_id']!r}, "
+            f"want {want.get('target_id')!r} — an unresolved target carries the "
+            "bare name and no id"
+        )
+        assert got["observability"] == want["observability"], (
+            f"{label}: relation {key}: observability {got['observability']!r}, "
+            f"want {want['observability']!r} — `asserted` is not a degraded "
+            "`confirmed`, and the difference is the founding incident"
+        )
+        for member in ("source_id", "vantage"):
+            if member in want:
+                assert got[member] == want[member], (
+                    f"{label}: relation {key}: {member} {got[member]!r}, want {want[member]!r}"
+                )
 
     # Collections: both directions by name.
     actual_cols = state["collections"]
@@ -841,6 +941,58 @@ def _assert_cross_boot(fixture: Fixture, state_dir: str, binary: Path) -> None:
 # ── the driver ───────────────────────────────────────────────────────────
 
 
+def _relation_identities(path: str) -> dict[tuple, str]:
+    """Every relation in the store, keyed by its identity, valued by its KEY.
+
+    Identity here is what the edge IS — source, type, target, discriminating
+    facts — and the value is what the collator keyed it under. Comparing this
+    map across rounds is acceptance item 6's "an upgrade never re-keys",
+    without any fixture having to hardcode a hash.
+    """
+    if not os.path.exists(path):
+        return {}
+    con = _connect_ro(path)
+    try:
+        return {
+            (row[0], row[1], row[2], row[3], row[4], row[5],
+             _canon(json.loads(row[6]) if row[6] is not None else None)): row[7]
+            for row in con.execute(
+                "SELECT collection, scope, source_name, type, target_kind, "
+                "target_name, facts, key FROM relations"
+            )
+        }
+    finally:
+        con.close()
+
+
+def _assert_never_re_keyed(fixture: Fixture, history: list[dict[tuple, str]]) -> None:
+    """An edge that survives from one round to the next keeps its key.
+
+    The founding rule is that resolution is a PROPERTY: the hub upgrades an
+    unresolved target when another host claims the name, and a key that moved
+    with the upgrade would retire the relation and mint a new one for the same
+    edge — resetting its lifecycle every time the estate learned something.
+
+    COVERAGE, stated because it is not total: this runs on SEQUENTIAL fixtures
+    only. A concurrent fixture has no ordered round boundary to sample at, so
+    the invariant is not checked there and a re-key under interleaving would
+    not be caught here. It is checked in-process by
+    TestResolutionUpgradesWithoutReKeying.
+    """
+    first_seen: dict[tuple, str] = {}
+    for round_index, keys in enumerate(history):
+        for identity, key in keys.items():
+            if identity not in first_seen:
+                first_seen[identity] = key
+                continue
+            assert first_seen[identity] == key, (
+                f"{fixture.name}: relation {identity} was keyed "
+                f"{first_seen[identity]!r} and is keyed {key!r} after round "
+                f"{round_index} — an upgrade re-keyed the edge, which retires "
+                "it and mints a new one for the same relationship"
+            )
+
+
 def run_fixture(fixture: Fixture, binary: Path | None = None) -> None:
     """Run one fixture against the real binary and judge it. Raises on red."""
     binary = binary or collate_binary()
@@ -849,7 +1001,8 @@ def run_fixture(fixture: Fixture, binary: Path | None = None) -> None:
         if fixture.concurrent:
             _run_concurrent(fixture, binary, state_dir)
         else:
-            _run_sequential(fixture, binary, state_dir)
+            _assert_never_re_keyed(
+                fixture, _run_sequential(fixture, binary, state_dir))
         assert_expect(fixture, snapshot(db_path(state_dir)))
         if fixture.expect.get("age_from_oldest"):
             _assert_age_from_oldest(fixture, state_dir, binary)
@@ -859,8 +1012,15 @@ def run_fixture(fixture: Fixture, binary: Path | None = None) -> None:
         shutil.rmtree(state_dir, ignore_errors=True)
 
 
-def _run_sequential(fixture: Fixture, binary: Path, state_dir: str) -> None:
+def _run_sequential(fixture: Fixture, binary: Path, state_dir: str) -> list[dict[tuple, str]]:
+    """Run each stream in order, returning the relation keys after each.
+
+    The return value is what _assert_never_re_keyed judges; a fixture with one
+    stream simply yields one sample and the invariant is vacuous there, which
+    is why it is sampled rather than asserted per round.
+    """
     fake = FakeCollector(fixture.declaration)
+    history: list[dict[tuple, str]] = []
     try:
         for i, stream in enumerate(fixture.streams):
             for collection, value in stream.wind_issued.items():
@@ -870,9 +1030,11 @@ def _run_sequential(fixture: Fixture, binary: Path, state_dir: str) -> None:
             assert proc.returncode == 0, (
                 f"{fixture.name}: round {i} exited {proc.returncode}:\n{proc.stderr}"
             )
+            history.append(_relation_identities(db_path(state_dir)))
         fake.check()
     finally:
         fake.close()
+    return history
 
 
 def _run_concurrent(fixture: Fixture, binary: Path, state_dir: str) -> None:

@@ -1,7 +1,7 @@
 {
   "name": "record-after-decline-refused",
   "acceptance_item": 2,
-  "note": "the second direction of the decline-ordering guard: decline, THEN an object. A decline is a statement about the whole collection and closes it to everything except absent's zero commit, so the batch must be refused with a recorded record-after-decline and nothing applied — not even the staleness the decline would have marked, because an invalid stream is authoritative for nothing. The defect this pins: the stream was accepted, the post-decline object vanished silently, and the batch acked with rejections=[].",
+  "note": "the second direction of the decline-ordering guard: decline, THEN an object. A decline is a statement about the whole collection and closes it to everything except absent's zero commit, so the batch must be refused with a recorded record-after-decline and nothing applied \u2014 not even the staleness the decline would have marked, because an invalid stream is authoritative for nothing. The defect this pins: the stream was accepted, the post-decline object vanished silently, and the batch acked with rejections=[].",
   "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"pools\",\"freshness\":\"1h\"}]}",
   "streams": [
     {
@@ -45,6 +45,7 @@
   ],
   "expect": {
     "objects": [],
+    "relations": [],
     "collections": [
       {
         "name": "pools",

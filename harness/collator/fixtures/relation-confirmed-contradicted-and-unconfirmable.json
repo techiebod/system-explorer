@@ -1,0 +1,256 @@
+{
+  "name": "relation-confirmed-contradicted-and-unconfirmable",
+  "acceptance_item": 6,
+  "note": "The distinction the product did not have when it replicated for months over data with no off-site copy: an edge observed at both ends is not the same statement as an edge observed at one. /srv is asserted from both vantages with the same facts and is confirmed; /var is asserted from both and they disagree, which is contradicted \u2014 a STATE, not a merge conflict and not a silent win for either vantage; and the devices side declares it cannot be confirmed from the far end, so it stays honestly asserted even though a mount did assert back at it. A type is judged by its own declaration, never by whether some other assertion happens to point the right way.",
+  "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"fixture\",\"collections\":[{\"name\":\"mounts\",\"freshness\":\"1h\",\"prefix\":\"mount\",\"relations\":[{\"type\":\"mounted-from\",\"carries_facts\":true,\"discriminator\":[\"Fs\"],\"inverse_observable\":true,\"confirmed_by\":\"carries\"}]},{\"name\":\"devices\",\"freshness\":\"1h\",\"prefix\":\"device\",\"relations\":[{\"type\":\"carries\",\"carries_facts\":true,\"discriminator\":[\"Fs\"],\"inverse_observable\":false}]}]}",
+  "streams": [
+    {
+      "records": [
+        {
+          "record": "begin",
+          "request": "batch-1",
+          "batch": "batch-1",
+          "declaration": "sha256:7383f4d841452ed2de6062e486b5bc86780dc0124ebc57651cf9feecebcb8d96",
+          "boot_id": "5e000000-0000-4000-8000-000000000001",
+          "timens": 0,
+          "instance": null,
+          "generations": {
+            "devices": 1,
+            "mounts": 1
+          }
+        },
+        {
+          "record": "object",
+          "collection": "mounts",
+          "name": "/srv",
+          "facts": {
+            "X": 1
+          },
+          "at": 10.5
+        },
+        {
+          "record": "object",
+          "collection": "mounts",
+          "name": "/var",
+          "facts": {
+            "X": 1
+          },
+          "at": 10.6
+        },
+        {
+          "record": "relation_assertion",
+          "collection": "mounts",
+          "name": "/srv",
+          "type": "mounted-from",
+          "vantage": "mounts",
+          "target": {
+            "kind": "device",
+            "name": "sda1"
+          },
+          "facts": {
+            "Fs": "ext4"
+          }
+        },
+        {
+          "record": "relation_assertion",
+          "collection": "mounts",
+          "name": "/var",
+          "type": "mounted-from",
+          "vantage": "mounts",
+          "target": {
+            "kind": "device",
+            "name": "sdb1"
+          },
+          "facts": {
+            "Fs": "xfs"
+          }
+        },
+        {
+          "record": "commit",
+          "collection": "mounts",
+          "generation": 1,
+          "objects": 2,
+          "assertions": 2,
+          "unobservable": 0,
+          "cpu_ms": 0.5
+        },
+        {
+          "record": "object",
+          "collection": "devices",
+          "name": "sda1",
+          "facts": {
+            "X": 1
+          },
+          "at": 10.7
+        },
+        {
+          "record": "object",
+          "collection": "devices",
+          "name": "sdb1",
+          "facts": {
+            "X": 1
+          },
+          "at": 10.8
+        },
+        {
+          "record": "relation_assertion",
+          "collection": "devices",
+          "name": "sda1",
+          "type": "carries",
+          "vantage": "devices",
+          "target": {
+            "kind": "mount",
+            "name": "/srv"
+          },
+          "facts": {
+            "Fs": "ext4"
+          }
+        },
+        {
+          "record": "relation_assertion",
+          "collection": "devices",
+          "name": "sdb1",
+          "type": "carries",
+          "vantage": "devices",
+          "target": {
+            "kind": "mount",
+            "name": "/var"
+          },
+          "facts": {
+            "Fs": "btrfs"
+          }
+        },
+        {
+          "record": "commit",
+          "collection": "devices",
+          "generation": 1,
+          "objects": 2,
+          "assertions": 2,
+          "unobservable": 0,
+          "cpu_ms": 0.5
+        },
+        {
+          "record": "end",
+          "request": "batch-1",
+          "batch": "batch-1",
+          "cpu_ms": 0.5,
+          "wall_ms": 1.0
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "objects": [
+      {
+        "collection": "devices",
+        "id": "devices:sda1",
+        "name": "sda1",
+        "facts": {
+          "X": 1
+        },
+        "at": 10.7
+      },
+      {
+        "collection": "devices",
+        "id": "devices:sdb1",
+        "name": "sdb1",
+        "facts": {
+          "X": 1
+        },
+        "at": 10.8
+      },
+      {
+        "collection": "mounts",
+        "id": "mounts:/srv",
+        "name": "/srv",
+        "facts": {
+          "X": 1
+        },
+        "at": 10.5
+      },
+      {
+        "collection": "mounts",
+        "id": "mounts:/var",
+        "name": "/var",
+        "facts": {
+          "X": 1
+        },
+        "at": 10.6
+      }
+    ],
+    "relations": [
+      {
+        "collection": "mounts",
+        "source_name": "/srv",
+        "type": "mounted-from",
+        "vantage": "mounts",
+        "target_kind": "device",
+        "target_name": "sda1",
+        "target_id": "devices:sda1",
+        "resolved": true,
+        "facts": {
+          "Fs": "ext4"
+        },
+        "observability": "confirmed"
+      },
+      {
+        "collection": "mounts",
+        "source_name": "/var",
+        "type": "mounted-from",
+        "vantage": "mounts",
+        "target_kind": "device",
+        "target_name": "sdb1",
+        "target_id": "devices:sdb1",
+        "resolved": true,
+        "facts": {
+          "Fs": "xfs"
+        },
+        "observability": "contradicted"
+      },
+      {
+        "collection": "devices",
+        "source_name": "sda1",
+        "type": "carries",
+        "vantage": "devices",
+        "target_kind": "mount",
+        "target_name": "/srv",
+        "target_id": "mounts:/srv",
+        "resolved": true,
+        "facts": {
+          "Fs": "ext4"
+        },
+        "observability": "asserted"
+      },
+      {
+        "collection": "devices",
+        "source_name": "sdb1",
+        "type": "carries",
+        "vantage": "devices",
+        "target_kind": "mount",
+        "target_name": "/var",
+        "target_id": "mounts:/var",
+        "resolved": true,
+        "facts": {
+          "Fs": "btrfs"
+        },
+        "observability": "asserted"
+      }
+    ],
+    "collections": [
+      {
+        "name": "devices",
+        "generation": 1,
+        "stale": false
+      },
+      {
+        "name": "mounts",
+        "generation": 1,
+        "stale": false
+      }
+    ],
+    "rejected": [],
+    "acked": [
+      "batch-1"
+    ]
+  }
+}

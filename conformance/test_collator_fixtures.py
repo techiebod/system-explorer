@@ -23,6 +23,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -60,9 +61,22 @@ REQUIRED = {
     # so a cross-boot stamp is a stated mismatch, never a subtraction.
     "oldest-read-wins": 5,
     "cross-boot-age-is-stated": 5,
+    # item 6 — every relation state reached, and an upgrade that never
+    # re-keys. These arrived 2026-08-19, when the loader stopped refusing
+    # relation expectations on a reason that had been false since
+    # store/relations.go landed: until then item 6 was judged only in
+    # process, by tests in the same language as the subject, while the tier
+    # built to be independent of it refused every fixture that would have
+    # exercised it. The absent state is the retirement case; unresolved and
+    # resolved-later are one fixture because the upgrade is the point.
+    "relation-resolves-later-without-re-keying": 6,
+    "relation-parallel-edges-survive-their-discriminator": 6,
+    "relation-confirmed-contradicted-and-unconfirmable": 6,
+    "relation-retired-by-a-committed-collection": 6,
 }
 
-REQUIRED_SELF_TESTS = {"self-test-unlisted-object", "self-test-wrong-fact"}
+REQUIRED_SELF_TESTS = {"self-test-unlisted-object", "self-test-wrong-fact",
+                       "self-test-unlisted-relation"}
 
 
 def test_the_required_scenarios_exist() -> None:
@@ -128,6 +142,7 @@ def _valid_doc() -> dict:
         "expect": {
             "objects": [{"collection": "pools", "id": "pools:tank", "name": "tank",
                          "facts": {"Health": "ONLINE"}}],
+            "relations": [],
             "collections": [{"name": "pools", "generation": 1, "stale": False}],
             "rejected": [],
             "acked": ["batch-1"],
@@ -139,6 +154,25 @@ def _write(tmp_path: Path, doc: dict) -> Path:
     path = tmp_path / f"{doc['name']}.json"
     path.write_text(json.dumps(doc))
     return path
+
+
+def test_the_re_key_invariant_fires_when_a_key_moves() -> None:
+    """The reversion for _assert_never_re_keyed.
+
+    It runs over the rounds of every sequential fixture, so it reports
+    success on all of them — and would report exactly the same success if it
+    compared nothing at all, which is the guard shape this repository has
+    been caught by more than once. Handed a history where one edge's identity
+    is unchanged and its key is not, it must red; handed a stable one it must
+    not."""
+    identity = ("rules", "", "rule-1", "member-of", "chain", "chain-1", "null")
+    synthetic = SimpleNamespace(name="synthetic")
+
+    driver._assert_never_re_keyed(synthetic, [{identity: "rel-a"}, {identity: "rel-a"}])
+
+    with pytest.raises(AssertionError, match="re-keyed"):
+        driver._assert_never_re_keyed(
+            synthetic, [{identity: "rel-a"}, {identity: "rel-b"}])
 
 
 def test_the_baseline_loader_case_itself_loads(tmp_path: Path) -> None:
@@ -172,17 +206,60 @@ def test_loader_refuses_an_illegal_stream_record(tmp_path: Path) -> None:
 
 
 def test_loader_refuses_an_expectation_nothing_judges(tmp_path: Path) -> None:
-    """expect.relations would pass vacuously — the phase-2 store holds no
-    relations — so a fixture naming one must be refused, not greened."""
+    """expect.opinions would pass vacuously — the store holds no opinions —
+    so a fixture naming one must be refused, not greened.
+
+    `relations` was in this tuple with it until 2026-08-19 and had stopped
+    belonging there when store/relations.go landed; the pair of tests below
+    is what now proves the loader discriminates on that member instead of
+    refusing it wholesale."""
     doc = _valid_doc()
-    doc["expect"]["relations"] = [{"key": "x", "observability": "asserted"}]
+    doc["expect"]["opinions"] = [{"object": "pools:tank", "key": "x", "level": "warn"}]
     with pytest.raises(driver.FixtureError, match="cannot be judged yet"):
         driver.load_fixture(_write(tmp_path, doc))
 
 
+def test_loader_accepts_a_well_formed_relation_expectation(tmp_path: Path) -> None:
+    """The reversion for the two refusal cases below: a loader that refused
+    every relation expectation would pass both of them and judge nothing,
+    which is exactly the state this member was in until 2026-08-19."""
+    doc = _valid_doc()
+    doc["expect"]["relations"] = [{
+        "collection": "pools", "source_name": "tank", "type": "backed-by",
+        "target_kind": "device", "target_name": "sda", "resolved": False,
+        "observability": "asserted",
+    }]
+    driver.load_fixture(_write(tmp_path, doc))
+
+
+def test_loader_refuses_a_relation_missing_what_it_must_state(tmp_path: Path) -> None:
+    """`observability` unstated would leave the one distinction the founding
+    incident turned on — asserted versus confirmed — unjudged on that edge."""
+    doc = _valid_doc()
+    doc["expect"]["relations"] = [{
+        "collection": "pools", "source_name": "tank", "type": "backed-by",
+        "target_kind": "device", "target_name": "sda", "resolved": False,
+    }]
+    with pytest.raises(driver.FixtureError, match="missing required members"):
+        driver.load_fixture(_write(tmp_path, doc))
+
+
+def test_loader_refuses_an_unknown_relation_member(tmp_path: Path) -> None:
+    """A misspelled member would silently assert nothing."""
+    doc = _valid_doc()
+    doc["expect"]["relations"] = [{
+        "collection": "pools", "source_name": "tank", "type": "backed-by",
+        "target_kind": "device", "target_name": "sda", "resolved": False,
+        "observability": "asserted", "observabillity": "confirmed",
+    }]
+    with pytest.raises(driver.FixtureError, match="unknown members"):
+        driver.load_fixture(_write(tmp_path, doc))
+
+
 def test_loader_requires_the_exhaustive_expect_members(tmp_path: Path) -> None:
-    """An omitted `acked` (or objects, collections, rejected) would be an
-    unjudged surface; the loader demands all four stated, even when empty."""
+    """An omitted `acked` (or objects, relations, collections, rejected) would
+    be an unjudged surface; the loader demands all five stated, even when
+    empty."""
     doc = _valid_doc()
     del doc["expect"]["acked"]
     with pytest.raises(driver.FixtureError, match="missing required members"):
