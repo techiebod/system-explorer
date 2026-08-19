@@ -1,0 +1,78 @@
+{
+  "collector": "logs",
+  "collections": [
+    "journal"
+  ],
+  "variant": "degraded",
+  "provenance": "captured",
+  "os": "ubuntu",
+  "os_version": "26.04",
+  "source_version": "systemd 257 (257.13-1~deb13u1)",
+  "captured": "2026-08-19T17:17:08Z",
+  "regenerable": true,
+  "regenerable_on": "a guest that has ACTUALLY FAILED at something, captured inside the window the failure stays on the page. Both halves matter. harness/remote/ stages the failure \u2014 a oneshot unit exiting 7, so systemd itself writes the err entry and its structured members rather than a logger line impersonating them, plus one logger call per rung above err, which systemd emits almost never. The window is the harder half and is the reason no capture held this shape before: the page is the newest DEFAULT_LIMIT=100 entries, and on this guest \u2014 eleven containers and systemd \u2014 the newest 100 span TWENTY-EIGHT SECONDS. A failure staged and captured three minutes apart has already scrolled off, which is exactly what happened on the first attempt here and read as `the lab guest never fails`. Stage and capture in one command.",
+  "canaries": [],
+  "anonymised": true,
+  "anonymisation_note": "Scrubbed by harness/scrub/logs.json, which gained four entries for this capture: UNIT_RESULT, EXIT_CODE, EXIT_STATUS and COMMAND are added by systemd only when a unit actually fails, so no capture of a quiet machine could hold them and no manifest could have classified them. Three are systemd's own vocabularies or a number and are `nothing`; COMMAND names the DIRECTIVE that failed (`ExecStart`) and is prose rather than nothing, because the member is called COMMAND and a future systemd putting a command LINE there must get the free-text pass instead of a silent exemption.\n\nThe run also caught what it exists to catch. USER_ID held a real person's login name \u2014 the account the capture ran under \u2014 and the scrubber REFUSED to write until it was declared, because `format: name` substitutes only names the run was handed. It is substituted in the committed bytes and the name appears nowhere in them.",
+  "note": "The DIRECTORY is `severity` and the variant kind is `degraded`, and the split follows the precedent kea/no-lease-hook set. The kind is a closed set naming the STATE the subject was in, and this machine had failed at something \u2014 a unit exited 7 \u2014 so `healthy` would be false of it; the directory carries the specific, which is that the page reaches above notice. `degraded` is used in the same sense storage/degraded uses it: the subject is not fully well. Adding a `severity` kind was the alternative and was rejected, because a kind names a state a subject can be in and `severity` names a column.\n\nThe counterpart to `logs/healthy`, and what the `logs/severity-and-truncation` residual asked for. That entry reads: `Every one of the 100 entries is priority 5 or 6, so the whole severity ladder above notice is evaluated by nothing`. Here the page carries every rung \u2014 emerg, alert, crit, err (three of them), warning, notice, info \u2014 against healthy's two notices and ninety-eight infos.\n\nThe err rows are not decoration. One is systemd's own `Failed to start`, carrying the MESSAGE_ID that names that event type, and beside it sits the `Failed with result 'exit-code'` row with UNIT_RESULT, EXIT_CODE and EXIT_STATUS on it \u2014 the structured members a unit failure adds and a quiet machine never produces. Two more err rows came from rsyslogd of its own accord, so the page is not only what was staged.\n\nWhat this variant does NOT close, and the residual should not be read as though it did:\n\n\u00b7 The OPINIONS half. The residual says the judgements rules/logs.py forms above notice are formed by nothing. This is a COLLECTOR stream and collector streams carry facts, not opinions, so a page full of emerg rows still exercises none of them. That half belongs to the agent's own tier and is not reachable from any corpus variant of this collector.\n\n\u00b7 The TRUNCATION half, and it is not reachable here either \u2014 for a reason worth stating rather than leaving as a gap. The journal on this guest holds 7,277 entries and the page holds 100, so the bound DID engage and both implementations agreed on which hundred. But the collector declares no cursor fact and no truncation fact: the journal cursor IS the object's name, and the bound is silent at this tier by design. `no cursor is issued, no truncation is reported` describes the agent's HTTP paging, where DEFAULT_LIMIT and MAX_LIMIT live, and no capture of this collector can speak to it.\n\n\u00b7 And one thing the anchors pin because staging got it wrong first. `SystemdUnit` is `_SYSTEMD_UNIT`, the unit of the process that SENT the entry \u2014 not the journal's `UNIT`, which names what the entry is ABOUT, and which this collector publishes as nothing at all. On these rows the two differ: systemd wrote `Failed to start se-lab-failing.service` from `init.scope`, so the row's SystemdUnit is init.scope and the failing unit's name survives only inside the Message prose. The relation the collector asserts points at the sender too. That matters to whoever filters this collection by unit to ask what a service said, because the two sets diverge exactly when a unit fails to START \u2014 then its own process wrote nothing and systemd wrote everything. Both implementations agree, so this is the reference's judgement rather than a port's defect, and it is anchored rather than argued: the anchor asserts init.scope.",
+  "anchors": [
+    {
+      "collection": "journal",
+      "commit_objects": 100
+    },
+    {
+      "collection": "journal",
+      "object": "s=5cb037d0b7ec4ed1edd52b4aec206481;i=1f04;b=5cb000e96b33b94946aaa03d29f25738;m=11249e9a1;t=6596992b3e076;x=35a5e651ccb509ae",
+      "fact": "Priority",
+      "value": 0
+    },
+    {
+      "collection": "journal",
+      "object": "s=5cb037d0b7ec4ed1edd52b4aec206481;i=1f00;b=5cb000e96b33b94946aaa03d29f25738;m=11249b79f;t=6596992b3ae74;x=d64ffad49516253",
+      "fact": "Priority",
+      "value": 1
+    },
+    {
+      "collection": "journal",
+      "object": "s=5cb037d0b7ec4ed1edd52b4aec206481;i=1efc;b=5cb000e96b33b94946aaa03d29f25738;m=112498d65;t=6596992b3843a;x=31f76b88e4d0691d",
+      "fact": "Priority",
+      "value": 2
+    },
+    {
+      "collection": "journal",
+      "object": "s=5cb037d0b7ec4ed1edd52b4aec206481;i=1f09;b=5cb000e96b33b94946aaa03d29f25738;m=11249f266;t=6596992b3e93b;x=39e48204a8bfffa5",
+      "fact": "Priority",
+      "value": 3
+    },
+    {
+      "collection": "journal",
+      "object": "s=5cb037d0b7ec4ed1edd52b4aec206481;i=1ef7;b=5cb000e96b33b94946aaa03d29f25738;m=11249548a;t=6596992b34b5f;x=3b218426bc8c4140",
+      "fact": "Priority",
+      "value": 4
+    },
+    {
+      "collection": "journal",
+      "object": "s=5cb037d0b7ec4ed1edd52b4aec206481;i=1ef7;b=5cb000e96b33b94946aaa03d29f25738;m=11249548a;t=6596992b34b5f;x=3b218426bc8c4140",
+      "fact": "MessageId",
+      "value": "d9b373ed55a64feb8242e02dbe79a49c"
+    },
+    {
+      "collection": "journal",
+      "object": "s=5cb037d0b7ec4ed1edd52b4aec206481;i=1ef7;b=5cb000e96b33b94946aaa03d29f25738;m=11249548a;t=6596992b34b5f;x=3b218426bc8c4140",
+      "fact": "SystemdUnit",
+      "value": "init.scope"
+    },
+    {
+      "collection": "journal",
+      "object": "s=5cb037d0b7ec4ed1edd52b4aec206481;i=1ef8;b=5cb000e96b33b94946aaa03d29f25738;m=1124956ee;t=6596992b34dc2;x=35b3d0f6e9ea5de6",
+      "fact": "Priority",
+      "value": 3
+    },
+    {
+      "collection": "journal",
+      "object": "s=5cb037d0b7ec4ed1edd52b4aec206481;i=1ef8;b=5cb000e96b33b94946aaa03d29f25738;m=1124956ee;t=6596992b34dc2;x=35b3d0f6e9ea5de6",
+      "fact": "MessageId",
+      "value": "be02cf6855d2428ba40df7e9d022f03d"
+    }
+  ]
+}

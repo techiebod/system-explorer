@@ -52,6 +52,12 @@
   "*.SESSION_ID": {"discloses": "nothing"},
   "*.TID": {"discloses": "nothing"},
   "*.UNIT": {"discloses": "nothing"},
+
+  "#a-unit-that-failed": "Four fields systemd adds only when a unit actually fails, so no capture of a quiet machine could hold them and no manifest could have classified them until corpus/logs/severity was staged. UNIT_RESULT and EXIT_CODE are systemd's own closed vocabularies (exit-code, signal, timeout; exited, killed, dumped) and EXIT_STATUS is the number the process returned — none is a fact about this estate. COMMAND names the DIRECTIVE that failed, `ExecStart`, and is prose rather than nothing because the member's name says command and a future systemd that put a command LINE there must get the free-text pass rather than a silent exemption.",
+  "*.UNIT_RESULT": {"discloses": "nothing"},
+  "*.EXIT_CODE": {"discloses": "nothing"},
+  "*.EXIT_STATUS": {"discloses": "nothing"},
+  "*.COMMAND": {"discloses": "content", "format": "prose"},
   "*.USER_UNIT": {"discloses": "nothing"},
   "*.CONTAINER_NAME": {"discloses": "content", "format": "name"},
   "*.CPU_USAGE_NSEC": {"discloses": "nothing"},
