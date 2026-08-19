@@ -182,18 +182,27 @@ func (d *declined) Error() string { return d.reason + ": " + d.detail }
 // only the replay half. A shared constant makes the disagreement unspellable
 // rather than merely currently-absent.
 //
-// `absent` is the reading, and it is the one decline that commits. A host whose
-// deployment names no Plex fronts no media server: all three collections are
-// genuinely empty there, which is a successful reading that establishes
-// something — DESIGN 19's own worked example. It must commit zero, because a
-// host that HAD a Plex and lost it would otherwise serve its last library rows
-// forever, stale and never retired.
+// `unavailable` is the reading, and it does NOT commit — RULED 2026-08-19,
+// reversing what stood here. The old text argued `absent` on the grounds that
+// the configuration IS the statement, and that committing zero was needed so a
+// host which lost this interface would not serve its libraries and sessions forever. The
+// second half of that is answered by staleness rather than by retirement: no
+// decline but `absent` commits, so prior state STANDS and the collator marks it
+// stale — visible as not-fresh, which is the honest rendering of a reading that
+// did not happen.
 //
-// The wording is the replay shim's own ("no <interface> on this host") with the
-// interface named as the SEAM and the live reference name it, so the three
-// implementations produce one record for one condition rather than three
-// spellings a reader would take for three conditions.
-var declineNoServer = declined{"absent", "no plex api on this host"}
+// The first half was simply wrong. An unset SE_PLEX_URL is not
+// evidence that the interface is gone — measured on the sibling case, where
+// unbound was installed, running and answering on a lab guest whose
+// SE_UNBOUND_SOCKET had never been set and its port declined `absent` over it.
+//
+// "Nobody told this process where to look" and "the thing is not here" are
+// different statements, and only the second may retire a row: retirement is not
+// recoverable, and a key rotation must not perform one.
+//
+// What still retires is a genuine absence, and a missing receipt cannot
+// establish one from here.
+var declineNoServer = declined{"unavailable", "no plex api on this host"}
 
 // The server is addressed and this deployment cannot open it. The `server` row
 // states this as ConfigMissing and stays — the standing signal that the estate

@@ -227,7 +227,7 @@ func TestTheStagedDocumentsDecideRatherThanTheReplayingHost(t *testing.T) {
 	}
 }
 
-func TestAnEmptyReplayDirectoryDeclinesAbsentAndCommitsZeroForEveryCollection(t *testing.T) {
+func TestAnEmptyReplayDirectoryDeclinesUnavailableAndCommitsNothingForEveryCollection(t *testing.T) {
 	code, stdout, stderr := runWith(t, wholeRequest,
 		map[string]string{"SE_REPLAY_DIR": t.TempDir()})
 	if code != exitOK {
@@ -239,18 +239,18 @@ func TestAnEmptyReplayDirectoryDeclinesAbsentAndCommitsZeroForEveryCollection(t 
 		t.Fatalf("every requested collection states the absence; got %v", declines)
 	}
 	for _, decline := range declines {
-		if decline["reason"] != "absent" || decline["detail"] != declineNoSocket.detail {
-			t.Fatalf("expected the shared absent decline, got %v", decline)
+		if decline["reason"] != "unavailable" || decline["detail"] != declineNoSocket.detail {
+			t.Fatalf("expected the shared unavailable decline, got %v", decline)
 		}
 	}
-	commits := ofKind(records, "commit")
-	if len(commits) != 3 {
-		t.Fatalf("absent is authoritative-empty and commits zero; got %v", commits)
-	}
-	for _, commit := range commits {
-		if commit["objects"] != 0.0 {
-			t.Fatalf("an absent commit retires what a previous batch published: %v", commit)
-		}
+	// RULED 2026-08-19: a configuration gap must never retire an object, so
+	// this reading declines and commits NOTHING. It used to commit zero per
+	// collection, which is authoritative-empty and retires — on a host where
+	// the interface may be running perfectly and only the receipt is missing.
+	// Prior state stands and the collator marks it stale, which is the honest
+	// rendering of a reading that did not happen.
+	if commits := ofKind(records, "commit"); len(commits) != 0 {
+		t.Fatalf("no decline but `absent` commits, so nothing may be retired here; got %v", commits)
 	}
 }
 

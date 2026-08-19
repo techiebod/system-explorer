@@ -119,17 +119,27 @@ func (d *declined) Error() string { return d.reason + ": " + d.detail }
 // only the replay half. A shared constant makes the disagreement unspellable
 // rather than merely currently-absent.
 //
-// `absent` is the reading, and it is the one decline that commits. A host with
-// no control socket configured, or none at the configured path, runs no Kea this
-// collector can see — a successful reading that establishes something, which is
-// DESIGN 19's own worked example. It must commit zero, because a host that HAD
-// a DHCP server and lost it would otherwise serve its last subnets, reservations
-// and leases forever, stale and never retired.
+// `unavailable` is the reading, and it does NOT commit — RULED 2026-08-19,
+// reversing what stood here. The old text argued `absent` on the grounds that
+// the configuration IS the statement, and that committing zero was needed so a
+// host which lost this interface would not serve its subnets, reservations and leases forever. The
+// second half of that is answered by staleness rather than by retirement: no
+// decline but `absent` commits, so prior state STANDS and the collator marks it
+// stale — visible as not-fresh, which is the honest rendering of a reading that
+// did not happen.
 //
-// The wording is the replay shim's own ("no <interface> on this host"), so the
-// two implementations produce the same record for the same condition rather than
-// two spellings a reader would take for two conditions.
-var declineNoSocket = declined{"absent", "no kea control socket on this host"}
+// The first half was simply wrong. An unset SE_KEA_SOCKET is not
+// evidence that the interface is gone — measured on the sibling case, where
+// unbound was installed, running and answering on a lab guest whose
+// SE_UNBOUND_SOCKET had never been set and its port declined `absent` over it.
+//
+// "Nobody told this process where to look" and "the thing is not here" are
+// different statements, and only the second may retire a row: retirement is not
+// recoverable, and a key rotation must not perform one.
+//
+// What still retires is a genuine absence, and a missing receipt cannot
+// establish one from here.
+var declineNoSocket = declined{"unavailable", "no kea control socket on this host"}
 
 // The socket is there and this collector may not open it. Distinct from absence
 // in the one respect that matters: unauthorised commits nothing, so a

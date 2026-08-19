@@ -122,13 +122,18 @@ func TestEverySourceGivesTheFleetMissingOneAnswer(t *testing.T) {
 	if fromReplay.reason != declineNoInstances.reason || fromReplay.detail != declineNoInstances.detail {
 		t.Fatalf("the replay path must take the shared reading, got %+v", fromReplay)
 	}
-	// absent is the only decline that commits, and that is the whole point: it
-	// must be able to retire the rows a previous batch published when a host
-	// stops fronting a fleet.
-	if declineNoInstances.reason != "absent" {
-		t.Fatalf("no configured instance is a successful reading that establishes "+
-			"this host observes no media managers, so it must be the reason that "+
-			"commits and retires; got %q", declineNoInstances.reason)
+	// `unavailable`, and it must NOT be the reason that commits — RULED
+	// 2026-08-19, reversing what this test used to assert. An empty
+	// SE_SERVARR_INSTANCES establishes that this process was not told which
+	// apps to ask, not that the host fronts none; the apps may be running and
+	// answering. `absent` commits zero and retires, and a configuration gap may
+	// never retire an object, so prior state stands and the collator marks it
+	// stale instead.
+	if declineNoInstances.reason != "unavailable" {
+		t.Fatalf("an unnamed fleet is a reading this process could not take, not "+
+			"an establishment that the host runs no media managers, so it must "+
+			"not be the reason that commits and retires; got %q",
+			declineNoInstances.reason)
 	}
 	// The live path, with an environment that names nobody — which is every
 	// machine that has not been configured for this collector.

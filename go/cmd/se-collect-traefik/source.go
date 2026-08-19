@@ -116,20 +116,27 @@ func (d *declined) Error() string { return d.reason + ": " + d.detail }
 // only the replay half. A shared constant makes the disagreement unspellable
 // rather than merely currently-absent.
 //
-// `absent` is the reading, and it is the one decline that commits. The
-// configuration IS the statement: a host whose deployment names no Traefik
-// endpoint publishes no routes this collector can see — a successful reading
-// that establishes something, which is DESIGN 19's own worked example. It must
-// commit zero, because a host that HAD an ingress tier and lost it would
-// otherwise serve its old routers forever, stale and never retired. The
-// unbound port reads its own deployment receipt the same way, and two
-// collectors facing one condition must not answer differently.
+// `unavailable` is the reading, and it does NOT commit — RULED 2026-08-19,
+// reversing what stood here. The old text argued `absent` on the grounds that
+// the configuration IS the statement, and that committing zero was needed so a
+// host which lost this interface would not serve its routers and services forever. The
+// second half of that is answered by staleness rather than by retirement: no
+// decline but `absent` commits, so prior state STANDS and the collator marks it
+// stale — visible as not-fresh, which is the honest rendering of a reading that
+// did not happen.
 //
-// The wording is the reference's, to the byte: the replay shim and
-// se-live-reference both spell it "no <interface> on this host" with the
-// interface named "traefik api", and a decline detail that reached an operator
-// in three spellings would read as three conditions.
-var declineNoAPI = declined{"absent", "no traefik api on this host"}
+// The first half was simply wrong. An unset SE_TRAEFIK_URL is not
+// evidence that the interface is gone — measured on the sibling case, where
+// unbound was installed, running and answering on a lab guest whose
+// SE_UNBOUND_SOCKET had never been set and its port declined `absent` over it.
+//
+// "Nobody told this process where to look" and "the thing is not here" are
+// different statements, and only the second may retire a row: retirement is not
+// recoverable, and a key rotation must not perform one.
+//
+// What still retires is a genuine absence, and a missing receipt cannot
+// establish one from here.
+var declineNoAPI = declined{"unavailable", "no traefik api on this host"}
 
 // The API answered and refused this collector. `unauthorised` is a deployment
 // error and never commits: the routes are live right now, so retiring the whole

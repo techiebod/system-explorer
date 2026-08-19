@@ -189,11 +189,12 @@ func collectOne(out *emitter, stderr io.Writer, src source, collection string,
 			Reason:     declineNoClient.reason,
 			Detail:     declineNoClient.detail,
 		})
-		// absent is authoritative-empty: it must be able to retire the objects
-		// a previous batch published, so it declines AND commits zero. No other
-		// reason commits — nothing was established, so prior state stands and
-		// the collator marks it stale.
-		out.emit(commitRecord{Record: "commit", Collection: collection, Generation: generation})
+		// No commit. A process holding neither client's receipts has not
+		// established that this host runs no download client — only that it was
+		// not told where to look — and RULED 2026-08-19 a configuration gap may
+		// never retire an object. Prior state stands and the collator marks it
+		// stale. `absent` remains the one reason that commits, and this is not
+		// it.
 		return exitOK
 	}
 
@@ -206,7 +207,13 @@ func collectOne(out *emitter, stderr io.Writer, src source, collection string,
 			Reason:     refused.reason,
 			Detail:     refused.detail,
 		})
-		if refused.reason == declineNoClient.reason {
+		// Keyed on the REASON `absent` and not on which constant was raised.
+		// It used to compare against declineNoClient.reason, which meant the
+		// commit followed that constant wherever its reason went — and when the
+		// ruling moved it to `unavailable`, every unavailable decline in this
+		// collector would have started retiring rows. The rule is about the
+		// reason, so the test is about the reason.
+		if refused.reason == "absent" {
 			out.emit(commitRecord{Record: "commit", Collection: collection, Generation: generation})
 		}
 		return exitOK
