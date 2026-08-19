@@ -136,6 +136,79 @@ CONF
         forget SE_KEA_SOCKET
         emit SE_KEA_SOCKET /run/kea/kea4-ctrl-socket
         say "kea control socket present"
+        # Leases planted through kea's own lease4-add, which ships in the same
+        # hook as lease4-get-all — so a guest that can be READ for leases can
+        # be staged with them, and no file is edited behind the daemon's back.
+        # The set is chosen to reach every fact the leases collection declares:
+        # all three State words, a lease with no Hostname, and an infinite
+        # valid lifetime, which is the one that renders ExpiresAt as `never`.
+        # Addresses are RFC 5737 documentation space and the MACs are
+        # locally-administered, because this corpus is published.
+        sudo python3 - <<'PLANT' || say "planting leases failed"
+import json, socket, sys
+
+LEASES = [
+    # ip, mac, hostname, valid-lft, state
+    ("192.0.2.100", "02:00:00:00:00:10", "lab-alpha", 3600, 0),
+    ("192.0.2.101", "02:00:00:00:00:11", "lab-beta", 4294967295, 0),
+    ("192.0.2.102", "02:00:00:00:00:12", None, 1800, 1),
+    ("192.0.2.103", "02:00:00:00:00:13", "lab-delta", 900, 2),
+]
+
+
+def call(command, arguments=None):
+    """One command on kea-dhcp4's own socket.
+
+    No `service` member and a list-or-dict reply, matching se-capture-guest's
+    client: `service` is the Control Agent's framing and this talks to the
+    daemon directly, which answers with a bare object.
+    """
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.settimeout(10.0)
+    sock.connect("/run/kea/kea4-ctrl-socket")
+    body = {"command": command}
+    if arguments:
+        body["arguments"] = arguments
+    sock.sendall(json.dumps(body).encode())
+    sock.shutdown(socket.SHUT_WR)
+    chunks = []
+    while True:
+        chunk = sock.recv(65536)
+        if not chunk:
+            break
+        chunks.append(chunk)
+    sock.close()
+    answer = json.loads(b"".join(chunks))
+    return answer[0] if isinstance(answer, list) else answer
+
+
+planted = 0
+for ip, mac, host, lifetime, state in LEASES:
+    args = {"ip-address": ip, "hw-address": mac, "subnet-id": 1,
+            "valid-lft": lifetime, "state": state}
+    if host:
+        args["hostname"] = host
+    answer = call("lease4-add", args)
+    if answer.get("result") != 0:
+        # kea answers result 1 for a duplicate, the same code it uses for a
+        # real rejection, so the add cannot be made idempotent by reading the
+        # code alone. Updating unconditionally after a failed add is what
+        # makes a re-run converge on the same table rather than on whatever
+        # the previous run happened to leave.
+        answer = call("lease4-update", args)
+    if answer.get("result") == 0:
+        planted += 1
+    else:
+        print(f"  lease4-add/update {ip}: {answer.get('text')}", file=sys.stderr)
+
+back = call("lease4-get-all", {"subnets": [1]})
+count = len((back.get("arguments") or {}).get("leases") or [])
+print(f"  planted {planted} leases, daemon reports {count}", file=sys.stderr)
+# Read back, not assumed: a plant nobody confirmed is how a capture of an
+# empty table gets committed as coverage of a full one.
+if count == 0:
+    raise SystemExit("kea reports no leases after planting")
+PLANT
     elif sudo test -e /run/kea; then
         say "kea is up but no control socket appeared — receipt omitted"
     else

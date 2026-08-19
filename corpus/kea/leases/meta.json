@@ -1,0 +1,117 @@
+{
+  "collector": "kea",
+  "collections": [
+    "daemon",
+    "subnets",
+    "reservations",
+    "leases"
+  ],
+  "variant": "healthy",
+  "provenance": "captured",
+  "os": "ubuntu",
+  "os_version": "26.04",
+  "source_version": "kea 3.0.3",
+  "captured": "2026-08-19T17:50:37Z",
+  "regenerable": true,
+  "regenerable_on": "a guest running kea-dhcp4 with the libdhcp_lease_cmds hook LOADED and a control socket the capture user can reach, plus leases in its table. harness/remote/provision-estate.sh stages exactly that — it writes the hooks-libraries entry and then plants four leases through kea's own lease4-add, which ships in the same hook as lease4-get-all, so a guest that can be READ for leases can be staged with them and no file is edited behind the daemon's back. The daemon's uptime, its pid, the statistic sample timestamps and every lease cltt move on each re-stage, so the ExpiresAt anchors below are re-read by hand in the same change or they are asserting a machine that is gone.",
+  "canaries": [],
+  "anonymised": true,
+  "anonymisation_note": "Scrubbed by harness/scrub/kea.json, which gained its lease entries for this capture — until a guest carried the hook there was no lease document to classify, so the manifest could not have covered it and deny-by-default is what said so. Every lease address, hardware address and hostname was substituted, alongside the reservation identifiers and names the sibling variant already exercised. The detectors were run over the committed bytes and reported none.\n\nThree classification decisions are recorded here rather than left in the diff. `arguments.leases.*.client-id` is carried though this capture has none, matching what the reservation entries already do for duid and flex-id — the manifest states what a member carries on ANY host, not what this one happens to hold. `lease-database.name` was tried as content/path and the scrubber REFUSED the run: the memfile path is the distribution's own and has nothing to substitute, so the classification claimed a rule that never engaged; it is `nothing`, in the same class as the control socket and logger paths. And `host`, `user` and `password` — the members the mysql and pgsql backends add beside it — are deliberately left unclassified, so deny-by-default refuses any future capture holding them, which is correct: DESIGN 21 says a credential must never have been captured, and no scrub repairs a payload that holds one.\n\nThe planted values were chosen to be publishable before they were scrubbed as well as after: RFC 5737 documentation addresses, locally-administered MACs, invented hostnames. The scrub still ran over all of them, because a manifest that trusted the stager would be a manifest that stops working the first time somebody captures a real host.",
+  "note": "The hook-loaded counterpart to `kea/no-lease-hook`, and what closes the `kea/leases` named residual. That residual ended \"the tool exists, the guest does not, so this truth stays owed rather than owned\" — this is the guest. FOUR collections, not three.\n\nThe residual named the facts nothing reached, and each is now staged deliberately rather than incidentally:\n\n· All three State words in one table. `default` (two leases), `declined` (one) and `expired-reclaimed` (one), so a port that hard-coded the common case, or that passed Kea's integer through instead of translating it, disagrees on a row rather than on nothing.\n\n· ExpiresAt as `never`. One lease carries valid-lft 4294967295, DHCP's infinite lifetime, which the adapter must special-case: the arithmetic would otherwise assert a concrete year-2162 date. The other three carry ordinary lifetimes and are anchored to the second, so a port that got the special case right and the arithmetic wrong still fails.\n\n· A lease with NO Hostname. Kea reports the empty string, which is falsy, so the fact is omitted rather than published as an empty value — the row beside it that does carry one is what makes that a discrimination instead of a coincidence.\n\n· Every lease carries a Subnet, joined from the config document by subnet-id rather than read off the lease. A port that dropped the join publishes three facts where the reference publishes four.\n\nAnd it changes a shape the sibling states explicitly. There, \"the pool is empty — nothing has ever leased from it — so AssignedAddresses, DeclinedAddresses and UsedPercent are all zero\", anchored as readings so a port dropping zero-valued facts fails. Here they are 3, 1 and 3 against a total of 101, so the arithmetic is exercised in both directions: the sibling proves zero is a reading, this proves the division is right. UsedPercent is a ROUNDED share — 3/101 is 2.97 and the anchor is 3 — so a port that truncated agrees with the sibling and fails here.\n\nWhat this variant still does NOT stage, each a shape a reader might otherwise assume the fourth collection brought with it:\n\n· No lease carries a client-id, because these were planted through lease4-add without one. The member is classified in the manifest and reached by no committed stream.\n\n· The leases all sit in one subnet, so a lease whose subnet-id matches no configured subnet — which must publish no Subnet fact rather than a wrong one — is unvisited.\n\n· No shared-networks, no global reservations, and no failure path: absent, unauthorised and unavailable are three statements this collector must make and this variant makes none of them. All three are inherited limitations of the sibling and are not repaired by loading a hook.\n\n· No names family, no absent list, no unobservable record and no relation assertion.\n\nOne thing this pair now proves that neither variant could alone: `gated_collections` reads list-commands and decides whether `leases` has an interface at all. Both documents are committed, one offering lease4-get-all and one not, so the gate is judged from both sides by replay rather than by reasoning about it.",
+  "anchors": [
+    {
+      "collection": "daemon",
+      "object": "kea-dhcp4",
+      "fact": "Version",
+      "value": "3.0.3"
+    },
+    {
+      "collection": "daemon",
+      "commit_objects": 1
+    },
+    {
+      "collection": "subnets",
+      "object": "192.0.2.0/24",
+      "fact": "SubnetId",
+      "value": 1
+    },
+    {
+      "collection": "subnets",
+      "object": "192.0.2.0/24",
+      "fact": "TotalAddresses",
+      "value": 101
+    },
+    {
+      "collection": "subnets",
+      "object": "192.0.2.0/24",
+      "fact": "AssignedAddresses",
+      "value": 3
+    },
+    {
+      "collection": "subnets",
+      "object": "192.0.2.0/24",
+      "fact": "DeclinedAddresses",
+      "value": 1
+    },
+    {
+      "collection": "subnets",
+      "object": "192.0.2.0/24",
+      "fact": "UsedPercent",
+      "value": 3
+    },
+    {
+      "collection": "subnets",
+      "commit_objects": 1
+    },
+    {
+      "collection": "reservations",
+      "commit_objects": 1
+    },
+    {
+      "collection": "leases",
+      "commit_objects": 4
+    },
+    {
+      "collection": "leases",
+      "object": "192.0.2.84",
+      "fact": "State",
+      "value": "default"
+    },
+    {
+      "collection": "leases",
+      "object": "192.0.2.84",
+      "fact": "ExpiresAt",
+      "value": "2026-08-19T17:50:37Z"
+    },
+    {
+      "collection": "leases",
+      "object": "192.0.2.84",
+      "fact": "Subnet",
+      "value": "192.0.2.0/24"
+    },
+    {
+      "collection": "leases",
+      "object": "192.0.2.87",
+      "fact": "ExpiresAt",
+      "value": "never"
+    },
+    {
+      "collection": "leases",
+      "object": "192.0.2.201",
+      "fact": "State",
+      "value": "declined"
+    },
+    {
+      "collection": "leases",
+      "object": "192.0.2.3",
+      "fact": "State",
+      "value": "expired-reclaimed"
+    },
+    {
+      "collection": "leases",
+      "object": "192.0.2.3",
+      "fact": "ExpiresAt",
+      "value": "2026-08-19T17:05:37Z"
+    }
+  ]
+}

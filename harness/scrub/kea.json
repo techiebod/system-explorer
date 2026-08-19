@@ -67,6 +67,42 @@
     "payload": "statistic-get-all"
   },
 
+  "#leases-are-the-other-risk": "lease4-get-all answers only where libdhcp_lease_cmds is loaded, which is why no manifest entry for it existed until a guest carried the hook. Its disclosure is sharper than config-get's: a reservation names a machine somebody decided to name, while a LEASE names every machine that has actually been on the network, with the address it was given and the moment it asked. Classified by what each member carries on any host, not by this capture — these leases were planted (RFC 5737 addresses, locally-administered MACs, invented hostnames), and a manifest written to that accident would be worthless against a real one. client-id is carried though this capture has none, matching the reservation entries above, which do the same for duid and flex-id.",
+  "arguments.leases.*.ip-address": {
+    "discloses": "location",
+    "format": "ipv4"
+  },
+  "arguments.leases.*.hw-address": {
+    "discloses": "identity",
+    "format": "mac"
+  },
+  "arguments.leases.*.client-id": {
+    "discloses": "identity",
+    "format": "serial"
+  },
+  "arguments.leases.*.hostname": {
+    "discloses": "identity",
+    "format": "name"
+  },
+  "arguments.leases.*.state": {
+    "discloses": "nothing"
+  },
+  "arguments.leases.*.subnet-id": {
+    "discloses": "nothing"
+  },
+  "arguments.leases.*.valid-lft": {
+    "discloses": "nothing"
+  },
+  "arguments.leases.*.cltt": {
+    "discloses": "nothing"
+  },
+  "arguments.leases.*.fqdn-fwd": {
+    "discloses": "nothing"
+  },
+  "arguments.leases.*.fqdn-rev": {
+    "discloses": "nothing"
+  },
+
   "arguments.hash": {
     "discloses": "nothing"
   },
@@ -219,6 +255,17 @@
     "discloses": "nothing"
   },
   "arguments.Dhcp4.lease-database.lfc-interval": {
+    "discloses": "nothing"
+  },
+  "#lease-database-name": "For memfile this is a path on the server, for mysql and pgsql a database name — a server-side storage location either way, in the same class as control-sockets.socket-name and the loggers' output paths, which this manifest already calls `nothing`. It was tried as content/path first and the scrubber refused the run: the memfile path is the distribution's own and carries nothing to substitute, so the classification claimed a rule that never engaged. What those backends DO carry is `host`, `user` and `password`, and those three have no entry here DELIBERATELY — deny-by-default then refuses a capture holding them, which is the correct outcome, because DESIGN 21 says a credential must never have been captured in the first place and no scrub repairs a payload that holds one.",
+  "arguments.Dhcp4.lease-database.name": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.lease-database.persist": {
+    "discloses": "nothing"
+  },
+  "#hook-library-path": "Where the distribution puts a shared object, in the same class as control-sockets.socket-name and the loggers' output paths, all of which this manifest already calls `nothing`. It names software rather than the estate — and which hooks are loaded is exactly what the leases collection's presence turns on, so it is worth being able to read in the corpus.",
+  "arguments.Dhcp4.hooks-libraries.*.library": {
     "discloses": "nothing"
   },
   "arguments.Dhcp4.lease-database.type": {

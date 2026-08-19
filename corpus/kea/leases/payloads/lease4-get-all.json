@@ -1,0 +1,52 @@
+{
+  "arguments": {
+    "leases": [
+      {
+        "cltt": 1787158237,
+        "fqdn-fwd": false,
+        "fqdn-rev": false,
+        "hostname": "host-6bf513",
+        "hw-address": "02:81:1f:0a:dc:c1",
+        "ip-address": "192.0.2.84",
+        "state": 0,
+        "subnet-id": 1,
+        "valid-lft": 3600
+      },
+      {
+        "cltt": 1787158237,
+        "fqdn-fwd": false,
+        "fqdn-rev": false,
+        "hostname": "host-bfbbe6",
+        "hw-address": "02:db:54:c2:68:a1",
+        "ip-address": "192.0.2.87",
+        "state": 0,
+        "subnet-id": 1,
+        "valid-lft": 4294967295
+      },
+      {
+        "cltt": 1787158237,
+        "fqdn-fwd": false,
+        "fqdn-rev": false,
+        "hostname": "",
+        "hw-address": "02:24:94:7a:cb:71",
+        "ip-address": "192.0.2.201",
+        "state": 1,
+        "subnet-id": 1,
+        "valid-lft": 1800
+      },
+      {
+        "cltt": 1787158237,
+        "fqdn-fwd": false,
+        "fqdn-rev": false,
+        "hostname": "host-7070b0",
+        "hw-address": "02:b8:21:f5:11:1a",
+        "ip-address": "192.0.2.3",
+        "state": 2,
+        "subnet-id": 1,
+        "valid-lft": 900
+      }
+    ]
+  },
+  "result": 0,
+  "text": "4 IPv4 lease(s) found."
+}

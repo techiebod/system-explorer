@@ -224,32 +224,16 @@ NAMED_RESIDUALS = {
     # The packages collector reads three interfaces and the corpus captures
     # one. A second variant would close this outright — which is why the entry
     # says so rather than dressing a gap as a boundary.
-    # The kea collector serves four collections and the lab guest can produce
-    # three. Named the day the collector was ported rather than after somebody
-    # noticed the coverage report was quiet about it.
-    "kea/leases": (
-        "lease4-get-all ships in libdhcp_lease_cmds, a HOOK library, so "
-        "whether the leases collection has an interface at all is a property "
-        "of a host's configuration and not of Kea's version. The lab guest "
-        "loads no hooks — corpus/kea/no-lease-hook/payloads/list-commands.json "
-        "is committed as the evidence, and se-capture-guest asks the daemon "
-        "before capturing rather than assuming — so no committed variant opens "
-        "the collection and no mutation operator mints one: an operator ADDS a "
-        "shape to the machine its seed captured, and staging a lease table on a "
-        "Kea that offers no lease commands would swap the machine outright. "
-        "Every fact the collection declares is therefore reached by nothing: "
-        "IpAddress, HwAddress and Hostname on a lease row, the State in Kea's "
-        "own vocabulary, the Subnet joined from the config document by subnet "
-        "id, and ExpiresAt — allocation time plus valid lifetime, or the word "
-        "never for DHCP's infinite lifetime. Venue: a capture from a guest with "
-        "the hook loaded, which is a staging change to the lab and not a code "
-        "change; the live comparator (harness/bin/se-compare) would surface a "
-        "disagreement on such a host, and on a host WITHOUT the hook it already "
-        "surfaces one — the port declines `unsupported` and the shipping "
-        "adapter raises, which is the asymmetry the three-decline-reasons queue "
-        "item names. The tool exists, the guest does not, so this truth stays "
-        "owed rather than owned."
-    ),
+    # `kea/leases` stood here until 2026-08-19 and is CLOSED, not moved: the
+    # residual's own stated venue was "a capture from a guest with the hook
+    # loaded, which is a staging change to the lab and not a code change", and
+    # it ended "the tool exists, the guest does not". The guest now exists —
+    # harness/remote/provision-estate.sh loads libdhcp_lease_cmds and plants
+    # four leases through kea's own lease4-add — and corpus/kea/leases opens
+    # the collection with all three State words, an infinite lifetime rendering
+    # ExpiresAt as `never`, and a lease with no Hostname. The entry is deleted
+    # rather than reworded because a residual describing a gap that has been
+    # filled sends the next reader around an obstacle that is not there.
     # The hardware collector reads five trees and the only guest available to
     # capture it has devices in three of them. These four entries are what
     # that costs, named fact by fact rather than as "some disk facts" — the

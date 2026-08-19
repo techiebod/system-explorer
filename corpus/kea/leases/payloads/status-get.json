@@ -1,0 +1,26 @@
+{
+  "arguments": {
+    "dhcp-state": {
+      "disabled-by-db-connection": [],
+      "disabled-by-local-command": [],
+      "disabled-by-remote-command": [],
+      "disabled-by-user": false,
+      "globally-disabled": false
+    },
+    "multi-threading-enabled": true,
+    "packet-queue-size": 64,
+    "packet-queue-statistics": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "pid": 29417,
+    "reload": 229,
+    "sockets": {
+      "status": "ready"
+    },
+    "thread-pool-size": 4,
+    "uptime": 229
+  },
+  "result": 0
+}
