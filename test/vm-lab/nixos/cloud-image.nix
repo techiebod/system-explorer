@@ -31,7 +31,7 @@
     firewall.allowedTCPPorts = [ 22 ];
   };
 
-  # Keep the base nixosConfiguration independently evaluable. The qcow image
+  # Keep the base nixosConfiguration independently evaluable. The `qemu` image
   # variant refines these with its QEMU guest profile when system.build.images
   # instantiates it.
   fileSystems."/" = {
@@ -42,9 +42,12 @@
 
   environment.systemPackages = [ pkgs.cloud-init ];
 
-  # The qcow image grows on first boot; the per-run overlay is resized by the
-  # lab before libvirt starts it.
-  image.modules.qcow.virtualisation.diskSize = 8192;
+  # The image grows on first boot; the per-run overlay is resized by the lab
+  # before libvirt starts it. `qemu` is the variant that builds a BIOS-booting
+  # qcow2 — matching boot.loader.grub.devices above — and it must be one of
+  # the names nixpkgs' image table defines, because an unknown one declares a
+  # new variant with nothing behind it rather than failing.
+  image.modules.qemu.virtualisation.diskSize = 8192;
 
   system.stateVersion = "26.05";
 }
