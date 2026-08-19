@@ -160,7 +160,7 @@ NAMED_RESIDUALS = {
         "Venue: the live comparator (harness/bin/se-compare), run with an "
         "instance named and its receipts withheld, and again with an app "
         "stopped — where the two implementations' disagreement about the "
-        "failure text is the finding rather than a defect in either."
+        "failure text is the finding rather than a defect in either.\n\nVENUE REPORTED 2026-08-19 (docs/PARITY-REPORT.md): run with no instance configured at all, which is the receipts-withheld case this entry describes. The reference RAISES — RuntimeError, no reading — and the port declines `absent`, which commits zero and retires. Neither side produced the ConfigMissing row this entry is about, so the fact stays unreached; what the run did establish is that the two implementations disagree about the SHAPE of an unconfigured fleet, not merely about a failure sentence."
     ),
     # The two readings a stalling slice takes when its stall is NOT accounted
     # for. Named rather than minted, and the reason is the guard's own rule
@@ -402,7 +402,7 @@ NAMED_RESIDUALS = {
         "implementations agree exactly on ConfigMissing and disagree on "
         "StatusUnobservable, where the reference writes the transport "
         "exception's own text and the port writes a constant phrase, because "
-        "that text is a channel carrying the client URL and sabnzbd's key."
+        "that text is a channel carrying the client URL and sabnzbd's key.\n\nVENUE REPORTED 2026-08-19 (docs/PARITY-REPORT.md): the comparator was run against a guest with NEITHER client configured, and the finding is larger than the facts this entry names. The reference publishes two commits — real rows saying what it was not told — and the port DECLINES both. So the divergence is not a fact's spelling, it is whether an incompletely configured client produces a row at all, and a row that says \"I was not given the API key\" is a finding an operator can act on where a decline is not. The port does not reproduce it."
     ),
     # logs has a seam entry, a built Go port and no committed pair. That was
     # invisible until 2026-08-19, because the coverage guard skipped any
