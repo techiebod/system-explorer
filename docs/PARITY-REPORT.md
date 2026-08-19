@@ -47,7 +47,7 @@ collectors.
 | `protection` | 16 | a manifest and 12 receipts on disk |
 | `servarr` | 8 | **two** instances, radarr and sonarr, API v3 |
 | `traefik` | 6 | a live dashboard over the docker provider |
-| `kea` | 3 | a control socket, with the lease hook loaded |
+| `kea` | 3 | a control socket, with the lease hook loaded and four leases in the table |
 | `downloaders` | 2 | transmission RPC and sabnzbd |
 | `bazarr`, `paperless`, `plex`, `unbound`, `storage` | 1 each | see below |
 
@@ -187,6 +187,68 @@ emits no structural `unobservable` records at all on either side
 contract change touching both declarations, the corpus and both
 implementations. Queued, not guessed.
 
+## The receipt-withheld sweep, and the check that caught what parity could not
+
+Provisioning the venues made a second run possible that the report had never
+had: each app collector re-run with its **key withheld and its URL kept**, which
+is the branch a key rotation actually takes. Five collectors, and the results
+split three ways.
+
+| Collector | Result |
+|---|---|
+| `servarr` | **clean** — 5 objects, 4 commits, both clocks. `ConfigMissing` on one instance of a two-instance fleet |
+| `downloaders` | **clean** — 2 objects |
+| `bazarr` | facts clean, **clock wrong** — see below |
+| `plex` | **clock wrong, and a shape disagreement** — see below |
+| `paperless` | the reference raises; the port declines. Class 1 |
+
+**The `at: 0` defect, in two ports, and the parity check could not see it.** The
+`ConfigMissing` row is built from the process environment and returns *before*
+any document is fetched — and the fetch is what takes the clock reading. So a
+row that rests on no read never got a stamp, and both ports published it with
+`at: 0`, which the contract refuses outright (`0 < at <= 1e9`).
+
+The facts were **identical on both sides**, so a comparator that only diffed
+facts would have called both collectors clean. It was the clock check — the one
+with no replay analogue, since under a pinned clock identical stamps are correct
+— that failed them. Replay cannot reach this branch at all: the seam pins the
+receipts precisely so a replaying host's own environment cannot decide a
+committed row.
+
+Fixed in both. `bazarr` takes the clock after the URL check and before the
+receipt checks, which keeps the no-URL *decline* answerable on a host with no
+`CLOCK_BOOTTIME` — a decline emits no object and owes no stamp, a row does.
+`plex` gained `ready()` on its source interface, called on the one path that
+publishes without reading. Both re-run: clean on all four checks.
+
+**`plex` also disagrees about shape, and the reference is the dangerous half.**
+With the token withheld, the shipping adapter commits `libraries` and `sessions`
+with **zero objects each**. An empty commit is authoritative-empty, so every
+library and every session the estate has published is **retired because a
+variable was unset** — under a server row whose only content is a note that a
+token is missing. The port declines both `unavailable`, naming the 401, and
+retires nothing.
+
+That is the second instance of the queue's *"commits zero with no decline"*
+item, after `packages`, and this one needs no staging to reach: it is what an
+ordinary key rotation does. Recorded, not repaired — the ruling is general now
+rather than about one collector.
+
+**And one venue reported exactly what it promised.** The
+`servarr/instance-config-and-failure` residual predicted that stopping an app
+would produce a disagreement about failure TEXT that neither implementation
+could resolve, because the reference's value is its rendering of an httpx
+exception. Sonarr's container was stopped:
+
+```
+reference:  StatusUnobservable = "ConnectError: All connection attempts failed"
+port:        StatusUnobservable = "sonarr did not answer /system/status"
+```
+
+Everything else agreed — five objects, four commits, both clocks. Both sentences
+are true and neither can produce the other, which is what the residual said it
+would be rather than a defect in either.
+
 ## A note on the venue, because one of them proves less than the others
 
 `protection` is the only venue here whose bytes are authored. Its manifest,
@@ -219,9 +281,22 @@ skips a null payload, and the two sides agree on all 16 objects.
    collections where the port loses one.
 4. **A ruling on `units`' could-not-read channel** — see above.
 
+5. **A ruling on the empty commit**, which `plex` turned from a `packages`
+   curiosity into what a key rotation does.
+
 Item 4 of the previous report, *"receipts for the app collectors"*, is **done**:
 `traefik`, `paperless`, `plex`, `servarr` and `bazarr` all compare on readings
 now, and `downloaders`, `kea`, `unbound` and `protection` came with them.
+
+Two entries left the residual ledger on the strength of these runs, and one
+closed outright. `kea/leases` is **closed**: its stated venue was "a capture
+from a guest with the hook loaded", it ended "the tool exists, the guest does
+not", and `corpus/kea/leases` is that capture — four leases carrying all three
+`State` words, an infinite lifetime rendering `ExpiresAt` as `never`, and a
+lease with no `Hostname`. `bazarr/config-missing` and
+`servarr/instance-config-and-failure` both had their venues **run**; they stay
+in the ledger because the facts are still reached by no committed stream, which
+is what the ledger speaks for, but neither is owed a run any more.
 
 Reproduce with `harness/bin/se-provision-lab <host> --ssh-config <path>`, then
 `se-compare` with `/tmp/se-lab/receipts.env` sourced. Note that the receipts must

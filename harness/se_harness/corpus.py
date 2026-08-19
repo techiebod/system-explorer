@@ -171,7 +171,7 @@ NAMED_RESIDUALS = {
         "Venue: the live comparator (harness/bin/se-compare), run with an "
         "instance named and its receipts withheld, and again with an app "
         "stopped — where the two implementations' disagreement about the "
-        "failure text is the finding rather than a defect in either.\n\nVENUE REPORTED 2026-08-19 (docs/PARITY-REPORT.md): run with no instance configured at all, which is the receipts-withheld case this entry describes. The reference RAISES — RuntimeError, no reading — and the port declines `absent`, which commits zero and retires. Neither side produced the ConfigMissing row this entry is about, so the fact stays unreached; what the run did establish is that the two implementations disagree about the SHAPE of an unconfigured fleet, not merely about a failure sentence."
+        "failure text is the finding rather than a defect in either.\n\nVENUE REPORTED 2026-08-19 (docs/PARITY-REPORT.md): run with no instance configured at all, which is the receipts-withheld case this entry describes. The reference RAISES — RuntimeError, no reading — and the port declines `absent`, which commits zero and retires. Neither side produced the ConfigMissing row this entry is about, so the fact stays unreached; what the run did establish is that the two implementations disagree about the SHAPE of an unconfigured fleet, not merely about a failure sentence.\n\nVENUE OWNED 2026-08-19, both halves, on a two-instance fleet. Receipts withheld: SE_SERVARR_INSTANCES named radarr and sonarr and radarr's key was removed, so the fleet stayed configured and one instance was short a receipt — the case the paragraph above could not reach by unconfiguring everything. Five objects, four commits, both clocks, CLEAN. ConfigMissing is therefore reproduced by the port and no longer an asymmetry; ConfigDuplicate still is, since no run has named one instance twice. App stopped: sonarr's container was stopped and the fleet re-read. Everything agreed except the one value this entry predicted would not — StatusUnobservable, where the reference renders httpx as `ConnectError: All connection attempts failed` and the port says `sonarr did not answer /system/status`. Both are true, neither can produce the other, and that is the finding this entry said it would be rather than a defect in either. QueueUnobservable stays unreached: the queue request is not made once /system/status has already gone dark."
     ),
     # The two readings a stalling slice takes when its stall is NOT accounted
     # for. Named rather than minted, and the reason is the guard's own rule
@@ -339,8 +339,22 @@ NAMED_RESIDUALS = {
         "own environment cannot decide a committed row. Venue: the live "
         "comparator (harness/bin/se-compare), run against a host with the URL "
         "configured and the key withheld, where the reference and the port "
-        "build the row from the same environment. The tool exists and no such "
-        "run has been taken, so this truth stays owed rather than owned."
+        "build the row from the same environment. "
+        "VENUE OWNED 2026-08-19: that run was taken, and it caught a defect no "
+        "other tier could. The facts agreed on the first attempt — one object, "
+        "one commit, the same ConfigMissing list — and the CLOCK did not: the "
+        "port published the row with `at: 0`, which the contract refuses "
+        "(0 < at <= 1e9). The row is built from the environment and returns "
+        "before any fetch, and the fetch is what took the clock reading, so a "
+        "row that rests on no read never got one. Replay cannot see it — the "
+        "seam pins the receipts exactly so a replaying host cannot reach this "
+        "branch — and the facts being identical is why a parity-only check "
+        "would have called it clean. Fixed by taking the clock after the URL "
+        "check and before the receipt checks, which keeps the no-URL decline "
+        "answerable on a host with no CLOCK_BOOTTIME; re-run, clean on all "
+        "four checks. The same shape was found and fixed in the plex port by "
+        "the same sweep. This entry stays because the fact is still reached by "
+        "no committed stream, and the corpus is what it speaks for."
     ),
     "bazarr/status-unobservable": (
         "StatusUnobservable is published where the configured instance did not "
@@ -477,7 +491,23 @@ NAMED_RESIDUALS = {
         "inventing a viewer and a title would be composing the reading rather "
         "than perturbing it. Venue: the live comparator, run against a server "
         "while something is playing — it publishes nothing, which is exactly "
-        "why it is the venue that can own this and the corpus cannot."
+        "why it is the venue that can own this and the corpus cannot.\n\n"
+        "VENUE REPORTED 2026-08-19, on the ConfigMissing third of this entry. "
+        "Run against an unclaimed lab server with SE_PLEX_URL set and "
+        "SE_PLEX_TOKEN withheld, the fact itself agreed — both sides publish "
+        "the server row naming the variable — and TWO other things did not. "
+        "The port stamped the row `at: 0`, because it rests on no document and "
+        "the read path is what takes the clock; fixed, and the identical shape "
+        "was found in bazarr by the same sweep. And the two disagree about the "
+        "other two collections: the reference COMMITS `libraries` and "
+        "`sessions` with zero objects, which is authoritative-empty and "
+        "therefore retires every library and every session on the strength of "
+        "an unset variable, while the port declines both `unavailable` naming "
+        "the 401 and retires nothing. That is the second instance of the "
+        "commits-zero-with-no-decline family the DESIGN queue already carries "
+        "for packages, it is in the retiring direction, and it is recorded "
+        "there rather than repaired here. The sessions facts stay unreached: "
+        "nothing was playing, and nothing on this server can be."
     ),
     # protection carries an AUTHORED variant, so all three of its collections
     # are covered and none is orphaned. What is not covered is anything a
