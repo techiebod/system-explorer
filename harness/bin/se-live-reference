@@ -86,9 +86,11 @@ LIVE = {
                "interface": "docker socket",
                "collections": ["containers", "volumes", "networks"]},
     "traefik": {"module": traefik, "adapter": traefik.Adapter,
+                "receipts": lambda a: a.url is None,
                 "interface": "traefik api",
                 "collections": ["overview", "routers", "services"]},
     "unbound": {"module": unbound, "adapter": unbound.Adapter,
+                "receipts": lambda a: a.socket_path is None,
                 "interface": "unbound control socket",
                 "collections": ["daemon"]},
     # Addressed by environment, like every HTTP-interface adapter here:
@@ -96,8 +98,10 @@ LIVE = {
     # comparator must be given the same receipts the port is or the two sides
     # are answering about different instances.
     "bazarr": {"module": bazarr, "adapter": bazarr.Adapter,
+               "receipts": lambda a: a.url is None,
                "interface": "bazarr api", "collections": ["instance"]},
     "paperless": {"module": paperless, "adapter": paperless.Adapter,
+                  "receipts": lambda a: a.url is None,
                   "interface": "paperless api", "collections": ["instance"]},
     # THREE collections, matching the replay seam rather than the adapter's
     # four. `requests` is seerr's, and it is absent from both sides for the
@@ -106,6 +110,7 @@ LIVE = {
     # every run against a host with no seerr — and against one WITH seerr it
     # would compare a collection no corpus can stage.
     "plex": {"module": plex, "adapter": plex.Adapter,
+             "receipts": lambda a: a.plex_url is None and a.seerr_url is None,
              "interface": "plex api",
              "collections": ["server", "libraries", "sessions"]},
     # Reads files this host publishes, so live means literally that — and it
@@ -117,6 +122,7 @@ LIVE = {
                    "interface": "homelab protection surfaces",
                    "collections": ["targets", "jobs", "destinations"]},
     "kea": {"module": kea, "adapter": kea.Adapter,
+            "receipts": lambda a: a.socket_path is None,
             "interface": "kea control socket",
             "collections": ["daemon", "subnets", "reservations", "leases"]},
     # The one adapter here addressed entirely by environment: SE_TRANSMISSION_
@@ -125,6 +131,7 @@ LIVE = {
     # side — so a comparator run must carry the same receipts the shipping
     # agent would, or the two sides are answering about different deployments.
     "downloaders": {"module": downloaders, "adapter": downloaders.Adapter,
+                    "receipts": lambda a: a.transmission_url is None and a.sab_url is None,
                     "interface": "download client",
                     "collections": ["clients", "transfers"]},
     # Five collections off one tree, and the comparator drives all five: the
@@ -158,6 +165,7 @@ LIVE = {
     # which is exactly the half a replay must never take from its environment
     # and exactly the half this side exists to read.
     "servarr": {"module": servarr, "adapter": servarr.Adapter,
+                "receipts": lambda a: not a.specs,
                 "interface": "servarr api",
                 "collections": ["apps", "health", "queue", "history"]},
 }
@@ -293,16 +301,34 @@ def run(collector: str, generations: dict[str, int]) -> None:
         # The prose reason is NOT parsed. unbound's capability distinguishes
         # not-configured, no-socket-at-the-path and permission-denied in three
         # sentences, and reading intent out of those would be exactly the
-        # inference this refuses. Distinguishing them structurally means a field
-        # on the published capability contract, which is a schema change and
-        # therefore a ruling of its own; until then the imprecision is stated
-        # rather than hidden: a permission failure reports `unavailable` here
-        # where `unauthorised` would be sharper.
+        # inference this refuses.
+        #
+        # So the bridge is narrowed to the case whose OUTCOME the ruling
+        # specifies, and `receipts` is how it is recognised: a predicate over
+        # the adapter's own parsed configuration, declared per collector in the
+        # LIVE table beside everything else this driver knows. It reads the
+        # adapter's attribute rather than the environment, so the receipt has
+        # ONE home — re-reading SE_* here would put the same fact in two files
+        # and let them drift.
+        #
+        # A capability that is unavailable for any OTHER reason still exits 2.
+        # That is deliberate and it is the ruling's shape: a service that is
+        # merely dark IS adjudicated, but the ruling settles the reason and not
+        # the SENTENCE, and the two implementations currently word it
+        # differently — the port says "the configured traefik API did not
+        # answer; the proxy may be restarting", which is truer than anything
+        # this driver could say without inventing it. Bridging that here would
+        # have the reference assert "not configured" about an endpoint that is
+        # configured and simply down, which is a false statement in a decline
+        # detail that travels to a hub. Measured on a stopped traefik,
+        # 2026-08-19: the first version of this bridge did exactly that on all
+        # three collections.
         try:
             gate = await adapter.capability()
         except Exception:  # noqa: BLE001 - a gate that raises is not a reading
-            gate = {"available": True}
-        if not gate.get("available", True):
+            gate = {}
+        unconfigured = spec.get("receipts")
+        if not gate.get("available", True) and unconfigured and unconfigured(adapter):
             for collection in generations:
                 out.decline(collection, "unavailable",
                             f"no {spec['interface']} configured for this process")
