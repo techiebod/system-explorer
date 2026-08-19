@@ -282,6 +282,51 @@ scsi_disk_path() {
   printf '%s/run/%s-scsi.img\n' "${STORAGE_DIR}" "$(domain_name "$1")"
 }
 
+nvme_disk_path() {
+  printf '%s/run/%s-nvme.img\n' "${STORAGE_DIR}" "$(domain_name "$1")"
+}
+
+# Fill an array with the virt-install arguments for an emulated NVMe drive, or
+# return non-zero if it cannot be staged.
+#
+# This is the only device here that libvirt's disk XML cannot express: there is
+# no `bus="nvme"` for an emulated drive — the nvme disk TYPE is VFIO passthrough
+# and wants real hardware — so it goes through qemu's own command line, which
+# libvirt passes verbatim.
+#
+# Two traps, both met on 2026-08-19 and both silent in different ways. A
+# `<qemu:commandline>` block whose namespace is not declared on the root element
+# is DROPPED by libvirt without complaint: the domain defines, starts, and has
+# no device, which reads exactly like a guest that was never given one.
+# virt-install declares the namespace itself, which is the main reason the
+# device is passed here rather than injected afterwards. And qemu's own
+# `-device` bypasses libvirt's PCI allocation, so an unpinned nvme took slot 2
+# and the domain would not start at all.
+#
+# Commas are NOT doubled, which was the third trap and the one that looked
+# most like diligence. virt-install escapes commas in most `--option a,b=c`
+# values, so doubling them here read as the careful choice — but it passes
+# `--qemu-commandline args=` through verbatim, checked against `--print-xml`,
+# and QEMU is the layer that treats `,,` as an escaped literal comma. The
+# doubled form therefore reached qemu as a filename with commas in it:
+# "Could not open '/…/nvme.img,if=none,id=nvmselab,format=raw'". Single commas.
+nvme_install_args() {
+  local -n out="$1"
+  local distro="$2"
+  local image
+  image="$(nvme_disk_path "${distro}")"
+  privileged qemu-img create -f raw "${image}" 512M >/dev/null 2>&1 || return 1
+  # Serial is what the collection publishes; the alphanumeric bound is qemu's.
+  local serial
+  serial="SELABNVME$(printf '%s' "${distro}" | sha256sum | cut -c1-6)"
+  out=(
+    --qemu-commandline "args=-drive"
+    --qemu-commandline "args=file=${image},if=none,id=nvmselab,format=raw"
+    --qemu-commandline "args=-device"
+    --qemu-commandline "args=nvme,drive=nvmselab,serial=${serial},addr=0x10"
+  )
+}
+
 domain_exists() {
   privileged virsh --connect "${LIBVIRT_URI}" dominfo "$(domain_name "$1")" >/dev/null 2>&1
 }
@@ -738,6 +783,28 @@ up_one() {
   fi
 
   log "starting ${name}"
+  # The NVMe device is attempted, and its absence is survivable. It rides
+  # `qemu:commandline`, which bypasses libvirt's PCI address allocation
+  # entirely — the first attempt collided with virtio-net on slot 2 and qemu
+  # refused to start the domain — so the slot is pinned well clear of the range
+  # libvirt allocates from (0x02 upward; a guest here reaches about 0x09). If a
+  # future guest ever grows into 0x10 the install fails LOUDLY rather than
+  # silently, and the retry below brings the guest up without the device. A lab
+  # that will not boot is worse than a lab missing one collection.
+  local nvme_args=()
+  if nvme_install_args nvme_args "${distro}"; then
+    if privileged virt-install "${install_args[@]}" "${nvme_args[@]}"; then
+      unstage_cloud_init "${cloud_init_dir}"
+      stage_scsi_disk "${distro}"
+      stake_claim "${distro}"
+      wait_until_ready "${distro}"
+      return 0
+    fi
+    log "virt-install refused the NVMe device; retrying without it"
+    log "  the guest will come up, and the nvme collection will read nothing on it"
+    privileged virsh --connect "${LIBVIRT_URI}" undefine "${name}" --nvram >/dev/null 2>&1 ||
+      privileged virsh --connect "${LIBVIRT_URI}" undefine "${name}" >/dev/null 2>&1 || true
+  fi
   if ! privileged virt-install "${install_args[@]}"; then
     unstage_cloud_init "${cloud_init_dir}"
     down_one "${distro}" || true
@@ -905,11 +972,11 @@ down_one() {
     privileged virsh --connect "${LIBVIRT_URI}" undefine "${name}" --nvram >/dev/null 2>&1 ||
       privileged virsh --connect "${LIBVIRT_URI}" undefine "${name}" >/dev/null
   fi
-  # The SCSI disk goes with the guest. It is disposable in exactly the way the
-  # root overlay is, and leaving it behind would make the next `up` attach a
-  # file carrying the previous guest's writes.
+  # The SCSI and NVMe images go with the guest. They are disposable in exactly
+  # the way the root overlay is, and leaving one behind would make the next
+  # `up` attach a file carrying the previous guest's writes.
   privileged rm -f -- "${disk}" "$(seed_path "${distro}")" \
-    "$(scsi_disk_path "${distro}")"
+    "$(scsi_disk_path "${distro}")" "$(nvme_disk_path "${distro}")"
   rm -rf -- "${STATE_DIR:?}/${distro}"
   [[ -z "${old_ip}" ]] || forget_host_key "${old_ip}"
 }
