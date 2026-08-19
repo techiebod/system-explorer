@@ -202,7 +202,7 @@ func (d *declined) Error() string { return d.reason + ": " + d.detail }
 //
 // What still retires is a genuine absence, and a missing receipt cannot
 // establish one from here.
-var declineNoServer = declined{"unavailable", "no plex api on this host"}
+var declineNoServer = declined{"unavailable", "no plex api configured for this process"}
 
 // The server is addressed and this deployment cannot open it. The `server` row
 // states this as ConfigMissing and stays — the standing signal that the estate

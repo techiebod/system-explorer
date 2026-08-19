@@ -148,7 +148,7 @@ func (d *declined) Error() string { return d.reason + ": " + d.detail }
 //
 // What still retires is a genuine absence, and a missing receipt cannot
 // establish one from here.
-var declineNoClient = declined{"unavailable", "no download client on this host"}
+var declineNoClient = declined{"unavailable", "no download client configured for this process"}
 
 // errUncaptured marks a document the variant did not stage. It must never fall
 // back to the live interface of the machine REPLAYING the corpus — that seam

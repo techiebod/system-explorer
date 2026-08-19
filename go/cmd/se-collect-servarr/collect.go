@@ -154,9 +154,18 @@ func collect(stdout, stderr io.Writer, src source, order []string, generations m
 	}
 	switch {
 	case refused != nil, errors.As(err, &refused):
-		// absent is authoritative-empty: it must be able to retire the rows a
-		// previous batch published, so it declines AND commits zero — for
-		// every requested collection, or the ones it skipped are never retired.
+		// `absent` is authoritative-empty and commits zero for every requested
+		// collection, or the ones it skipped are never retired. Every OTHER
+		// reason commits nothing: nothing was established, so prior state
+		// stands and the collator marks it stale.
+		//
+		// Keyed on the reason and not on which constant was raised. This used
+		// to commit unconditionally, which was correct only while
+		// declineNoInstances was `absent` — the moment the configuration-gap
+		// ruling moved it to `unavailable` (2026-08-19) this block began
+		// committing after a decline that establishes nothing, and the stream
+		// law caught it: "a 'unavailable' decline must not commit". The same
+		// latent coupling was in downloaders.
 		for _, collection := range order {
 			if _, serves := served[collection]; !serves {
 				out.emit(unsupportedFor(collection))
@@ -168,8 +177,10 @@ func collect(stdout, stderr io.Writer, src source, order []string, generations m
 				Reason:     refused.reason,
 				Detail:     refused.detail,
 			})
-			out.emit(commitRecord{Record: "commit", Collection: collection,
-				Generation: generations[collection]})
+			if refused.reason == "absent" {
+				out.emit(commitRecord{Record: "commit", Collection: collection,
+					Generation: generations[collection]})
+			}
 		}
 		return finish(out, stderr, src, batch)
 	case err != nil:

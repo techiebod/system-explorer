@@ -269,6 +269,45 @@ def run(collector: str, generations: dict[str, int]) -> None:
     # its place, on its own apparatus rather than on a port.
     async def batch() -> None:
         emitted = 0
+
+        # The adapter's OWN statement that it cannot serve this host, asked
+        # once and before anything is acquired.
+        #
+        # RULED 2026-08-19 (appendix C, "the three non-absent decline reasons"):
+        # the shipping adapters gain declines PER CASE and after adjudication,
+        # never as a blanket bridge from exception to decline — that would make
+        # the two implementations agree BY CONSTRUCTION and the comparator would
+        # stop discriminating exactly on the cases nobody has judged. This is
+        # the first such case and it is the adjudicated one: a deployment
+        # receipt that was never set.
+        #
+        # `unavailable`, and NOT because the reason was inferred — because it is
+        # the only reason that is true of everything reachable here. The adapter
+        # has said it cannot serve; it has NOT said the thing is absent, and
+        # `absent` is the one reason that commits and retires. So the
+        # conservative reading is also the correct one, and it is safe by
+        # construction: nothing this branch emits can ever retire a row.
+        # Genuine absence keeps its own path — the UnknownCollection bridge
+        # below, which is where a capability gate says "there are none here".
+        #
+        # The prose reason is NOT parsed. unbound's capability distinguishes
+        # not-configured, no-socket-at-the-path and permission-denied in three
+        # sentences, and reading intent out of those would be exactly the
+        # inference this refuses. Distinguishing them structurally means a field
+        # on the published capability contract, which is a schema change and
+        # therefore a ruling of its own; until then the imprecision is stated
+        # rather than hidden: a permission failure reports `unavailable` here
+        # where `unauthorised` would be sharper.
+        try:
+            gate = await adapter.capability()
+        except Exception:  # noqa: BLE001 - a gate that raises is not a reading
+            gate = {"available": True}
+        if not gate.get("available", True):
+            for collection in generations:
+                out.decline(collection, "unavailable",
+                            f"no {spec['interface']} configured for this process")
+            return
+
         for collection in generations:
             at = time.clock_gettime(time.CLOCK_BOOTTIME)
             try:

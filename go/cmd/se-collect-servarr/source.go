@@ -126,7 +126,7 @@ func (d *declined) Error() string { return d.reason + ": " + d.detail }
 //
 // What still retires is a genuine absence, and a missing receipt cannot
 // establish one from here.
-var declineNoInstances = declined{"unavailable", "no servarr api on this host"}
+var declineNoInstances = declined{"unavailable", "no servarr api configured for this process"}
 
 // errNotFound is one app answering "I have no such endpoint" — prowlarr's
 // /queue and /queue/status, which are 404 with no body at all. It is a reading

@@ -468,10 +468,13 @@ func nullPaths(node any, path string) []string {
 	return nil
 }
 
-// No payload at all is a host that fronts no fleet: absent is
-// authoritative-empty, so it declines AND commits zero for every collection,
-// which is what lets it retire the rows a previous batch published.
-func TestNoFleetDeclinesAbsentAndCommitsZeroForEveryCollection(t *testing.T) {
+// No payload at all is a host whose deployment named no fleet — which is not
+// the same as a host that fronts none, and RULED 2026-08-19 it may not retire.
+// Every requested collection declines `unavailable`, and NOTHING commits: no
+// reason but `absent` commits, so prior state stands and the collator marks it
+// stale. This test asserted the opposite until that ruling, and the assertion
+// moved with it rather than being deleted.
+func TestNoFleetDeclinesUnavailableForEveryCollectionAndCommitsNothing(t *testing.T) {
 	env := map[string]string{"SE_REPLAY_DIR": t.TempDir()}
 	code, stdout, stderr := runWith(t, wholeRequest, env)
 	if code != exitOK {
@@ -481,15 +484,9 @@ func TestNoFleetDeclinesAbsentAndCommitsZeroForEveryCollection(t *testing.T) {
 	if declines := ofKind(records, "decline"); len(declines) != 4 {
 		t.Fatalf("every requested collection is declined, not just the first; got %v", declines)
 	}
-	commits := ofKind(records, "commit")
-	if len(commits) != 4 {
-		t.Fatalf("absent commits zero, and it must commit for EVERY collection or "+
-			"the ones it skipped are never retired; got %v", commits)
-	}
-	for _, commit := range commits {
-		if commit["objects"] != 0.0 || commit["assertions"] != 0.0 || commit["unobservable"] != 0.0 {
-			t.Errorf("absent commits zero of all three; got %v", commit)
-		}
+	if commits := ofKind(records, "commit"); len(commits) != 0 {
+		t.Fatalf("an unnamed fleet establishes nothing, so no collection may be "+
+			"retired here; got %v", commits)
 	}
 	if len(ofKind(records, "object")) != 0 {
 		t.Fatal("a declined collection carries no records of any kind")

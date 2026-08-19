@@ -93,7 +93,7 @@ func (d *declined) Error() string { return d.reason + ": " + d.detail }
 //
 // What still retires is a genuine absence, and a missing receipt cannot
 // establish one from here.
-var declineNoSocket = declined{"unavailable", "no unbound control socket on this host"}
+var declineNoSocket = declined{"unavailable", "no unbound control socket configured for this process"}
 
 // The socket is there and this collector may not open it. Distinct from
 // absence in the one respect that matters: unauthorised commits nothing, so a

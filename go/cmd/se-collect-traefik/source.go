@@ -136,7 +136,7 @@ func (d *declined) Error() string { return d.reason + ": " + d.detail }
 //
 // What still retires is a genuine absence, and a missing receipt cannot
 // establish one from here.
-var declineNoAPI = declined{"unavailable", "no traefik api on this host"}
+var declineNoAPI = declined{"unavailable", "no traefik api configured for this process"}
 
 // The API answered and refused this collector. `unauthorised` is a deployment
 // error and never commits: the routes are live right now, so retiring the whole
