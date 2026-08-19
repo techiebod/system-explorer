@@ -1,3 +1,3 @@
-{"batch":"replay","boot_id":"5e000000-0000-4000-8000-000000000001","declaration":"sha256:replay","generations":{"nft-chains":198},"instance":null,"record":"begin","request":"replay","timens":0}
-{"assertions":0,"collection":"nft-chains","generation":198,"objects":0,"record":"commit","unobservable":0}
-{"batch":"replay","cpu_ms":0.5,"record":"end","request":"replay","wall_ms":1.0}
+{"record":"begin","request":"replay","batch":"replay","declaration":"sha256:50eb5dff413ef72db79566505094fa9386cda75ec2f98137f9f3171b2db0887f","boot_id":"5e000000-0000-4000-8000-000000000001","timens":0,"instance":null,"generations":{"nft-chains":21438}}
+{"record":"commit","collection":"nft-chains","generation":21438,"objects":0,"assertions":0,"unobservable":0}
+{"record":"end","request":"replay","batch":"replay","cpu_ms":0.5,"wall_ms":1}

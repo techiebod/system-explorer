@@ -132,11 +132,24 @@ def issue_generations(collections: Iterable[str], seed: str) -> dict[str, int]:
     channel. crc32 is not secrecy and does not need to be: the property is
     that no constant passes EVERYWHERE, so a collector must parse the
     request line rather than bake in a number that happens to match one
-    variant. The range 103..997 excludes 0 and 100 by construction — the
-    two constants adversaries have actually shipped — and stays boot-scale
-    small so a committed pair reads as issued, not measured.
+    variant. The range excludes 0 and 100 by construction — the two
+    constants adversaries have actually shipped.
+
+    THE RANGE IS WIDE BECAUSE DISTINCTNESS IS THE PROPERTY, and the first
+    spelling of it was 103..997. 895 slots is a birthday problem: at the
+    25 variants this corpus already held, the chance that some pair
+    collided was better than one in three, and on 2026-08-19 a pair did —
+    paperless/healthy and storage/healthy both issued 458, which is a
+    constant that would have passed both. Nothing was wrong with the new
+    variant; the issuance was sized for a corpus a third this size and
+    would have failed again on the one after. A scheme whose guard fails
+    a third of the time it is extended is the subset-guard shape wearing
+    arithmetic, so the modulus is now large enough that distinctness is
+    the ordinary outcome rather than the lucky one. The guard still
+    ASSERTS it — a collision is caught, never assumed away — and these
+    stay small enough to read as issued rather than measured.
     """
-    base = 103 + zlib.crc32(seed.encode()) % 895
+    base = 103 + zlib.crc32(seed.encode()) % 99895
     return {name: base + 17 * i for i, name in enumerate(sorted(collections))}
 
 

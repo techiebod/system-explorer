@@ -1,4 +1,4 @@
-{"record":"begin","request":"replay","batch":"replay","declaration":"sha256:50eb5dff413ef72db79566505094fa9386cda75ec2f98137f9f3171b2db0887f","boot_id":"5e000000-0000-4000-8000-000000000001","timens":0,"instance":null,"generations":{"nft-chains":487}}
+{"record":"begin","request":"replay","batch":"replay","declaration":"sha256:50eb5dff413ef72db79566505094fa9386cda75ec2f98137f9f3171b2db0887f","boot_id":"5e000000-0000-4000-8000-000000000001","timens":0,"instance":null,"generations":{"nft-chains":30487}}
 {"record":"object","collection":"nft-chains","name":"ip asym shared","facts":{"BaseChain":false,"Family":"ip","Handle":1,"JumpedFrom":["input"],"Name":"shared","RuleCount":1,"Table":"asym"},"at":1}
 {"record":"relation_assertion","collection":"nft-chains","name":"ip asym shared","type":"member-of","vantage":"nft-chains","target":{"kind":"nft-table","name":"ip asym"}}
 {"record":"object","collection":"nft-chains","name":"ip asym input","facts":{"BaseChain":true,"Family":"ip","Handle":2,"Hook":"input","Name":"input","Policy":"accept","Priority":0,"RuleCount":1,"Table":"asym","Type":"filter"},"at":1.001}
@@ -7,5 +7,5 @@
 {"record":"relation_assertion","collection":"nft-chains","name":"ip6 asym shared","type":"member-of","vantage":"nft-chains","target":{"kind":"nft-table","name":"ip6 asym"}}
 {"record":"object","collection":"nft-chains","name":"ip6 asym input","facts":{"BaseChain":true,"Family":"ip6","Handle":2,"Hook":"input","Name":"input","Policy":"accept","Priority":0,"RuleCount":0,"Table":"asym","Type":"filter"},"at":1.003}
 {"record":"relation_assertion","collection":"nft-chains","name":"ip6 asym input","type":"member-of","vantage":"nft-chains","target":{"kind":"nft-table","name":"ip6 asym"}}
-{"record":"commit","collection":"nft-chains","generation":487,"objects":4,"assertions":4,"unobservable":0}
+{"record":"commit","collection":"nft-chains","generation":30487,"objects":4,"assertions":4,"unobservable":0}
 {"record":"end","request":"replay","batch":"replay","cpu_ms":0.5,"wall_ms":1}
