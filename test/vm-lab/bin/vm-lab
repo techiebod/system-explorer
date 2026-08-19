@@ -313,7 +313,7 @@ load_image() {
   IMAGE_BOOT="uefi"
   # The login shell cloud-init gives the test user. Per-distro because it is a
   # PATH, and a path is a property of the image: sshd refuses an account whose
-  # shell does not exist — "User henry not allowed because shell /bin/bash does
+  # shell does not exist — "User <lab-user> not allowed because shell /bin/bash does
   # not exist" — before it ever consults authorized_keys, so the wrong value
   # here presents as a publickey rejection on a guest whose user, key and sudo
   # rule are all correctly in place.
@@ -747,6 +747,10 @@ up_one() {
 # The namespace the claim lives under. A URI rather than a bare word because
 # libvirt keys metadata by namespace URI; it need not resolve.
 CLAIM_URI="https://github.com/techiebod/system-explorer/vm-lab"
+# The XML prefix libvirt binds that URI to inside the domain's <metadata>.
+# `virsh metadata --set` REFUSES without it — "namespace key is required when
+# modifying metadata" — which is how the first version of this failed.
+CLAIM_KEY="vmlab"
 
 # Say, on the domain itself, who parked this guest here and when.
 #
@@ -780,19 +784,35 @@ CLAIM_URI="https://github.com/techiebod/system-explorer/vm-lab"
 stake_claim() {
   local distro="$1" name
   name="$(domain_name "${distro}")"
+  # No xmlns of its own: libvirt binds CLAIM_URI to CLAIM_KEY and rewrites the
+  # element, storing <vmlab:vm-lab xmlns:vmlab="…"> with every child prefixed.
+  # Declaring a default namespace here as well produced a mixed form
+  # (xmlns:vmlab on an unprefixed element) that is nobody's intent. What the
+  # consumer sees from `virsh metadata --uri …` is the readback, and the
+  # readback is plain-tag XML: <vm-lab><owner>…</owner><staked>…</staked>.
   local claim
-  claim="<vm-lab xmlns=\"${CLAIM_URI}\">"
+  claim="<vm-lab>"
   claim+="<owner>system-explorer vm-lab</owner>"
   claim+="<purpose>disposable conformance lab guest; rebuilt on demand</purpose>"
   claim+="<staked>$(date -u +%Y-%m-%dT%H:%M:%SZ)</staked>"
   claim+="</vm-lab>"
-  if privileged virsh --connect "${LIBVIRT_URI}" metadata "${name}" \
-      --uri "${CLAIM_URI}" --set "${claim}" --config --live >/dev/null 2>&1 ||
-     privileged virsh --connect "${LIBVIRT_URI}" metadata "${name}" \
-      --uri "${CLAIM_URI}" --set "${claim}" --config >/dev/null 2>&1; then
+  # The error text is captured rather than discarded, and shown when both
+  # attempts fail. The first version sent it to /dev/null and the run said only
+  # that the claim did not stake — the actual reason, "namespace key is
+  # required when modifying metadata", had to be rediscovered by hand against a
+  # live host. A best-effort step still owes its reason.
+  local problem
+  if problem="$(privileged virsh --connect "${LIBVIRT_URI}" metadata "${name}" \
+      --uri "${CLAIM_URI}" --key "${CLAIM_KEY}" --set "${claim}" \
+      --config --live 2>&1)"; then
     log "claimed ${name} for system-explorer vm-lab"
+  elif problem="$(privileged virsh --connect "${LIBVIRT_URI}" metadata "${name}" \
+      --uri "${CLAIM_URI}" --key "${CLAIM_KEY}" --set "${claim}" \
+      --config 2>&1)"; then
+    log "claimed ${name} for system-explorer vm-lab (config only)"
   else
     log "could not stake a claim on ${name}; it will read as unaccounted for"
+    log "  virsh said: ${problem}"
   fi
 }
 

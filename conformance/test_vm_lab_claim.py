@@ -74,7 +74,8 @@ def test_the_namespace_is_the_one_the_estate_reads() -> None:
     """A changed URI is a silent break: the consumer finds no claim and reports
     the guest as unaccounted for, which is the exact wrong answer this exists to
     prevent — and nothing fails on either side."""
-    assert EXPECTED_URI in CLAIM, (
+    src = SCRIPT.read_text()
+    assert f'CLAIM_URI="{EXPECTED_URI}"' in src, (
         f"vm-lab's claim namespace moved away from {EXPECTED_URI}. The estate's "
         "vestige report keys on it, so changing it makes every lab guest read "
         "as drift again, with no failure anywhere to say so. Coordinate the "
@@ -97,15 +98,55 @@ def test_each_value_is_its_own_element(key: str) -> None:
     Extra elements are free for it; a changed SHAPE is not, so collapsing these
     into a single string — or renaming one — has to fail here rather than in
     somebody else's report.
+
+    Plain tag names, no namespace: libvirt binds the URI to CLAIM_KEY when it
+    stores the element, and `virsh metadata --uri …` hands the consumer the
+    readback, which is unprefixed. An earlier version of this test looked the
+    children up IN the namespace — it passed, because it was checking the XML
+    this script builds rather than the shape the consumer is given, and those
+    are not the same document.
     """
     root = ElementTree.fromstring(CLAIM)
-    element = root.find(f"{{{EXPECTED_URI}}}{key}")
+    element = root.find(key)
     assert element is not None, (
         f"the claim carries no <{key}> element of its own. The estate's reader "
         f"looks up {key} by name; a blob it has to parse positionally couples "
         "the two repositories to a schema version neither of them checks."
     )
     assert (element.text or "").strip(), f"<{key}> is present but empty"
+
+
+def test_the_claim_carries_no_namespace_of_its_own() -> None:
+    """libvirt supplies it, and declaring one here produced a mixed form.
+
+    Passing `xmlns="…"` alongside `--key` made libvirt emit
+    `<vm-lab xmlns:vmlab="…">` — an unprefixed element carrying a prefixed
+    declaration nothing uses, which is nobody's intent and is not what the
+    consumer's parser was described. Proven against a live libvirt on
+    2026-08-19: with no xmlns, the domain stores `<vmlab:vm-lab>` with every
+    child prefixed, and the readback is clean.
+    """
+    assert "xmlns" not in CLAIM, (
+        "the claim declares its own namespace; libvirt binds CLAIM_URI to "
+        "CLAIM_KEY and doing both yields a mixed form"
+    )
+
+
+def test_the_set_passes_the_namespace_key() -> None:
+    """`virsh metadata --set` refuses without `--key`.
+
+    "namespace key is required when modifying metadata" — and the first
+    version of this omitted it, so every claim silently failed to stake while
+    the lab came up green. The guard is here because that failure is invisible
+    from this side: stake_claim is best-effort by design, so a missing --key
+    costs a log line and nothing else.
+    """
+    src = SCRIPT.read_text()
+    assert re.search(r'--key\s+"\$\{CLAIM_KEY\}"', src), (
+        "stake_claim does not pass --key to `virsh metadata --set`, which "
+        "refuses without it. The claim will never stake, and because the step "
+        "is best-effort the only symptom is one log line."
+    )
 
 
 # What the claim is allowed to say. An ALLOWLIST, and the first draft of this
