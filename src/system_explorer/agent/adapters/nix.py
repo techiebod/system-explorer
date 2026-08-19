@@ -632,10 +632,18 @@ class Adapter:
                 facts.update(self._deployment_facts(number, manifest, receipts_visible))
             # Only the running generation is positively vouched for; the rest
             # are neutral history unless a rule fires.
-            items.append(env.item_summary(
+            item = env.item_summary(
                 f"generation:{number}", "generation", str(number), facts,
                 opinions=generation_opinions(facts),
-                healthy="ok" if facts["Current"] else "info"))
+                healthy="ok" if facts["Current"] else "info")
+            # Law 1: the closure IS the durable name. A generation NUMBER is
+            # this machine's counter — the same configuration is generation 3
+            # here and 147 there — so a collator keying on it alone can never
+            # say that two hosts are running the same system, and a profile
+            # rolled back renumbers what it points at. The store path is a
+            # hash of what built the closure, so it answers both.
+            item["names"] = {"stable": {"store-path": target}}
+            items.append(item)
         return items
 
     # ── plumbing ─────────────────────────────────────────────

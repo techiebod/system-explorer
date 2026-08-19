@@ -274,6 +274,23 @@ EXPECTED = (
     # drops. If this goes red here, the replay judge has grown a rule that sees
     # an address no committed capture holds — DESIGN 20's trap statement and
     # test_differential.py's case table move together, not this row alone.
+    # ── GREEN, adjudicated: three nix readings every ordinary host agrees
+    # with. Each is the third trap in its purest form — the shortcut is
+    # correct on every machine the corpus holds, so the replay judge honestly
+    # passes it and the differential guard owns the red.
+    Expectation("a11_nix_pointer_derived.py", None, "nix/attested", "GREEN",
+                "Booted derived from Current, which no committed capture can "
+                "expose: current and booted name one closure on every "
+                "captured machine, so the two rows are identical and the "
+                "differential guard owns the red"),
+    Expectation("a11_nix_empty_release.py", None, "nix/attested", "GREEN",
+                "an unrecorded release published as the empty string, which "
+                "no committed capture can expose: every captured closure "
+                "records its nixos-version, so the substitution never fires"),
+    Expectation("a11_nix_profile_by_position.py", None, "nix/attested", "GREEN",
+                "the profile directory filtered by shape rather than by "
+                "parsing the number, which no committed capture can expose: "
+                "every captured profile holds only what nix put there"),
     Expectation("a9_address_blind.py", None, "vms/healthy", "GREEN",
                 "a domain row with no address fact, which no committed guest "
                 "can expose: the captured domain is shut off, so both "
@@ -534,6 +551,18 @@ ADJUDICATED_GREEN = {
     ("a8_l2cache_blind.py", None): "the third trap: replay cannot see the "
     "l2cache group no committed pool holds (DESIGN 20); the differential "
     "guard owns this red, under zpool-cache-vdev",
+    ("a11_nix_pointer_derived.py", None): "the third trap: replay cannot see "
+    "a machine whose booted closure is neither its current one nor its "
+    "profile, because every captured host has current == booted (DESIGN 20); "
+    "the differential guard owns this red, under nix-pointers-disagree",
+    ("a11_nix_empty_release.py", None): "the third trap: replay cannot see a "
+    "closure that records no release, because every captured one does "
+    "(DESIGN 20); the differential guard owns this red, under "
+    "nix-release-unrecorded",
+    ("a11_nix_profile_by_position.py", None): "the third trap: replay cannot "
+    "see a profile directory carrying a link nix did not make, because every "
+    "captured one holds exactly what nix put there (DESIGN 20); the "
+    "differential guard owns this red, under nix-profile-intruder",
     ("a9_address_blind.py", None): "the third trap: replay cannot see an "
     "address no committed guest holds, because the only captured domain is "
     "shut off (DESIGN 20); the differential guard owns this red, under "

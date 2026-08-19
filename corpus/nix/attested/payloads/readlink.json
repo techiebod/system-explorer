@@ -1,0 +1,8 @@
+{
+  "/nix/var/nix/profiles": {
+    "system-1-link": "/nix/store/fpz72mwmm0331by0q504x35d288ndrrm-nixos-system-nixos-qcow2-26.05.20260807.ee48b14",
+    "system-2-link": "/nix/store/31i784rx1cpbqw5jd8nbhsp7bfi9a570-nixos-system-nixos-26.05pre-git",
+    "system-3-link": "/nix/store/paf5nl9jb7c853z06dwdxzx36wgdpnbf-nixos-system-nixos-26.05pre-git",
+    "system-4-link": "/nix/store/yw5avx4w8djazkxax03f8xy46i1wr8ld-nixos-system-nixos-26.05pre-git"
+  }
+}

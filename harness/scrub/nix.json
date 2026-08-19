@@ -7,17 +7,26 @@
 
   "#the_one_identifying_token_inside_a_store_path": "A system closure is named `nixos-system-<hostname>-<version>`, so the host's OWN name sits inside the path. No pattern here scrubs it, because it is not a field — it is a substring of a value whose other half must survive — and the tool's mechanism for an operator-chosen word inside free text is the run's --hostnames pass, exactly as it is for a libvirt domain name. ON THIS CAPTURE it did not need to fire: the guest carries nixpkgs' default hostname, the literal string `nixos`, which discloses nothing about any estate and could not be substituted anyway without mangling `nixos-version`, `nixos-system` and the distribution's own vocabulary. A re-stage on a host with a real hostname MUST pass it through --hostnames, and this paragraph is the only thing that says so.",
 
+  "#the_revision_is_prose_deliberately_and_it_is_a_recorded_GAP": "A VCS revision is ONE identifier, and `prose` — unbounded text that may carry an identifier and routinely carries none — is the wrong shape for it. It is taken anyway, deliberately, because the alternative available today is worse: classifying the standalone `configuration-revision` as identity substitutes it, while the IDENTICAL revision inside se-generation.json is prose and survives verbatim, so one identifier ends up with two spellings that disagree — which is precisely the join-that-does-not-exist the vms manifest warns about, measured here on 2026-08-19 (ANONAAE96CDBE1D01517D4AABCFA19C72BAD in one place, 9f3c1e70… in the other). The scrubber has no VCS-revision shape, so no substitution can be consistent across both; the gap is in the adjudication queue. Until it closes, a nix variant may only be staged from a guest whose revision is FABRICATED, which is what this one is and what regenerable_on says.",
+
   "#nixos_version_is_a_release_not_a_machine": "nixos-version is the closure's record of which nixpkgs built it, the same string on every host running that release. configuration-revision and se-generation.json are the other half: a VCS revision and a build manifest naming the repository that builds the estate, which is estate-authored content whatever it happens to be on this guest — both are empty here because nothing wrote them, and classifying by what a capture happens to contain is how a manifest comes to be wrong on the next host.",
 
   "#mtime_is_a_measurement": "A profile link's mtime is when that generation was activated: a measurement of an event, not a property of a machine, and already published verbatim as the Created fact.",
 
   "#member_keys": "Every payload's second level is keyed by a FILENAME — nixos-version, kernel, system-2-link, specialisation — so each needs its own '*.~key' beside the container one. They are the names nix and nixpkgs give their own files, identical on every host, with one thing in them that varies: a profile link carries its generation NUMBER, which is a counter of how many times this machine has been rebuilt and not an identifier of it.",
 
+  "#receipts_are_read_through_the_same_primitive": "A deployment receipt is a file, so it arrives in read.json beside the closure files — under the receipts DIRECTORY as its container. It is addressed by that literal container path rather than by a wildcard, because a wildcard there would also claim `nixos-version` and the two-entry refusal is the point: the closure files and the receipts are different fields with different classifications, and only the container tells them apart. A capture taken with receipts somewhere else needs a line here, which is deny-by-default working rather than a defect — the same shape as hardware's four sysfs attributes that force a re-stage on a host with disks.",
+
+  "#the_receipts_path_is_nothing_in_both_places_it_appears": "The directory where deployment receipts are kept is a convention, identical on every host of an estate that keeps them, and it names a directory rather than a machine — so it is `nothing` and travels verbatim. It appears TWICE, once as the receipts-dir payload's whole value and once as a container key inside read.json, and both carry the same classification: a specimen where the two diverged would teach a join that does not exist. Reclassifying it would therefore mean reclassifying both, and `format: path` is specifically the wrong answer — the substitution engages on identifying components, this path has none, and the run refuses rather than printing `scrubbed` over a value nothing touched.",
+
   "read:~key": {"discloses": "nothing"},
   "read:*.~key": {"discloses": "nothing"},
   "read:*.nixos-version": {"discloses": "nothing"},
-  "read:*.configuration-revision": {"discloses": "content"},
-  "read:*.se-generation\\.json": {"discloses": "content"},
+  "read:*.configuration-revision": {"discloses": "content", "format": "prose"},
+  "read:*.se-generation\\.json": {"discloses": "content", "format": "prose"},
+  "read:/var/lib/se/receipts.*": {"discloses": "content", "format": "prose"},
+
+  "receipts-dir": {"payload": "receipts-dir", "whole": {"discloses": "nothing"}},
 
   "listdir:~key": {"discloses": "nothing"},
   "listdir:*.~key": {"discloses": "nothing"},

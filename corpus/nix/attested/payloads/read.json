@@ -1,0 +1,26 @@
+{
+  "/nix/store/31i784rx1cpbqw5jd8nbhsp7bfi9a570-nixos-system-nixos-26.05pre-git": {
+    "configuration-revision": "",
+    "nixos-version": "26.05pre-git",
+    "se-generation.json": ""
+  },
+  "/nix/store/fpz72mwmm0331by0q504x35d288ndrrm-nixos-system-nixos-qcow2-26.05.20260807.ee48b14": {
+    "configuration-revision": "",
+    "nixos-version": "qcow2-26.05.20260807.ee48b14",
+    "se-generation.json": ""
+  },
+  "/nix/store/paf5nl9jb7c853z06dwdxzx36wgdpnbf-nixos-system-nixos-26.05pre-git": {
+    "configuration-revision": "",
+    "nixos-version": "26.05pre-git",
+    "se-generation.json": "{\"schema\": 2,\n \"revision\": \"9f3c1e70a4d25b8816cbe3f42a7d90e5c6b17a48\",\n \"receiptsExpected\": true,\n \"inputs\": {\"nixpkgs\": {\"revision\": \"ee48b147c18c7de1e6ec97dc74792be42724bed1\",\n                        \"narHash\": \"sha256-ZuvZfVW2tB5tXYEcpcfhVXB3N4OhdZLOqOviy4OD4b4=\",\n                        \"lastModified\": 1786089803}}}"
+  },
+  "/nix/store/yw5avx4w8djazkxax03f8xy46i1wr8ld-nixos-system-nixos-26.05pre-git": {
+    "configuration-revision": "9f3c1e70a4d25b8816cbe3f42a7d90e5c6b17a48",
+    "nixos-version": "26.05pre-git",
+    "se-generation.json": "{\"schema\": 2,\n \"revision\": \"9f3c1e70a4d25b8816cbe3f42a7d90e5c6b17a48\",\n \"receiptsExpected\": true,\n \"inputs\": {\"nixpkgs\": {\"revision\": \"ee48b147c18c7de1e6ec97dc74792be42724bed1\",\n                        \"narHash\": \"sha256-ZuvZfVW2tB5tXYEcpcfhVXB3N4OhdZLOqOviy4OD4b4=\",\n                        \"lastModified\": 1786089803}}}"
+  },
+  "/var/lib/se/receipts": {
+    "3.json": "",
+    "4.json": "{\n  \"generation\": 4,\n  \"activation\": {\n    \"mode\": \"boot\",\n    \"outcome\": \"VERIFIED\",\n    \"verified_at\": \"2026-08-19T22:40:00Z\"\n  },\n  \"risks\": [\"kernel-change\"],\n  \"source\": {\n    \"git_revision\": \"9f3c1e70a4d25b8816cbe3f42a7d90e5c6b17a48\",\n    \"branch\": \"main\"\n  }\n}"
+  }
+}

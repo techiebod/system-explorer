@@ -457,6 +457,14 @@ print(json.dumps(seen.get(want, {}), indent=1, sort_keys=True))
 # find. hardware takes the six-run risk because a quiescent guest's /sys does
 # not move; a profile directory is exactly the thing that does.
 #
+# A seventh payload beside the six primitives: the receipts DIRECTORY, which
+# is the one read in agent/nixos.py that is not a file. It comes from the
+# environment, so it is captured as a value rather than transcribed as a path,
+# and a variant taken without SE_DEPLOYMENT_RECEIPTS records null — which is
+# exactly what a process nobody pointed at a receipts directory sees. Without
+# it the reference under replay read the environment of the machine REPLAYING,
+# and the Deployment fact was capturable by nothing.
+#
 # Deltas OFF, matching the replay seam, and for the reason the seam states:
 # what CHANGED between two generations left the rewrite's scope by the
 # 2026-08-19 ruling, and the walk that computes it does not ride these five
@@ -495,10 +503,11 @@ async def walk():
         await adapter.acquire(collection)
 
 asyncio.run(walk())
-print(json.dumps({name + ".json": seen.get(name, {})
-                  for name in ("read", "listdir", "realpath",
-                               "readlink", "mtime", "exists")},
-                 indent=1, sort_keys=True))
+payloads = {name + ".json": seen.get(name, {})
+            for name in ("read", "listdir", "realpath",
+                         "readlink", "mtime", "exists")}
+payloads["receipts-dir.json"] = nixos.receipts_dir()
+print(json.dumps(payloads, indent=1, sort_keys=True))
 '
 hostname_py='
 import socket

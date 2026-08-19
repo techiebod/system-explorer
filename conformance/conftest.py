@@ -60,6 +60,7 @@ GO_COLLECTORS = {
     "plex": "./cmd/se-collect-plex",
     "protection": "./cmd/se-collect-protection",
     "logs": "./cmd/se-collect-logs",
+    "nix": "./cmd/se-collect-nix",
 }
 
 

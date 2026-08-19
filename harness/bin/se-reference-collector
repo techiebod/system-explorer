@@ -175,6 +175,15 @@ SEAM = {
             "mtime": "mtime",
             "exists": "exists",
         },
+        # The one read in agent/nixos.py that is not a file: the receipts
+        # directory comes from the environment, so the seam substitutes the
+        # FUNCTION and a variant that captured no receipts pins it to None —
+        # which is exactly what a process nobody pointed at a receipts
+        # directory sees. Auxiliary rather than an acquisition, because a
+        # missing one qualifies the reading instead of meaning the interface
+        # was absent. Without this the reference read the environment of the
+        # machine REPLAYING, and the Deployment fact was capturable by nothing.
+        "auxiliary": {"receipts_dir": ("receipts-dir", None)},
         # Deltas OFF under replay, and this is the 2026-08-19 ruling rather
         # than a convenience. What CHANGED between two generations left the
         # rewrite's scope, to a plugin once a plugin surface exists; the walk

@@ -88,7 +88,29 @@ class Case:
     env: tuple[tuple[str, str], ...] = ()
 
 
+NIX_POINTER = "a11_nix_pointer_derived.py"
+NIX_RELEASE = "a11_nix_empty_release.py"
+NIX_PROFILE = "a11_nix_profile_by_position.py"
+
 CASES = (
+    # ── nix: three readings that are right on every ordinary host ────────
+    #
+    # Each of these is invisible under plain replay and would stay invisible
+    # for as long as the corpus held only machines where the shortcut holds:
+    # current == booted on almost every host, a profile directory holds only
+    # what nix put there, and every closure records its release. The mutation
+    # set is what makes them decidable.
+    Case("pointer-derived", "nix-pointers-disagree", NIX_POINTER,
+         differential.DISAGREE, "differences", ("Booted",)),
+    Case("empty-string-fact", "nix-release-unrecorded", NIX_RELEASE,
+         differential.DISAGREE, "differences", ("NixosVersion",)),
+    # Both halves, because the defect has two: a generation this machine
+    # never had, and a commit count that grew to match it. A port that
+    # invented the row and left the count alone would be caught by the
+    # truncation rule instead, which is a different finding.
+    Case("profile-dir-by-position", "nix-profile-intruder", NIX_PROFILE,
+         differential.DISAGREE, "differences",
+         ("unexpected:", "objects: expected 4, got 5")),
     # ── the eight-defect port, class by class ────────────────────────────
     Case("family-enum", "nft-netdev-ingress", PORT, differential.DISAGREE,
          "differences",

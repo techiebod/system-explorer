@@ -1,0 +1,109 @@
+{
+  "collector": "nix",
+  "collections": [
+    "generations"
+  ],
+  "variant": "degraded",
+  "provenance": "captured",
+  "os": "nixos",
+  "os_version": "26.05",
+  "source_version": "26.05pre-git",
+  "captured": "2026-08-19T22:36:00Z",
+  "regenerable": true,
+  "regenerable_on": "a NixOS guest with four system generations, two of which carry `se-generation.json` inside the closure (written by `system.extraSystemBuilderCmds`, since nixpkgs writes neither that nor `configuration-revision`), a receipts directory holding a receipt for the NEWEST of those two and none for the other, and SE_DEPLOYMENT_RECEIPTS pointing at it \u2014 the capture forwards it like any other SE_* variable. The revision planted in the closure and the receipt MUST be fabricated: the scrubber has no VCS-revision shape, so the value travels verbatim, which is a recorded gap rather than a property of this capture.",
+  "canaries": [],
+  "anonymised": true,
+  "note": "Four generations, and the deployment half of the collection is what this variant exists for. Generation 4 has a build manifest saying receipts are expected AND a receipt, so it publishes ReceiptsExpected with a Deployment object. Generation 3 has the same manifest and NO receipt, so it publishes ReceiptsExpected and OMITS Deployment \u2014 the shape that says something activated this closure outside the workflow, and the only warn this collection raises. Omitted rather than nulled: the reference reaches that point with a null and its envelope builder strips it, because a null names none of the three channels, and ReceiptsExpected standing beside an absent Deployment is the whole statement. Generations 2 and 1 carry no manifest at all and publish neither fact, which is the third state and the one most easily got wrong: a generation built before the workflow existed is not a generation that bypassed it, so the facts are OMITTED rather than published as false or null.\n\nThe variant kind is `degraded` because one generation is unattested and that is a real finding an operator acts on, not an intermediate state.\n\nThe pointers disagree here too, three ways rather than two: current and booted are generation 1, the profile is generation 4, and generations 2 and 3 are neither \u2014 history that is neither running nor next. So a port that derived any pointer from another, or that assumed the profile is the highest-numbered generation, disagrees on more rows here than in the rebuild-pending variant.\n\nThis is also the variant that closed a seam escape. The receipts DIRECTORY is the one read in agent/nixos.py that is not a file \u2014 it comes from the environment \u2014 so until 2026-08-19 the reference under replay read the environment of whatever machine was replaying, and the Deployment fact was capturable by nothing. It is now captured as its own payload and pinned by the seam, which is why receipts-dir.json sits beside the six transcriptions.\n\nStated bounds. The planted revision is fabricated and travels VERBATIM into this corpus, because the scrubber has no VCS-revision shape: classifying the standalone `configuration-revision` as identity substitutes it while the identical value inside se-generation.json stays prose and survives, so one identifier ends up with two spellings that disagree. Both are therefore prose, deliberately, and the gap is in the adjudication queue \u2014 a capture from a host with a real revision may not be published until it closes. The receipt's activation outcome is VERIFIED, so `deployment-not-verified` is unreached; only `deployment-unattested` fires. All four generations share one kernel, and none has a specialisation, so both of those facts are constant across the rows.",
+  "anchors": [
+    {
+      "collection": "generations",
+      "object": "4",
+      "fact": "ConfigurationRevision",
+      "value": "9f3c1e70a4d25b8816cbe3f42a7d90e5c6b17a48"
+    },
+    {
+      "collection": "generations",
+      "object": "4",
+      "fact": "ReceiptsExpected",
+      "value": true
+    },
+    {
+      "collection": "generations",
+      "object": "4",
+      "fact": "Created",
+      "value": "2026-08-19T22:32:30Z"
+    },
+    {
+      "collection": "generations",
+      "object": "4",
+      "fact": "Profile",
+      "value": true
+    },
+    {
+      "collection": "generations",
+      "object": "4",
+      "fact": "Current",
+      "value": false
+    },
+    {
+      "collection": "generations",
+      "object": "3",
+      "fact": "ReceiptsExpected",
+      "value": true
+    },
+    {
+      "collection": "generations",
+      "object": "3",
+      "absent_fact": "Deployment"
+    },
+    {
+      "collection": "generations",
+      "object": "3",
+      "fact": "Created",
+      "value": "2026-08-19T22:30:18Z"
+    },
+    {
+      "collection": "generations",
+      "object": "3",
+      "fact": "Profile",
+      "value": false
+    },
+    {
+      "collection": "generations",
+      "object": "3",
+      "absent_fact": "ConfigurationRevision"
+    },
+    {
+      "collection": "generations",
+      "object": "2",
+      "absent_fact": "ReceiptsExpected"
+    },
+    {
+      "collection": "generations",
+      "object": "2",
+      "absent_fact": "Deployment"
+    },
+    {
+      "collection": "generations",
+      "object": "1",
+      "fact": "Current",
+      "value": true
+    },
+    {
+      "collection": "generations",
+      "object": "1",
+      "fact": "Booted",
+      "value": true
+    },
+    {
+      "collection": "generations",
+      "object": "1",
+      "absent_fact": "ReceiptsExpected"
+    },
+    {
+      "collection": "generations",
+      "commit_objects": 4
+    }
+  ],
+  "anchors_note": "Read off the seven payload files by hand at staging, before any stream was generated. Nothing here is transcribed from the reference's output.\n\nThe three deployment states are anchored on the three rows that hold them, which is the whole point of the variant. Generation 4 carries ReceiptsExpected true, and its Deployment object is deliberately NOT anchored member by member: the members come from a receipt this capture planted, so anchoring them would assert something about the fixture rather than about the reading \u2014 what matters and is anchored is that the fact is present at all on 4 and that ReceiptsExpected is absent on 2 and 1. Generation 3's ReceiptsExpected true beside a Deployment nothing wrote is the unattested shape, and a port that omitted ReceiptsExpected when the receipt was missing \u2014 the obvious simplification \u2014 passes every other anchor and fails that one.\n\nCreated is anchored on generations 3 and 4 because they are two minutes apart, 22:30:18 and 22:32:30, and a port that read the closure's timestamp instead of the LINK's would give both the same value. Truncated to the second in UTC, not rounded.\n\nCurrent and Booted on generation 1 with Profile on generation 4 is the three-way pointer disagreement; anchoring Current false on 4 is what refuses a port that took the profile as the running system.\n\nConfigurationRevision is anchored present on 4 and ABSENT on 3, which is the pair that matters: both closures carry the same build manifest, and only one of them carries the revision file, so a port that read the revision out of the manifest's `revision` member rather than from the closure's own `configuration-revision` file publishes it on both and fails here. That is a real confusion \u2014 the two hold the same string on this guest, deliberately, so that a port cannot pass by reading the wrong one.\n\ncommit_objects 4 is the count of numbered links in listdir.json."
+}

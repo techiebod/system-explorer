@@ -1,0 +1,168 @@
+{
+  "schema": "se.declaration/1",
+  "collector": "nix",
+  "version": "0.7.0",
+  "authority": {
+    "read_paths": [
+      "/nix/var/nix/profiles",
+      "/nix/store",
+      "/run/current-system",
+      "/run/booted-system"
+    ]
+  },
+  "probe": "the activated-closure pointer /run/current-system is there, which is the one test that separates a NixOS host from every other kind. A host with exactly one generation still answers, and that is a reading of one generation rather than a probe failure",
+  "collections": [
+    {
+      "name": "generations",
+      "question": "what has this host been, which of those closures is it running, and which would it boot?",
+      "prefix": "generation",
+      "freshness": "300s",
+      "perishability": "reconstructible",
+      "answer": [
+        "NixosVersion",
+        "Current",
+        "Booted",
+        "Profile"
+      ],
+      "ceiling": {
+        "records": 2048,
+        "bytes": 4194304
+      },
+      "facts": {
+        "NixosVersion": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/*/nixos-version",
+          "sentence": "The nixpkgs release that built this closure, as the closure itself records it. The same string on every host running that release, so it says which nixpkgs a generation came from and nothing about the machine. Omitted where the file is empty or absent rather than published as an empty string, because a closure that does not record its release is not a closure with a blank one."
+        },
+        "Kernel": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": [
+            "StorePath"
+          ],
+          "discloses": "nothing",
+          "from": "/*/kernel",
+          "sentence": "The kernel package this generation boots, named as its store path names it \u2014 `linux-6.18.43`, the package name and version and not the store hash. Read by resolving the closure's own `kernel` link, so it is what this generation WOULD boot rather than what is running; on a host with a rebuild pending those are different generations and only one of them is Booted."
+        },
+        "ConfigurationRevision": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/*/configuration-revision",
+          "sentence": "The VCS revision the configuration that built this generation came from, where the build recorded one. It is the answer to \"what source produced the machine I am looking at\", which is why it is worth carrying even though most closures do not have it \u2014 nixpkgs does not write it, so it is present exactly where somebody's own build arranged for it."
+        },
+        "Created": {
+          "type": "timestamp",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/nix/var/nix/profiles/*",
+          "sentence": "When this generation was made the profile's, taken from the profile LINK's own mtime rather than from anything inside the closure \u2014 every file under a store path carries whatever timestamp nix gave it, so the closure cannot say when this machine adopted it. Omitted where the link vanished between the listing and the stat, because 1970 is not a creation time."
+        },
+        "Current": {
+          "type": "boolean",
+          "temperament": "state",
+          "kind": "derived",
+          "derived_from": [
+            "StorePath"
+          ],
+          "discloses": "nothing",
+          "from": "/run/current-system",
+          "sentence": "Whether this is the closure activated right now. It is one of three pointers that can disagree, and the disagreement is the point: a test activation a reboot would discard shows up here as Current without Profile."
+        },
+        "Booted": {
+          "type": "boolean",
+          "temperament": "state",
+          "kind": "derived",
+          "derived_from": [
+            "StorePath"
+          ],
+          "discloses": "nothing",
+          "from": "/run/booted-system",
+          "sentence": "Whether this is the closure the last boot activated. Current without Booted means something was switched into since the machine started; Booted without Current means something was switched away from."
+        },
+        "Profile": {
+          "type": "boolean",
+          "temperament": "state",
+          "kind": "derived",
+          "derived_from": [
+            "StorePath"
+          ],
+          "discloses": "nothing",
+          "from": "/nix/var/nix/profiles/system",
+          "sentence": "Whether this is the closure the next boot would pick. Profile without Current is a rebuild that has been built and made the default and not booted into \u2014 an ordinary intermediate state, and the only one where a reader can tell from the rows alone that the machine is running something other than what it would come back as."
+        },
+        "Specialisations": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/*/specialisation",
+          "sentence": "The named variants this generation carries, which are whole alternative configurations bootable from the same closure. Sorted, and empty where the closure has no specialisation directory at all \u2014 empty is the honest reading there, because the question `which variants does this generation offer` has the answer `none`."
+        },
+        "StorePath": {
+          "type": "string",
+          "temperament": "existence",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/nix/var/nix/profiles/*",
+          "sentence": "The closure this generation IS, as the profile link points at it. A build hash over the derivation's inputs, so two hosts that built the same configuration from the same nixpkgs carry the same path \u2014 which is what makes generations comparable across machines, and why it is never substituted when a capture is scrubbed."
+        },
+        "ReceiptsExpected": {
+          "type": "boolean",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/*/se-generation.json",
+          "sentence": "Whether this closure states that every deployment of it should leave a receipt. Set only where the closure's own build manifest says so AND this process can see where receipts are kept; without both the fact is omitted, because a generation built before that workflow existed is not a generation that bypassed it."
+        },
+        "Deployment": {
+          "type": "object",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/*/se-generation.json",
+          "sentence": "What the deployment that produced this generation recorded about itself: how it was activated, whether the checks passed, when it was verified, the risks it declared and the source revision it came from. Null where receipts are expected and this generation has none, which is the shape that says something activated this closure outside the workflow."
+        }
+      },
+      "names": {
+        "store-path": {
+          "class": "stable",
+          "sentence": "The closure this generation is. It survives everything a generation number does not \u2014 renumbering, garbage collection of its neighbours, being copied to another machine \u2014 because it is a hash of what built it, so it is the only durable way to say that two hosts are running the same system."
+        }
+      },
+      "redaction_exemption": "Every value this collection reads is a nixpkgs or nix vocabulary word, a build hash, a release string or a timestamp. The two that carry anybody's own content \u2014 the configuration revision and the deployment receipt \u2014 are declared `content` in the fact table above and travel through the same classification as any other field; there is no credential surface in a profile link farm, because nothing here is a configuration file, only the names of closures and the small records they carry.",
+      "reference_commands": [
+        {
+          "purpose": "the generations this collection rows, by hand",
+          "argv": [
+            "nixos-rebuild",
+            "list-generations"
+          ]
+        },
+        {
+          "purpose": "the three pointers that can disagree",
+          "argv": [
+            "ls",
+            "-l",
+            "/run/current-system",
+            "/run/booted-system",
+            "/nix/var/nix/profiles/system"
+          ]
+        },
+        {
+          "purpose": "one generation's release, as the closure records it",
+          "argv": [
+            "cat",
+            "/nix/var/nix/profiles/system-<generation>-link/nixos-version"
+          ]
+        }
+      ]
+    }
+  ]
+}

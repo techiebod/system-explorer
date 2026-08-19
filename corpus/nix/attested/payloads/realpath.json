@@ -1,0 +1,29 @@
+{
+  "/nix/store/31i784rx1cpbqw5jd8nbhsp7bfi9a570-nixos-system-nixos-26.05pre-git": {
+    "etc": "/nix/store/qfkv8yyfh801lhj8hddmnpys93bc3b1f-etc/etc",
+    "kernel": "/nix/store/a493j0zfbm4gif5nj5jvivhlblvaq06q-linux-6.18.43/bzImage",
+    "sw": "/nix/store/rddm9p3kdg6km5s8c9jrjib579yzdqc4-system-path"
+  },
+  "/nix/store/fpz72mwmm0331by0q504x35d288ndrrm-nixos-system-nixos-qcow2-26.05.20260807.ee48b14": {
+    "etc": "/nix/store/ara0bdfcxp6f4i5k4qmidd6ldk8a2n6g-etc/etc",
+    "kernel": "/nix/store/a493j0zfbm4gif5nj5jvivhlblvaq06q-linux-6.18.43/bzImage",
+    "sw": "/nix/store/lhknh5kjnc2v8znrk9lf6x9p9g86b6gb-system-path"
+  },
+  "/nix/store/paf5nl9jb7c853z06dwdxzx36wgdpnbf-nixos-system-nixos-26.05pre-git": {
+    "etc": "/nix/store/cd7g7yg1k8y832ci20hh8xm10z61hd9l-etc/etc",
+    "kernel": "/nix/store/a493j0zfbm4gif5nj5jvivhlblvaq06q-linux-6.18.43/bzImage",
+    "sw": "/nix/store/31fmn7zcfbsc7ydb6gm7wbghhkx53arc-system-path"
+  },
+  "/nix/store/yw5avx4w8djazkxax03f8xy46i1wr8ld-nixos-system-nixos-26.05pre-git": {
+    "etc": "/nix/store/1fqzbc7kl6943srf5hlycgddcsiyz8ci-etc/etc",
+    "kernel": "/nix/store/a493j0zfbm4gif5nj5jvivhlblvaq06q-linux-6.18.43/bzImage",
+    "sw": "/nix/store/v1lpkgliwxc33fvf840ydldnj9i6pgzl-system-path"
+  },
+  "/nix/var/nix/profiles": {
+    "system": "/nix/store/yw5avx4w8djazkxax03f8xy46i1wr8ld-nixos-system-nixos-26.05pre-git"
+  },
+  "/run": {
+    "booted-system": "/nix/store/fpz72mwmm0331by0q504x35d288ndrrm-nixos-system-nixos-qcow2-26.05.20260807.ee48b14",
+    "current-system": "/nix/store/fpz72mwmm0331by0q504x35d288ndrrm-nixos-system-nixos-qcow2-26.05.20260807.ee48b14"
+  }
+}

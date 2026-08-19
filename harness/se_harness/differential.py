@@ -82,6 +82,11 @@ SEEDS = {
     "plex": "plex/healthy",
     "protection": "protection/healthy",
     "logs": "logs/healthy",
+    # The four-generation capture, not the two: the deployment facts and the
+    # three-way pointer disagreement both live there, and a seed that could
+    # not reach them would let a mutation about either come back REFUSED
+    # through no fault of the challenger.
+    "nix": "nix/attested",
 }
 
 # Names the operators mint. Constants rather than inline literals so the
@@ -1896,6 +1901,114 @@ def _job_without_receipts(payloads: dict) -> dict:
     return payloads
 
 
+# ── nix: the three pointers, and a generation that is only history ───────
+
+NIX_REALPATH = "realpath"
+NIX_LISTDIR = "listdir"
+NIX_READ = "read"
+NIX_PROFILES = "/nix/var/nix/profiles"
+
+
+def _nix_document(payloads: dict, name: str) -> dict:
+    document = payloads.get(name)
+    if not isinstance(document, dict):
+        raise MutatorError(f"the payload carries no {name} transcription")
+    return document
+
+
+def _pointers_disagree_three_ways(payloads: dict) -> dict:
+    """CLASS pointer-derived: a generation the machine is running, would boot,
+    and booted into are read as one answer.
+
+    The mutation moves `booted-system` onto a generation that is neither
+    current nor the profile, so all three pointers name three different
+    closures. Almost every host has current == booted, and a collector that
+    read one and reported it as both is invisible on all of them: the corpus's
+    own variants have current == booted too, so replay equivalence over them
+    cannot see it either.
+
+    What it costs when it is wrong is the whole question this collection
+    answers. `Booted` without `Current` means something was switched into
+    since the machine started; `Current` without `Booted` means something was
+    switched away from. A collector that derives one from the other says
+    neither ever happens.
+    """
+    document = _nix_document(payloads, NIX_REALPATH)
+    run = document.get("/run")
+    profiles = document.get(NIX_PROFILES)
+    if not isinstance(run, dict) or not isinstance(profiles, dict):
+        raise MutatorError("this capture resolves neither /run nor the profile links")
+    current, profile = run.get("current-system"), profiles.get("system")
+    if not isinstance(current, str) or not isinstance(profile, str):
+        raise MutatorError("this capture resolves no current system or no profile")
+    others = [
+        target
+        for target in _nix_document(payloads, "readlink").get(NIX_PROFILES, {}).values()
+        if isinstance(target, str) and target not in (current, profile)
+    ]
+    if not others:
+        raise MutatorError(
+            "every generation here is already current or the profile, so no "
+            "third closure exists for booted to name"
+        )
+    run["booted-system"] = others[0]
+    return payloads
+
+
+def _profile_link_is_not_a_generation(payloads: dict) -> dict:
+    """CLASS profile-dir-by-position: the profile directory's residents are
+    told apart by where they sit rather than by what they are named.
+
+    /nix/var/nix/profiles holds `system` and `per-user` beside the numbered
+    links, and a collector that skipped the first N entries, or that took
+    every symlink it found, rows them as generations. The mutation adds a
+    fourth resident with a name that is neither — `system-profile-link`,
+    which shares both affixes the numbering test uses and parses as no
+    number — so a walk keyed on prefix and suffix alone counts it and a walk
+    that parses the number does not.
+
+    Invisible under plain replay: every committed capture holds exactly the
+    residents nix put there.
+    """
+    listing = _nix_document(payloads, NIX_LISTDIR)
+    profiles = listing.get("/nix/var/nix")
+    if not isinstance(profiles, dict) or not isinstance(profiles.get("profiles"), list):
+        raise MutatorError("this capture enumerates no profile directory")
+    entries = profiles["profiles"]
+    if "system-profile-link" in entries:
+        raise MutatorError("the intruder is already staged")
+    entries.append("system-profile-link")
+    return payloads
+
+
+def _generation_without_a_release(payloads: dict) -> dict:
+    """CLASS empty-string-fact: a file that reads empty becomes a fact whose
+    value is the empty string.
+
+    A closure records its release in `nixos-version`, and a closure built
+    without one has the file absent — which every reader here answers as "".
+    The honest reading is that this generation does not record its release, so
+    the fact is omitted; a port that published "" instead has invented a
+    release nothing has, and a consumer cannot tell an unrecorded one from a
+    blank one.
+
+    The mutation empties the NEWEST generation's release, because that is the
+    row a reader looks at first.
+    """
+    document = _nix_document(payloads, NIX_READ)
+    closures = sorted(
+        key for key, value in document.items()
+        if isinstance(value, dict) and "nixos-version" in value
+    )
+    if not closures:
+        raise MutatorError("this capture reads no closure's release")
+    for key in closures:
+        if document[key]["nixos-version"]:
+            document[key]["nixos-version"] = ""
+            return payloads
+    raise MutatorError("every closure here already records an empty release")
+
+
 @dataclass(frozen=True)
 class Operator:
     """One structural transformation, bound to the defect class it exposes."""
@@ -1907,6 +2020,12 @@ class Operator:
 
 
 OPERATORS: tuple[Operator, ...] = (
+    Operator("nix-pointers-disagree", "nix", "pointer-derived",
+             _pointers_disagree_three_ways),
+    Operator("nix-profile-intruder", "nix", "profile-dir-by-position",
+             _profile_link_is_not_a_generation),
+    Operator("nix-release-unrecorded", "nix", "empty-string-fact",
+             _generation_without_a_release),
     Operator("logs-containerised-entry", "logs", "container-blind",
              _containerised_entry),
     Operator("paperless-count-absent", "paperless", "absent-count-is-zero",

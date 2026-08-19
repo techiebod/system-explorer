@@ -56,15 +56,22 @@ GENERATION_MANIFEST = "se-generation.json"
 RECEIPTS_EXPECTED_SCHEMA = 2
 
 
-def receipts_dir() -> Path | None:
+def receipts_dir() -> str | None:
     """Directory of per-generation deployment receipts, or None.
 
     No default on purpose. An estate that does not write receipts must not have
     this agent inventing a path, finding nothing there, and reporting the nothing
     as a deployment that bypassed a workflow it never had.
+
+    A STRING rather than a Path, and it is the seam that decides that. This is
+    the one read in this module that does not go through the five primitives —
+    it is an environment variable, not a file — so the replay seam substitutes
+    the function itself, and a stub can only hand back what the captured
+    payload holds. Everything downstream therefore joins paths by formatting
+    rather than by `/`, which is what the primitives speak anyway.
     """
     configured = os.environ.get("SE_DEPLOYMENT_RECEIPTS", "").strip()
-    return Path(configured) if configured else None
+    return configured or None
 
 
 # ── the five filesystem primitives, and why they are functions ───────────
@@ -231,7 +238,7 @@ def deployment_receipt(number: int) -> dict | None:
     directory = receipts_dir()
     if directory is None:
         return None
-    return read_json(directory / f"{number}.json")
+    return read_json(f"{directory}/{number}.json")
 
 
 def generation_links() -> list[tuple[int, str, str]]:
