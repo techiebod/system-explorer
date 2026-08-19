@@ -246,6 +246,74 @@ kea_version_py='
 import json, sys
 print("kea " + json.load(sys.stdin)["text"])
 '
+# The tree-shaped interface, and the only capture here that is not one
+# document per command. DESIGN's tree-shape ruling (2026-08-19): the native
+# document for a filesystem is the filesystem TRANSCRIBED — the directory
+# listings the collector walked plus the contents of every file it read — so
+# a reader with the payloads can `cat` any path and compare.
+#
+# Both halves come from one run of the collector's own walk, with its two
+# module-level readers wrapped: that is what makes the capture exactly what
+# the adapter reads rather than what somebody thought it reads. A `find`
+# would enumerate a different set, and a second pass would sample the
+# counters at a second moment.
+#
+# `null` is a path that was not there and is committed as such: root has no
+# memory.current, a cgroup outside the io controller has no io.stat, and
+# absent is not empty — the whole collection turns on keeping those apart.
+resources_py='
+import json, sys
+sys.path.insert(0, "/tmp/secmp/src")
+from system_explorer.agent.adapters import resources as R
+listings, reads = [], {}
+real_read, real_walk = R._read_text, R._walk
+def walk(root, onerror):
+    for entry in real_walk(root, onerror):
+        listings.append([entry[0], list(entry[1]), list(entry[2])])
+        yield entry
+def read(path):
+    text = real_read(path)
+    reads[path] = text
+    return text
+R._walk, R._read_text = walk, read
+found = R._nodes()
+R._unattributed_cpu(found)
+print(json.dumps({"root": R.CGROUP_ROOT, "listings": listings, "reads": reads}))
+'
+# The bundle split into the files the replay seam addresses. Run HERE and not
+# on the guest, because the naming rule is the harness'"'"'s: se-reference-collector
+# dispatches `_read_text` and `_walk` on their first argument and keys the
+# payload on slug(argument), so the file name is the path it answers and a
+# reviewer reading one is reading the other.
+resources_split_py='
+import json, sys
+from pathlib import Path
+
+def slug(argument):
+    # mirrors slug() in harness/bin/se-reference-collector
+    text = str(argument).strip("/")
+    keep = [c if (c.isalnum() or c in "-_.") else "-" for c in text]
+    return "".join(keep).strip("-").replace("--", "-") or "root"
+
+bundle = json.loads(Path(sys.argv[1]).read_text())
+out = Path(sys.argv[2])
+written = {}
+walk_stem = slug(bundle["root"])
+written[walk_stem] = "walk listings"
+(out / (walk_stem + ".json")).write_text(json.dumps(bundle["listings"], indent=1) + "\n")
+for path, text in sorted(bundle["reads"].items()):
+    stem = slug(path)
+    if stem in written:
+        raise SystemExit("two paths slug to %r: %s and %s" % (stem, written[stem], path))
+    written[stem] = path
+    if text is None:
+        (out / (stem + ".json")).write_text("null\n")
+    else:
+        (out / (stem + ".txt")).write_text(text)
+print("  %d payload files (%d listings, %d paths read)"
+      % (len(written), len(bundle["listings"]), len(bundle["reads"])))
+'
+
 declare -a acquisitions
 case "$collector" in
     storage)
@@ -271,6 +339,12 @@ case "$collector" in
             "manager.json|python3 -c '$manager_py'"
             "dpkg.json|python3 -c '$dpkg_py'"
         )
+        ;;
+    resources)
+        # One bundle, split below. Privileged: an unprivileged walk cannot
+        # read another user's cgroup subtree, and a capture that silently
+        # skipped it would replay as a machine running less than it does.
+        acquisitions=("_bundle.json|sudo python3 -c '$resources_py'")
         ;;
     docker)
         # The engine API IS the native interface, so each path's response
@@ -368,6 +442,11 @@ case "$collector" in
     # is the version the FIELD SET is a fact about — a journal entry's members
     # are decided by the systemd that wrote it, not by any separate tool.
     logs) version_probe="journalctl --version | head -1" ;;
+    # The kernel is the interface here: cgroup v2's file set, the PSI files
+    # and their fields are decided by the kernel that presents them, not by
+    # any userspace tool, so the kernel release is the version a drift diff
+    # is a fact about.
+    resources) version_probe="echo linux \$(uname -r)" ;;
     # The daemon reporting on itself, which is the version that actually
     # answered the socket — `unbound -V` reads the binary on PATH and can name
     # a different build from the one running.
@@ -469,6 +548,12 @@ fi
 if [[ -n $version_probe ]]; then
     source_version="$(ssh "${ssh_opts[@]}" -- "$target" "set -o pipefail; $remote_env$version_probe" | tr -d '\r')"
 fi
+if [[ $collector == resources ]]; then
+    python3 -c "$resources_split_py" "$payload_dir/_bundle.json" "$payload_dir"
+    rm -f "$payload_dir/_bundle.json"
+fi
+
+source_version="$(ssh "${ssh_opts[@]}" -- "$target" "set -o pipefail; $remote_env$version_probe" | tr -d '\r')"
 if [[ -z $source_version ]]; then
     echo "could not read the interface version on $target — a capture whose" >&2
     echo "source_version is unknown cannot tell a drift diff what changed." >&2

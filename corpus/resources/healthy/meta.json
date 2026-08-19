@@ -1,0 +1,42 @@
+{
+  "collector": "resources",
+  "variant": "healthy",
+  "collections": ["workloads"],
+  "os": "ubuntu",
+  "os_version": "26.04",
+  "source_version": "linux 7.0.0-28-generic",
+  "captured": "2026-08-19T10:02:28Z",
+  "regenerable": true,
+  "regenerable_on": "any host presenting a cgroup v2 unified hierarchy — but the payload set IS that host's own tree, so a re-stage yields different stems and a different row count, and the anchors below are read off THIS machine",
+  "anchors": [
+    {"collection": "workloads", "commit_objects": 68},
+
+    {"collection": "workloads", "object": "-.slice",
+     "fact": "HostCpuBusyUsec", "value": 393080000},
+    {"collection": "workloads", "object": "-.slice",
+     "fact": "HostCpuStolenUsec", "value": 2180000},
+    {"collection": "workloads", "object": "-.slice",
+     "absent_fact": "MemoryCurrentBytes"},
+    {"collection": "workloads", "object": "-.slice",
+     "fact": "PsiIoFullAvg60", "value": 0.08},
+    {"collection": "workloads", "object": "-.slice",
+     "fact": "StallExplainedBy",
+     "value": {"PsiIoFullAvg60": "user-1000.slice"}},
+
+    {"collection": "workloads", "object": "init.scope",
+     "fact": "Depth", "value": 1},
+    {"collection": "workloads", "object": "user@1000.service",
+     "fact": "Delegated", "value": true},
+
+    {"collection": "workloads", "object": "system.slice",
+     "fact": "CpuUsageUsec", "value": 270253097},
+    {"collection": "workloads", "object": "system.slice",
+     "fact": "IoReadBytes", "value": 1520582656},
+    {"collection": "workloads", "object": "user-1000.slice",
+     "absent_fact": "IoReadBytes"},
+
+    {"collection": "workloads",
+     "object": "docker-5b3e81546f704b4190abb05d65b30ec2ef7345b4f4781178e8d7c2bf1bb80ac0.scope",
+     "fact": "Parent", "value": "system.slice"}
+  ]
+}

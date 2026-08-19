@@ -343,6 +343,23 @@ EXPECTED = (
                 "committed capture can expose: every captured reservation pins "
                 "an address, so nothing is filtered out and the remainder is "
                 "absent from both answers, and the differential guard owns the red"),
+    # ── GREEN, adjudicated: the third trap, the one-name-apart spelling ──
+    #
+    # The oom-blind port lifts `oom` where `oom_kill` belongs — how many times
+    # a workload hit its memory limit, published as how many of its processes
+    # the kernel killed. Every memory.events document in the only committed
+    # resources capture reads 0 for both, because the guest was at rest, so
+    # there is nothing to conflate and the judge honestly passes it. Its RED
+    # lives in test_differential.py, where the cgroup-oom-kill operator gives
+    # one workload three events and one kill. If this goes red here, the replay
+    # judge has grown a rule that sees an OOM record no committed capture holds
+    # — DESIGN 20's trap statement and the case table move together, not this
+    # row alone.
+    Expectation("a9_oom_kill_blind.py", None, "resources/healthy", "GREEN",
+                "an OOM event published as an OOM kill, which no committed "
+                "capture can expose: every memory.events reads 0 for both, so "
+                "the two counters are the same number under replay and the "
+                "differential guard owns the red"),
     Expectation("a9_scope_state_blind.py", None, "docker/healthy", "GREEN",
                 "a scope unit named only for a running container, which no "
                 "committed capture can expose: every captured container is "
@@ -435,6 +452,10 @@ ADJUDICATED_GREEN = {
     "one pins an address and a port that filters before it counts reproduces "
     "the pair exactly (DESIGN 20); the differential guard owns this red, under "
     "kea-addressless-reservation",
+    ("a9_oom_kill_blind.py", None): "the third trap: replay cannot tell an OOM "
+    "event from an OOM kill, because the only captured machine was at rest and "
+    "both counters read zero on every cgroup (DESIGN 20); the differential "
+    "guard owns this red, under cgroup-oom-kill",
     ("a9_scope_state_blind.py", None): "the third trap: replay cannot see a "
     "restarting or paused container, because every captured one is running or "
     "exited and a running-only scope rule agrees on both (DESIGN 20); the "

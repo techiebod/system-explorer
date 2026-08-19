@@ -162,6 +162,32 @@ NAMED_RESIDUALS = {
         "stopped — where the two implementations' disagreement about the "
         "failure text is the finding rather than a defect in either."
     ),
+    # The two readings a stalling slice takes when its stall is NOT accounted
+    # for. Named rather than minted, and the reason is the guard's own rule
+    # rather than a shrug about what could be staged.
+    "resources/stall-not-accounted-for": (
+        "StallUnexplained and StallAttributionUnobservable are what a slice "
+        "states when every member was read and none accounts for its stall, "
+        "and when a member could not be read at all. The only committed "
+        "capture is of a machine at rest: three slices report an I/O stall and "
+        "all three are explained by a member, so neither branch is reached and "
+        "the pair of facts is published by no replayed stream. An operator "
+        "COULD raise a slice above every member and mint the first — which is "
+        "exactly why it is not minted here, because test_differential's "
+        "no-dead-weight rule requires every operator to have a committed wrong "
+        "fixture that dies to it, and no port has been written that is blind "
+        "to these two while agreeing about everything else. So the REPLAY tier "
+        "does not own them. StallUnexplained is now owned elsewhere: the live "
+        "comparator (harness/bin/se-compare) was run on the lab guest on "
+        "2026-08-19 with the root slice reading 0.07% while all 67 of its "
+        "members read 0.0, and the reference and the port produced the "
+        "identical sentence — so that half is owned, and owned OUTSIDE this "
+        "tier. StallAttributionUnobservable is reached by nothing yet: it "
+        "wants a host where a member's pressure file will not read, or a "
+        "cgroup tree deeper than the walk's bound, and no lab guest stages "
+        "either. Venue: the same live comparator, on a host that has one — the "
+        "tool exists, the shape has not been met, and that half stays owed."
+    ),
     # The packages collector reads three interfaces and the corpus captures
     # one. A second variant would close this outright — which is why the entry
     # says so rather than dressing a gap as a boundary.

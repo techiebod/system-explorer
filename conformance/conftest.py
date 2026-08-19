@@ -52,6 +52,7 @@ GO_COLLECTORS = {
     "traefik": "./cmd/se-collect-traefik",
     "servarr": "./cmd/se-collect-servarr",
     "kea": "./cmd/se-collect-kea",
+    "resources": "./cmd/se-collect-resources",
 }
 
 

@@ -79,6 +79,7 @@ from system_explorer.agent.adapters import (  # noqa: E402
     bazarr, docker, logs, network, packages, storage, traefik, unbound, vms,
     docker, logs, network, packages, servarr, storage, traefik, unbound, vms,
     docker, kea, logs, network, packages, storage, traefik, unbound, vms,
+    docker, logs, network, packages, resources, storage, traefik, unbound, vms,
 )
 
 # Which module-level acquisition each collector redirects, and what payload
@@ -302,6 +303,31 @@ SEAM = {
         # from the adapter is what stops this table, se-capture-guest and the
         # ported binary from each holding their own copy of it.
         "page": {"query": {}, "limit": None, "cursor": None},
+        "instance": {},
+    },
+    # ── the one TREE-shaped interface: the document is the filesystem ────
+    "resources": {
+        "module": resources,
+        "adapter": resources.Adapter,
+        "interface": "cgroup v2 hierarchy",
+        "collections": ["workloads"],
+        # Both readers, because both are the interface. DESIGN's tree-shape
+        # ruling (2026-08-19) says the native document for a filesystem is the
+        # filesystem transcribed — the listings walked PLUS the contents of
+        # every file read — so a reader with the payloads can `cat` any path
+        # and compare. Stubbing only the reads would leave `_walk` enumerating
+        # the cgroup tree of whichever machine is REPLAYING, which is the seam
+        # escape that once put a workstation's filesystem into committed facts.
+        #
+        # `_read_text` is keyed on the path and `_walk` on its root, so the
+        # payload directory IS the path→content map: `sys-fs-cgroup.json`
+        # holds the listings os.walk yielded, in the order it yielded them —
+        # load-bearing, because the shallowest occurrence of a duplicated unit
+        # name wins and that depends on walk order — and every other file is
+        # one path's contents under slug(path). A path that did not exist is
+        # `null`, not an empty document: absent and empty are different
+        # answers here, and the whole collection turns on keeping them apart.
+        "arg_acquisitions": ["_read_text", "_walk"],
         "instance": {},
     },
     "network": {

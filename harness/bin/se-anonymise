@@ -49,6 +49,25 @@ collector, as a manifest, and this tool guesses nothing:
   used to crash on bytes it could not json.loads, and a crash is not a
   classification.
 
+  "No leaves for a dotted path to name" is a property of the DOCUMENT, not
+  of the file extension, so a .json payload that decodes to a bare scalar
+  takes the same whole regime. A tree-shaped interface has one such payload
+  per path it read, and `null` is how it records a path that was not there —
+  which is a different answer from an empty document and must stay one.
+  Before this, such a payload reached scrub_node's leaf branch at the root,
+  where no pattern can match (every pattern has at least one segment), so
+  the tool refused every capture of that shape with "(root): no manifest
+  entry classifies this leaf" and no manifest could answer it.
+
+  And `payload` may be a GLOB on a whole entry, because a transcription's
+  payload set is one file per path read and those paths are the machine's,
+  not the manifest author's. The classification is per FILE KIND — cpu.stat
+  holds the kernel's CPU counters on every host that has one — so an entry
+  says so once, and a stem matching no entry is refused exactly as before.
+  Exact stems still work and still win by being the only match; two entries
+  matching one payload is refused, so which one governs never depends on
+  this file's iteration order.
+
   nothing   -> verbatim          identity/location/content -> substituted
   secret    -> the run is refused outright: a secret must never have been
                captured, and no amount of substitution repairs that
@@ -97,6 +116,7 @@ tool was installed somewhere else.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import hashlib
 import hmac
 import ipaddress
@@ -610,6 +630,21 @@ def load_manifest(path: Path) -> tuple[dict[tuple, dict], dict[str, dict]]:
     return entries, wholes
 
 
+def whole_for(wholes: dict[str, dict], payload: str) -> tuple[dict | None, list[str]]:
+    """(the whole-document entry governing this payload, the patterns that
+    matched it).
+
+    A pattern is a stem or a glob over stems. Both are matched the same way —
+    fnmatch on a stem with no wildcard is equality — so an exact entry keeps
+    behaving exactly as it did. The match list is returned rather than
+    resolved here because two matching entries is a refusal, not a choice:
+    which one governs must never depend on this file's iteration order, and
+    that is the same rule `_leaf_entry` applies to overlapping path patterns.
+    """
+    matched = [pattern for pattern in wholes if fnmatch.fnmatchcase(payload, pattern)]
+    return (wholes[matched[0]] if len(matched) == 1 else None), matched
+
+
 def entries_for(entries: dict[tuple, dict], payload: str) -> dict[tuple, dict]:
     """The entries that govern ONE payload document.
 
@@ -1030,28 +1065,51 @@ def main() -> None:
 
     scrubbed: list[tuple[Path, object, bool]] = []
     for path in args.payloads:
-        if path.suffix != ".json":
-            # a text payload: the native format IS the payload (DESIGN 20),
-            # and it is classified whole or it is refused — the same
-            # deny-by-default as an unclassified leaf, because the failure
-            # mode of passing it is publication
-            spec = wholes.get(path.stem)
-            if spec is None:
-                ctx.problems.append(
-                    f"{path.stem}: no whole-document manifest entry "
-                    "classifies this text payload"
-                )
+        document: object = None
+        if path.suffix == ".json":
+            document = json.loads(path.read_text())
+            if isinstance(document, (dict, list)):
+                # The manifest view for THIS document, so a scoped entry
+                # cannot reach a payload it was not written for. One Ctx
+                # across all of them: the mapping is global by rule 2 of
+                # DESIGN 21, and the same WWN in three payloads must come
+                # back as one replacement.
+                ctx.entries = entries_for(entries, path.stem)
+                scrubbed.append((path, scrub_node(document, (), ctx), False))
                 continue
-            scrubbed.append(
-                (path, scrub_whole(path.read_text(), spec, path.stem, ctx), True)
+        # No leaves for a dotted path to name — a text payload, whose native
+        # format IS the payload (DESIGN 20), or a JSON payload that decodes to
+        # one scalar. Classified whole or refused, the same deny-by-default as
+        # an unclassified leaf, because the failure mode of passing it is
+        # publication.
+        spec, matched = whole_for(wholes, path.stem)
+        if len(matched) > 1:
+            ctx.problems.append(
+                f"{path.stem}: matched by {len(matched)} whole-document "
+                f"entries ({', '.join(sorted(matched))}) — exactly one must"
             )
             continue
-        # The manifest view for THIS document, so a scoped entry cannot reach
-        # a payload it was not written for. One Ctx across all of them: the
-        # mapping is global by rule 2 of DESIGN 21, and the same WWN in three
-        # payloads must come back as one replacement.
-        ctx.entries = entries_for(entries, path.stem)
-        scrubbed.append((path, scrub_node(json.loads(path.read_text()), (), ctx), False))
+        if spec is None:
+            ctx.problems.append(
+                f"{path.stem}: no whole-document manifest entry "
+                "classifies this payload"
+            )
+            continue
+        if path.suffix == ".json":
+            # A scalar document is the leaf, so it takes _scrub_leaf directly:
+            # scrub_whole's whitespace surgery is about a TEXT file carrying
+            # its token with a trailing newline, and a JSON scalar carries no
+            # surroundings to preserve.
+            entry = {"discloses": spec["discloses"]}
+            if spec.get("format") is not None:
+                entry["format"] = spec["format"]
+            scrubbed.append(
+                (path, _scrub_leaf(document, entry, (path.stem,), ctx), False)
+            )
+            continue
+        scrubbed.append(
+            (path, scrub_whole(path.read_text(), spec, path.stem, ctx), True)
+        )
 
     if ctx.problems:
         # nothing is written: a partial scrub looks exactly like a full one

@@ -213,6 +213,21 @@ CASES = (
          # line, so this distinction is exercised by no replay and this
          # operator is what mints the only shape that draws it.
          (differential.UNBOUND_QUERY_TOTAL, differential.UNBOUND_THREAD_SHARE)),
+    Case("oom-counter-blind", "cgroup-oom-kill", "a9_oom_kill_blind.py",
+         differential.DISAGREE, "differences",
+         # Both spellings of the one row, by value: the processes the kernel
+         # actually killed, and the times the limit was merely hit, which is
+         # what a port that read `oom` publishes in their place. Bound to the
+         # pair because the facts dict is compared whole — a single spelling
+         # would also be satisfied by a port that had lost some other counter
+         # entirely — and to the workload's name, because a port that minted
+         # the record on a different row would otherwise satisfy the values.
+         # Every committed capture is of a machine at rest, where oom and
+         # oom_kill are 0 on all 73 documents, so this distinction is exercised
+         # by no replay and this operator is what mints the only shape that
+         # draws it.
+         (differential.OOM_KILLED_UNIT, differential.OOM_KILLS_TRUE,
+          differential.OOM_KILLS_BLIND)),
     Case("scoped-state-enum", "docker-restarting-container",
          "a9_scope_state_blind.py", differential.DISAGREE, "differences",
          # The fact and the unit it names, by value. Every committed container

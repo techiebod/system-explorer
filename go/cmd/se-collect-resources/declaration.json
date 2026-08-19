@@ -1,0 +1,336 @@
+{
+  "schema": "se.declaration/1",
+  "collector": "resources",
+  "version": "0.7.0",
+  "authority": {
+    "read_paths": [
+      "/sys/fs/cgroup",
+      "/proc/stat",
+      "/proc/self/auxv",
+      "/proc/sys/kernel/random/boot_id",
+      "/proc/self/timens_offsets"
+    ],
+    "groups": [],
+    "capabilities": [],
+    "credentials": [],
+    "commands": []
+  },
+  "probe": "/sys/fs/cgroup/cgroup.controllers exists and the tree under it can be walked. A cgroup v1 host, a container without the host's cgroupfs, and a kernel built without the unified hierarchy are all the same reading — this cannot be observed here — and each is an absence rather than a failure, because a host with no v2 hierarchy runs no workload this collector can measure.",
+  "collections": [
+    {
+      "name": "workloads",
+      "question": "what is eating this machine, and what is it stalled on?",
+      "prefix": "unit",
+      "freshness": "30s",
+      "perishability": "sampled",
+      "answer": [
+        "Parent", "Depth", "Delegated",
+        "CpuUsageUsec", "CpuThrottledUsec",
+        "MemoryCurrentBytes", "MemoryPeakBytes", "MemoryOomKills",
+        "IoReadBytes", "IoWrittenBytes",
+        "PsiIoFullAvg60", "PsiCpuSomeAvg60", "PsiMemoryFullAvg60",
+        "HostCpuBusyUsec", "UnattributedCpuUsec",
+        "StallExplainedBy", "StallUnexplained", "StallAttributionUnobservable"
+      ],
+      "ceiling": { "records": 5000, "bytes": 4194304 },
+      "facts": {
+        "Parent": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The cgroup this one sits directly inside, by systemd's name for it — the rung above on the ladder, and what makes a total decomposable rather than merely large. Read off the enclosing directory in the walk, which is where the kernel states it."
+        },
+        "Depth": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": ["Parent"],
+          "discloses": "nothing",
+          "sentence": "How far below the root cgroup this workload sits, which is the length of the Parent chain above it; the root itself is 0."
+        },
+        "Delegated": {
+          "type": "boolean",
+          "labels": ["delegated subtree", "no delegated subtree"],
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": ["Parent"],
+          "discloses": "nothing",
+          "sentence": "This unit was given its cgroup subtree to manage — a container runtime, a user manager, a VM supervisor — so its numbers are the aggregate of a hierarchy whose members are another manager's and have no rows here. It is why a figure on this row cannot be broken down further."
+        },
+        "CpuUsageUsec": {
+          "type": "integer",
+          "unit": "microseconds",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Total CPU time this workload and everything under it has consumed since the cgroup was created, from `usage_usec` in cpu.stat. A counter, never a rate: the window a rate needs belongs to whoever is watching, and this process has only one sample."
+        },
+        "CpuUserUsec": {
+          "type": "integer",
+          "unit": "microseconds",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The part of CpuUsageUsec spent in user code, from `user_usec` in cpu.stat."
+        },
+        "CpuSystemUsec": {
+          "type": "integer",
+          "unit": "microseconds",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The part of CpuUsageUsec spent in the kernel on this workload's behalf, from `system_usec` in cpu.stat."
+        },
+        "CpuThrottledUsec": {
+          "type": "integer",
+          "unit": "microseconds",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "How long this workload has been held stopped by its own CPU quota, from `throttled_usec` in cpu.stat. It is the answer to 'it is slow and nothing is contended' — a limit, not a shortage, and invisible to every pressure reading."
+        },
+        "CpuThrottledPeriods": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "How many accounting periods ended with this workload throttled, from `nr_throttled` in cpu.stat; against CpuThrottledUsec it separates brief frequent clipping from long stalls."
+        },
+        "MemoryCurrentBytes": {
+          "type": "integer",
+          "unit": "bytes",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Memory charged to this workload right now, including the page cache it caused to be read, from memory.current. Absent rather than zero where the controller is off or the kernel does not keep it — a cgroup nobody measured is not a cgroup using nothing."
+        },
+        "MemoryPeakBytes": {
+          "type": "integer",
+          "unit": "bytes",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The high-water mark of MemoryCurrentBytes since the cgroup was created, from memory.peak; the figure a limit has to clear, which the current value hides."
+        },
+        "MemorySwapCurrentBytes": {
+          "type": "integer",
+          "unit": "bytes",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Swap charged to this workload, from memory.swap.current — memory it was given and then lost the fast copy of."
+        },
+        "MemoryOomKills": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "How many processes the kernel has killed in this workload for exceeding memory, from `oom_kill` in memory.events. It survives what nothing else does: systemd restarts the service, the unit returns to active, and this counter is the only trace left that it happened."
+        },
+        "MemoryOomEvents": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "How many times this workload hit its memory limit and had to reclaim or block, from `oom` in memory.events, whether or not anything was killed. It is a different record from MemoryOomKills and reading one for the other reports killings that never happened."
+        },
+        "IoReadBytes": {
+          "type": "integer",
+          "unit": "bytes",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Bytes read from block devices by this workload and everything under it, summed across the devices io.stat names — per-device detail belongs to storage, which owns the objects those devices are."
+        },
+        "IoWrittenBytes": {
+          "type": "integer",
+          "unit": "bytes",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Bytes written to block devices by this workload and everything under it, summed across the devices io.stat names."
+        },
+        "IoReadOps": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Read requests issued to block devices by this workload, from `rios` in io.stat."
+        },
+        "IoWriteOps": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Write requests issued to block devices by this workload, from `wios` in io.stat."
+        },
+        "HostCpuBusyUsec": {
+          "type": "integer",
+          "unit": "microseconds",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Every microsecond of CPU this host actually spent doing work, from /proc/stat's own accounting rather than from any cgroup — the denominator the workloads below are a share of. Time stolen by a hypervisor is excluded and carried separately: the vCPU was not running, so counting it here would inflate the remainder by however contended this machine's neighbours are."
+        },
+        "HostCpuStolenUsec": {
+          "type": "integer",
+          "unit": "microseconds",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "CPU time a hypervisor gave to somebody else while this machine wanted it, from /proc/stat's steal column — present only on a virtualised host that has lost any, and absent rather than zero on bare metal. It is neither busy nor idle, which is why it is its own fact: it is the work this host did not get to do."
+        },
+        "UnattributedCpuUsec": {
+          "type": "integer",
+          "unit": "microseconds",
+          "temperament": "counter",
+          "kind": "derived",
+          "derived_from": ["HostCpuBusyUsec", "CpuUsageUsec"],
+          "discloses": "nothing",
+          "sentence": "Host CPU spent inside no top-level slice, and therefore belonging to no workload row here: kernel threads, an md resync, a scrub, writeback. On most kernels those tasks do sit in a cgroup — the root one — so this is deliberately not called work in no cgroup at all. Stated for CPU alone, because it is the one resource whose host total has an unambiguous denominator: memory's is a heuristic and block I/O's double-counts every stacked device, and a remainder nobody can defend is worse than none."
+        },
+        "PsiIoSomeAvg10": {
+          "type": "number",
+          "temperament": "gauge", "kind": "observed", "discloses": "nothing",
+          "sentence": "The share of the last 10 seconds in which at least one task here was waiting on I/O."
+        },
+        "PsiIoSomeAvg60": {
+          "type": "number",
+          "temperament": "gauge", "kind": "observed", "discloses": "nothing",
+          "sentence": "The share of the last minute in which at least one task here was waiting on I/O — it aggregates as a union up the tree, so a parent is normally at least its children and it is never used for attribution."
+        },
+        "PsiIoSomeAvg300": {
+          "type": "number",
+          "temperament": "gauge", "kind": "observed", "discloses": "nothing",
+          "sentence": "The same share over the last five minutes."
+        },
+        "PsiIoFullAvg10": {
+          "type": "number",
+          "temperament": "gauge", "kind": "observed", "discloses": "nothing",
+          "sentence": "The share of the last 10 seconds in which every task in this workload that had work to do was waiting on I/O."
+        },
+        "PsiIoFullAvg60": {
+          "type": "number",
+          "temperament": "gauge", "kind": "observed", "discloses": "nothing",
+          "sentence": "The share of the last minute in which every task in this workload that had work to do was waiting on I/O. Tasks with nothing to do are not counted, so this is 'made no progress', not 'everything is stuck'."
+        },
+        "PsiIoFullAvg300": {
+          "type": "number",
+          "temperament": "gauge", "kind": "observed", "discloses": "nothing",
+          "sentence": "The same share over the last five minutes, which is where a brief spike and a standing problem separate."
+        },
+        "PsiCpuSomeAvg10": {
+          "type": "number",
+          "temperament": "gauge", "kind": "observed", "discloses": "nothing",
+          "sentence": "The share of the last 10 seconds in which at least one task here was runnable but waiting for a CPU."
+        },
+        "PsiCpuSomeAvg60": {
+          "type": "number",
+          "temperament": "gauge", "kind": "observed", "discloses": "nothing",
+          "sentence": "The share of the last minute in which at least one task here was runnable but waiting for a CPU — contention, which is a different thing from the CPU time this workload actually got. There is no `full` companion: the kernel defines cpu full as always zero, so publishing it would look like a measurement."
+        },
+        "PsiCpuSomeAvg300": {
+          "type": "number",
+          "temperament": "gauge", "kind": "observed", "discloses": "nothing",
+          "sentence": "The same share over the last five minutes."
+        },
+        "PsiMemorySomeAvg10": {
+          "type": "number",
+          "temperament": "gauge", "kind": "observed", "discloses": "nothing",
+          "sentence": "The share of the last 10 seconds in which at least one task here was waiting on memory reclaim."
+        },
+        "PsiMemorySomeAvg60": {
+          "type": "number",
+          "temperament": "gauge", "kind": "observed", "discloses": "nothing",
+          "sentence": "The share of the last minute in which at least one task here was waiting on memory reclaim."
+        },
+        "PsiMemorySomeAvg300": {
+          "type": "number",
+          "temperament": "gauge", "kind": "observed", "discloses": "nothing",
+          "sentence": "The same share over the last five minutes."
+        },
+        "PsiMemoryFullAvg10": {
+          "type": "number",
+          "temperament": "gauge", "kind": "observed", "discloses": "nothing",
+          "sentence": "The share of the last 10 seconds in which every task here that had work to do was waiting on memory reclaim."
+        },
+        "PsiMemoryFullAvg60": {
+          "type": "number",
+          "temperament": "gauge", "kind": "observed", "discloses": "nothing",
+          "sentence": "The share of the last minute in which every task here that had work to do was waiting on memory reclaim."
+        },
+        "PsiMemoryFullAvg300": {
+          "type": "number",
+          "temperament": "gauge", "kind": "observed", "discloses": "nothing",
+          "sentence": "The same share over the last five minutes."
+        },
+        "StallExplainedBy": {
+          "type": "object",
+          "temperament": "state",
+          "kind": "derived",
+          "derived_from": ["PsiIoFullAvg60", "PsiMemoryFullAvg60"],
+          "discloses": "nothing",
+          "sentence": "The workload inside this slice whose own stall accounts for the slice's, keyed by the pressure fact it is about. A slice only counts time in which every non-idle task under it was stalled, so a member that caused it reads at least as high — and the member's row is where the finding belongs, with a name on it."
+        },
+        "StallUnexplained": {
+          "type": "object",
+          "temperament": "state",
+          "kind": "derived",
+          "derived_from": ["PsiIoFullAvg60", "PsiMemoryFullAvg60"],
+          "discloses": "nothing",
+          "sentence": "Every member of this slice was read and none of them accounts for its stall, keyed by the pressure fact it is about. On the root slice this is the statement that the host's stall is not any workload's fault — it is kernel work in no cgroup, which no row here will ever carry."
+        },
+        "StallAttributionUnobservable": {
+          "type": "object",
+          "temperament": "state",
+          "kind": "derived",
+          "derived_from": ["PsiIoFullAvg60", "PsiMemoryFullAvg60"],
+          "discloses": "nothing",
+          "sentence": "Why this slice's stall could be neither attributed nor ruled out — a member that would not read, a subtree the walk did not reach the bottom of, or a member cgroup that is not a systemd unit and so has no row for its reading to belong to. A gap in the reading, never a finding about the slice."
+        }
+      },
+      "redaction_exemption": "this collector serves no evidence verb yet, and when it does the payload is the cgroup files it already reads: cpu.stat, memory.current, memory.peak, memory.swap.current, memory.events, io.stat and the three pressure files, plus /proc/stat on the root row. Every one of them is counters, averages and device numbers in a format the kernel fixes — none names a client, a query, a command line or an environment, and no file this collector opens can carry a credential because the set is enumerated by name rather than globbed. The bound is stated because it is a decision rather than a shape: a cgroup PATH carries whatever name created the cgroup, which on a host running named containers or libvirt domains is a word somebody chose, and a payload keyed by path therefore needs this exemption revisited rather than inherited (harness/scrub/resources.json carries the same bound for the corpus).",
+      "reference_commands": [
+        {
+          "purpose": "the tree this collector walks, as systemd names it",
+          "argv": ["systemd-cgls"]
+        },
+        {
+          "purpose": "the same consumption, live and ranked, by hand",
+          "argv": ["systemd-cgtop"]
+        },
+        {
+          "purpose": "one workload's CPU counters — the CpuUsageUsec, CpuUserUsec, CpuSystemUsec and throttling facts come from here",
+          "argv": ["cat", "/sys/fs/cgroup/system.slice/cpu.stat"]
+        },
+        {
+          "purpose": "one workload's memory charge and its high-water mark",
+          "argv": ["cat", "/sys/fs/cgroup/system.slice/memory.current"]
+        },
+        {
+          "purpose": "the OOM record that survives a restart, where MemoryOomKills and MemoryOomEvents come from",
+          "argv": ["cat", "/sys/fs/cgroup/system.slice/memory.events"]
+        },
+        {
+          "purpose": "one workload's block I/O, per device, before this collector sums it",
+          "argv": ["cat", "/sys/fs/cgroup/system.slice/io.stat"]
+        },
+        {
+          "purpose": "the three pressure files a stall reading and its attribution are built from",
+          "argv": ["cat", "/sys/fs/cgroup/system.slice/io.pressure"]
+        },
+        {
+          "purpose": "the host denominator the unattributed remainder is measured against — named because a subtraction is only checkable if both sides are",
+          "argv": ["cat", "/proc/stat"]
+        }
+      ]
+    }
+  ]
+}

@@ -680,6 +680,69 @@ def test_an_unclassified_leaf_refuses_the_run() -> None:
     assert "surprise" in proc.stderr
 
 
+# ── a transcription's payloads: one scalar per path, addressed by glob ───
+#
+# A TREE-shaped interface's native document is the filesystem transcribed
+# (DESIGN's tree-shape ruling, 2026-08-19), which is one payload per path the
+# machine had — hundreds of stems the manifest's author never chose, and `null`
+# wherever a path was not there. Two properties have to hold for that to be
+# publishable at all, and both are deny-by-default; each is asserted here
+# against the real tool, because a manifest language that silently passed
+# either would publish a capture nobody classified.
+
+
+def _scrub_files(files: dict[str, str], manifest: dict):
+    """Scrub payload files written VERBATIM, so a `.json` document that is a
+    bare scalar and a `.txt` document both reach the tool as themselves."""
+    with tempfile.TemporaryDirectory() as tmp:
+        manifest_path = Path(tmp) / "manifest.json"
+        manifest_path.write_text(json.dumps(manifest))
+        paths = []
+        for name, body in files.items():
+            path = Path(tmp) / name
+            path.write_text(body)
+            paths.append(path)
+        proc = subprocess.run(
+            [sys.executable, str(ANONYMISE), "--manifest", str(manifest_path),
+             *(str(p) for p in paths)],
+            capture_output=True, text=True,
+            env={**os.environ, "SE_SCRUB_SECRET": TEST_SECRET},
+        )
+        return proc, {p.name: p.read_text() for p in paths}
+
+
+def test_a_scalar_json_payload_is_classified_whole_or_refused() -> None:
+    """`null` is how a transcription records a path that was not there, and a
+    document that is one scalar has no leaves for a dotted path to name — the
+    same property a text payload has. Classified whole it survives verbatim;
+    unclassified it refuses, which is what stops a capture of this shape
+    reaching a public corpus unclassified."""
+    manifest = {"absent path": {"payload": "*-io.stat", "whole": {"discloses": "nothing"}}}
+    proc, files = _scrub_files({"cg-io.stat.json": "null\n"}, manifest)
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(files["cg-io.stat.json"]) is None
+
+    proc, _ = _scrub_files({"cg-memory.peak.json": "null\n"}, manifest)
+    assert proc.returncode != 0
+    assert "cg-memory.peak" in proc.stderr
+
+
+def test_a_whole_entry_may_scope_by_glob_and_two_matches_refuse() -> None:
+    """A transcription's stems are the machine's paths, not a vocabulary
+    anybody wrote down, so the classification is stated per FILE KIND and the
+    entry names the kind. Overlap is refused rather than resolved, because
+    which entry governs must never depend on the manifest's iteration order."""
+    manifest = {"cpu": {"payload": "*-cpu.stat", "whole": {"discloses": "nothing"}}}
+    proc, files = _scrub_files({"a-cpu.stat.txt": "usage_usec 5\n"}, manifest)
+    assert proc.returncode == 0, proc.stderr
+    assert files["a-cpu.stat.txt"] == "usage_usec 5\n"
+
+    manifest["cpu again"] = {"payload": "a-*", "whole": {"discloses": "nothing"}}
+    proc, _ = _scrub_files({"a-cpu.stat.txt": "usage_usec 5\n"}, manifest)
+    assert proc.returncode != 0
+    assert "exactly one must" in proc.stderr
+
+
 def test_a_declared_secret_refuses_the_run_without_echoing_it() -> None:
     """A secret must never have been captured; scrubbing cannot repair the
     payload, and the refusal itself must not become the leak."""

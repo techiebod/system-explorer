@@ -1,0 +1,28 @@
+{
+  "#": "Scrub manifest for the resources collector, whose interface is a TREE and whose native document is therefore the filesystem transcribed (DESIGN's tree-shape ruling, 2026-08-19): one payload holding the directory listings the walk yielded, and one payload per path read holding that file's exact bytes — `null` where the path was not there, because absent and empty are different answers and this collection turns on keeping them apart.",
+
+  "#why-globs": "A transcription's payload set is one file per path the MACHINE had, so the stems are not a vocabulary anybody wrote down: this guest yields 677 of them and a re-stage yields different ones the moment a container starts or an ssh session opens. The classification does not vary with the path — cpu.stat holds the kernel's CPU counters on every host that has a cpu.stat — so it is stated once per FILE KIND and the entry names the kind by glob. A stem matching no entry is still refused, which is what will force this file to grow when a kernel adds a file the collector reads.",
+
+  "#contents-disclose-nothing": "Every entry below classifies a CONTENT, and every one of those contents is a counter, an average or a device number the kernel writes in a fixed format. cpu.stat, memory.events: `key value` integers. memory.current, memory.peak, memory.swap.current: one integer. io.stat: `major:minor` plus byte and operation counters — a major:minor locates a device on this kernel's device number space exactly as a PCI address locates a card on a bus, identical across every machine of that layout, which is DESIGN 21's own worked example of `nothing`. The pressure files: three decaying averages and a microsecond total. /proc/stat: jiffy counters, interrupt counts and the boot instant. None of it correlates a machine across captures, none of it says where anything sits, and none of it is a word anybody chose.",
+
+  "#THE-BOUND-IS-THE-PATHS-NOT-THE-CONTENTS": "The identifying surface of this capture is not in any value. It is in the cgroup PATHS — which are in the walk listing below AND in the payload FILE NAMES, and a file name is something no scrubber rewrites. So the `nothing` on the three walk entries is a bound of THIS capture, in the shape harness/scrub/docker.json's #names and #argv-and-labels entries already carry, and it is stated rather than implied.\n\nWhat makes it true here: every component of every path in this capture is a name the SOFTWARE chose. systemd's own unit names (system.slice, init.scope, dev-hugepages.mount, system-getty.slice), the distribution's packaged units (chrony.service, unbound.service, kea-dhcp4-server.service), this product's own (se-collate.service), a uid (user-1000.slice), a logind session number (session-186.scope), and eight `docker-<64 hex>.scope` names — docker container ids, classified nothing here for exactly the reason harness/scrub/docker.json classifies `*.Id` nothing: the id is minted at create time from randomness and denotes nothing outside the daemon that minted it.\n\nWhat would make it false: a host running anybody's actual stacks. A container run under `--name` puts that word in a cgroup path; a libvirt guest puts its domain name in machine.slice/machine-<name>.scope; an operator-written unit puts a chosen word in system.slice. Those are content, and they land in the payload file names where substitution cannot reach them — so such a capture must be REFUSED rather than scrubbed, and this file is where somebody has to notice. Nothing mechanical will force it.",
+
+  "#no-secret-surface": "No file this collector reads can carry a credential: the collector reads counters and pressure files by name (adapters/resources.py's _read_counters and _read_pressure enumerate them), never a unit's environment, its argv or its configuration. That is why there is no `secret` entry here and no redaction to declare — a statement about the interface, not an absence of anyone having looked.",
+
+  "#walk": "The listings payload is a list of [dirpath, [subdirectory names], [file names]] triples, in the order os.walk yielded them — load-bearing, because the shallowest occurrence of a duplicated unit name wins and that depends on the order. So the three patterns below address a list index, then the triple's position: `*.0` is the directory, `*.1.*` each subdirectory name, `*.2.*` each file name. The file names are the kernel's own cgroup interface files, identical on every cgroup v2 host at this kernel version.",
+
+  "*.0": {"payload": "sys-fs-cgroup", "discloses": "nothing"},
+  "*.1.*": {"payload": "sys-fs-cgroup", "discloses": "nothing"},
+  "*.2.*": {"payload": "sys-fs-cgroup", "discloses": "nothing"},
+
+  "cpu.stat": {"payload": "*-cpu.stat", "whole": {"discloses": "nothing"}},
+  "cpu.pressure": {"payload": "*-cpu.pressure", "whole": {"discloses": "nothing"}},
+  "io.pressure": {"payload": "*-io.pressure", "whole": {"discloses": "nothing"}},
+  "memory.pressure": {"payload": "*-memory.pressure", "whole": {"discloses": "nothing"}},
+  "io.stat": {"payload": "*-io.stat", "whole": {"discloses": "nothing"}},
+  "memory.current": {"payload": "*-memory.current", "whole": {"discloses": "nothing"}},
+  "memory.peak": {"payload": "*-memory.peak", "whole": {"discloses": "nothing"}},
+  "memory.swap.current": {"payload": "*-memory.swap.current", "whole": {"discloses": "nothing"}},
+  "memory.events": {"payload": "*-memory.events", "whole": {"discloses": "nothing"}},
+  "proc/stat": {"payload": "proc-stat", "whole": {"discloses": "nothing"}}
+}

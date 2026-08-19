@@ -61,6 +61,7 @@ from system_explorer.agent.adapters import (  # noqa: E402
     bazarr, docker, logs, network, packages, storage, traefik, unbound, vms,
     docker, logs, network, packages, servarr, storage, traefik, unbound, vms,
     docker, kea, logs, network, packages, storage, traefik, unbound, vms,
+    docker, logs, network, packages, resources, storage, traefik, unbound, vms,
 )
 
 # The collections each adapter serves live, and the capability attributes the
@@ -70,6 +71,12 @@ from system_explorer.agent.adapters import (  # noqa: E402
 LIVE = {
     "storage": {"module": storage, "adapter": storage.Adapter,
                 "interface": "zpool", "collections": ["pools"]},
+    # The tree-shaped one. Nothing is redirected here, so `_walk` and
+    # `_read_text` read this machine's own cgroupfs — which is the point of
+    # this tool and the exact thing its replay twin refuses.
+    "resources": {"module": resources, "adapter": resources.Adapter,
+                  "interface": "cgroup v2 hierarchy",
+                  "collections": ["workloads"]},
     "network": {"module": network, "adapter": network.Adapter,
                 "interface": "nft", "collections": ["nft-chains", "nft-rules"]},
     "vms": {"module": vms, "adapter": vms.Adapter,

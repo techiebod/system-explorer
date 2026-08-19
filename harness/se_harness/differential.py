@@ -74,6 +74,7 @@ SEEDS = {
     "traefik": "traefik/healthy",
     "servarr": "servarr/healthy",
     "kea": "kea/no-lease-hook",
+    "resources": "resources/healthy",
 }
 
 # Names the operators mint. Constants rather than inline literals so the
@@ -190,6 +191,26 @@ SERVARR_ERROR_MESSAGE = "The download is missing files"
 KEA_UNLISTED_HOST = "printer-loft"
 KEA_RESERVATION_COUNT = "'ReservationCount': 7"
 KEA_UNLISTED_REMAINDER = "'UnlistedReservations': 1"
+# The workload the cgroup operator gives an OOM record to, and the payload
+# holding it. The payload name is the seam's own addressing — the resources
+# collector's reads are dispatched on their PATH, so the stem is slug(path) —
+# and it is spelled out rather than derived, because a stem this operator got
+# wrong would raise a mutator error a reader can act on instead of silently
+# rewriting some other cgroup's counters.
+OOM_KILLED_UNIT = "cron.service"
+OOM_KILLED_PAYLOAD = "sys-fs-cgroup-system.slice-cron.service-memory.events"
+# Three times at the limit, one process killed. oom_kill <= oom is a kernel
+# invariant — a kill implies an event — so the two are not equal here, which is
+# the whole shape: an implementation that read one for the other agrees with
+# the reference on every capture where both are zero, and reports killings that
+# never happened the moment they are not.
+OOM_EVENTS = 3
+OOM_KILLS = 1
+# The two spellings the disagreement lands on: the number of processes the
+# kernel actually killed, and the number of times the limit was merely hit,
+# which is what a port that read `oom` publishes in its place.
+OOM_KILLS_TRUE = f"'MemoryOomKills': {OOM_KILLS}"
+OOM_KILLS_BLIND = f"'MemoryOomKills': {OOM_EVENTS}"
 
 
 # ── nftables helpers, grammar-aware ──────────────────────────────────────
@@ -959,6 +980,63 @@ def _second_resolver_thread(payloads: dict) -> dict:
     return payloads
 
 
+# ── cgroupfs: the workload that was killed ───────────────────────────────
+
+
+def _oom_killed_workload(payloads: dict) -> dict:
+    """CLASS oom-counter-blind: an OOM KILL reported as an OOM event.
+
+    `memory.events` keeps two counters that read almost the same and mean
+    entirely different things. `oom` is how many times the workload hit its
+    limit and had to reclaim or block; `oom_kill` is how many of its processes
+    the kernel then killed. On any machine at rest both are 0, so a collector
+    that lifted one under the other's name reproduces every committed capture
+    exactly — and on the machine an operator is actually asking about, it
+    reports killings that never happened, or misses the ones that did.
+
+    That is DESIGN 20's third trap, and this is the shape that springs it. It
+    matters more here than the arithmetic suggests: an OOM kill is the loudest
+    thing that happens to a workload and it leaves no other trace — systemd
+    restarts the service, the unit returns to active, and this counter is the
+    only survivor.
+
+    `max` moves with them because the kernel could not have produced the
+    document otherwise: a limit that was never reached cannot have invoked the
+    OOM killer, and the mutator's contract is a machine that could exist.
+
+    The reference publishes MemoryOomKills 1 beside MemoryOomEvents 3; a blind
+    port publishes 3 for both, so the disagreement arrives on the one row and
+    names the workload it is about.
+    """
+    text = payloads.get(OOM_KILLED_PAYLOAD)
+    if not isinstance(text, str):
+        raise MutatorError(
+            f"the capture has no {OOM_KILLED_PAYLOAD!r} payload, so there is "
+            f"no {OOM_KILLED_UNIT} memory.events to give an OOM record to"
+        )
+    values = {}
+    for line in text.splitlines():
+        fields = line.split()
+        if len(fields) == 2:
+            values[fields[0]] = fields[1]
+    if values.get("oom") != "0" or values.get("oom_kill") != "0":
+        raise MutatorError(
+            f"{OOM_KILLED_UNIT} already carries an OOM record "
+            f"({values.get('oom')}/{values.get('oom_kill')}), so a minted one "
+            "would be a second reading rather than the first"
+        )
+    minted = {"max": str(OOM_EVENTS), "oom": str(OOM_EVENTS),
+              "oom_kill": str(OOM_KILLS)}
+    out = []
+    for line in text.splitlines():
+        fields = line.split()
+        if len(fields) == 2 and fields[0] in minted:
+            line = f"{fields[0]} {minted[fields[0]]}"
+        out.append(line)
+    payloads[OOM_KILLED_PAYLOAD] = _keep_trailing_newline(text, out)
+    return payloads
+
+
 # ── docker containers ────────────────────────────────────────────────────
 
 
@@ -1413,6 +1491,8 @@ OPERATORS: tuple[Operator, ...] = (
              _removed_but_configured_row),
     Operator("unbound-second-thread", "unbound", "thread-share-blind",
              _second_resolver_thread),
+    Operator("cgroup-oom-kill", "resources", "oom-counter-blind",
+             _oom_killed_workload),
     Operator("docker-restarting-container", "docker", "scoped-state-enum",
              _restarting_container),
     Operator("docker-paused-container", "docker", "scoped-state-enum",

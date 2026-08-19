@@ -48,6 +48,7 @@ from se_harness import live, replay  # noqa: E402
 # collection served but never compared is the hole `nft-rules` sat in.
 SERVES = {
     "storage": ["pools"],
+    "resources": ["workloads"],
     "network": ["nft-chains", "nft-rules"],
     "vms": ["domains"],
     "packages": ["packages"],
