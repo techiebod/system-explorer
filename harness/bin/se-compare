@@ -62,14 +62,21 @@ def port_binary(collector: str) -> Path:
     """The built Go collector. Built, not built-here: the comparator must
     compare what would actually be deployed, and a build step hidden inside a
     measurement is how a stale binary gets measured twice."""
-    path = REPO / "go" / "bin" / f"se-collect-{collector}"
-    if not path.exists():
-        raise SystemExit(
-            f"{path} does not exist. Build it first:\n"
-            f"  cd {REPO / 'go'} && go build -o bin/se-collect-{collector} "
-            f"./cmd/se-collect-{collector}"
-        )
-    return path
+    return REPO / "go" / "bin" / f"se-collect-{collector}"
+
+
+def is_ported(collector: str) -> bool:
+    """Whether a Go collector exists to compare the reference against.
+
+    NOT PORTED is a third state beside clean and failed, and it has to be its
+    own state for the fleet phase to be legible: SERVES names every collection
+    the replay seam can serve — which the subset guard requires, so no
+    collector can be quietly left out of the report — and porting lags capture
+    by design. Collapsing "no binary yet" into a failure would make the gate-3
+    report read as seventeen defects, and collapsing it into a pass would be
+    the far worse direction: silence over a collector nothing has compared.
+    """
+    return port_binary(collector).exists()
 
 
 def run_one(argv: list[str], collector: str, collections: list[str],
@@ -120,6 +127,14 @@ class CouldNotRun(Exception):
 def compare(collector: str, twice: bool) -> dict:
     collections = SERVES[collector]
     result: dict = {"collector": collector, "collections": collections}
+
+    if not is_ported(collector):
+        result["not_ported"] = (
+            f"no {port_binary(collector).name} — the seam can replay this "
+            "collector and nothing has been written to compare against yet"
+        )
+        result["clean"] = True  # nothing was compared, and nothing failed
+        return result
 
     try:
         reference, ref_window, ref_stderr = run_one(
@@ -237,6 +252,9 @@ def _counts(records: list[dict]) -> dict[str, int]:
 
 def render(result: dict) -> str:
     lines = [f"── {result['collector']} ({', '.join(result['collections'])})"]
+    if "not_ported" in result:
+        lines.append(f"  · not ported: {result['not_ported']}")
+        return "\n".join(lines)
     if "could_not_run" in result:
         failed = result["could_not_run"]
         lines.append(f"  ✗ the {failed['side']} could not run (exit {failed['exit']})")
