@@ -78,6 +78,7 @@ import httpx  # noqa: E402
 from system_explorer.agent.adapters import (  # noqa: E402
     bazarr, docker, logs, network, packages, storage, traefik, unbound, vms,
     docker, logs, network, packages, servarr, storage, traefik, unbound, vms,
+    docker, kea, logs, network, packages, storage, traefik, unbound, vms,
 )
 
 # Which module-level acquisition each collector redirects, and what payload
@@ -246,6 +247,33 @@ SEAM = {
         # a key nobody could read.
         "fleet_methods": ["_get"],
         "instance": {},
+    },
+    "kea": {
+        "module": kea,
+        "adapter": kea.Adapter,
+        "interface": "kea control socket",
+        "collections": ["daemon", "subnets", "reservations", "leases"],
+        # The same one-command-one-connection shape as unbound, and the same
+        # dispatched seam — but the answers are JSON, so the payloads are
+        # .json and load_payloads parses them exactly as the adapter's own
+        # json.loads would. Five commands sit on the acquisition path
+        # (version-get, status-get, statistic-get-all, config-get,
+        # lease4-get-all) and list-commands sits on the capability one; all
+        # six are keyed on the command, because the command is what decides
+        # which document comes back.
+        #
+        # `leases` is in this list and is gated on a HOOK. lease4-get-all
+        # ships in libdhcp_lease_cmds, so a Kea with no hooks loaded does not
+        # offer it at all — which capability() turns into an unavailable
+        # collection naming the hook. acquire() re-checks nothing, so this
+        # seam serves the collection from a captured payload wherever one
+        # exists and refuses (never falls through to a live socket) where one
+        # does not.
+        "methods": ["_command"],
+        # Pinned for the reason unbound's is: the adapter reads SE_KEA_SOCKET
+        # in __init__, so an unpinned replay would carry whatever the machine
+        # REPLAYING the corpus has in its environment.
+        "instance": {"socket_path": "/replay.invalid/kea4-ctrl-socket"},
     },
     # ── the one collector with no acquire(), and the shape that follows ──
     "logs": {

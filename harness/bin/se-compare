@@ -54,6 +54,7 @@ SERVES = {
     "docker": ["containers", "volumes", "networks"],
     "traefik": ["overview", "routers", "services"],
     "unbound": ["daemon"],
+    "kea": ["daemon", "subnets", "reservations", "leases"],
     "logs": ["journal"],
     "bazarr": ["instance"],
     "servarr": ["apps", "health", "queue", "history"],

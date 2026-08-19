@@ -1,0 +1,469 @@
+{
+  "#": "Scrub manifest for the kea collector: the five documents the control socket answers on the acquisition and probe paths — version-get, status-get, statistic-get-all, config-get and list-commands. The control channel IS a JSON interface, so an answer document is the payload and every leaf of it walks this file.",
+  "#scoped": "Three entries name their payload and the rest do not, and the split is forced rather than stylistic. `arguments` is a LIST in list-commands, a dict of statistic NAMES in statistic-get-all, and a dict of schema members in the other three — so a `*` at that position means 'a list index' in one file, 'a named thing' in another and nothing at all in the third. `_keys_are_data` asks whether ANY visible entry walks a dict's keys with a `*`, so an unscoped `arguments.*` would demand an `arguments.~key` classification of status-get's schema members too, which would be a false claim about them. Everything else names its member explicitly at that position and is invisible to the payloads that do not have it.",
+  "#config-is-the-risk": "config-get is where this collector's disclosure actually lives, and it is not a shape the other four share. A DHCP configuration states which network this is, which pool it hands out, and — one reservation at a time — the MAC address, client identifier, DUID or flex-id of a particular machine on it, beside the name that machine is given. Those are identity and location in DESIGN 21's own words, and they are classified as such here BY WHAT THE MEMBER CARRIES ON ANY HOST, not by what this capture happens to hold: the values in this guest's config are ISC's shipped example (1a:1b:1c:1d:1e:1f, hal9000, special-snowflake, 192.0.2.0/24), and a manifest written to that accident would be worthless the first time it met a real one.",
+  "#bound-subnet": "THE ONE PLACE THIS CAPTURE FORCED A `nothing`. `subnet4.*.subnet` is the most location-bearing member in the document and it is classified `nothing` here, because the value is 192.0.2.0/24 — RFC 5737 TEST-NET-1, the documentation range this repository's own scrubber substitutes INTO. A CIDR is scrubbed as a unit (base masked valid for its length), and every address in the documentation range maps back into the documentation range, so a /24 there is a fixed point: declared location/ipv4 it comes back byte-identical and the survived-unchanged gate refuses the run, correctly, because no substitution rule engaged. The value genuinely discloses nothing — it is the example range, published in ISC's manual and in RFC 5737 — and the entry says so instead of dressing the member as prose to get past a gate that is working.\n\nThe bound: a capture from a host with a real subnet must reclassify this to {\"discloses\": \"location\", \"format\": \"ipv4\"} BEFORE it is scrubbed. There the substitution does engage — 192.168.1.0/24 and 10.20.0.0/16 both move within their own space and come back masked — so the fixed point is a property of this capture's range and of no other. Nothing mechanical will force that edit, which is why it is written here.",
+  "#bound-nothing-by-default": "Four more members are `nothing` only because of what THIS guest runs, and each is a package default rather than a decision anybody made. `control-sockets.*.socket-name` is `kea4-ctrl-socket`, the name Ubuntu's package ships; a deployment that keeps its socket under an operator-named run directory writes a path that says where this host puts things, which is location. `loggers.*.name` is `kea-dhcp4`, Kea's own; a custom logger is an operator's word. `loggers.*.output-options.*.output` is `stdout`; a host that logs to disk writes a filesystem path there. `option-data.*.name` and `.space` are DHCP's registered option vocabulary; a host with an `option-def` of its own writes names and a vendor space somebody chose. Every one of them must be reclassified before a capture from such a host is scrubbed — the same sentence harness/scrub/docker.json carries for `*.Command` and `*.Labels.*`, written here before an audit had to find it.",
+  "#prose": "Five members take format `prose`, which is the ruling of 2026-08-19: the same free-text pass every formatless entry takes, exempt only from the refusal for having substituted nothing. Each is a member whose content is genuinely unbounded and routinely carries no identifier at all. `option-data.*.data` is the worst of them — in this one capture it holds two address lists, two domain names, a POSIX timezone string, a hex byte and a bare integer, in ONE member — so a declared format would assert a shape the member does not have, and a formatless entry would refuse the run over `0xf0`. `boot-file-name` and `client-classes.*.test` are the same shape: a TFTP filename may be a bare word or a URL naming a server, and a class test is an operator-written expression over option bytes.\n\nWhat prose costs is stated rather than implied: the pass still substitutes an address, a MAC or a named host written inside the text, but it does NOT refuse when it finds none. So a real estate's domain name written in `option-data.*.data` — which is exactly where `domain-name` and `domain-search` live — passes through silently unless the run is handed that domain via --hostnames. A capture from an estate host must name its domains to the run.",
+  "#names": "Six members are operator-chosen WORDS, declared format `name`, which is the one classification that refuses to run at all without --hostnames: without a names list those fields no-op while the tool prints `scrubbed`, and that is the demonstrated leak the refusal exists for. They are the reservation hostname and server-hostname, their global twins, the DDNS generated prefix and qualifying suffix, the server tag, and the client-class name. Five of the eight leaves under them are the empty string on this guest — Kea normalises an unset member to `\"\"` rather than dropping it — and an empty string identifies nothing, so it survives the pass and the KEEP gate lets it, which is why `hostname` format is wrong here: that format substitutes the whole leaf, and it would turn `\"\"` into a minted host name and give five reservations a Hostname fact the daemon never stated.",
+  "#identifiers": "The reservation identifiers are format `serial` rather than a shape of their own. A client-id, a DUID and a flex-id are opaque strings a client presented — `010A0B0C0D0E0F`, `01:02:03:04:05`, a hex-encoded flex expression — and no existing format matches all three: `mac` refuses a five-octet DUID, `wwn` finds no 16- or 32-hex body, and a formatless entry substitutes nothing and refuses. `serial` is the format for exactly this — an opaque identifier a device carries — and its ANON-prefixed replacement is what the independent detectors look for. The cost is that the replacement is no longer a syntactically valid client-id, which nothing here reads: the adapter lifts ip-address, hw-address and hostname from a reservation and nothing else.",
+  "#ranges": "`subnet4.*.pools.*.pool` is a RANGE written as two addresses joined by a hyphen (`192.0.2.1-192.0.2.200`), and it is classified location with no format because no format spells a range: the free-text pass substitutes each endpoint on its own. Two consequences are stated rather than discovered. The endpoints are substituted INDEPENDENTLY, so a range can come back with its start above its end — a document Kea would reject — and whoever scrubs a capture reads the result before committing it; this one came back 192.0.2.5-192.0.2.210 and did not. And the pool's SIZE moves while `subnet[N].total-addresses` in statistic-get-all does not, because a counter is a number and nothing correlates it back to the range it was counted from — so the two documents disagree about pool arithmetic after the scrub. Neither matters to the collector, which reads the statistic and never the range, and both would matter to a reader checking one against the other.",
+  "#hash": "`arguments.hash` is Kea's SHA-256 over its own running configuration, and it is `nothing` because it discloses strictly less than the document it summarises — which is published here in full. It does NOT survive the scrub as a true digest: the config it covers is the pre-scrub one, so the hash and the committed configuration disagree by construction. That is a property of every scrubbed corpus and is stated rather than repaired, because recomputing it would be this repository inventing a value Kea never produced.",
+  "#unreached": "Six members exist in the schema, are empty on this guest, and carry no entry at all — `hooks-libraries`, `shared-networks`, `option-def`, `interfaces-config.interfaces`, `subnet4.*.relay.ip-addresses` and the pool- and class-level `option-data`. An empty list has no leaves, so the deny-by-default walk has nothing to refuse today and will refuse loudly the first time one of them is populated. That is deliberate: `shared-networks` in particular is central to this collector (a subnet declared inside one is a subnet whose statistics exist and whose CIDR would be missing), and classifying it from the manual rather than from a document in front of whoever writes it is how a manifest ends up describing a shape nobody has seen.",
+
+  "result": {
+    "discloses": "nothing"
+  },
+
+  "arguments.extended": {
+    "discloses": "nothing"
+  },
+  "text": {
+    "discloses": "nothing"
+  },
+
+  "arguments.dhcp-state.disabled-by-user": {
+    "discloses": "nothing"
+  },
+  "arguments.dhcp-state.globally-disabled": {
+    "discloses": "nothing"
+  },
+  "arguments.multi-threading-enabled": {
+    "discloses": "nothing"
+  },
+  "arguments.packet-queue-size": {
+    "discloses": "nothing"
+  },
+  "arguments.packet-queue-statistics.*": {
+    "discloses": "nothing"
+  },
+  "arguments.pid": {
+    "discloses": "nothing"
+  },
+  "arguments.reload": {
+    "discloses": "nothing"
+  },
+  "arguments.sockets.status": {
+    "discloses": "nothing"
+  },
+  "arguments.thread-pool-size": {
+    "discloses": "nothing"
+  },
+  "arguments.uptime": {
+    "discloses": "nothing"
+  },
+
+  "arguments.*": {
+    "discloses": "nothing",
+    "payload": "list-commands"
+  },
+
+  "arguments.~key": {
+    "discloses": "nothing",
+    "payload": "statistic-get-all"
+  },
+  "arguments.*.*.*": {
+    "discloses": "nothing",
+    "payload": "statistic-get-all"
+  },
+
+  "arguments.hash": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.allocator": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.authoritative": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.boot-file-name": {
+    "discloses": "content",
+    "format": "prose"
+  },
+  "arguments.Dhcp4.cache-threshold": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.calculate-tee-times": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.client-classes.*.boot-file-name": {
+    "discloses": "content",
+    "format": "prose"
+  },
+  "arguments.Dhcp4.client-classes.*.name": {
+    "discloses": "content",
+    "format": "name"
+  },
+  "arguments.Dhcp4.client-classes.*.next-server": {
+    "discloses": "location",
+    "format": "ipv4"
+  },
+  "arguments.Dhcp4.client-classes.*.server-hostname": {
+    "discloses": "identity",
+    "format": "name"
+  },
+  "arguments.Dhcp4.client-classes.*.test": {
+    "discloses": "content",
+    "format": "prose"
+  },
+  "arguments.Dhcp4.control-sockets.*.socket-name": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.control-sockets.*.socket-type": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.ddns-conflict-resolution-mode": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.ddns-generated-prefix": {
+    "discloses": "identity",
+    "format": "name"
+  },
+  "arguments.Dhcp4.ddns-override-client-update": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.ddns-override-no-update": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.ddns-qualifying-suffix": {
+    "discloses": "identity",
+    "format": "name"
+  },
+  "arguments.Dhcp4.ddns-replace-client-name": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.ddns-send-updates": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.ddns-update-on-renew": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.decline-probation-period": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.dhcp-ddns.enable-updates": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.dhcp-ddns.max-queue-size": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.dhcp-ddns.ncr-format": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.dhcp-ddns.ncr-protocol": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.dhcp-ddns.sender-ip": {
+    "discloses": "location",
+    "format": "ipv4"
+  },
+  "arguments.Dhcp4.dhcp-ddns.sender-port": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.dhcp-ddns.server-ip": {
+    "discloses": "location",
+    "format": "ipv4"
+  },
+  "arguments.Dhcp4.dhcp-ddns.server-port": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.dhcp-queue-control.capacity": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.dhcp-queue-control.enable-queue": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.dhcp-queue-control.queue-type": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.dhcp4o6-port": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.early-global-reservations-lookup": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.echo-client-id": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.expired-leases-processing.flush-reclaimed-timer-wait-time": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.expired-leases-processing.hold-reclaimed-time": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.expired-leases-processing.max-reclaim-leases": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.expired-leases-processing.max-reclaim-time": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.expired-leases-processing.reclaim-timer-wait-time": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.expired-leases-processing.unwarned-reclaim-cycles": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.host-reservation-identifiers.*": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.hostname-char-replacement": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.hostname-char-set": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.interfaces-config.re-detect": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.ip-reservations-unique": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.lease-database.lfc-interval": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.lease-database.type": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.loggers.*.debuglevel": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.loggers.*.name": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.loggers.*.output-options.*.flush": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.loggers.*.output-options.*.output": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.loggers.*.output-options.*.pattern": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.loggers.*.severity": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.match-client-id": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.multi-threading.enable-multi-threading": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.multi-threading.packet-queue-size": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.multi-threading.thread-pool-size": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.next-server": {
+    "discloses": "location"
+  },
+  "arguments.Dhcp4.option-data.*.always-send": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.option-data.*.code": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.option-data.*.csv-format": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.option-data.*.data": {
+    "discloses": "content",
+    "format": "prose"
+  },
+  "arguments.Dhcp4.option-data.*.name": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.option-data.*.never-send": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.option-data.*.space": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.parked-packet-limit": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.rebind-timer": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.renew-timer": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.reservations-global": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.reservations-in-subnet": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.reservations-lookup-first": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.reservations-out-of-pool": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.sanity-checks.extended-info-checks": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.sanity-checks.lease-checks": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.server-hostname": {
+    "discloses": "identity",
+    "format": "name"
+  },
+  "arguments.Dhcp4.server-tag": {
+    "discloses": "identity",
+    "format": "name"
+  },
+  "arguments.Dhcp4.stash-agent-options": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.statistic-default-sample-age": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.statistic-default-sample-count": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.store-extended-info": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.4o6-interface": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.4o6-interface-id": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.4o6-subnet": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.allocator": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.cache-threshold": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.calculate-tee-times": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.id": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.max-valid-lifetime": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.min-valid-lifetime": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.option-data.*.always-send": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.option-data.*.code": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.option-data.*.csv-format": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.option-data.*.data": {
+    "discloses": "content",
+    "format": "prose"
+  },
+  "arguments.Dhcp4.subnet4.*.option-data.*.name": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.option-data.*.never-send": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.option-data.*.space": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.pools.*.pool": {
+    "discloses": "location"
+  },
+  "arguments.Dhcp4.subnet4.*.rebind-timer": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.renew-timer": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.reservations.*.boot-file-name": {
+    "discloses": "content",
+    "format": "prose"
+  },
+  "arguments.Dhcp4.subnet4.*.reservations.*.client-id": {
+    "discloses": "identity",
+    "format": "serial"
+  },
+  "arguments.Dhcp4.subnet4.*.reservations.*.duid": {
+    "discloses": "identity",
+    "format": "serial"
+  },
+  "arguments.Dhcp4.subnet4.*.reservations.*.flex-id": {
+    "discloses": "identity",
+    "format": "serial"
+  },
+  "arguments.Dhcp4.subnet4.*.reservations.*.hostname": {
+    "discloses": "identity",
+    "format": "name"
+  },
+  "arguments.Dhcp4.subnet4.*.reservations.*.hw-address": {
+    "discloses": "identity",
+    "format": "mac"
+  },
+  "arguments.Dhcp4.subnet4.*.reservations.*.ip-address": {
+    "discloses": "location",
+    "format": "ipv4"
+  },
+  "arguments.Dhcp4.subnet4.*.reservations.*.next-server": {
+    "discloses": "location",
+    "format": "ipv4"
+  },
+  "arguments.Dhcp4.subnet4.*.reservations.*.option-data.*.always-send": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.reservations.*.option-data.*.code": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.reservations.*.option-data.*.csv-format": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.reservations.*.option-data.*.data": {
+    "discloses": "content",
+    "format": "prose"
+  },
+  "arguments.Dhcp4.subnet4.*.reservations.*.option-data.*.name": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.reservations.*.option-data.*.never-send": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.reservations.*.option-data.*.space": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.reservations.*.server-hostname": {
+    "discloses": "identity",
+    "format": "name"
+  },
+  "arguments.Dhcp4.subnet4.*.store-extended-info": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.subnet": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.t1-percent": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.t2-percent": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.subnet4.*.valid-lifetime": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.t1-percent": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.t2-percent": {
+    "discloses": "nothing"
+  },
+  "arguments.Dhcp4.valid-lifetime": {
+    "discloses": "nothing"
+  }
+}

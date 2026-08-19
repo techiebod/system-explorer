@@ -1,0 +1,7 @@
+{
+  "arguments": {
+    "extended": "3.0.3 (3.0.3 (tarball))\npremium: no\nlinked with:\n- log4cplus 2.0.8\n- OpenSSL 3.5.5 27 Jan 2026\nlease backends:\n- Memfile backend 3.0"
+  },
+  "result": 0,
+  "text": "3.0.3"
+}

@@ -236,6 +236,18 @@ CASES = (
          # satisfied by a port that had lost some other member entirely.
          ("StatusMessages", differential.SERVARR_STUCK_MESSAGE,
           differential.SERVARR_ERROR_MESSAGE)),
+    Case("unlistable-remainder", "kea-addressless-reservation",
+         "a9_unlistable_remainder_blind.py", differential.DISAGREE, "differences",
+         # Both halves of the reconciliation, by value: the count over every
+         # entry the configuration holds, and the remainder that says how many
+         # of them no row can carry. Bound to the pair because the facts dict is
+         # compared whole — ReservationCount alone would also be satisfied by a
+         # port that had lost some other subnet fact, and the remainder alone by
+         # one that published it and miscounted. Every reservation in the only
+         # committed kea capture states an address, so the remainder is nil there
+         # and a port that filters before it counts reproduces the pair exactly;
+         # this operator mints the one shape that draws the distinction.
+         (differential.KEA_RESERVATION_COUNT, differential.KEA_UNLISTED_REMAINDER)),
     Case("scoped-state-enum", "docker-paused-container",
          "a9_scope_state_blind.py", differential.DISAGREE, "differences",
          # The third member of the declared set, staged separately for the same

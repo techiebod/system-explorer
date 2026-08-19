@@ -202,6 +202,49 @@ for name, document in (("instances", bundle["instances"]),
 servarr_version_py='
 import json, sys
 print(", ".join(json.load(sys.stdin)["versions"]))
+# One command, one connection, the answer verbatim — Kea's control channel IS
+# a JSON interface (no socat on the lab image, and a shell pipeline would put
+# a transcription between the daemon and the payload). The socket path comes
+# from SE_KEA_SOCKET as an ARGUMENT rather than from the environment, because
+# reading it needs sudo and sudo resets the environment: the shell expands the
+# forwarded variable and sudo carries the value across as argv.
+#
+# The result member is checked before a byte is written. Kea answers every
+# command, including one it does not implement, with a well-formed JSON object
+# carrying a non-zero result — so a payload written blind would commit the
+# refusal as though it were a reading, and replay would serve it as a broken
+# lease table rather than as a collection this guest does not have. 3 is
+# CONTROL_RESULT_EMPTY, which is an answer ("the command ran and nothing
+# matched") and is exactly what the adapter's own ok=(0, 3) accepts.
+kea_py='
+import json, socket, sys
+path, command = sys.argv[1], sys.argv[2]
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.settimeout(10.0)
+s.connect(path)
+s.sendall(json.dumps({"command": command}).encode())
+s.shutdown(socket.SHUT_WR)
+chunks = []
+while True:
+    chunk = s.recv(65536)
+    if not chunk:
+        break
+    chunks.append(chunk)
+raw = b"".join(chunks).decode()
+answer = json.loads(raw)
+if isinstance(answer, list):
+    answer = answer[0] if answer else {}
+if answer.get("result") not in (0, 3):
+    sys.stderr.write("kea " + command + " answered " + str(answer.get("result"))
+                     + ": " + str(answer.get("text")) + "\n")
+    raise SystemExit(1)
+sys.stdout.write(raw)
+'
+# The daemon reporting on itself, which is the build that actually answered the
+# socket — `kea-dhcp4 -v` reads the binary on PATH and can name a different one.
+kea_version_py='
+import json, sys
+print("kea " + json.load(sys.stdin)["text"])
 '
 declare -a acquisitions
 case "$collector" in
@@ -292,6 +335,22 @@ case "$collector" in
         # than growing a second dialect inside it.
         acquisitions=()
         ;;
+    kea)
+        # Five commands, five documents, keyed on the command — the argument
+        # that decides which document comes back, which is what the dispatched
+        # seam keys its payloads on. list-commands is on the PROBE path rather
+        # than the acquisition path and is captured anyway: it is the document
+        # the leases gate reads, so committing it is what makes "this Kea
+        # offers no lease4-get-all" evidence a reviewer can check instead of a
+        # sentence in a note.
+        acquisitions=(
+            "version-get.json|sudo python3 -c '$kea_py' \"\$SE_KEA_SOCKET\" version-get"
+            "status-get.json|sudo python3 -c '$kea_py' \"\$SE_KEA_SOCKET\" status-get"
+            "statistic-get-all.json|sudo python3 -c '$kea_py' \"\$SE_KEA_SOCKET\" statistic-get-all"
+            "config-get.json|sudo python3 -c '$kea_py' \"\$SE_KEA_SOCKET\" config-get"
+            "list-commands.json|sudo python3 -c '$kea_py' \"\$SE_KEA_SOCKET\" list-commands"
+        )
+        ;;
     *)
         echo "unknown collector '$collector'" >&2
         exit 2
@@ -318,6 +377,7 @@ case "$collector" in
     # answered — a container tag or a package name would say what was deployed,
     # and those two disagree the moment an image is repulled without a restart.
     bazarr) version_probe="curl -s -H \"X-API-KEY: \$SE_BAZARR_API_KEY\" \"\$SE_BAZARR_URL/api/system/status\" | python3 -c 'import json,sys; print(\"bazarr\", json.load(sys.stdin)[\"data\"][\"bazarr_version\"])'" ;;
+    kea) version_probe="sudo python3 -c '$kea_py' \"\$SE_KEA_SOCKET\" version-get | python3 -c '$kea_version_py'" ;;
 esac
 
 # Forward the caller's SE_* variables to the guest. Every HTTP-interface
@@ -336,6 +396,28 @@ while IFS='=' read -r key value; do
     remote_env+="export $key=$(printf '%q' "$value"); "
 done < <(env)
 [[ -n $remote_env ]] && echo "  forwarding: $(echo "$remote_env" | tr ';' '\n' | sed -n 's/^ *export \([A-Z_]*\)=.*/\1/p' | tr '\n' ' ')"
+
+# The one acquisition that is not a property of the interface's VERSION but of
+# the guest's configuration. `lease4-get-all` ships in libdhcp_lease_cmds, a
+# hook library, so a Kea with no hooks loaded does not offer the command at all
+# — which is the same gate the adapter's capability() applies, and the reason
+# it names the hook instead of erroring every collect. Asked of the daemon
+# rather than assumed, and asked here because it needs the forwarded
+# environment above: on a guest that loads the hook the payload is captured
+# like any other, and on one that does not, the leases collection has no
+# interface to capture and the run says so instead of committing a refusal.
+if [[ $collector == kea ]]; then
+    if ssh "${ssh_opts[@]}" -- "$target" \
+        "${remote_env}sudo python3 -c '$kea_py' \"\$SE_KEA_SOCKET\" list-commands" \
+        | grep -q '"lease4-get-all"'; then
+        acquisitions+=("lease4-get-all.json|sudo python3 -c '$kea_py' \"\$SE_KEA_SOCKET\" lease4-get-all")
+    else
+        echo "  note: this Kea offers no lease4-get-all — libdhcp_lease_cmds is not" >&2
+        echo "  loaded, so the leases collection has no interface on this guest and" >&2
+        echo "  no payload is captured for it. A variant staged here therefore opens" >&2
+        echo "  three collections, not four." >&2
+    fi
+fi
 
 echo "capturing $collector from $target"
 for entry in "${acquisitions[@]}"; do

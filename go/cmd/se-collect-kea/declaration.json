@@ -1,0 +1,420 @@
+{
+  "schema": "se.declaration/1",
+  "collector": "kea",
+  "version": "0.7.0",
+  "authority": {
+    "read_paths": [
+      "/proc/sys/kernel/random/boot_id",
+      "/proc/self/timens_offsets"
+    ],
+    "groups": ["kea"]
+  },
+  "probe": "the Kea control socket answers `list-commands`. The socket's PATH is deployment configuration and not a constant, so it is named by SE_KEA_SOCKET rather than declared as a read path here — a path this file invented would be granted on hosts that put the socket somewhere else and denied on the ones that do not. What the deployment must grant is the socket's GROUP: Kea's runtime directory is 0750 and the socket 0770, so a permissions gap is the first failure mode on the target and it must never read as no-DHCP-here (the NixOS module's grantKeaAccess supplies that membership; a distribution that names the group differently — Debian and Ubuntu ship `_kea` — is granting the same thing under another name). One command answers three questions at once, which is why the probe is `list-commands` and not a stat: whether a socket is there, whether this process may open it, and WHICH commands the daemon implements. The last one decides a collection: `lease4-get-all` ships in the libdhcp_lease_cmds hook, so a Kea with no hooks loaded serves the daemon, subnets and reservations collections and keeps no lease table this collector can read — a configuration gap, which the probe's reason names rather than leaving to be discovered as a decline.",
+  "collections": [
+    {
+      "name": "daemon",
+      "question": "is the DHCP service itself up, and which release is answering?",
+      "prefix": "daemon",
+      "freshness": "60s",
+      "perishability": "sampled",
+      "answer": ["Version", "Uptime"],
+      "ceiling": { "records": 1, "bytes": 65536 },
+      "facts": {
+        "Version": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/version/text",
+          "sentence": "The Kea release answering the control socket, from `version-get`'s own one-line answer. It is the build that is actually serving DHCP, which is not always the build on PATH — a package upgrade without a restart leaves the two disagreeing, and this is the half that is handing out addresses."
+        },
+        "Uptime": {
+          "type": "integer",
+          "unit": "seconds",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/status/arguments/uptime",
+          "sentence": "Seconds since the daemon started, by its own clock. A gauge rather than a counter because it reads meaningfully alone, and because a restart resets it — which is the one thing this number is worth watching for on a server whose whole job is to keep answering."
+        },
+        "QueueDepthAverages": {
+          "type": "list",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/status/arguments/packet-queue-statistics",
+          "sentence": "Average inbound packet-queue depth over the last 10, 100 and 1000 packets, in that order, as a multi-threaded Kea reports them. It is the only live queue signal the daemon states — `packet-queue-size` beside it is the configured capacity, not the occupancy — and the three are carried as one list because only their order says which window each average covers."
+        }
+      },
+      "redaction_exemption": "the two documents this collection reads are the daemon reporting on ITSELF: a release string and its linked library versions, its thread and queue configuration, its pid, its uptime, and whether an operator has disabled it. Nothing in either names a client, a lease, a subnet or an address, and the control socket takes no credential in this posture, so there is none to leak into a reason or an error. The bound is stated because it is a decision rather than a shape: `status-get` grows a `high-availability` section on a Kea running the HA hook, which names its peers and the URLs they are reached at — a host serving those needs this exemption replaced by a redaction list rather than inheriting it.",
+      "reference_commands": [
+        {
+          "purpose": "the release answering the socket — the Version fact comes from `text`, not from the longer `arguments.extended` beside it",
+          "argv": ["kea-shell", "--service", "dhcp4", "version-get"]
+        },
+        {
+          "purpose": "the daemon's account of itself: uptime, pid, thread pool and the packet-queue averages",
+          "argv": ["kea-shell", "--service", "dhcp4", "status-get"]
+        }
+      ]
+    },
+    {
+      "name": "subnets",
+      "question": "how full is each pool, and what does it hand out?",
+      "prefix": "subnet",
+      "freshness": "60s",
+      "perishability": "sampled",
+      "answer": ["Subnet", "UsedPercent", "AssignedAddresses", "TotalAddresses"],
+      "ceiling": { "records": 4096, "bytes": 4194304 },
+      "facts": {
+        "Subnet": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "location",
+          "from": "/config/Dhcp4/subnet4/*/subnet",
+          "sentence": "The subnet's CIDR as configured, joined from the configuration document so the row names the network rather than only Kea's internal id. A subnet declared inside a shared network carries it too; a row with no CIDR at all is a subnet whose statistics exist and whose declaration this collector did not find."
+        },
+        "SubnetId": {
+          "type": "integer",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/statistics/subnet[*]",
+          "sentence": "Kea's own id for the subnet — the key its statistics are filed under, and the join between the counters and the configuration. Operator-chosen but meaningless outside this server, which is why it is published beside the CIDR and never instead of it."
+        },
+        "TotalAddresses": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/statistics/subnet[*].total-addresses",
+          "sentence": "How many addresses the subnet's pools can hand out in total, as the daemon counts them. A gauge and not a constant: it moves the moment a pool is widened or narrowed."
+        },
+        "AssignedAddresses": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/statistics/subnet[*].assigned-addresses",
+          "sentence": "How many addresses are leased right now. Against the total this is the pool arithmetic that fails silently when it runs out — every existing lease keeps working while new devices get nothing, so nothing on any dashboard moves."
+        },
+        "DeclinedAddresses": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/statistics/subnet[*].declined-addresses",
+          "sentence": "Addresses Kea offered and a client then refused on the wire, usually because something is already squatting on them. They are held out of the pool for the decline probation period, so any at all is both a capacity loss and a sign of something unmanaged on the network."
+        },
+        "UsedPercent": {
+          "type": "integer",
+          "unit": "percent",
+          "temperament": "gauge",
+          "kind": "derived",
+          "derived_from": ["AssignedAddresses", "TotalAddresses"],
+          "denominator": "TotalAddresses",
+          "discloses": "nothing",
+          "sentence": "Assigned as a rounded share of total — how far through its pool this subnet already is. Published only where a positive total makes the division meaningful: a subnet with no pool is not zero per cent used, it is a subnet the question does not apply to."
+        },
+        "LeaseTimeSeconds": {
+          "type": "integer",
+          "unit": "seconds",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/config/Dhcp4/subnet4/*/valid-lifetime",
+          "sentence": "How long a granted lease lasts, from the subnet's own valid-lifetime, else its shared network's, else the global one — Kea's inheritance order, resolved here so the row states the value in effect rather than the value written at one scope."
+        },
+        "Routers": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "location",
+          "from": "/config/Dhcp4/subnet4/*/option-data",
+          "sentence": "The default gateway handed out with each lease, exactly as Kea's option-data states it at the most specific scope — subnet over shared network over global — and comma-separated where there are several. Absent where a never-send suppression means the client is handed no such option at all, which is a different statement from the option being unset."
+        },
+        "DnsServers": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "location",
+          "from": "/config/Dhcp4/subnet4/*/option-data",
+          "sentence": "The DNS resolver addresses clients are told to use, at the most specific scope that states them and comma-separated where there are several. This is what a client believes about DNS, which is the question asked when a name resolves on one machine and not another."
+        },
+        "ReservationCount": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/config/Dhcp4/subnet4/*/reservations",
+          "sentence": "How many host reservations this subnet carries — addresses pinned to particular machines rather than pooled — INCLUDING any the reservations collection cannot list for want of an ip-address. It is the count the configuration states, so it reconciles with the listed rows only through UnlistedReservations beside it."
+        },
+        "UnlistedReservations": {
+          "type": "integer",
+          "unit": "count",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/config/Dhcp4/subnet4/*/reservations",
+          "sentence": "How many of this subnet's reservations state no ip-address — hostname- or class-only pins, which mint no stable id and so appear in no reservations row. It is the remainder that reconciles ReservationCount with the rows listed, and it is absent rather than zero where there is none."
+        }
+      },
+      "redactions": [
+        {
+          "path": "/config/Dhcp4/subnet4/*/subnet",
+          "discloses": "location"
+        },
+        {
+          "path": "/config/Dhcp4/subnet4/*/pools/*/pool",
+          "discloses": "location"
+        },
+        {
+          "path": "/config/Dhcp4/subnet4/*/option-data/*/data",
+          "discloses": "content"
+        },
+        {
+          "path": "/config/Dhcp4/option-data/*/data",
+          "discloses": "content"
+        },
+        {
+          "path": "/config/Dhcp4/subnet4/*/relay/ip-addresses/*",
+          "discloses": "location"
+        },
+        {
+          "path": "/config/Dhcp4/lease-database/password",
+          "discloses": "secret"
+        },
+        {
+          "path": "/config/Dhcp4/hosts-databases/*/password",
+          "discloses": "secret"
+        },
+        {
+          "path": "/config/Dhcp4/config-control/config-databases/*/password",
+          "discloses": "secret"
+        }
+      ],
+      "reference_commands": [
+        {
+          "purpose": "the pool counters, per subnet — TotalAddresses, AssignedAddresses and DeclinedAddresses are the newest sample of three of these keys",
+          "argv": ["kea-shell", "--service", "dhcp4", "statistic-get-all"]
+        },
+        {
+          "purpose": "the configuration the counters are joined to: which CIDR each subnet id is, what lease time is in effect, and which options a client is handed",
+          "argv": ["kea-shell", "--service", "dhcp4", "config-get"]
+        }
+      ]
+    },
+    {
+      "name": "reservations",
+      "question": "which addresses are pinned to which machines?",
+      "prefix": "reservation",
+      "freshness": "300s",
+      "perishability": "reconstructible",
+      "answer": ["IpAddress", "HwAddress", "Hostname"],
+      "ceiling": { "records": 65536, "bytes": 8388608 },
+      "facts": {
+        "IpAddress": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "location",
+          "from": "/config/Dhcp4/subnet4/*/reservations/*/ip-address",
+          "sentence": "The address the reservation pins — handed to its machine every time it asks, and to nobody else. A reservation that states none pins something other than an address and is counted on its subnet's row instead of listed here."
+        },
+        "HwAddress": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "identity",
+          "from": "/config/Dhcp4/subnet4/*/reservations/*/hw-address",
+          "sentence": "The MAC address that identifies which machine the pinned address belongs to. Absent on a reservation matched some other way — Kea also matches on a client-id, a DUID or a flex-id, and none of those is published here, because they are what the reservation is looked up BY rather than something a row answers with."
+        },
+        "Hostname": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/config/Dhcp4/subnet4/*/reservations/*/hostname",
+          "sentence": "The name the reservation hands the client along with its address, where the configuration states one. Kea normalises an unset hostname to an empty string rather than dropping the member, so this fact is absent where the string is empty — the two are one statement and neither is a name."
+        },
+        "Subnet": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "location",
+          "from": "/config/Dhcp4/subnet4/*/subnet",
+          "sentence": "The CIDR of the subnet this reservation lives in, so the row names its network and not just an id. A GLOBAL reservation is not subnet-scoped and carries none — the absence is the statement, not a gap."
+        }
+      },
+      "redactions": [
+        {
+          "path": "/config/Dhcp4/subnet4/*/reservations/*/hw-address",
+          "discloses": "identity"
+        },
+        {
+          "path": "/config/Dhcp4/subnet4/*/reservations/*/client-id",
+          "discloses": "identity"
+        },
+        {
+          "path": "/config/Dhcp4/subnet4/*/reservations/*/duid",
+          "discloses": "identity"
+        },
+        {
+          "path": "/config/Dhcp4/subnet4/*/reservations/*/flex-id",
+          "discloses": "identity"
+        },
+        {
+          "path": "/config/Dhcp4/subnet4/*/reservations/*/ip-address",
+          "discloses": "location"
+        },
+        {
+          "path": "/config/Dhcp4/subnet4/*/reservations/*/hostname",
+          "discloses": "content"
+        },
+        {
+          "path": "/config/Dhcp4/reservations/*/hw-address",
+          "discloses": "identity"
+        },
+        {
+          "path": "/config/Dhcp4/reservations/*/client-id",
+          "discloses": "identity"
+        },
+        {
+          "path": "/config/Dhcp4/reservations/*/duid",
+          "discloses": "identity"
+        },
+        {
+          "path": "/config/Dhcp4/reservations/*/flex-id",
+          "discloses": "identity"
+        },
+        {
+          "path": "/config/Dhcp4/reservations/*/ip-address",
+          "discloses": "location"
+        },
+        {
+          "path": "/config/Dhcp4/reservations/*/hostname",
+          "discloses": "content"
+        },
+        {
+          "path": "/config/Dhcp4/lease-database/password",
+          "discloses": "secret"
+        },
+        {
+          "path": "/config/Dhcp4/hosts-databases/*/password",
+          "discloses": "secret"
+        },
+        {
+          "path": "/config/Dhcp4/config-control/config-databases/*/password",
+          "discloses": "secret"
+        }
+      ],
+      "reference_commands": [
+        {
+          "purpose": "the reservations themselves — they live in the running configuration, not in the lease database",
+          "argv": ["kea-shell", "--service", "dhcp4", "config-get"]
+        }
+      ]
+    },
+    {
+      "name": "leases",
+      "question": "who holds an address right now?",
+      "prefix": "lease",
+      "freshness": "60s",
+      "perishability": "perishable",
+      "answer": ["IpAddress", "HwAddress", "Hostname", "ExpiresAt"],
+      "ceiling": { "records": 65536, "bytes": 16777216 },
+      "facts": {
+        "IpAddress": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "location",
+          "from": "/arguments/leases/*/ip-address",
+          "sentence": "The address this lease grants right now — the live answer to who holds what, and the one fact a lease cannot be listed without."
+        },
+        "HwAddress": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "identity",
+          "from": "/arguments/leases/*/hw-address",
+          "sentence": "The MAC address of the machine currently holding the lease. It is the one identifier that follows a device across renewals and reboots, which is what makes it identity rather than a label."
+        },
+        "Hostname": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/arguments/leases/*/hostname",
+          "sentence": "The name the client stated when it asked, where Kea recorded one. It is the client's claim about itself and not a name this server chose, so it is the least trustworthy identifier on the row and the most useful one for finding a machine somebody can point at."
+        },
+        "State": {
+          "type": "enum",
+          "values": ["default", "declined", "expired-reclaimed"],
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/arguments/leases/*/state",
+          "sentence": "The lease's condition in Kea's own vocabulary: `default` is a live lease, `declined` was refused on the wire and is being held out of the pool, and `expired-reclaimed` has lapsed and been recovered. These are the three Kea defines, and a state a future release adds is carried through as the number Kea sent rather than renamed into a word Kea does not use."
+        },
+        "Subnet": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "location",
+          "from": "/arguments/leases/*/subnet-id",
+          "sentence": "The CIDR the lease was drawn from, joined from the configuration document via the subnet id the lease states. A lease naming a subnet id the configuration no longer declares carries none — which is what a lease left behind by a removed subnet looks like."
+        },
+        "ExpiresAt": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "derived",
+          "derived_from": ["State"],
+          "discloses": "nothing",
+          "sentence": "When the lease lapses unless renewed — its allocation time plus its valid lifetime, as UTC. The word `never` where DHCP's infinite lifetime was granted (valid-lft 4294967295), because the arithmetic would otherwise assert a concrete date in 2162 and present it as a fact. Declared a string and not a timestamp for exactly that reason: the sentinel is part of the answer."
+        }
+      },
+      "redactions": [
+        {
+          "path": "/arguments/leases/*/ip-address",
+          "discloses": "location"
+        },
+        {
+          "path": "/arguments/leases/*/hw-address",
+          "discloses": "identity"
+        },
+        {
+          "path": "/arguments/leases/*/client-id",
+          "discloses": "identity"
+        },
+        {
+          "path": "/arguments/leases/*/duid",
+          "discloses": "identity"
+        },
+        {
+          "path": "/arguments/leases/*/hostname",
+          "discloses": "content"
+        },
+        {
+          "path": "/arguments/leases/*/user-context",
+          "discloses": "content"
+        }
+      ],
+      "reference_commands": [
+        {
+          "purpose": "the lease table — a HOOK command (libdhcp_lease_cmds), not core Kea, so a server with no hooks loaded answers that it does not implement it",
+          "argv": ["kea-shell", "--service", "dhcp4", "lease4-get-all"]
+        },
+        {
+          "purpose": "which subnet each lease's subnet-id names — the lease record states the id and nothing else about its network",
+          "argv": ["kea-shell", "--service", "dhcp4", "config-get"]
+        }
+      ]
+    }
+  ]
+}

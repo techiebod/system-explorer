@@ -1,0 +1,304 @@
+{
+  "arguments": {
+    "Dhcp4": {
+      "allocator": "iterative",
+      "authoritative": false,
+      "boot-file-name": "",
+      "cache-threshold": 0.25,
+      "calculate-tee-times": false,
+      "client-classes": [
+        {
+          "boot-file-name": "/dev/null",
+          "name": "host-9a805a",
+          "next-server": "192.0.2.175",
+          "option-data": [],
+          "option-def": [],
+          "server-hostname": "host-1c6518",
+          "test": "substring(option[60].hex,0,6) == 'Aastra'"
+        }
+      ],
+      "control-sockets": [
+        {
+          "socket-name": "kea4-ctrl-socket",
+          "socket-type": "unix"
+        }
+      ],
+      "ddns-conflict-resolution-mode": "check-with-dhcid",
+      "ddns-generated-prefix": "host-74cf17",
+      "ddns-override-client-update": false,
+      "ddns-override-no-update": false,
+      "ddns-qualifying-suffix": "",
+      "ddns-replace-client-name": "never",
+      "ddns-send-updates": true,
+      "ddns-update-on-renew": false,
+      "decline-probation-period": 86400,
+      "dhcp-ddns": {
+        "enable-updates": false,
+        "max-queue-size": 1024,
+        "ncr-format": "JSON",
+        "ncr-protocol": "UDP",
+        "sender-ip": "0.0.0.0",
+        "sender-port": 0,
+        "server-ip": "127.0.0.1",
+        "server-port": 53001
+      },
+      "dhcp-queue-control": {
+        "capacity": 64,
+        "enable-queue": false,
+        "queue-type": "kea-ring4"
+      },
+      "dhcp4o6-port": 0,
+      "early-global-reservations-lookup": false,
+      "echo-client-id": true,
+      "expired-leases-processing": {
+        "flush-reclaimed-timer-wait-time": 25,
+        "hold-reclaimed-time": 3600,
+        "max-reclaim-leases": 100,
+        "max-reclaim-time": 250,
+        "reclaim-timer-wait-time": 10,
+        "unwarned-reclaim-cycles": 5
+      },
+      "hooks-libraries": [],
+      "host-reservation-identifiers": [
+        "hw-address",
+        "duid",
+        "circuit-id",
+        "client-id"
+      ],
+      "hostname-char-replacement": "",
+      "hostname-char-set": "[^A-Za-z0-9.-]",
+      "interfaces-config": {
+        "interfaces": [],
+        "re-detect": true
+      },
+      "ip-reservations-unique": true,
+      "lease-database": {
+        "lfc-interval": 3600,
+        "type": "memfile"
+      },
+      "loggers": [
+        {
+          "debuglevel": 0,
+          "name": "kea-dhcp4",
+          "output-options": [
+            {
+              "flush": true,
+              "output": "stdout",
+              "pattern": "%-5p %m\n"
+            }
+          ],
+          "severity": "INFO"
+        }
+      ],
+      "match-client-id": true,
+      "multi-threading": {
+        "enable-multi-threading": true,
+        "packet-queue-size": 64,
+        "thread-pool-size": 0
+      },
+      "next-server": "0.0.0.0",
+      "option-data": [
+        {
+          "always-send": false,
+          "code": 6,
+          "csv-format": true,
+          "data": "192.0.2.5, 192.0.2.146",
+          "name": "domain-name-servers",
+          "never-send": false,
+          "space": "dhcp4"
+        },
+        {
+          "always-send": false,
+          "code": 15,
+          "csv-format": true,
+          "data": "example.org",
+          "name": "domain-name",
+          "never-send": false,
+          "space": "dhcp4"
+        },
+        {
+          "always-send": false,
+          "code": 119,
+          "csv-format": true,
+          "data": "mydomain.example.com, example.com",
+          "name": "domain-search",
+          "never-send": false,
+          "space": "dhcp4"
+        },
+        {
+          "always-send": false,
+          "code": 67,
+          "csv-format": true,
+          "data": "EST5EDT4\\,M3.2.0/02:00\\,M11.1.0/02:00",
+          "name": "boot-file-name",
+          "never-send": false,
+          "space": "dhcp4"
+        },
+        {
+          "always-send": false,
+          "code": 23,
+          "csv-format": true,
+          "data": "0xf0",
+          "name": "default-ip-ttl",
+          "never-send": false,
+          "space": "dhcp4"
+        }
+      ],
+      "option-def": [],
+      "parked-packet-limit": 256,
+      "rebind-timer": 1800,
+      "renew-timer": 900,
+      "reservations-global": false,
+      "reservations-in-subnet": true,
+      "reservations-lookup-first": false,
+      "reservations-out-of-pool": false,
+      "sanity-checks": {
+        "extended-info-checks": "fix",
+        "lease-checks": "warn"
+      },
+      "server-hostname": "",
+      "server-tag": "",
+      "shared-networks": [],
+      "stash-agent-options": false,
+      "statistic-default-sample-age": 0,
+      "statistic-default-sample-count": 20,
+      "store-extended-info": false,
+      "subnet4": [
+        {
+          "4o6-interface": "",
+          "4o6-interface-id": "",
+          "4o6-subnet": "",
+          "allocator": "iterative",
+          "cache-threshold": 0.25,
+          "calculate-tee-times": false,
+          "id": 1,
+          "max-valid-lifetime": 3600,
+          "min-valid-lifetime": 3600,
+          "option-data": [
+            {
+              "always-send": false,
+              "code": 3,
+              "csv-format": true,
+              "data": "192.0.2.5",
+              "name": "routers",
+              "never-send": false,
+              "space": "dhcp4"
+            }
+          ],
+          "pools": [
+            {
+              "option-data": [],
+              "pool": "192.0.2.5-192.0.2.210"
+            }
+          ],
+          "rebind-timer": 1800,
+          "relay": {
+            "ip-addresses": []
+          },
+          "renew-timer": 900,
+          "reservations": [
+            {
+              "boot-file-name": "",
+              "client-classes": [],
+              "duid": "ANONA8419DADF0",
+              "hostname": "",
+              "ip-address": "192.0.2.218",
+              "next-server": "0.0.0.0",
+              "option-data": [
+                {
+                  "always-send": false,
+                  "code": 6,
+                  "csv-format": true,
+                  "data": "10.226.206.71, 10.138.56.21",
+                  "name": "domain-name-servers",
+                  "never-send": false,
+                  "space": "dhcp4"
+                }
+              ],
+              "server-hostname": ""
+            },
+            {
+              "boot-file-name": "/dev/null",
+              "client-classes": [],
+              "client-id": "ANON9E486B0616",
+              "hostname": "",
+              "ip-address": "192.0.2.150",
+              "next-server": "192.0.2.5",
+              "option-data": [],
+              "server-hostname": "host-1c6518"
+            },
+            {
+              "boot-file-name": "",
+              "client-classes": [],
+              "client-id": "ANONE0F3235316",
+              "hostname": "host-f6f88b",
+              "ip-address": "192.0.2.82",
+              "next-server": "0.0.0.0",
+              "option-data": [],
+              "server-hostname": ""
+            },
+            {
+              "boot-file-name": "",
+              "client-classes": [],
+              "client-id": "ANONDAEAAD2106",
+              "hostname": "",
+              "ip-address": "192.0.2.154",
+              "next-server": "0.0.0.0",
+              "option-data": [
+                {
+                  "always-send": false,
+                  "code": 125,
+                  "csv-format": true,
+                  "data": "4491",
+                  "name": "vivso-suboptions",
+                  "never-send": false,
+                  "space": "dhcp4"
+                },
+                {
+                  "always-send": false,
+                  "code": 2,
+                  "csv-format": true,
+                  "data": "10.226.206.71, 10.138.56.21",
+                  "name": "tftp-servers",
+                  "never-send": false,
+                  "space": "vendor-4491"
+                }
+              ],
+              "server-hostname": ""
+            },
+            {
+              "boot-file-name": "",
+              "client-classes": [],
+              "hostname": "",
+              "hw-address": "02:d3:cc:e0:41:80",
+              "ip-address": "192.0.2.145",
+              "next-server": "0.0.0.0",
+              "option-data": [],
+              "server-hostname": ""
+            },
+            {
+              "boot-file-name": "",
+              "client-classes": [],
+              "flex-id": "ANON8B0639733789C5",
+              "hostname": "",
+              "ip-address": "192.0.2.78",
+              "next-server": "0.0.0.0",
+              "option-data": [],
+              "server-hostname": ""
+            }
+          ],
+          "store-extended-info": false,
+          "subnet": "192.0.2.0/24",
+          "t1-percent": 0.5,
+          "t2-percent": 0.875,
+          "valid-lifetime": 3600
+        }
+      ],
+      "t1-percent": 0.5,
+      "t2-percent": 0.875,
+      "valid-lifetime": 3600
+    },
+    "hash": "3B30BC5B9DF7212ADC8C3F90B89CF38A65CF6A27320A5A3B639527352BAE6905"
+  },
+  "result": 0
+}

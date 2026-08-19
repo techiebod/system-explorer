@@ -73,6 +73,7 @@ SEEDS = {
     "bazarr": "bazarr/healthy",
     "traefik": "traefik/healthy",
     "servarr": "servarr/healthy",
+    "kea": "kea/no-lease-hook",
 }
 
 # Names the operators mint. Constants rather than inline literals so the
@@ -178,6 +179,17 @@ SERVARR_CLIENT = "mut-transmission"
 # reference publish a null — which is what the blind fixture rewrites.
 SERVARR_STUCK_MESSAGE = "Not an upgrade for existing movie file(s)"
 SERVARR_ERROR_MESSAGE = "The download is missing files"
+# The hostname-only reservation the kea operator mints, and the two spellings the
+# disagreement lands on. A reservation that pins a NAME and no address is an
+# ordinary Kea configuration — it exists to hand a client its hostname, or to put
+# it in a class — and it is exactly the entry that can be counted and cannot be
+# listed. The counts are read off the committed seed (six reservations, all of
+# them addressed) plus the entry minted below; a re-stage of corpus/kea moves
+# both, exactly as it moves that variant's anchors, and the case that binds to
+# them fails by name when it does.
+KEA_UNLISTED_HOST = "printer-loft"
+KEA_RESERVATION_COUNT = "'ReservationCount': 7"
+KEA_UNLISTED_REMAINDER = "'UnlistedReservations': 1"
 
 
 # ── nftables helpers, grammar-aware ──────────────────────────────────────
@@ -1309,6 +1321,64 @@ def _grab_in_flight(payloads: dict) -> dict:
     return payloads
 
 
+# ── kea reservations ─────────────────────────────────────────────────────
+
+
+def _addressless_reservation(payloads: dict) -> dict:
+    """CLASS unlistable-remainder: an inventory that lists what it counts.
+
+    A Kea host reservation does not have to pin an address. One that states a
+    hostname alone hands a client its NAME — which is what a DHCP server is for
+    on a network where DNS is fed from leases — and one that states only
+    client-classes pins a class. Both are ordinary configuration, and neither
+    can mint a stable id: `reservation:<subnet>/<ip>` has no ip to be keyed on.
+
+    So the reference COUNTS them and does not LIST them, and says so on the wire
+    rather than in a docstring: the subnet row carries ReservationCount over
+    every entry the configuration holds and UnlistedReservations over the ones no
+    row can carry, so a reader who subtracts gets the number of rows. That is
+    rule 7's stated remainder, and it exists because the two would otherwise
+    quietly disagree and only source-reading would explain why.
+
+    A port that filters the list once, at the top, and then counts what survived
+    reproduces every committed pair exactly: every reservation in the only kea
+    capture states an address, so the filter removes nothing and the remainder is
+    nil. Its ReservationCount is the number of rows BY CONSTRUCTION and can never
+    disagree with the listing — which reads as consistency and is under-reporting
+    the machine's configuration. That is DESIGN 20's third trap, and this is the
+    shape that springs it.
+
+    Inserted at the end of the subnet's own reservations rather than globally,
+    because a global reservation exercises a different arm of the walk, and the
+    hostname is a plausible one: a printer somebody pinned a name to and never
+    an address.
+    """
+    subnets = ((payloads.get("config-get") or {}).get("arguments") or {}) \
+        .get("Dhcp4", {}).get("subnet4")
+    if not isinstance(subnets, list) or not subnets:
+        raise MutatorError("the config payload declares no top-level subnet4")
+    reservations = subnets[0].setdefault("reservations", [])
+    if any(isinstance(r, dict) and r.get("hostname") == KEA_UNLISTED_HOST
+           for r in reservations):
+        raise MutatorError(
+            f"{KEA_UNLISTED_HOST} is already in this capture, so a minted entry "
+            "would be a duplicate rather than an unlistable reservation"
+        )
+    # The members Kea normalises onto every reservation, so the mutated document
+    # stays one config-get could have produced — an entry missing them is not a
+    # reservation this daemon would hand back.
+    reservations.append({
+        "boot-file-name": "",
+        "client-classes": [],
+        "client-id": "01ANON7F3C21",
+        "hostname": KEA_UNLISTED_HOST,
+        "next-server": "0.0.0.0",
+        "option-data": [],
+        "server-hostname": "",
+    })
+    return payloads
+
+
 @dataclass(frozen=True)
 class Operator:
     """One structural transformation, bound to the defect class it exposes."""
@@ -1353,6 +1423,8 @@ OPERATORS: tuple[Operator, ...] = (
              _dynamic_provider),
     Operator("servarr-grab-in-flight", "servarr", "stuck-reason-blind",
              _grab_in_flight),
+    Operator("kea-addressless-reservation", "kea", "unlistable-remainder",
+             _addressless_reservation),
 )
 
 

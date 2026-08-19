@@ -51,6 +51,7 @@ GO_COLLECTORS = {
     "bazarr": "./cmd/se-collect-bazarr",
     "traefik": "./cmd/se-collect-traefik",
     "servarr": "./cmd/se-collect-servarr",
+    "kea": "./cmd/se-collect-kea",
 }
 
 

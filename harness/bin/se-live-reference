@@ -60,6 +60,7 @@ from system_explorer.agent import envelope as env  # noqa: E402
 from system_explorer.agent.adapters import (  # noqa: E402
     bazarr, docker, logs, network, packages, storage, traefik, unbound, vms,
     docker, logs, network, packages, servarr, storage, traefik, unbound, vms,
+    docker, kea, logs, network, packages, storage, traefik, unbound, vms,
 )
 
 # The collections each adapter serves live, and the capability attributes the
@@ -90,6 +91,9 @@ LIVE = {
     # are answering about different instances.
     "bazarr": {"module": bazarr, "adapter": bazarr.Adapter,
                "interface": "bazarr api", "collections": ["instance"]},
+    "kea": {"module": kea, "adapter": kea.Adapter,
+            "interface": "kea control socket",
+            "collections": ["daemon", "subnets", "reservations", "leases"]},
     # The one adapter with no acquire(): a bounded journal query has no "all
     # items" to materialise, so `page` names the collect() call to drive and
     # emission.materialise dispatches on it. Declared here as well as in the

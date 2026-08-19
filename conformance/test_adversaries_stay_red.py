@@ -324,6 +324,25 @@ EXPECTED = (
     # has grown a rule that sees a container state no committed capture holds —
     # DESIGN 20's trap statement and the case table move together, not this row
     # alone.
+    # ── GREEN, adjudicated: the third trap, the counted-not-listed spelling ──
+    #
+    # The unlistable-remainder port applies the reservation filter before the
+    # count instead of after it, so its ReservationCount is its row count by
+    # construction and it never states a remainder. Every reservation in the only
+    # committed kea capture pins an address, so the filter removes nothing, the
+    # remainder is nil, and the correct answer omits UnlistedReservations too —
+    # the judge honestly passes it. Its RED lives in test_differential.py, where
+    # the kea-addressless-reservation operator puts a hostname-only reservation
+    # into the seed's subnet and the two counts stop agreeing. If this goes red
+    # here, the replay judge has grown a rule that sees a remainder no committed
+    # capture holds — DESIGN 20's trap statement and the case table move
+    # together, not this row alone.
+    Expectation("a9_unlistable_remainder_blind.py", None, "kea/no-lease-hook",
+                "GREEN",
+                "the reservation filter applied before the count, which no "
+                "committed capture can expose: every captured reservation pins "
+                "an address, so nothing is filtered out and the remainder is "
+                "absent from both answers, and the differential guard owns the red"),
     Expectation("a9_scope_state_blind.py", None, "docker/healthy", "GREEN",
                 "a scope unit named only for a running container, which no "
                 "committed capture can expose: every captured container is "
@@ -411,6 +430,11 @@ ADJUDICATED_GREEN = {
     "stuck download's explanation, because the captured fleet is idle and its "
     "queue holds no records at all (DESIGN 20); the differential guard owns "
     "this red, under servarr-grab-in-flight",
+    ("a9_unlistable_remainder_blind.py", None): "the third trap: replay cannot "
+    "see a reservation that pins a name and no address, because every captured "
+    "one pins an address and a port that filters before it counts reproduces "
+    "the pair exactly (DESIGN 20); the differential guard owns this red, under "
+    "kea-addressless-reservation",
     ("a9_scope_state_blind.py", None): "the third trap: replay cannot see a "
     "restarting or paused container, because every captured one is running or "
     "exited and a running-only scope rule agrees on both (DESIGN 20); the "
