@@ -740,7 +740,60 @@ up_one() {
     die "virt-install failed for ${distro}"
   fi
   unstage_cloud_init "${cloud_init_dir}"
+  stake_claim "${distro}"
   wait_until_ready "${distro}"
+}
+
+# The namespace the claim lives under. A URI rather than a bare word because
+# libvirt keys metadata by namespace URI; it need not resolve.
+CLAIM_URI="https://github.com/techiebod/system-explorer/vm-lab"
+
+# Say, on the domain itself, who parked this guest here and when.
+#
+# These VMs are disposable and are created on a host that has a life of its
+# own. Anything auditing that host's domains against its own configuration
+# finds them unaccounted for and correct to flag — but "an orphan nobody meant
+# to leave" and "another tool's scratch VM" are different answers, and only the
+# first is something to act on. A report that renders them identically invites
+# a confident wrong action: deleting a lab guest that is in use.
+#
+# On the DOMAIN rather than in either repository, because a list of these names
+# kept anywhere else is a second home for a fact this tool owns, and it goes
+# stale silently while still reading as authoritative. Written by the thing
+# that creates the guest, so it cannot drift from it, and carried away by
+# `virsh undefine` when the guest goes, so it cannot outlive it.
+#
+# STATED COVERAGE, and it is the reason `staked` is in here: this is an
+# ASSERTION, not a proof. It records that something said "mine" — not that the
+# owner still exists or still wants it. A tool that died leaves a claim that
+# reads healthy forever, which is the same defect as unobservable rendering as
+# absent, aimed at a different reader. The date is what lets a reader disbelieve
+# it, so whatever consumes this should show the claim's AGE rather than treat
+# "claimed" as a terminal answer.
+#
+# The host is deliberately not named: this repository is public, and a reader of
+# this metadata is already on the host it is stored on.
+#
+# Best-effort. A libvirt too old for `virsh metadata` must not fail a lab
+# bring-up over a label, so the failure is reported and the guest still comes
+# up unclaimed — which is the pre-existing behaviour rather than a new one.
+stake_claim() {
+  local distro="$1" name
+  name="$(domain_name "${distro}")"
+  local claim
+  claim="<vm-lab xmlns=\"${CLAIM_URI}\">"
+  claim+="<owner>system-explorer vm-lab</owner>"
+  claim+="<purpose>disposable conformance lab guest; rebuilt on demand</purpose>"
+  claim+="<staked>$(date -u +%Y-%m-%dT%H:%M:%SZ)</staked>"
+  claim+="</vm-lab>"
+  if privileged virsh --connect "${LIBVIRT_URI}" metadata "${name}" \
+      --uri "${CLAIM_URI}" --set "${claim}" --config --live >/dev/null 2>&1 ||
+     privileged virsh --connect "${LIBVIRT_URI}" metadata "${name}" \
+      --uri "${CLAIM_URI}" --set "${claim}" --config >/dev/null 2>&1; then
+    log "claimed ${name} for system-explorer vm-lab"
+  else
+    log "could not stake a claim on ${name}; it will read as unaccounted for"
+  fi
 }
 
 down_one() {
