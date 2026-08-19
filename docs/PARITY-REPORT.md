@@ -249,6 +249,37 @@ Everything else agreed — five objects, four commits, both clocks. Both sentenc
 are true and neither can produce the other, which is what the residual said it
 would be rather than a defect in either.
 
+## A disclosure the comparator found, which parity would have called a wording difference
+
+`paperless` was run against an instance whose token belongs to a **non-superuser**
+— `/api/status/` answers 403 — which is the venue its residual named. One fact
+differs, and the difference is not wording:
+
+```
+reference:  HTTPStatusError: Client error '403 Forbidden' for url
+            'http://…:8000/api/status/' For more information check: <MDN link>
+port:       the paperless API answered GET /api/status/ with HTTP 403
+```
+
+The reference publishes the instance's **host and port inside a fact**.
+`StatusUnobservable` is not a log line — it is a committed fact that travels to
+a hub and out over MCP. `env.reason` strips userinfo and query strings and does
+not strip the host, so the address rides along. On this guest the URL is
+loopback and discloses nothing; on the estate it is the real one.
+
+Neither side is defective and both statements are true, which is exactly why
+this is an adjudication rather than a bug — but a corpus pair would have to
+enshrine one of the two, and the safer one is not the reference's.
+
+The same run reached two facts nobody had reached. Stopping `paperless-redis`
+made the app report `Error connecting to redis, check logs for more detail.`
+and the matching celery sentence — **paperless's own words**, which is the
+thing the residual said could not be invented, since an operator can rewrite a
+status word but not the error string an app writes about its own failure. Both
+sides agreed on both. `DatabaseError` and `IndexError` remain unreached: this
+deployment is sqlite and there is no clean way to break either component
+without breaking the app that reports on it.
+
 ## A note on the venue, because one of them proves less than the others
 
 `protection` is the only venue here whose bytes are authored. Its manifest,
