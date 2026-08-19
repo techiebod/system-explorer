@@ -195,33 +195,55 @@ called clean because the facts matched and only the clock check caught;
 `se-capture-guest`'s `kea` arm captured the downloaders adapter for two days
 while `bash -n` reported the file fine.
 
-**`nix` is deliberately deferred, and gate 3 must not be read as though it were
-not.** Nineteen of twenty collectors are ported. The twentieth is `nix`, and it
-is not blocked on the lab any more — the NixOS guest boots, is reachable, and
-stages two generations with a real delta in about ten minutes. It is deferred
-because the collector is going to be REPLACED: the generations collection is to
-be overhauled so it can show the full difference between two generations in a
-structured format, and the delta machinery that would be replaced —
-`_delta_rows`, `_package_rows`, `_etc_rows`, `_aggregate_rows`, and the /etc
-collapse and enumerate ceilings — is the bulk of what a corpus and a port would
-be testing.
+**`nix` ports its generations and its deltas are out of scope — ruled
+2026-08-19, and the deferral it replaces is withdrawn.** The collector was
+deferred whole on the argument that it was about to be replaced. The ruling
+splits it instead, because the two halves have different futures. What a host
+*has been* — the list of generations, which one is current, which one booted,
+what kernel and configuration revision each carries — ports now, and `packages`
+must read a NixOS host, because those are questions an operator asks on any
+machine and two of the three answers already exist. What *changed between two
+generations* does not port and is not queued either: it becomes a plugin once
+the plugin surface exists, so `_delta_rows`, `_package_rows`, `_etc_rows`,
+`_aggregate_rows` and the /etc collapse and enumerate ceilings leave the
+rewrite's scope rather than sitting inside it as debt.
 
-What that work will need, recorded now so it is not rediscovered: the reads must
-become stubbable before a replay seam can reach them at all. `nix` acquires
-through primitives split across TWO modules — its own tree walkers in
-`adapters/nix.py` and the shared `agent/nixos.py` — and the seam stubs the one
-module its table names, so the adapter needs the `resources` treatment (a
-module-level primitive introduced so the tree became stubbable). Then a
-`path_acquisitions` entry, an instrumented capture in the shape of `hardware_py`,
-then corpus and port. Doing it against the current shape would be a full
-collector's work discarded.
+**That produces a named parity divergence, which is the third clause working
+rather than being waived.** The shipping adapter keeps emitting
+`ComparedWithGeneration`, `DeltaCounts` and their siblings until the cut,
+because it is what the estate runs today and nothing is served by breaking it;
+the port declares and emits neither. So the two disagree by construction on
+exactly those facts and must agree on every other, and the divergence is listed
+in the parity report as accepted — with the fact names written down, so a
+disagreement anywhere else in the collection still fails.
+
+What the port needs, recorded so it is not rediscovered: `nix` reads a
+filesystem, and the ruled answer for a tree-shaped interface is the filesystem
+transcribed — the directory listings the collector walked. Dropping the deltas
+removes most of the tree walking with them (`_etc_entries`, `_tree_entries` and
+`store_paths` are delta machinery), so what the corpus must hold is the profile
+link farm and the handful of small files inside each closure, which is a far
+smaller transcription than the deferral assumed.
 
 > **Gate 3 opens when**
 >
-> every first-party collector passes replay and lab-live checks — with `nix`
-> named above as the one deferral, which is a carve-out that must be closed or
-> re-stated before the gate is claimed, never a silence · items 1, 6, 7, 8 · the
-> parity report per collection is clean or its diffs are named and accepted.
+> every first-party collector passes replay and lab-live checks, `nix` included
+> at the scope the ruling above leaves it — generations yes, deltas out of
+> scope and not counted against this gate · **item 1's collator half**: two
+> instances with identical native names never merge in one collator's store,
+> the hub half being gate 4's · **item 6's collator half**: every relation state
+> reached and an upgrade that never re-keys, judged through the black-box driver
+> and not only in-process, cross-host re-testing against intent being gate 4's ·
+> **item 7's first half**: a batch with an unknown declaration hash is held
+> rather than applied, and an undeclared fact reaches no join — opinion and
+> answer are gate 5's and the roll-up is gate 4's, because neither surface
+> exists to be judged here · item 8 · the parity report per collection is clean
+> or its diffs are named and accepted.
+>
+> *The three halvings are rulings taken 2026-08-19, not scope lost. Each names
+> the gate that owes the other half, because an item whose unjudgeable half is
+> silent reads as fully green — which is the failure this suite was written to
+> catch, wearing the suite's own numbering.*
 
 ### Phase 4 — hub and protocol (medium)
 
@@ -229,7 +251,7 @@ The Python hub evolves: the connection reverses (collator dials in), checkpoint 
 
 > **Gate 4 opens when**
 >
-> items 9 and 10 pass · the checkpoint crash suite is green · a two-guest estate renders one coherent view with reach and coverage stated.
+> items 9 and 10 pass · **item 1's hub half** — two instances with identical native names never merge across two collators either · **item 6's hub half** — cross-host re-testing against intent, where `resolved-later` stops being one collator's two batches · **item 7's roll-up half** — an undeclared fact reaches no roll-up · the checkpoint crash suite is green · a two-guest estate renders one coherent view with reach and coverage stated.
 
 ### Phase 5 — surfaces (medium, parallel)
 
@@ -237,7 +259,7 @@ Server-rendered HTML/CSS UI at both scales from one token system; MCP on collato
 
 > **Gate 5 opens when**
 >
-> item 11 across every channel including UI, MCP and MQTT · MCP-parity check · UI smoke on both scales.
+> item 11 across every channel including UI, MCP and MQTT · **item 7's last half** — an undeclared fact reaches no opinion and no answer, judgeable only once opinions and the answer surfaces exist · MCP-parity check · UI smoke on both scales.
 
 ### Phase 6 — the cut (small, supervised)
 
