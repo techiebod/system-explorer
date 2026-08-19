@@ -152,25 +152,33 @@ The second blocker was the seam, and it was the real one: **ten of the seventeen
 **Captured and replaying: `vms`, `packages`, `docker`, `traefik`.** traefik's pair is committed — the first capture this product has taken from an HTTP interface, and it found a null fact value on three of three services the moment it ran. `docker`'s payloads are captured and held OUT of the tree until its scrub manifest classifies them: its documents carry real MACs and host mount paths, and the deny-by-default walk is refusing an imperfect manifest, which is the gate working rather than an obstacle to route around.
 
 **Where gate 3 actually stands, 2026-08-19.** The parity report
-(`docs/PARITY-REPORT.md`) is **17 of 18 clean**, up from 8, after the lab gained
-the venues twelve collectors need to read anything at all
-(`harness/bin/se-provision-lab`). The remaining one is `vms`, and it is waiting
-on a ruling rather than on work.
+(`docs/PARITY-REPORT.md`) is **clean — 18 of 18**, up from 8 this morning. Two
+things got it there: the lab gained the venues twelve collectors need to read
+anything at all (`harness/bin/se-provision-lab`), and `vms` was ported over
+`virsh` once its blocking objection turned out to be about `virsh list` rather
+than `virsh domstats`.
 
-**Everything still blocking this gate is a ruling, not a task.** Five of them,
-each with a measurement behind it now rather than an argument:
+**All five rulings were taken and four are implemented.** A configuration gap
+never retires — a missing receipt declines `unavailable`, and no collector
+commits zero for a collection it could not read. The shipping adapters gain
+declines per case and after adjudication, never as a blanket bridge, which
+preserves the comparator's independence on everything unjudged; all three
+measured triggers are bridged. `units` routes a failed property read to the
+unobservable channel. And `vms` is ported.
 
-1. `vms` — whether a replay-only port counts as ported, and by what mechanism.
-2. Whether a missing **receipt** may decline `absent`, given `absent` retires.
-3. Whether the shipping adapters gain a decline vocabulary at all. Three
-   triggers measured: a receipt nobody set, an interface that answers *no*
-   (kea's unloaded `lease_cmds` hook costs the reference all four collections
-   where the port loses one), and a service that is simply down — which is any
-   container restart, and costs the reference everything.
-4. Whether a failed property read may spell itself as a fact's absence
-   (`units`' `Slice`).
-5. Whether an empty commit is ever the right statement, now that `plex` shows
-   it retiring every library on an unset variable.
+**Two things were deliberately NOT done, each with its reason recorded.**
+`MissingReferenceUnobservable` was not migrated to the unobservable channel
+although the ruling asked for it: `rules/units.py` reads it as a FACT, rules are
+computed from facts, and moving it would delete the rule's only signal that the
+probe never ran — leaving the collector to opine confidently that an absent unit
+is referenced by nothing. `vms` has the identical shape, which is what makes it
+a pattern. The prior decision — whether the rules layer reads the unobservable
+channel at all — is now the queue item that would settle both.
+
+**One new item came out of the work**: five adapters cannot tell whether their
+service is dark and three can, because only `traefik`, `unbound` and `kea` probe
+their interface inside `capability()`. That decides how much of the
+dark-service trigger can be bridged, and it is not free to fix.
 
 **Item 7's decline reasons are no longer unmapped.** All three non-absent
 reasons have now been observed live, each from a distinct real cause:

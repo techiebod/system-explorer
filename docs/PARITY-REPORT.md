@@ -1,8 +1,7 @@
 # Parity report — the reference and the port, one machine, one moment
 
 Gate 3 asks for this: *"the parity report per collection is clean or its diffs
-are named and accepted."* **Seventeen of eighteen are clean.** The eighteenth is
-`vms`, and it is waiting on a ruling rather than on work.
+are named and accepted."* **All eighteen are clean.**
 
 Produced by `harness/bin/se-compare --json`, which runs the shipping Python
 adapter and the Go port against the same live interfaces in the same minute and
@@ -93,18 +92,29 @@ credential. The receipt is only written after `/library/sections` is confirmed
 to answer 200, because a receipt pointing at a server that 401s everything makes
 both sides fail identically, and identical failure reads as agreement.
 
-## The one that is not clean — `vms`
+## `vms`, which was the eighteenth, and the objection that was about the wrong command
 
-```
-reference:  begin, commit 1, end     — it read libvirt
-port:       begin, decline 1, end    — it declined
-```
+It declined `unsupported` on any host where libvirt was listening, so it passed
+replay and could not read a machine. The recorded objection was that `virsh`
+renders a domain's state as the prose "shut off" where this collection's `State`
+is libvirt's enum word "shutoff" — true of `virsh list`, and false of `virsh
+domstats`, which answers `state.state=1`: the same integer the C API returns.
+No cgo, no hand-written RPC client, no Python past the cut, and the static
+pure-Go build every other collector has is kept.
 
-The open queue item says `se-collect-vms` *"declines `unsupported` on any host
-where libvirt is listening"*. That was written from reasoning about the port's
-construction; it is now a measurement. The ruling owed — whether a replay-only
-port counts as ported, and whether the mechanism is cgo, a hand-written RPC
-client, or Python past the cut — is unchanged.
+Every source is a structured document or a set, never a rendered table.
+Persistence and autostart come from `virsh list --persistent` / `--autostart` as
+set membership rather than `dominfo`'s prose; state, memory and vcpus from
+`domstats`; uuid, taps and MACs from `dumpxml`; and addresses from libvirt's
+dnsmasq status file, which is JSON — and which is the source the reference
+actually gets its answer from, because libvirt refuses the guest agent outright
+on the read-only connection this collector opens.
+
+**The first comparison was vacuous and looked perfect.** The guest runs libvirtd
+and defines no domains, so both sides committed zero and the run went green over
+an empty set. A nested domain now makes the venue real, and it is started rather
+than merely defined, because a shutoff domain reaches neither `HostTaps` nor the
+address path.
 
 ## Closed since the last report
 
@@ -398,9 +408,7 @@ something permanent. Each was caught by a measurement rather than by review.
 
 ## What gate 3 still needs
 
-1. **The `vms` port**, which is the only collector not clean. Its ruling is
-   taken — port it over `virsh`, whose `domstats` answers `state.state=1`, the
-   enum the objection assumed only the C API had — and the work is outstanding.
+1. ~~**The `vms` port**~~ — **done**, and with it the report is clean.
 2. **`units`' could-not-read channel**, ruled and not yet implemented: route a
    failed property read to the structural `unobservable` record, and migrate
    `MissingReferenceUnobservable` with it.
@@ -434,6 +442,14 @@ be sourced **inside** the privileged shell: `sudo -E` does not carry them past
 `env_reset`, and the app collectors then decline for want of a receipt while
 looking exactly like a host that has no apps.
 
-Parity is **established for seventeen collectors, owed a PORT on one, and
-unavailable for one**. That last change of word is the round's result: `vms` was
-waiting on a decision this morning and is waiting on work tonight.
+Parity is **established for all eighteen collectors compared, and unavailable
+for one** — `system`, which has no Python adapter and so nothing to disagree
+with.
+
+The round's arc, in one line each: eight clean this morning, seventeen once the
+lab had venues to read, eighteen once `vms` was ported over a command the
+original objection had not examined. What the report cannot say, and should be
+read as not saying, is that the collectors are correct — only that two
+independent implementations reading one machine at one moment agree, which is a
+weaker and more useful claim. Five defects this round were found by exactly that
+disagreement and by nothing else.
