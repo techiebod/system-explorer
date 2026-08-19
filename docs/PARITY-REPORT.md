@@ -271,6 +271,22 @@ Neither side is defective and both statements are true, which is exactly why
 this is an adjudication rather than a bug — but a corpus pair would have to
 enshrine one of the two, and the safer one is not the reference's.
 
+**And the leak is narrower than the house pattern, which matters for how you
+look for it.** Stopping bazarr's container gives the same shape of disagreement
+with no URL in it at all:
+
+```
+reference:  ConnectError: All connection attempts failed
+port:       the bazarr API did not answer GET /api/system/status
+```
+
+httpx renders the two exceptions differently. `ConnectError` — nothing
+listening — stringifies without the URL. `HTTPStatusError` — something
+answered, with a status — stringifies **with** the request URL. So whether a
+collector's failure text discloses an address depends on which exception fires,
+and reading one collector's dark-app output and concluding the family is safe
+would be exactly wrong.
+
 The same run reached two facts nobody had reached. Stopping `paperless-redis`
 made the app report `Error connecting to redis, check logs for more detail.`
 and the matching celery sentence — **paperless's own words**, which is the
