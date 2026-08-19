@@ -151,9 +151,33 @@ The second blocker was the seam, and it was the real one: **ten of the seventeen
 
 **Captured and replaying: `vms`, `packages`, `docker`, `traefik`.** traefik's pair is committed — the first capture this product has taken from an HTTP interface, and it found a null fact value on three of three services the moment it ran. `docker`'s payloads are captured and held OUT of the tree until its scrub manifest classifies them: its documents carry real MACs and host mount paths, and the deny-by-default walk is refusing an imperfect manifest, which is the gate working rather than an obstacle to route around.
 
+**`nix` is deliberately deferred, and gate 3 must not be read as though it were
+not.** Nineteen of twenty collectors are ported. The twentieth is `nix`, and it
+is not blocked on the lab any more — the NixOS guest boots, is reachable, and
+stages two generations with a real delta in about ten minutes. It is deferred
+because the collector is going to be REPLACED: the generations collection is to
+be overhauled so it can show the full difference between two generations in a
+structured format, and the delta machinery that would be replaced —
+`_delta_rows`, `_package_rows`, `_etc_rows`, `_aggregate_rows`, and the /etc
+collapse and enumerate ceilings — is the bulk of what a corpus and a port would
+be testing.
+
+What that work will need, recorded now so it is not rediscovered: the reads must
+become stubbable before a replay seam can reach them at all. `nix` acquires
+through primitives split across TWO modules — its own tree walkers in
+`adapters/nix.py` and the shared `agent/nixos.py` — and the seam stubs the one
+module its table names, so the adapter needs the `resources` treatment (a
+module-level primitive introduced so the tree became stubbable). Then a
+`path_acquisitions` entry, an instrumented capture in the shape of `hardware_py`,
+then corpus and port. Doing it against the current shape would be a full
+collector's work discarded.
+
 > **Gate 3 opens when**
 >
-> every first-party collector passes replay and lab-live checks · items 1, 6, 7, 8 · the parity report per collection is clean or its diffs are named and accepted.
+> every first-party collector passes replay and lab-live checks — with `nix`
+> named above as the one deferral, which is a carve-out that must be closed or
+> re-stated before the gate is claimed, never a silence · items 1, 6, 7, 8 · the
+> parity report per collection is clean or its diffs are named and accepted.
 
 ### Phase 4 — hub and protocol (medium)
 

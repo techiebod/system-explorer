@@ -430,6 +430,39 @@ def obj_ref(object_id: str, obj_type: str, native_id: str, name: str | None = No
     return out
 
 
+def valued(facts: dict) -> dict:
+    """A facts mapping with its non-values removed.
+
+    A fact has three channels and `null` is none of them: a VALUE is what was
+    measured, `absent` says the thing does not apply, and an `unobservable`
+    record says it could not be read (DESIGN 19). A null names none of the
+    three, and `se.stream.1.json` refuses one at any depth — so an adapter that
+    publishes one produces an envelope that cannot be validated and a row that
+    tells a reader nothing.
+
+    Applied HERE rather than at the call sites because there are thirty-seven of
+    them. `raw.get("title")` returns None for a member the interface omitted and
+    reads as ordinary defensive code every time; `x or None` reads as
+    deliberate. The family has now been found five times — nftables, Traefik's
+    noop@internal, packages' Version, vms' IPAddresses, and plex's library
+    Title, that last one found by an agent reviewing a Go port that had already
+    taken the lawful reading its own reference had not. Fixing the fifth call
+    site would have left the sixth to be written.
+
+    Dropping is the lawful reading and the one the Go ports already take, so
+    this is also what makes reference and port agree rather than diverge. An
+    adapter that MEANT "I could not read this" says so through the unobservable
+    channel, which is a different member and is untouched here.
+
+    STATED COVERAGE: top-level fact values only. A null nested inside a fact's
+    list or sub-object is still refused by the contract and is still a defect;
+    this does not reach it, because pruning inside a value would change the
+    shape of a reading rather than remove a non-reading. No committed stream
+    carries one — that was checked, at every depth, when this landed.
+    """
+    return {key: value for key, value in facts.items() if value is not None}
+
+
 def observation(subsystem: str, obj: dict, src: dict, facts: dict,
                 opinions: list[dict] | None = None,
                 relationships: list[dict] | None = None,
@@ -444,7 +477,7 @@ def observation(subsystem: str, obj: dict, src: dict, facts: dict,
         "observed_at": utc_now(),
         "status": status,
         "source": src,
-        "facts": facts,
+        "facts": valued(facts),
     }
     if status != "ok":
         # Scrubbed at the boundary, wholesale: the fifteen call sites that
@@ -569,7 +602,8 @@ def item_summary(object_id: str, obj_type: str, native_id: str, facts: dict,
     needs to explain a red row without a per-object round trip.
     `opinions=None` (an inventory row with no evaluator — packages) makes
     no severity claim at all."""
-    out: dict[str, Any] = {"id": object_id, "type": obj_type, "native_id": native_id, "facts": facts}
+    out: dict[str, Any] = {"id": object_id, "type": obj_type,
+                           "native_id": native_id, "facts": valued(facts)}
     if name:
         out["name"] = name
     if opinions is not None:

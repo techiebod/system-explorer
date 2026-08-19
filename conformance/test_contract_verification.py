@@ -427,3 +427,54 @@ def test_every_declared_fact_is_observed_somewhere_or_named(collector: str) -> N
         "able to emit. Capture a variant that reaches it, or name it in "
         "corpus.NAMED_RESIDUALS with the venue that owns it."
     )
+
+
+# ── the null-fact family, closed centrally ───────────────────────────────
+
+
+def test_a_fact_value_is_never_null_on_either_surface():
+    """`null` is not one of a fact's three channels, and the contract refuses
+    it at any depth.
+
+    Found five times before it was closed — nftables, Traefik's noop@internal,
+    packages' Version, vms' IPAddresses, and plex's library Title — and a static
+    sweep of the adapters then turned up THIRTY-SEVEN call sites that can
+    produce one, across eleven collectors. Every one of them is a member the
+    interface may omit, read with `raw.get(...)` or written as `x or None`, and
+    every one reads as ordinary defensive code.
+
+    So the repair is at the two places facts become an envelope rather than at
+    thirty-seven call sites, and this is the test that keeps it there. It drives
+    both surfaces, because they are two different builders: `item_summary` makes
+    a collection row and `observation` makes an opened object, and fixing one
+    would leave the other emitting nulls on exactly the drill-down a reader
+    reaches for when a row looks wrong.
+    """
+    from system_explorer.agent import envelope as env
+
+    facts = {"Kept": "value", "AlsoKept": 0, "FalseIsAValue": False,
+             "EmptyIsAValue": "", "Dropped": None}
+
+    row = env.item_summary("thing:1", "thing", "1", dict(facts))
+    assert "Dropped" not in row["facts"], (
+        "item_summary published a null fact value — a collection row that "
+        "cannot be validated against se.stream.1.json"
+    )
+
+    opened = env.observation("sub", {"id": "thing:1"}, {"kind": "test"}, dict(facts))
+    assert "Dropped" not in opened["facts"], (
+        "observation published a null fact value — the opened object of a row "
+        "that was itself lawful, which is the drill-down a reader reaches for"
+    )
+
+    # The four that are VALUES and must survive. Zero, False and the empty
+    # string are the ones a truthiness filter would eat, and each is a real
+    # reading: a count of nothing, a flag that is off, a name the interface
+    # deliberately answered as empty.
+    for surface, built in (("row", row["facts"]), ("opened", opened["facts"])):
+        for key in ("Kept", "AlsoKept", "FalseIsAValue", "EmptyIsAValue"):
+            assert key in built, (
+                f"{surface}: {key!r} was dropped — the guard filters on None, "
+                "never on truthiness, or a zero count and an off flag stop "
+                "being readings"
+            )
