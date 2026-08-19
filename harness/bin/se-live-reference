@@ -117,9 +117,9 @@ LIVE = {
              # and the adapter says so per collection. Without this the driver
              # acquired them anyway, got [] and COMMITTED it, retiring every
              # library the estate had published because a variable was unset.
-             "receipt_collections": lambda a, c: (
+             "gated": lambda a, c: "unavailable" if (
                  c in ("libraries", "sessions")
-                 and a.plex_url is not None and not a._plex_token_set),
+                 and a.plex_url is not None and not a._plex_token_set) else None,
              "interface": "plex api",
              "collections": ["server", "libraries", "sessions"]},
     # Reads files this host publishes, so live means literally that — and it
@@ -132,6 +132,14 @@ LIVE = {
                    "collections": ["targets", "jobs", "destinations"]},
     "kea": {"module": kea, "adapter": kea.Adapter,
             "receipts": lambda a: a.socket_path is None,
+            # lease4-get-all lives in libdhcp_lease_cmds, a HOOK library, so
+            # whether `leases` has an interface at all is a property of a
+            # host's configuration and not of Kea's version. Without it the
+            # reference used to raise and lose ALL FOUR collections where the
+            # port loses one. `unsupported`, matching the port: the command is
+            # not offered by this server and will not be until it is
+            # reconfigured, which is not a transient failure to retry.
+            "gated": lambda a, c: "unsupported" if c == "leases" else None,
             "interface": "kea control socket",
             "collections": ["daemon", "subnets", "reservations", "leases"]},
     # The one adapter here addressed entirely by environment: SE_TRANSMISSION_
@@ -379,12 +387,22 @@ def run(collector: str, generations: dict[str, int]) -> None:
         # retire. Declining it made the reference disagree with a port that was
         # right, on a host that genuinely has no NVMe. Measured 2026-08-19: 17
         # clean went to 16 on the first full run after that change.
-        receipt_gap = spec.get("receipt_collections")
+        # `gated` returns the decline REASON for a collection this adapter has
+        # declared unavailable, or None to leave it unbridged. The reason is
+        # declared per case rather than defaulted, because the two adjudicated
+        # cases do not share one: a Plex with no token is `unavailable` — it
+        # may answer perfectly tomorrow — while a Kea whose lease_cmds hook is
+        # not loaded is `unsupported`, permanent for that configuration, the
+        # same reading OpenZFS 2.2.2 gets for lacking `status -j`.
+        gated = spec.get("gated")
         dark = gate.get("unavailable_collections") or {}
-        skip = {name for name in generations
-                if name in dark and receipt_gap and receipt_gap(adapter, name)}
-        for collection in skip:
-            out.decline(collection, "unavailable",
+        skip = {}
+        if gated:
+            for name in generations:
+                if name in dark and (reason := gated(adapter, name)):
+                    skip[name] = reason
+        for collection, reason in skip.items():
+            out.decline(collection, reason,
                         f"{collection} is not observable through the "
                         f"{spec['interface']} on this host")
 
