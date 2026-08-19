@@ -277,6 +277,11 @@ func serverRows(src source) ([]row, error) {
 	}
 	facts := newObject()
 	if len(deploy.missing) > 0 {
+		// This row rests on no document, so nothing else takes the clock for
+		// it — and a published object with `at: 0` is refused by the contract.
+		if err := src.ready(); err != nil {
+			return nil, err
+		}
 		facts.set(factConfigMissing, stringList(deploy.missing))
 		return []row{{name: serverName, facts: facts}}, nil
 	}

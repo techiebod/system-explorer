@@ -496,7 +496,14 @@ func TestAConfiguredServerWithNoTokenPublishesTheRowAndAsksNothingElse(t *testin
 		t.Fatalf("a URL with no token is a receipts gap naming the variable; got %+v", got)
 	}
 
-	rows, err := serverRows(src)
+	// The deployment gate above is read from the environment and needs no
+	// clock, so the LIVE source answers it on any platform. The row builder
+	// below now does need one: a ConfigMissing row rests on no document, so
+	// nothing else takes its `at`, and it used to publish `at: 0`. Driving it
+	// through stubSource — which carries the same deployment and inherits
+	// replay's stamping — keeps this a test of the DERIVATION rather than of
+	// whether the host running the tests has CLOCK_BOOTTIME.
+	rows, err := serverRows(stubSource{deploy: got})
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("the server row stays: %v rows, err %v", len(rows), err)
 	}

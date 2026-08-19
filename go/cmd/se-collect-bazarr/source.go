@@ -259,6 +259,27 @@ func (s *liveSource) instance() (reading, error) {
 		reason := declineNoInstance
 		return reading{}, &reason
 	}
+	// The clock reading before the first byte: `at` must precede the earliest
+	// native read that contributes to the row, and the tie breaks toward older
+	// (DESIGN 19).
+	//
+	// Taken BEFORE the receipt checks below, and after the URL check above,
+	// because those two paths differ in the one way that matters here: no URL
+	// is a DECLINE and emits no object, so it needs no stamp and must stay
+	// answerable on a machine with no CLOCK_BOOTTIME; a missing key emits a
+	// ROW, and every published object owes a real `at`. Reading the clock
+	// after those returns left ConfigMissing rows carrying `at: 0` — a value
+	// the contract refuses (0 < at <= 1e9) and which no test could see,
+	// because the row is built from the environment and the replay seam pins
+	// the receipts so a replaying host cannot reach this branch. The live
+	// comparator caught it on the first run with a URL set and a key withheld,
+	// which is the venue the bazarr/config-missing residual named.
+	at, err := bootClock()
+	if err != nil {
+		return reading{}, err
+	}
+	s.at = at
+
 	// The receipts, before anything is fetched. An instance named by URL with
 	// no usable key is a row saying so — never a decline, because the estate
 	// configured this instance and a missing receipt is a gap in THIS
@@ -269,15 +290,6 @@ func (s *liveSource) instance() (reading, error) {
 	if s.key == "" {
 		return reading{configMissing: []string{keyVariable}}, nil
 	}
-
-	// The clock reading before the first byte: `at` must precede the earliest
-	// native read that contributes to the row, and the tie breaks toward older
-	// (DESIGN 19).
-	at, err := bootClock()
-	if err != nil {
-		return reading{}, err
-	}
-	s.at = at
 
 	status, detail := s.fetch(pathStatus)
 	if detail != "" {

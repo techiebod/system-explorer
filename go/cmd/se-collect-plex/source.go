@@ -64,6 +64,15 @@ type source interface {
 	// stated by the caller: the first read after a mark takes the clock and every
 	// row of that collection shares it.
 	mark()
+	// ready takes this collection's clock reading without reading the API,
+	// for the one row that rests on NO native document: the ConfigMissing row
+	// is built from the deployment's receipts alone, so the read path that
+	// normally takes the stamp never runs and `at` stayed 0 — a value the
+	// contract refuses (0 < at <= 1e9). Replay cannot reach that branch,
+	// because the seam pins the receipts so a replaying host cannot decide a
+	// committed row; the live comparator caught it with a URL set and the
+	// token withheld, which is the venue plex's own residual named.
+	ready() error
 	// stamp is `at` for the i-th emitted object.
 	stamp(i int) float64
 	// costs are end's advisory self-report (DESIGN 19): bounded by the judge,
@@ -458,6 +467,10 @@ func (replaySource) declaration() string { return declarationDigest }
 // Nothing to open: a replay reads files, and the pinned stamp below is a function
 // of emission order alone.
 func (replaySource) mark() {}
+
+// Nothing to take: replay's `at` is the reference constant below, a function of
+// emission order alone, so there is no clock for a stampless row to miss.
+func (replaySource) ready() error { return nil }
 
 func (replaySource) stamp(i int) float64 {
 	// The reference constant, 1.0 + 0.001*i in emission order and one counter
