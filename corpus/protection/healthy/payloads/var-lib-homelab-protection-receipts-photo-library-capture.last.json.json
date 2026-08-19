@@ -1,0 +1,13 @@
+[
+  {
+    "schema": 1,
+    "job": "photo-library-capture",
+    "host": "vault",
+    "unit": "capture-photo-library.service",
+    "finishedAt": "2026-08-19T12:51:40Z",
+    "finishedAtEpoch": 1787143900,
+    "result": "success",
+    "exitStatus": "0"
+  },
+  null
+]

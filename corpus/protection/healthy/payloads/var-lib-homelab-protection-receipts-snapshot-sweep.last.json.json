@@ -1,0 +1,13 @@
+[
+  {
+    "schema": 1,
+    "job": "snapshot-sweep",
+    "host": "vault",
+    "unit": "snapshot-sweep.service",
+    "finishedAt": "2026-08-19T13:35:00Z",
+    "finishedAtEpoch": 1787146500,
+    "result": "success",
+    "exitStatus": "0"
+  },
+  null
+]

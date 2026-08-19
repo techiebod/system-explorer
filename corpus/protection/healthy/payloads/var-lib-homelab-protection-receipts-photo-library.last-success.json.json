@@ -1,0 +1,13 @@
+[
+  {
+    "schema": 1,
+    "job": "photo-library",
+    "host": "vault",
+    "unit": "protect-photo-library.service",
+    "finishedAt": "2026-08-19T13:00:00Z",
+    "finishedAtEpoch": 1787144400,
+    "result": "success",
+    "exitStatus": "0"
+  },
+  null
+]

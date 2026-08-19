@@ -1,0 +1,167 @@
+[
+  {
+    "schema": 1,
+    "counts": {
+      "backup": 5,
+      "recreate": 1,
+      "replicate": 1
+    },
+    "destinations": {
+      "nearline-zfs": {
+        "kind": "zfs-recv",
+        "independent": false,
+        "immutability": "Received snapshots are read-only and the dataset is mounted noexec, but the sending host still holds send rights, so a compromised source can destroy what it sent; this rung is not append-only and is not claimed to be.",
+        "pruneAuthority": "the receiving host's own retention policy; no sending host holds a delete right here"
+      },
+      "offsite-object": {
+        "kind": "restic-s3",
+        "independent": true,
+        "immutability": "Versioning with Object Lock in governance mode; a leaked source key can still remove object versions, so append-only is the target and not today's state.",
+        "pruneAuthority": "a maintenance identity that exists only in the recovery kit; no source host may prune here"
+      }
+    },
+    "targets": {
+      "photo-library": {
+        "class": "backup",
+        "kind": "zfs-dataset",
+        "ownerHost": "vault",
+        "cadence": "daily",
+        "retention": "irreplaceable-zfs",
+        "source": "dataset:tank/photos",
+        "destinations": [
+          "nearline-zfs",
+          "offsite-object"
+        ],
+        "implementedBy": {
+          "nearline-zfs": "vault:photo-library",
+          "offsite-object": "annex:photo-library-offsite"
+        },
+        "implementedExternally": {},
+        "lastProvenAt": {
+          "offsite-object": "2026-07-30"
+        },
+        "proofs": [
+          {
+            "rung": "offsite-object",
+            "at": "2026-07-30",
+            "result": "pass",
+            "scope": "4 files / 21.3 MiB sampled from the 2019 subtree of snapshot 9c1f2ab (411,902 files / 2.1 TiB)",
+            "comparedAgainst": "the LIVE dataset on vault, deliberately not the nearline replica the copy was made from, so the whole chain is exercised",
+            "record": "docs/recovery-proofs.md"
+          }
+        ]
+      },
+      "document-archive": {
+        "class": "backup",
+        "kind": "container",
+        "ownerHost": "vault",
+        "cadence": "daily",
+        "retention": "irreplaceable-app",
+        "source": "container:document-archive",
+        "destinations": [
+          "nearline-zfs",
+          "offsite-object"
+        ],
+        "implementedBy": {
+          "nearline-zfs": "vault:document-archive",
+          "offsite-object": "annex:document-archive-offsite"
+        },
+        "implementedExternally": {},
+        "lastProvenAt": {},
+        "proofs": [
+          {
+            "rung": "offsite-object",
+            "at": "2026-06-11",
+            "result": "fail",
+            "scope": "1 file / 2.4 MiB restored from snapshot 41ba77c",
+            "comparedAgainst": "the live archive on vault; the restored document did not match and the archive's own checksum disagreed",
+            "record": "docs/recovery-proofs.md"
+          }
+        ]
+      },
+      "appliance-config": {
+        "class": "backup",
+        "kind": "repo",
+        "ownerHost": "vault",
+        "cadence": "weekly",
+        "retention": "recreatable-with-effort",
+        "source": "appliance export bundle",
+        "destinations": [
+          "nearline-zfs",
+          "offsite-object"
+        ],
+        "implementedBy": {
+          "nearline-zfs": "vault:appliance-config"
+        },
+        "implementedExternally": {},
+        "lastProvenAt": {},
+        "proofs": []
+      },
+      "definitions-repo": {
+        "class": "backup",
+        "kind": "repo",
+        "ownerHost": "vault",
+        "cadence": "daily",
+        "retention": "irreplaceable-app",
+        "source": "configuration git repository + secret material",
+        "destinations": [
+          "offsite-object"
+        ],
+        "implementedBy": {},
+        "implementedExternally": {
+          "offsite-object": "operator-held: a git remote plus a passphrase-encrypted recovery kit (verified 2026-07-02)"
+        },
+        "lastProvenAt": {},
+        "proofs": []
+      },
+      "music-library": {
+        "class": "backup",
+        "kind": "zfs-dataset",
+        "ownerHost": "annex",
+        "cadence": "daily",
+        "retention": "irreplaceable-zfs",
+        "source": "dataset:tank/music",
+        "destinations": [
+          "nearline-zfs"
+        ],
+        "implementedBy": {
+          "nearline-zfs": "annex:music-library"
+        },
+        "implementedExternally": {},
+        "lastProvenAt": {},
+        "proofs": []
+      },
+      "runtime-state": {
+        "class": "replicate",
+        "kind": "container",
+        "ownerHost": "vault",
+        "cadence": "hourly",
+        "retention": "derived",
+        "source": "container:runtime-state",
+        "destinations": [
+          "nearline-zfs"
+        ],
+        "implementedBy": {
+          "nearline-zfs": "vault:runtime-state"
+        },
+        "implementedExternally": {},
+        "lastProvenAt": {},
+        "proofs": []
+      },
+      "scratch-space": {
+        "class": "recreate",
+        "kind": "dataset",
+        "ownerHost": "vault",
+        "cadence": "none",
+        "retention": "derived",
+        "source": "dataset:tank/scratch",
+        "destinations": [],
+        "implementedBy": {},
+        "implementedExternally": {},
+        "lastProvenAt": {},
+        "proofs": []
+      }
+    }
+  },
+  null
+]

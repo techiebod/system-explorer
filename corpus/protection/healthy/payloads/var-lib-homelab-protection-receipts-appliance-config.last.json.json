@@ -1,0 +1,13 @@
+[
+  {
+    "schema": 1,
+    "job": "appliance-config",
+    "host": "vault",
+    "unit": "protect-appliance-config.service",
+    "finishedAt": "2026-08-05T15:00:00Z",
+    "finishedAtEpoch": 1785942000,
+    "result": "success",
+    "exitStatus": "0"
+  },
+  null
+]

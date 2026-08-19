@@ -1,0 +1,82 @@
+[
+  {
+    "schema": 1,
+    "host": "vault",
+    "checkedAt": 1787146200,
+    "unimplemented": [
+      "definitions-repo"
+    ],
+    "unimplementedHops": [
+      {
+        "target": "appliance-config",
+        "destination": "offsite-object"
+      }
+    ],
+    "jobs": [
+      {
+        "job": "appliance-config",
+        "state": "stale",
+        "basis": "last-success",
+        "ageSeconds": 1206000,
+        "maxAgeSeconds": 691200,
+        "lastResult": "success",
+        "target": null
+      },
+      {
+        "job": "config-sweep",
+        "state": "ok",
+        "basis": "last-success",
+        "ageSeconds": 900,
+        "maxAgeSeconds": 10800,
+        "lastResult": "success",
+        "target": null
+      },
+      {
+        "job": "document-archive",
+        "state": "ok",
+        "basis": "last-success",
+        "ageSeconds": 5400,
+        "maxAgeSeconds": 129600,
+        "lastResult": "success",
+        "target": null
+      },
+      {
+        "job": "photo-library",
+        "state": "ok",
+        "basis": "last-success",
+        "ageSeconds": 3600,
+        "maxAgeSeconds": 129600,
+        "lastResult": "success",
+        "target": null
+      },
+      {
+        "job": "photo-library-capture",
+        "state": "ok",
+        "basis": "last-success",
+        "ageSeconds": 4100,
+        "maxAgeSeconds": 129600,
+        "lastResult": "success",
+        "target": "photo-library"
+      },
+      {
+        "job": "runtime-state",
+        "state": "stale",
+        "basis": "registered-never-succeeded",
+        "ageSeconds": 604800,
+        "maxAgeSeconds": 86400,
+        "lastResult": "none",
+        "target": null
+      },
+      {
+        "job": "snapshot-sweep",
+        "state": "ok",
+        "basis": "last-success",
+        "ageSeconds": 1500,
+        "maxAgeSeconds": 10800,
+        "lastResult": "success",
+        "target": null
+      }
+    ]
+  },
+  null
+]

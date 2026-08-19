@@ -427,50 +427,39 @@ NAMED_RESIDUALS = {
         "this collector against a real journal and publishes nothing, so it "
         "owns the port's behaviour today while the CORPUS half stays owed."
     ),
-    # The three protection collections, named together because one decision
-    # governs all three: whether this public repository may carry a document
-    # describing a private estate's backups.
-    "protection/targets": (
-        "No committed variant, and NOT because the interface is hard to reach "
-        "— it was captured cleanly from a host that publishes these documents "
-        "on 2026-08-19, 35 payloads, and the capture is what this entry is "
-        "written from. It is not committed because of what it IS. Every one of "
-        "the corpus's other variants comes from a disposable lab guest; this "
-        "one would be the first from a real estate, and the manifest's 191 "
-        "leaves are that estate's entire protection posture — every target it "
-        "declares, what each protects, where copies land, which host owns "
-        "which, and hand-written security prose about who may delete. "
-        "Scrubbing substitutes the hostnames and leaves the SHAPE, and the "
-        "shape is the disclosure: a reader learns what a named person backs up "
-        "and what they do not. That is an estate record, and estate records "
-        "live in the private repository, so the boundary rather than the "
-        "tooling is what stops this. Venue: the live comparator "
-        "(harness/bin/se-compare), run on a host that publishes the three "
-        "documents, where the real manifest is read and nothing is published. "
-        "The alternative venue — a variant over an INVENTED estate, shaped "
-        "from the real capture and marked authored rather than captured — is "
-        "a decision about this corpus's standards and is not taken here."
-    ),
-    "protection/jobs": (
-        "Uncommitted for the reason stated under protection/targets, and this "
-        "collection loses the most to it. The staleness verdict and the "
-        "receipts are the only place the five states are distinguishable — "
-        "declared, implemented, running-green, proven by restore, and "
-        "TRIED-AND-FAILED — and no replayed stream exercises any of them, so "
-        "the one-row-one-vintage rule (the verdict's own as-of stamp beside "
-        "the receipt that outranks it) is checked by nothing here. Venue: the "
-        "live comparator on a host with both documents, which reads sixteen "
-        "real jobs and their receipts."
-    ),
-    "protection/destinations": (
-        "Uncommitted for the reason stated under protection/targets, and here "
-        "the reason is at its sharpest: the collection's whole content is the "
-        "Immutability and PruneAuthority prose, carried VERBATIM because "
-        "paraphrasing a security property would be inventing a new claim. "
-        "Verbatim security prose about a private estate is the single thing in "
-        "this capture least suitable for a public corpus, and a scrub that "
-        "rewrote it would produce a claim nobody made. Venue: the live "
-        "comparator, which reads the sentences and publishes none of them."
+    # protection carries an AUTHORED variant, so all three of its collections
+    # are covered and none is orphaned. What is not covered is anything a
+    # written document cannot be evidence of, and that is one thing rather
+    # than three.
+    "protection/never-captured": (
+        "The committed variant is authored, not captured: every shape in it "
+        "was read off a real capture taken on 2026-08-19, and every value was "
+        "written. So the corpus is evidence about the COLLECTOR and is no "
+        "evidence at all about the estate's documents — if the manifest, the "
+        "verdict or the receipt schema moves, this variant keeps replaying "
+        "happily against a shape nothing produces any more, and the "
+        "source_version it claims (protection-manifest-schema 1) would go on "
+        "saying 1 forever because it too was written here. No mutation "
+        "operator can close that: an operator rewrites what an interface "
+        "SAID, and the question is whether any interface still says it. The "
+        "real capture is not committed because the manifest's 191 leaves "
+        "describe what a private estate protects, where copies land and who "
+        "may delete, and scrubbing substitutes the names while leaving the "
+        "shape — harness/scrub/protection.json is written for that capture "
+        "anyway, and was proven against a scratch copy of the authored "
+        "payloads to classify every leaf and to substitute host names "
+        "consistently, including inside the `<host>:<job>` references. Venue: "
+        "the live comparator (harness/bin/se-compare) on a host that "
+        "publishes the three documents, which reads the real ones and "
+        "publishes none of them; it is the only thing that can notice the "
+        "shape has moved. The tool exists and no such run has been made, so "
+        "this truth stays owed rather than owned.\n\n"
+        "One thing here is owed by nobody, which is different from unowned: "
+        "a target's protection spans HOSTS by design — the source captures, "
+        "another host pushes the off-site copy — so no host adapter can state "
+        "the weakest link in a chain it cannot see, and the collector "
+        "deliberately does not try. That belongs to the hub, and the hub does "
+        "not exist yet."
     ),
 }
 

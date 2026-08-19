@@ -1,0 +1,13 @@
+[
+  {
+    "schema": 1,
+    "job": "document-archive",
+    "host": "vault",
+    "unit": "protect-document-archive.service",
+    "finishedAt": "2026-08-19T13:25:00Z",
+    "finishedAtEpoch": 1787145900,
+    "result": "exit-code",
+    "exitStatus": "1"
+  },
+  null
+]

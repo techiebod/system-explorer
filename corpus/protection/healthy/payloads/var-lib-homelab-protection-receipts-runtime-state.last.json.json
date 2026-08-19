@@ -1,0 +1,13 @@
+[
+  {
+    "schema": 1,
+    "job": "runtime-state",
+    "host": "vault",
+    "unit": "replicate-runtime-state.service",
+    "finishedAt": "2026-08-19T13:20:00Z",
+    "finishedAtEpoch": 1787145600,
+    "result": "exit-code",
+    "exitStatus": "2"
+  },
+  null
+]

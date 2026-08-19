@@ -1,0 +1,13 @@
+[
+  {
+    "schema": 1,
+    "job": "config-sweep",
+    "host": "vault",
+    "unit": "config-sweep.service",
+    "finishedAt": "2026-08-19T13:15:00Z",
+    "finishedAtEpoch": 1787145300,
+    "result": "success",
+    "exitStatus": "0"
+  },
+  null
+]
