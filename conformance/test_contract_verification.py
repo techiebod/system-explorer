@@ -407,7 +407,8 @@ def test_every_declared_fact_is_observed_somewhere_or_named(collector: str) -> N
             payloads = differential.mutated_payloads(operator, seed)
             with tempfile.TemporaryDirectory(prefix="se-declared-") as tmp:
                 directory = Path(tmp)
-                differential.write_payloads(payloads, directory)
+                differential.write_payloads(payloads, directory,
+                                            seed.payload_suffixes)
                 _observe(binary, seed, observed, payload_dir=directory)
 
     orphans = []
