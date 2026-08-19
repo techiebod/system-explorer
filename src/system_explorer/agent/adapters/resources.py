@@ -189,6 +189,33 @@ def _read_text(path: str) -> str | None:
         return None
 
 
+def _walk(root: str, onerror):
+    """The cgroup tree's directory structure, and the module's ONE walk.
+
+    Here for the same reason `_read_text` is, one level up: every read in this
+    module goes through a named helper so a lint can see it, and until now the
+    WALK went through a bare os.walk that no lint and no replay seam could
+    reach. That asymmetry is what kept this collector out of the corpus. Its
+    reads are stubbable and its tree was not, so a replayed run would have
+    enumerated the cgroups of whichever machine was replaying — the seam
+    escape that once put a workstation's filesystem into committed facts, and
+    the one failure this repository has paid for twice.
+
+    The interface a cgroup collector reads is a filesystem, so its native
+    document is the filesystem transcribed: the listings this yields plus the
+    contents `_read_text` returns. Both halves have to be capturable for that
+    to be true of a replay, and a reader with the payload can `cat` any path
+    and compare, which is the checkable-reading property the D-Bus ruling
+    turns on (DESIGN's adjudication queue).
+
+    A thin wrapper on purpose. It adds no behaviour — onerror still carries
+    the unlistable-subtree reporting that os.walk would otherwise discard in
+    silence — because a seam that changed what it wraps would be a second
+    implementation rather than a seam.
+    """
+    return os.walk(root, onerror=onerror)
+
+
 def _read_or_reason(path: str) -> str:
     """The same read for evidence, where a failure is itself the answer: a
     file that will not open is shown as the reason it did not, because
@@ -408,7 +435,7 @@ def _nodes() -> dict[str, dict]:
             if held is not None and held["path"] == path:
                 held["pruned"] = True
 
-    for dirpath, dirnames, _files in os.walk(CGROUP_ROOT, onerror=unlistable):
+    for dirpath, dirnames, _files in _walk(CGROUP_ROOT, unlistable):
         depth = dirpath.count("/") - root_depth
         if depth >= CGROUP_MAX_DEPTH:
             dirnames[:] = []
