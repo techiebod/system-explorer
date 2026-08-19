@@ -43,7 +43,7 @@ collectors.
 | `logs` | 100 | a real journal |
 | `resources` | 70 | a real cgroup tree, 11 container scopes included |
 | `docker` | 29 | eleven containers, volumes and networks |
-| `hardware` | 20 | a real sysfs walk |
+| `hardware` | 23 | a real sysfs walk, **including a SCSI disk with a serial and a WWN** |
 | `protection` | 16 | a manifest and 12 receipts on disk |
 | `servarr` | 8 | **two** instances, radarr and sonarr, API v3 |
 | `traefik` | 6 | a live dashboard over the docker provider |
@@ -68,6 +68,20 @@ running iptables-nft compatibility (Docker, libvirt)"* and records that no lab
 guest ran that layer. This one does — docker, libvirt and traefik between them
 now drive 136 rows. **The `xt` spelling is visited.** The bare-string spelling
 still is not, so that residual narrows rather than closes.
+
+**`hardware` was compared against a host with a disk in one of its walks.** Every
+lab guest's disks were virtio-blk, which the kernel presents through neither the
+scsi nor the nvme class — `/sys/class/nvme` does not exist and
+`/sys/bus/scsi/devices` held two `ata_piix` hosts and no device — so every fact
+belonging to a *disk* rather than a controller was reached by nothing. The
+guests now get a virtio-SCSI disk as well, hot-attached after `virt-install`
+with an explicit serial and WWN. `Block`, `SizeBytes`, `Serial`,
+`WWN` (`naa.…`), `ByPath` and `Revision` all arrive, both sides agree, and the
+controller row's `Devices` count reads 1 against the ata hosts' 0 — the first
+time that fact has discriminated anything. The residual's own ruling is
+respected: staging a disk by inventing a sysfs subtree would be "the reference
+half of the guard answering about a host that does not exist", so the kernel
+builds the subtree and the collector reads what a kernel wrote.
 
 **`plex` was compared against an unclaimed server.** No claim token was passed,
 `PLEX_CLAIM` is unset, and `Preferences.xml` carries no `PlexOnlineToken`,
