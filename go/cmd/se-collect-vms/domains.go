@@ -21,6 +21,11 @@ const addressUnobservable = "no address source could answer for this running gue
 type domainRow struct {
 	name  string
 	facts *value
+	// Law 1: the domain UUID, which is the one identifier that survives a
+	// rename. Without it the collator keys a domain on its NAME alone, so
+	// `virsh domrename` retires the object and mints a new one — the guest's
+	// whole history gone, with nothing saying it was the same guest.
+	names *value
 	// Present only for a running guest whose address nothing could see: the
 	// value exists and this reading cannot get it, which is the third channel
 	// (DESIGN 19) and not a value, not an absence, and never a null.
@@ -95,9 +100,23 @@ func buildDomain(domain *value) (domainRow, error) {
 		facts.set("IPAddressesUnobservable", stringValue(addressUnobservable))
 	}
 
+	// Law 1, added 2026-08-19 with the reference in the same commit. The UUID
+	// was read, used as a fact, and never published as a NAME, so the one
+	// identifier that survives a rename was not a join key anywhere. Emitted
+	// only when the document carries it: a names block whose family is
+	// missing would be a join key nobody may join on.
+	var names *value
+	if uuid := domain.get("uuid"); uuid.isString() && uuid.text != "" {
+		stable := newObject()
+		stable.set("uuid", uuid)
+		names = newObject()
+		names.set("stable", stable)
+	}
+
 	return domainRow{
 		name:  domainName(domain),
 		facts: facts,
+		names: names,
 		// The pair the reference publishes as a null value with a reason
 		// beside it. Only HALF of that pair is unlawful: `IPAddresses: null`
 		// is refused by the contract at any depth, and it is dropped. The
@@ -232,13 +251,17 @@ func collectDomains(out *emitter, stderr io.Writer, src source, collection strin
 			fmt.Fprintln(stderr, err)
 			return exitRuntime
 		}
-		out.emit(objectRecord{
+		record := objectRecord{
 			Record:     "object",
 			Collection: collection,
 			Name:       row.name,
 			Facts:      row.facts.encode(),
 			At:         at,
-		})
+		}
+		if row.names != nil {
+			record.Names = row.names.encode()
+		}
+		out.emit(record)
 		*objects++
 	}
 	out.emit(commitRecord{

@@ -321,10 +321,18 @@ class Adapter:
             summary = summary_facts(facts)
             # Rules see the summary facts (State and Autostart both there), so
             # the row carries the same worst opinion an opened object would.
-            items.append(env.item_summary(
+            item = env.item_summary(
                 f"domain:{dom['name']}", "domain", dom["name"], summary,
                 opinions=domain_opinions(summary) + domain_address_opinions(summary),
-                healthy="ok" if dom["state"] == "running" else "info"))
+                healthy="ok" if dom["state"] == "running" else "info")
+            # Law 1: the UUID is the one identifier that survives a rename,
+            # and it was read, used and dropped. Without it the collator keys
+            # a domain on its NAME alone, so `virsh domrename` retires the
+            # object and mints a new one — the domain's whole history gone,
+            # and nothing anywhere saying it was the same guest.
+            if dom.get("uuid"):
+                item["names"] = {"stable": {"uuid": dom["uuid"]}}
+            items.append(item)
         return items
 
     async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:

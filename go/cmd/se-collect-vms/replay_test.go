@@ -325,3 +325,49 @@ func TestProbeAnswersWithAVerdictNotAnExitCode(t *testing.T) {
 		t.Fatal("a verdict without its why is not actionable")
 	}
 }
+
+// Law 1: the UUID travels as a NAME, not only as a fact the summary drops.
+//
+// It was read, used and published nowhere until 2026-08-19, so the collator
+// keyed a domain on its NAME alone and `virsh domrename` retired the guest
+// and minted a new object carrying none of its history. The declaration
+// test pins the declared half; this pins the emitted half, and the two
+// together are what stop a family being declared that the stream never
+// carries — a join key nobody may join on.
+func TestTheDomainUUIDTravelsAsAName(t *testing.T) {
+	code, stdout, stderr := runWith(t, "collect domains:412\n", replayEnv(stageReplayDir(t, stagedDomains)))
+	if code != exitOK {
+		t.Fatalf("exit %d, stderr: %s", code, stderr)
+	}
+	object := ofKind(parseRecords(t, stdout), "object")[0]
+	names, ok := object["names"].(map[string]any)
+	if !ok {
+		t.Fatalf("the row carries no names block: %v", object["names"])
+	}
+	stable, ok := names["stable"].(map[string]any)
+	if !ok {
+		t.Fatalf("a UUID is a STABLE name — it survives the rename the row's own name does not: %v", names)
+	}
+	if stable["uuid"] != "5cb00000-0000-4000-8000-000000000001" {
+		t.Errorf("the uuid family carries the document's own value; got %v", stable["uuid"])
+	}
+	if len(names) != 1 || len(stable) != 1 {
+		t.Errorf("exactly the declared family, and no other: %v", names)
+	}
+}
+
+// A document with no uuid publishes no names block at all, rather than an
+// empty family: a names block whose family is missing is a join key nobody
+// may join on, which is the rule the declaration test's old pin defended.
+func TestADomainWithNoUUIDPublishesNoNames(t *testing.T) {
+	document := strings.Replace(stagedDomains,
+		`"uuid": "5cb00000-0000-4000-8000-000000000001",`, "", 1)
+	code, stdout, stderr := runWith(t, "collect domains:412\n", replayEnv(stageReplayDir(t, document)))
+	if code != exitOK {
+		t.Fatalf("exit %d, stderr: %s", code, stderr)
+	}
+	object := ofKind(parseRecords(t, stdout), "object")[0]
+	if _, present := object["names"]; present {
+		t.Errorf("an absent uuid publishes no names block: %v", object["names"])
+	}
+}

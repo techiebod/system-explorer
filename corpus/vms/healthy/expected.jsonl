@@ -1,4 +1,4 @@
-{"record":"begin","request":"replay","batch":"replay","declaration":"sha256:f389bed5947a0e432c01941768bbc634b13e7021a237f6e2d1455fec80579843","boot_id":"5e000000-0000-4000-8000-000000000001","timens":0,"instance":null,"generations":{"domains":37346}}
-{"record":"object","collection":"domains","name":"host-7a173d","facts":{"State":"shutoff","MemoryMiB":256,"VCPUs":1,"Autostart":false,"Persistent":true,"HostTaps":[]},"at":1}
+{"record":"begin","request":"replay","batch":"replay","declaration":"sha256:9e0d12c08bf4bb72f780d8f89df90434f26f481b06a1a8dc3944d08b99790c82","boot_id":"5e000000-0000-4000-8000-000000000001","timens":0,"instance":null,"generations":{"domains":37346}}
+{"record":"object","collection":"domains","name":"host-7a173d","facts":{"State":"shutoff","MemoryMiB":256,"VCPUs":1,"Autostart":false,"Persistent":true,"HostTaps":[]},"names":{"stable":{"uuid":"5cb07e64-2969-354b-a116-6fb8a59e6fb7"}},"at":1}
 {"record":"commit","collection":"domains","generation":37346,"objects":1,"assertions":0,"unobservable":0}
 {"record":"end","request":"replay","batch":"replay","cpu_ms":0.5,"wall_ms":1}

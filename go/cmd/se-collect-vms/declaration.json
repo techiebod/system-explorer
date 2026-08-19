@@ -110,6 +110,12 @@
           "sentence": "Why this running guest's addresses could not be read, when they could not. A blank address column is otherwise ambiguous between a guest that has no address and a guest whose address nobody could tell us, and only the second is a gap in the reading. It is a FACT rather than an unobservable record because the rulebook reads it to decide which of those two a row is showing, and rules are computed from facts. Absent on a guest whose addresses were read, and on one that is not running, where an address does not apply."
         }
       },
+      "names": {
+        "uuid": {
+          "class": "stable",
+          "sentence": "The domain UUID libvirt assigned at definition time. It is the one identifier that survives `virsh domrename`, so it is what a collator joins a renamed guest to its own history on; the domain NAME is operator-authored and changes."
+        }
+      },
       "redactions": [
         {
           "path": "/*/name",

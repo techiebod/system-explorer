@@ -108,19 +108,25 @@ func TestTheDeclarationNamesExactlyTheFactsThisCollectorEmits(t *testing.T) {
 		}
 	}
 
-	// Two absences that are decisions rather than omissions, each pinned so
-	// nobody adds one without meeting the reason it is not there.
-	//
-	// No `names`: the reference's row publishes no name family, so the
-	// collator keys a domain on its NAME alone. The domain UUID is the
-	// identifier that would survive a rename, and declaring a family here
-	// while the stream carries none would be a join key nobody may join on.
-	//
-	// No `relations`: the bridge, tap and disk edges belong to the opened
-	// object, and this collector does not serve that verb yet.
-	if len(collection.Names) != 0 {
-		t.Error("a names family is declared and the stream carries none")
+	// `names` declares exactly the uuid family, and the stream carries it.
+	// This pinned the OPPOSITE until 2026-08-19 — no family declared,
+	// because the reference published none — which was faithful and left the
+	// collator keying a domain on its NAME alone, so `virsh domrename` would
+	// retire the guest and mint a new object with none of its history. Both
+	// implementations publish it now; the rule the old pin was defending
+	// still holds and is why this checks BOTH directions: a family declared
+	// while the stream carries none is a join key nobody may join on.
+	if len(collection.Names) != 1 {
+		t.Errorf("the uuid family is the one declared: %v", collection.Names)
 	}
+	if _, ok := collection.Names["uuid"]; !ok {
+		t.Error("the domain UUID is the identifier that survives a rename")
+	}
+
+	// One absence that is a decision rather than an omission, pinned so
+	// nobody adds one without meeting the reason it is not there. No
+	// `relations`: the bridge, tap and disk edges belong to the opened
+	// object, and this collector does not serve that verb yet.
 	if len(collection.Relations) != 0 {
 		t.Error("a relation type is declared and this collection asserts none")
 	}
