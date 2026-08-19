@@ -61,6 +61,7 @@ SERVES = {
     "servarr": ["apps", "health", "queue", "history"],
     "downloaders": ["clients", "transfers"],
     "hardware": ["platform", "pci", "usb", "scsi", "nvme"],
+    "units": ["units"],
 }
 
 REFERENCE = REPO / "harness" / "bin" / "se-live-reference"

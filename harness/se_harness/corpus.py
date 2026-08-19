@@ -188,6 +188,28 @@ NAMED_RESIDUALS = {
         "either. Venue: the same live comparator, on a host that has one — the "
         "tool exists, the shape has not been met, and that half stays owed."
     ),
+    # The units collection's one declared fact that no capture reaches and no
+    # operator can mint — and the second half of that sentence is the reason it
+    # is here rather than in the mutation guard, where MachineName and
+    # MissingRequirements both went.
+    "units/missing-reference-unobservable": (
+        "MissingReferenceUnobservable stands for a backwards probe that did "
+        "not happen: a GetAll on an absent unit that failed, a unit that went "
+        "away between the listing and the probe, or a listing carrying more "
+        "not-found units than one collection will probe. No committed capture "
+        "holds one — every probe answered and 41 is far below the 200-unit cap "
+        "— and no mutation operator can mint one either, which is a property "
+        "of the harness rather than a gap in imagination: making a probe fail "
+        "means removing a reply the listing names, and the replay seam fails "
+        "the RUN on an uncaptured request rather than letting the adapter "
+        "swallow it, so the reference half of any such mutation exits 2 and "
+        "the guard's own control test refuses the operator. Venue: the live "
+        "comparator (harness/bin/se-compare), where the race is real — a "
+        "daemon-reload between the listing and the probe collects the Unit "
+        "object and the path 404s — and where a host carrying more than 200 "
+        "unloadable units would exercise the cap. The tool exists and no such "
+        "run has caught one, so this truth stays owed rather than owned."
+    ),
     # The packages collector reads three interfaces and the corpus captures
     # one. A second variant would close this outright — which is why the entry
     # says so rather than dressing a gap as a boundary.

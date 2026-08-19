@@ -1,0 +1,156 @@
+{
+  "schema": "se.declaration/1",
+  "collector": "units",
+  "version": "0.7.0",
+  "authority": {
+    "read_paths": [
+      "/proc/sys/kernel/random/boot_id",
+      "/proc/self/timens_offsets"
+    ],
+    "commands": ["busctl"]
+  },
+  "probe": "systemd's manager answers ListUnits on the system bus. Reached through busctl, which is systemd's own binary and ships in the same package as the manager it talks to — so no busctl is no systemd, which is a successful reading that there are no units here rather than a tooling gap. A bus that is present and does not answer is a different verdict and the reason says which; the permission axis is mapped by nothing in this fleet and is not closed here by reading intent out of an error message.",
+  "collections": [
+    {
+      "name": "units",
+      "question": "what does this host run, what state is each unit in, and what does a unit file ask for that is not here?",
+      "prefix": "unit",
+      "freshness": "60s",
+      "perishability": "sampled",
+      "answer": ["ActiveState", "SubState", "Description", "MissingRequirements"],
+      "ceiling": { "records": 5000, "bytes": 8388608 },
+      "facts": {
+        "LoadState": {
+          "type": "enum",
+          "values": ["stub", "loaded", "not-found", "bad-setting", "error", "merged", "masked"],
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/data/0/*/2",
+          "sentence": "Whether systemd could load a unit file for this name, in systemd's own vocabulary. `not-found` is the interesting one and is not a failure to collect: systemd lists a name it cannot load because something else references it, and such a row is here so an operator can see what their unit files ask for and do not get."
+        },
+        "ActiveState": {
+          "type": "enum",
+          "values": ["active", "reloading", "inactive", "failed", "activating", "deactivating", "maintenance", "refreshing"],
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/data/0/*/3",
+          "sentence": "systemd's verdict on whether the unit is up, in its own words. `failed` is the one an operator acts on; `inactive` covers both a unit that finished cleanly and one nothing ever starts, which is why SubState is published beside it rather than folded in."
+        },
+        "SubState": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/data/0/*/4",
+          "sentence": "The type-specific detail behind ActiveState — `running`, `exited`, `mounted`, `plugged`, `dead` — whose vocabulary is decided by the unit's type rather than by systemd as a whole, which is why it is carried as a string and not as a closed set. It is what separates a oneshot that ran and exited from a service that is up."
+        },
+        "Description": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/data/0/*/1",
+          "sentence": "The unit's own Description=, which is a sentence somebody wrote and the only thing on a device or mount row that says what the unit is FOR. For a unit systemd could not load it degrades to the unit's own name, because there is no file to read a description from."
+        },
+        "RuntimeSynthesised": {
+          "type": "boolean",
+          "labels": ["synthesised from the mount table", "declared in a unit file"],
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": ["LoadState"],
+          "discloses": "nothing",
+          "sentence": "Present on a mount unit systemd made up from the mount table rather than reading a unit file for it, which happens whenever something outside systemd performed the mount. Such a unit reports the mount accurately but has no fragment, and RequiresMountsFor= against a fragmentless mount does not become a real dependency — so a service naming the path may start before the filesystem is there. Common and harmless for container overlay and netns mounts, which nothing declares; it matters where something does."
+        },
+        "ContainerID": {
+          "type": "string",
+          "temperament": "existence",
+          "kind": "derived",
+          "derived_from": ["LoadState"],
+          "discloses": "nothing",
+          "sentence": "The first twelve characters of the container id, read out of a transient scope's own name, and published under the same fact name the docker collection uses so the two join on one value. It is the only handle such a scope has: the unit's Description is dockerd's `libcontainer container <the same id>`, which names nothing an operator recognises. Minted from randomness at create time, so it denotes nothing outside the daemon that minted it."
+        },
+        "MachineName": {
+          "type": "string",
+          "temperament": "existence",
+          "kind": "derived",
+          "derived_from": ["LoadState"],
+          "discloses": "content",
+          "sentence": "The libvirt domain running inside a machine scope, recovered in full from the scope's name — libvirt names it qemu-<domid>-<domain> and systemd escapes it, so unlike a container id this one round-trips to a name an operator chose and can be joined to the vms collection as a real edge rather than a hint."
+        },
+        "Slice": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/data/0",
+          "sentence": "The cgroup slice this service or scope accounts to, read from the unit's own Slice property. It is what makes the listing a tree rather than a list, and it is the join to whatever measures consumption: a stall reported against a slice is answered by the units that hang from it. Absent on a unit that accounts to no slice, which is what systemd answers for a name it could not load."
+        },
+        "MissingRequirements": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": ["LoadState"],
+          "discloses": "content",
+          "sentence": "Names the units this one hard-depends on — Requires=, Requisite= or BindsTo= — for which systemd can load nothing of that name on this host, each with the directive that was written. A dependency systemd cannot resolve is not skipped the way a soft one is: the start job for the unit carrying this fact fails before the unit runs, so this is a defect that stops something rather than one that quietly does less than its file claims."
+        },
+        "MissingWants": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": ["LoadState"],
+          "discloses": "content",
+          "sentence": "Names the units this one asks for — Wants= or Upholds= — for which systemd can load nothing of that name on this host, each with the directive that was written. systemd documents these as soft and ignores one it cannot resolve, so nothing fails and nothing will; what the unit file asks to be pulled in alongside it simply never is, and has not been for as long as the file has said so."
+        },
+        "MissingOrdering": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": ["LoadState"],
+          "discloses": "content",
+          "sentence": "Names the units this one is ordered against — After= or Before= — for which systemd can load nothing of that name on this host, each with the directive that was written. Ordering against something that is not there orders nothing at all, so the sequence the file describes is not the sequence that runs. Mostly this is systemd's own implicit device and quota barriers on units nobody wrote a fragment for, which is why no opinion is drawn from it."
+        },
+        "ReferencedBy": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": ["LoadState"],
+          "discloses": "content",
+          "sentence": "Names the units that point at this one and the directive each wrote, carried on rows for names systemd could not load. Such a unit is listed at all only because something references it, so this is both the reason it appears and the only thing about it worth reading. The finding, where there is one, belongs to the units named here, because those have a file and an owner and this has neither."
+        },
+        "MissingReferenceUnobservable": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "derived",
+          "derived_from": ["LoadState"],
+          "discloses": "nothing",
+          "sentence": "Present when what this row can say about references between it and units that are not present on this host is incomplete, naming what stood in the way: a dependency property that could not be read, a unit that went away between the listing and the probe, or a listing too large for one collection to probe in full. An unread reference is not an absent one, so this stands in place of the reference facts rather than beside them."
+        }
+      },
+      "redaction_exemption": "This collector serves no evidence verb, so there is no payload to withhold paths from — and the four replies it reads on the acquisition path are the unit table itself: names, descriptions, load and active states, object paths, the unit-file listing, and the reverse dependency properties of the units systemd could not load. None of them takes a credential and none carries one. The bound is stated because it is a decision rather than a shape: the type-specific interfaces this collector deliberately does NOT read on this path — org.freedesktop.systemd1.Service in particular — carry Environment=, where sops-provisioned credentials, API tokens and database URLs land as a matter of routine, so an evidence verb over this interface arrives with a redaction list or it does not arrive.",
+      "reference_commands": [
+        {
+          "purpose": "the same listing an operator reads, by hand",
+          "argv": ["systemctl", "list-units", "--all"]
+        },
+        {
+          "purpose": "the exact document the row facts are built from — path, interface and member, as the corpus keys it",
+          "argv": ["busctl", "call", "org.freedesktop.systemd1", "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager", "ListUnits", "--json=short"]
+        },
+        {
+          "purpose": "which units exist as a FILE, which is how a mount systemd synthesised is told from one somebody declared",
+          "argv": ["busctl", "call", "org.freedesktop.systemd1", "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager", "ListUnitFiles", "--json=short"]
+        },
+        {
+          "purpose": "the backwards arrow: run against a name the listing shows as not-found, this prints the very lists the absent-reference facts are built from",
+          "argv": ["busctl", "call", "org.freedesktop.systemd1", "/org/freedesktop/systemd1/unit/", "org.freedesktop.DBus.Properties", "GetAll", "s", "org.freedesktop.systemd1.Unit", "--json=short"]
+        },
+        {
+          "purpose": "the slice a service or scope accounts to, one unit at a time",
+          "argv": ["busctl", "call", "org.freedesktop.systemd1", "/org/freedesktop/systemd1/unit/", "org.freedesktop.DBus.Properties", "Get", "ss", "org.freedesktop.systemd1.Service", "Slice", "--json=short"]
+        }
+      ]
+    }
+  ]
+}

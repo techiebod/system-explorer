@@ -77,6 +77,7 @@ SEEDS = {
     "resources": "resources/healthy",
     "downloaders": "downloaders/healthy",
     "hardware": "hardware/qemu-guest",
+    "units": "units/healthy",
 }
 
 # Names the operators mint. Constants rather than inline literals so the
@@ -220,6 +221,26 @@ OOM_KILLS_BLIND = f"'MemoryOomKills': {OOM_EVENTS}"
 # that does not resolve and never gets a reply to be refused by.
 TRANSFER_ERROR_CODE = 2
 TRANSFER_ERROR_TEXT = "Tracker gave HTTP response code 404 (Not Found)"
+# The two ends of the hard reference the units operator mints, read off
+# corpus/units/healthy at staging: the alphabetically first name systemd could
+# not load that anything already references, and the alphabetically first unit
+# that references it. A re-stage of that variant moves both, exactly as it
+# moves the variant's own anchors, and the case that binds to them fails by
+# name when it does.
+UNITS_ABSENT_UNIT = "NetworkManager.service"
+UNITS_HARD_REFERRER = "apt-daily-upgrade.service"
+UNITS_HARD_REFERENCE = f"{UNITS_ABSENT_UNIT} (Requires=)"
+# The machine scope the libvirt operator mints, and the domain name systemd's
+# escaping of it round-trips to. libvirt names a machine scope
+# machine-qemu-<domid>-<domain>, and systemd escapes every '-' inside the name
+# as \x2d — which is what makes the domain recoverable in full where a
+# container id is not.
+UNITS_MACHINE_DOMAIN = "mut-guest"
+UNITS_MACHINE_SCOPE = r"machine-qemu\x2d1\x2dmut\x2dguest.scope"
+UNITS_MACHINE_PATH = (
+    "/org/freedesktop/systemd1/unit/"
+    "machine_2dqemu_5cx2d1_5cx2dmut_5cx2dguest_2escope"
+)
 
 
 # ── nftables helpers, grammar-aware ──────────────────────────────────────
@@ -1585,6 +1606,118 @@ def _usb_hwdb_miss(payloads: dict) -> dict:
             "them would stage nothing"
         )
     return payloads
+# ── systemd units ────────────────────────────────────────────────────────
+
+# The request each reply is keyed on, spelled the way the seam and the port
+# both spell it: everything after `busctl call org.freedesktop.systemd1 `.
+_UNITS_LIST = ("/org/freedesktop/systemd1 org.freedesktop.systemd1.Manager "
+               "ListUnits")
+
+
+def _units_listing(payloads: dict) -> list:
+    document = (payloads.get("listunits") or {}).get(_UNITS_LIST)
+    if not isinstance(document, dict) or not document.get("data"):
+        raise MutatorError("the payload carries no ListUnits reply")
+    return document["data"][0]
+
+
+def _hard_reverse_reference(payloads: dict) -> dict:
+    """CLASS inverse-property-enum: a backwards walk whose reverse properties
+    are an enum over the ones its author had met.
+
+    systemd stores every dependency together with its inverse, and the whole
+    reason this collection can afford to report what a unit file asks for and
+    does not get is that it reads the inverse side of the SEVEN properties that
+    carry a consequence — RequiredBy, RequisiteOf, BoundBy, UpheldBy, WantedBy,
+    Before and After. Four of those seven are empty on every unit of every
+    committed capture, because an ordinary distribution accumulates ordering
+    references to software it no longer ships and almost never a hard one:
+    DESIGN 20's own measurement is zero hard references on five hosts.
+
+    So a port that read Before, After and WantedBy and stopped reproduces every
+    committed pair exactly while being blind to the class that MATTERS. The
+    three it drops are the start-blocking ones — a Requires= systemd cannot
+    resolve fails the start job before the unit runs, where a Wants= is
+    documented as ignored — so the blindness is precisely inverted: it sees
+    every reference that costs nothing and none of the ones that stop
+    something.
+
+    Give the alphabetically first absent name a hard referrer, chosen as the
+    alphabetically first unit that already references it — a real machine
+    writes Requires= beside After= all the time. The reference publishes
+    MissingRequirements on that referrer; an enum port publishes nothing.
+    """
+    properties = payloads.get("unit-properties")
+    if not isinstance(properties, dict) or not properties:
+        raise MutatorError("the payload carries no unit properties")
+    by_name = {}
+    for request, document in properties.items():
+        values = document.get("data", [{}])[0]
+        name = (values.get("Id") or {}).get("data")
+        if isinstance(name, str) and name:
+            by_name[name] = (request, values)
+    for name in sorted(by_name):
+        request, values = by_name[name]
+        referrers = sorted({
+            referrer
+            for prop in ("RequiredBy", "RequisiteOf", "BoundBy", "UpheldBy",
+                         "WantedBy", "Before", "After")
+            for referrer in (values.get(prop) or {}).get("data") or []
+        })
+        if not referrers:
+            continue
+        if (values.get("RequiredBy") or {}).get("data"):
+            raise MutatorError(
+                f"{name} already carries a RequiredBy, so a minted one would "
+                "be a second hard reference rather than the first"
+            )
+        values["RequiredBy"] = {"type": "as", "data": [referrers[0]]}
+        return payloads
+    raise MutatorError(
+        "no absent unit in this seed is referenced by anything, so there is "
+        "no reverse property to make hard"
+    )
+
+
+def _machine_scope(payloads: dict) -> dict:
+    """CLASS machine-scope-blind: a transient scope whose workload is nameable
+    and is not named.
+
+    libvirt registers a running domain as machine-qemu-<domid>-<domain>.scope
+    and systemd escapes every '-' inside the name, so the domain comes back in
+    full — which is what makes this edge REAL rather than a join hint: a docker
+    scope yields an id and nothing an operator recognises, and this one yields
+    the name they typed. It is also the only fact in this collection that mints
+    a cross-subsystem relationship, so a port that drops it breaks the walk
+    from a stalling cgroup to the guest inside it.
+
+    Every committed capture is of a host with no domain running — libvirt is
+    installed on the lab guest and nothing was up — so the scope shape is
+    reached by no capture, exactly as the address fact was for vms. Bring a
+    domain up: one scope row in the listing, and the Slice reply that scope's
+    own existence implies, because a scope that is not in the cgroup tree is
+    not a document systemd produces.
+    """
+    listing = _units_listing(payloads)
+    if any(row and row[0] == UNITS_MACHINE_SCOPE for row in listing):
+        raise MutatorError(
+            f"{UNITS_MACHINE_SCOPE} is already in this capture, so a minted "
+            "row would be a duplicate rather than a running domain"
+        )
+    listing.append([
+        UNITS_MACHINE_SCOPE,
+        f"Virtual Machine qemu-1-{UNITS_MACHINE_DOMAIN}",
+        "loaded", "active", "running", "",
+        UNITS_MACHINE_PATH, 0, "", "/",
+    ])
+    slices = payloads.get("unit-slice")
+    if not isinstance(slices, dict):
+        raise MutatorError("the payload carries no slice replies")
+    request = (f"{UNITS_MACHINE_PATH} org.freedesktop.DBus.Properties Get ss "
+               "org.freedesktop.systemd1.Scope Slice")
+    slices[request] = {"type": "v",
+                       "data": [{"type": "s", "data": "machine.slice"}]}
+    return payloads
 
 
 @dataclass(frozen=True)
@@ -1638,6 +1771,10 @@ OPERATORS: tuple[Operator, ...] = (
     Operator("transmission-errored-transfer", "downloaders", "error-text-blind",
              _transmission_tracker_error),
     Operator("usb-hwdb-miss", "hardware", "hwdb-fallback-blind", _usb_hwdb_miss),
+    Operator("systemd-hard-reference", "units", "inverse-property-enum",
+             _hard_reverse_reference),
+    Operator("systemd-machine-scope", "units", "machine-scope-blind",
+             _machine_scope),
 )
 
 

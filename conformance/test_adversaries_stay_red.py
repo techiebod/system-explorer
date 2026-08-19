@@ -456,6 +456,40 @@ EXPECTED = (
                 "no committed capture can expose: every captured USB device is "
                 "a root hub the udev hardware database names, so the fallback "
                 "is reached by nothing and the differential guard owns the red"),
+    # ── GREEN, adjudicated: the third trap, the unwalked-inverse spelling ──
+    #
+    # The hard-reference-blind port reads three of the seven reverse properties
+    # the backwards walk depends on, and the four it drops are empty on every
+    # unit of the only committed units capture — an ordinary distribution
+    # accumulates ordering references to software it no longer ships and almost
+    # never a hard one, which is DESIGN 20's own measurement (zero on five
+    # hosts). So there is nothing to lose and the judge honestly passes it. Its
+    # RED lives in test_differential.py, where systemd-hard-reference gives an
+    # absent name a RequiredBy. If this goes red here, the replay judge has
+    # grown a rule that sees a hard reference no committed capture holds —
+    # DESIGN 20's trap statement and the case table move together, not this row
+    # alone.
+    Expectation("a10_hard_reference_blind.py", None, "units/healthy", "GREEN",
+                "four reverse dependency properties never walked, which no "
+                "committed capture can expose: RequiredBy, RequisiteOf, "
+                "BoundBy and UpheldBy are empty on every absent unit here, so "
+                "emptying them changes nothing and the differential guard owns "
+                "the red"),
+    # ── GREEN, adjudicated: the third trap, the second-runtime spelling ──
+    #
+    # The machine-scope-blind port names the workload inside a docker scope and
+    # never met libvirt's. The captured guest has libvirt installed and no
+    # domain running, so no machine scope exists to name and both
+    # implementations omit the fact. Its RED lives in test_differential.py,
+    # where systemd-machine-scope brings a domain up. If this goes red here,
+    # the replay judge has grown a rule that sees a machine scope no committed
+    # capture holds — DESIGN 20's trap statement and the case table move
+    # together, not this row alone.
+    Expectation("a10_machine_scope_blind.py", None, "units/healthy", "GREEN",
+                "a machine scope's domain name never derived, which no "
+                "committed capture can expose: no domain was running on the "
+                "captured host, so there is no scope to name and the "
+                "differential guard owns the red"),
 )
 
 # The closed set of adjudicated greens, and the DESIGN clause each rests
@@ -519,6 +553,15 @@ ADJUDICATED_GREEN = {
     "device is a root hub the database names and the fallback to the device's "
     "own strings is reached by nothing (DESIGN 20); the differential guard "
     "owns this red, under usb-hwdb-miss",
+    ("a10_hard_reference_blind.py", None): "the third trap: replay cannot see "
+    "a hard reference to an absent unit, because a distribution accumulates "
+    "ordering references and almost never a hard one — zero on five hosts "
+    "measured (DESIGN 20); the differential guard owns this red, under "
+    "systemd-hard-reference",
+    ("a10_machine_scope_blind.py", None): "the third trap: replay cannot see a "
+    "libvirt machine scope, because no domain was running on the captured host "
+    "and a scope exists only while its workload does (DESIGN 20); the "
+    "differential guard owns this red, under systemd-machine-scope",
 }
 
 

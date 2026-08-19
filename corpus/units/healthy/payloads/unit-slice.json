@@ -1,0 +1,2171 @@
+{
+  "/org/freedesktop/systemd1/unit/ModemManager_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/NetworkManager_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/apparmor_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/apport_2dautoreport_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/apport_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/apt_2ddaily_2dupgrade_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/apt_2ddaily_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/auditd_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/blk_2davailability_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/chrony_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/cloud_2dconfig_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/cloud_2dfinal_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/cloud_2dinit_2dhotplugd_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/cloud_2dinit_2dlocal_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/cloud_2dinit_2dmain_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/cloud_2dinit_2dnetwork_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/connman_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/console_2dscreen_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/console_2dsetup_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/containerd_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/cron_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/dbus_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/display_2dmanager_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/dm_2devent_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/dmesg_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/docker_2d5b3e81546f704b4190abb05d65b30ec2ef7345b4f4781178e8d7c2bf1bb80ac0_2escope org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Scope Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/docker_2d627f80267d07d0dac0b7c66d605b835734ad25b19152c6dd2bc50cfdce7d41f7_2escope org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Scope Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/docker_2d6d27378f5d9981dee1087738a3f41a20e4275b775fe0bafdc9f08231d7c9daa8_2escope org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Scope Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/docker_2d6e47cc1d9ef20f3a23ae670381857c2b383095e522dac79630f59aa579be06d1_2escope org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Scope Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/docker_2d855ad7f2f267ca9491012b6623bc4e97ce2337965da2f02ec4f16c4b7d76fb17_2escope org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Scope Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/docker_2dabca102c682048799d799d8209cf73f0a25da4c7989edec3dc58a5aac788d5ef_2escope org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Scope Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/docker_2db95be65d4b8b798ffd84c3bb8f9546bb6eb07c99abeb8d9bfedc4d2e68e918df_2escope org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Scope Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/docker_2dc84d3ce4abf8c482b89175a073e2797136c85164ae2687a918fad2b89cd095d8_2escope org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Scope Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/docker_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/dpkg_2ddb_2dbackup_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/dracut_2dcmdline_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/dracut_2dinitqueue_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/dracut_2dmount_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/dracut_2dpre_2dmount_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/dracut_2dpre_2dpivot_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/dracut_2dpre_2dtrigger_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/dracut_2dpre_2dudev_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/dracut_2dshutdown_2donfailure_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/dracut_2dshutdown_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/e2scrub_5fall_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/e2scrub_5freap_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/emergency_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/fcoe_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/finalrd_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/firewalld_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/fstrim_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/fwupd_2drefresh_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/getty_2dstatic_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/getty_40tty1_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system-getty.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/grub_2dcommon_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/grub_2dinitrd_2dfallback_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/grub2_2dcommon_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/hv_5fkvp_5fdaemon_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/init_2escope org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Scope Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "-.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/initrd_2dcleanup_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/initrd_2dparse_2detc_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/initrd_2dswitch_2droot_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/initrd_2dudevadm_2dcleanup_2ddb_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/iscsi_2dshutdown_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/iscsid_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/kbd_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/kea_2ddhcp4_2dserver_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/keyboard_2dsetup_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/kmod_2dstatic_2dnodes_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/ldconfig_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/libvirt_2dguests_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/libvirtd_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/logrotate_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/lvm2_2dactivation_2dearly_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/lvm2_2dlvmpolld_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/lvm2_2dmonitor_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/lxc_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/man_2ddb_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/mkinitcpio_2dgenerate_2dshutdown_2dramfs_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/modprobe_40configfs_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system-modprobe.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/modprobe_40dm_5fmod_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system-modprobe.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/modprobe_40dm_5fmultipath_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system-modprobe.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/modprobe_40drm_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system-modprobe.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/modprobe_40efi_5fpstore_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system-modprobe.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/modprobe_40fuse_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system-modprobe.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/modprobe_40loop_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system-modprobe.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/motd_2dnews_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/multipathd_2dqueueing_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/multipathd_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/netplan_2dconfigure_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/netplan_2dovs_2dcleanup_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/networkd_2ddispatcher_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/networking_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/nfs_2dkernel_2dserver_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/nfs_2dserver_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/ntp_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/ntpsec_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/open_2discsi_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/open_2dvm_2dtools_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/openntpd_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/ovsdb_2dserver_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/plymouth_2dhalt_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/plymouth_2dkexec_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/plymouth_2dpoweroff_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/plymouth_2dquit_2dwait_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/plymouth_2dquit_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/plymouth_2dread_2dwrite_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/plymouth_2dreboot_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/plymouth_2dstart_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/plymouth_2dswitch_2droot_2dinitramfs_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/plymouth_2dswitch_2droot_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/polkit_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/qemu_2dkvm_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/rbdmap_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/rc_2dlocal_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/rescue_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/rpc_2dstatd_2dnotify_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/rsyslog_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/sanoid_2dprune_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/sanoid_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/se_2dcollate_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system-explorer.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/secureboot_2ddb_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/serial_2dgetty_40ttyS0_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system-serial\\x2dgetty.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/session_2d186_2escope org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Scope Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "user-1000.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/session_2d420_2escope org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Scope Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "user-1000.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/setvtrgb_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/smartmontools_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/smbd_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/snapd_2eapparmor_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/snapd_2eautoimport_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/snapd_2ecore_2dfixup_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/snapd_2efailure_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/snapd_2erecovery_2dchooser_2dtrigger_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/snapd_2eseeded_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/snapd_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/snapd_2esnap_2drepair_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/snapd_2esystem_2dshutdown_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/ssh_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/sshd_2dkeygen_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/sshd_40sshd_2dkeygen_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system-sshd.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/sysstat_2dcollect_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/sysstat_2drotate_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/sysstat_2dsummary_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/sysstat_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dask_2dpassword_2dconsole_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dask_2dpassword_2dplymouth_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dask_2dpassword_2dwall_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dbattery_2dcheck_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dbinfmt_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dbsod_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dconfext_2dinitrd_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dconfext_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dfirstboot_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dfsck_2droot_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dfsck_40dev_2ddisk_2dby_5cx2dlabel_2dBOOT_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system-systemd\\x2dfsck.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dfsck_40dev_2ddisk_2dby_5cx2dlabel_2dUEFI_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system-systemd\\x2dfsck.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dhalt_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dhibernate_2dclear_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dhibernate_2dresume_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dhibernate_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dhostnamed_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dhwdb_2dupdate_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dhybrid_2dsleep_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dimportd_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2djournal_2dcatalog_2dupdate_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2djournal_2dflush_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2djournald_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dkexec_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dlogind_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dmachine_2did_2dcommit_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dmachined_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dmodules_2dload_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dnetworkd_2dpersistent_2dstorage_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dnetworkd_2dwait_2donline_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dnetworkd_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2doomd_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dpcrmachine_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dpcrnvdone_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dpcrphase_2dinitrd_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dpcrphase_2dsysinit_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dpcrphase_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dpcrproduct_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dpoweroff_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dpstore_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dquotacheck_2droot_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dquotacheck_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2drandom_2dseed_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dreboot_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dremount_2dfs_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dresolved_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2drfkill_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dsoft_2dreboot_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dsuspend_2dthen_2dhibernate_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dsuspend_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dsysctl_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dsysext_2dinitrd_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dsysext_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dsysusers_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dtmpfiles_2dclean_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dtmpfiles_2dsetup_2ddev_2dearly_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dtmpfiles_2dsetup_2ddev_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dtmpfiles_2dsetup_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dtpm2_2dsetup_2dearly_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dtpm2_2dsetup_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dudev_2dload_2dcredentials_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dudev_2dsettle_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dudev_2dtrigger_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dudevd_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dupdate_2ddone_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2duser_2dsessions_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/systemd_2dvconsole_2dsetup_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/tpm_2dudev_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/ua_2dauto_2dattach_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/ua_2dreboot_2dcmds_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/ua_2dtimer_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/ubuntu_2dadvantage_2dcloud_2did_2dshim_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/ubuntu_2dadvantage_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/ubuntu_2dfan_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/udisks2_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/ufw_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/unattended_2dupgrades_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/unbound_2dresolvconf_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/unbound_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/update_2dnotifier_2ddownload_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/update_2dnotifier_2dmotd_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/user_2druntime_2ddir_401000_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "user-1000.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/user_401000_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "user-1000.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/uuidd_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/vgauth_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/virtlockd_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/virtlogd_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/xencommons_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/xendomains_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": ""
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/xfs_5fscrub_5fall_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system-xfs_scrub.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/xfs_5fscrub_5fall_5ffail_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/zfs_2dimport_2dcache_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/zfs_2dload_2dmodule_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/zfs_2dmount_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/zfs_2dshare_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/zfs_2dvolume_2dwait_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1/unit/zfs_2dzed_2eservice org.freedesktop.DBus.Properties Get ss org.freedesktop.systemd1.Service Slice": {
+    "type": "v",
+    "data": [
+      {
+        "type": "s",
+        "data": "system.slice"
+      }
+    ]
+  }
+}

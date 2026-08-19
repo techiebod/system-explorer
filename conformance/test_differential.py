@@ -263,6 +263,33 @@ CASES = (
          # and a port that filters before it counts reproduces the pair exactly;
          # this operator mints the one shape that draws the distinction.
          (differential.KEA_RESERVATION_COUNT, differential.KEA_UNLISTED_REMAINDER)),
+    Case("inverse-property-enum", "systemd-hard-reference",
+         "a10_hard_reference_blind.py", differential.DISAGREE, "differences",
+         # The fact and the reference it carries, by value, on the unit that
+         # wrote it. Both, because the fact name alone would also be satisfied
+         # by a port that published a DIFFERENT absent name under it, and the
+         # reference string alone by one that filed it under MissingOrdering —
+         # which is the flattening this collection exists to refuse. Every
+         # committed capture carries ordering and soft references and no hard
+         # one at all, so this class is exercised by no replay and this
+         # operator mints the only shape that draws it. The referring unit is
+         # bound too, because the whole point of the backwards walk is WHERE
+         # the finding lands: on the unit with a file and an owner, never on
+         # the absent name, which has neither.
+         ("MissingRequirements", differential.UNITS_HARD_REFERENCE,
+          differential.UNITS_HARD_REFERRER)),
+    Case("machine-scope-blind", "systemd-machine-scope",
+         "a10_machine_scope_blind.py", differential.DISAGREE, "differences",
+         # The fact and the domain it names, by value. libvirt was installed on
+         # the guest the capture came from and no domain was running, so no
+         # machine scope existed and both implementations are silent — the
+         # blindness is invisible until a guest is up, which is the moment
+         # somebody is following a stalling cgroup back to the VM inside it.
+         # Bound to the unescaped domain as well as the fact, because the name
+         # is recovered from systemd's escaping and a port that published the
+         # escaped form would satisfy a bare "MachineName" and still resolve to
+         # no domain at all.
+         ("MachineName", differential.UNITS_MACHINE_DOMAIN)),
     Case("scoped-state-enum", "docker-paused-container",
          "a9_scope_state_blind.py", differential.DISAGREE, "differences",
          # The third member of the declared set, staged separately for the same

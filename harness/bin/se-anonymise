@@ -11,8 +11,15 @@ collector, as a manifest, and this tool guesses nothing:
 
   harness/scrub/<collector>.json maps payload field paths to
       {"discloses": nothing|identity|location|content|secret,
-       "format": wwn|guid_u64|serial|mac|ipv4|ipv6|hostname|name|path|prose,
+       "format": wwn|guid_u64|serial|mac|ipv4|ipv6|hostname|name|path|prose
+                 |unit_name|object_path,
        "payload": <payload stem this entry is scoped to, optional>}
+
+  The last two are ENCODINGS rather than shapes: a producer that writes an
+  identifier in its own escaping — systemd spells one partition UUID three
+  ways in a single ListUnits row — hides it from every pattern below, so the
+  pass runs over the folded reading and the escaping is restored afterwards.
+  See ENCODED_FORMATS.
 
   paths are dotted; '*' matches one dict key or one list index; a trailing
   '~key' segment classifies the KEY strings of the dict it names (a dict of
@@ -132,7 +139,7 @@ from se_harness import detectors  # noqa: E402  (after the path insert above)
 
 DISCLOSES = {"nothing", "identity", "location", "content", "secret"}
 FORMATS = {"wwn", "guid_u64", "serial", "mac", "ipv4", "ipv6", "hostname",
-           "name", "path", "prose"}
+           "name", "path", "prose", "unit_name", "object_path"}
 
 # The formats whose whole VALUE is the identifier. Everything here is held to
 # the survived-unchanged gate below: if the leaf is a WWN and scrubbing left it
@@ -149,6 +156,52 @@ FORMATS = {"wwn", "guid_u64", "serial", "mac", "ipv4", "ipv6", "hostname",
 # reviewer can disagree with — thirty formatless entries in the shipped
 # manifests rely on that gate today, and they must go on relying on it.
 PROSE = "prose"
+
+# ── identifiers a producer writes in its own escaping ────────────────────
+#
+# The passes below read a leaf exactly as written, and systemd does not write
+# an identifier only one way. ONE partition UUID appears three times in a
+# single ListUnits row: plain in the device unit's description
+# (/dev/disk/by-uuid/<uuid>), `\x2d`-escaped in the unit name systemd derives
+# from that path, and escaped a second time as `_5cx2d` in the D-Bus object
+# path derived from the name. Measured on a systemd 259 capture: 54 strings
+# whose identifier appears only after folding, and ZERO findings from the
+# independent detectors on the unscrubbed file — so neither the remover nor
+# the checker could see two of the three spellings, and a `content`
+# classification on those leaves would have claimed a substitution that never
+# happened. That is worse than a refusal: it is a manifest saying the value
+# was scrubbed.
+#
+# So a manifest may declare the ENCODING a leaf is written in, and the pass
+# runs over the folded reading. The escapes are then restored BY POSITION,
+# which is sound for exactly the reason rule 1 of DESIGN 21 exists: a
+# substitution keeps its original's shape, so a UUID is still 8-4-4-4-12 and a
+# WWN is still sixteen hex digits, and the character an escape stood for is
+# still that character at the same offset. Where the pass changed the LENGTH —
+# an address, a name from the names list — the restore is refused rather than
+# guessed, because a re-escaped value of the wrong length is a unit name the
+# host could not have produced.
+#
+# Both formats take prose's found-nothing exemption, and here it is sound
+# rather than merely convenient: `ssh.service` folds to itself and carries
+# nothing, while the case the gate exists for — a value that DOES carry an
+# identifier and came back unchanged — can no longer arise from the escaping
+# alone, because the pass has now read what the value encodes.
+UNIT_ESCAPE = re.compile(r"\\x([0-9a-fA-F]{2})")
+DBUS_PATH_ESCAPE = re.compile(r"_([0-9a-fA-F]{2})")
+
+# Outermost encoding first: a D-Bus object path is the path-escaping OF an
+# already-escaped unit name, so `_5cx2d` folds to `\x2d` and then to `-`.
+ENCODED_FORMATS = {
+    "unit_name": (UNIT_ESCAPE,),
+    "object_path": (DBUS_PATH_ESCAPE, UNIT_ESCAPE),
+}
+
+# The formats for which "the pass found nothing" is an ordinary outcome rather
+# than evidence of a hole. Held as a set so the gate below cannot learn one
+# member and forget another — the shape that let a shipped manifest classify a
+# field as scrubbed while nothing ran.
+FOUND_NOTHING_EXEMPT = frozenset({PROSE, *ENCODED_FORMATS})
 
 U64_MAX = 2**64 - 1
 
@@ -470,7 +523,16 @@ IPV6 = re.compile(
     r"(?![0-9a-fA-F:.])"
 )
 IPV4 = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
-GUID_TEXT = re.compile(r"\b\d{19,20}\b")
+# Fifteen digits, not nineteen, and the number is `_guid_replacement`'s own:
+# that builder treats >= 15 digits as the u64 band, so a floor of 19 here made
+# the free-text pass blind to exactly the guids the builder was written to
+# stand in for. A uniformly random u64 is BELOW 10^19 about half the time, and
+# udev writes a ZFS pool guid into a by-uuid link in decimal — measured on a
+# systemd 259 capture: `dev-disk-by\x2duuid-560891294865571655.device`, the
+# pool guid DESIGN 21's opening example is about, eighteen digits, out
+# verbatim. The independent detectors already floor at 16 under an id-ish key
+# for the same reason; this is the removing side catching up.
+GUID_TEXT = re.compile(r"\b\d{15,20}\b")
 
 
 def _token_around(text: str, start: int, end: int) -> str:
@@ -559,6 +621,96 @@ def scrub_text(text: str, ctx: Ctx) -> str:
     text = GUID_TEXT.sub(lambda m: park(_guid_replacement(ctx, m.group(0))), text)
 
     return re.sub(r"\x00(\d+)\x00", lambda m: parked[int(m.group(1))], text)
+
+
+def _fold_escapes(text: str, pattern: re.Pattern) -> tuple[str, list[tuple[int, str]]]:
+    """(the decoded reading, where each escape stood in it).
+
+    Each mark is the offset in the FOLDED text of the single character an
+    escape stood for, beside the escape's own bytes — which is what lets the
+    original spelling be put back once the pass has run.
+    """
+    parts: list[str] = []
+    marks: list[tuple[int, str]] = []
+    index = length = 0
+    for match in pattern.finditer(text):
+        parts.append(text[index:match.start()])
+        length += match.start() - index
+        marks.append((length, match.group(0)))
+        parts.append(chr(int(match.group(1), 16)))
+        length += 1
+        index = match.end()
+    parts.append(text[index:])
+    return "".join(parts), marks
+
+
+def _restore_escapes(text: str, marks: list[tuple[int, str]]) -> str:
+    """The escaped spelling again: every folded character back in its bytes."""
+    parts: list[str] = []
+    last = 0
+    for offset, original in marks:
+        parts.append(text[last:offset])
+        parts.append(original)
+        last = offset + 1
+    parts.append(text[last:])
+    return "".join(parts)
+
+
+def _placed_marks(marks: list[tuple[int, str]], folded: str,
+                  scrubbed: str) -> list[tuple[int, str]] | None:
+    """Where each escape's character sits AFTER the pass, or None if unknowable.
+
+    Same length is the ordinary case and needs no arithmetic: every identifier
+    format keeps its original's shape (DESIGN 21 rule 1), so a UUID is still
+    8-4-4-4-12 and every offset holds. A length CHANGE comes from the one
+    mechanism that cannot preserve shape — an operator's word substituted from
+    the names list — and then only the untouched prefix and suffix can be
+    mapped: `dev-disk-by\\x2dlabel-labtank.device` has its escape in the
+    prefix and survives, while an escape inside the region that moved is
+    refused rather than re-escaped by guesswork, because a name put back in the
+    wrong place is a name this producer could not have written.
+    """
+    if len(folded) == len(scrubbed):
+        return marks
+    prefix = 0
+    while (prefix < min(len(folded), len(scrubbed))
+           and folded[prefix] == scrubbed[prefix]):
+        prefix += 1
+    suffix = 0
+    while (suffix < min(len(folded), len(scrubbed)) - prefix
+           and folded[-1 - suffix] == scrubbed[-1 - suffix]):
+        suffix += 1
+    shift = len(scrubbed) - len(folded)
+    placed = []
+    for offset, original in marks:
+        if offset < prefix:
+            placed.append((offset, original))
+        elif offset >= len(folded) - suffix:
+            placed.append((offset + shift, original))
+        else:
+            return None
+    return placed
+
+
+def _scrub_encoded(value: str, fmt: str, path: tuple, ctx: Ctx) -> str:
+    """A leaf written in a producer's own escaping, scrubbed through it."""
+    folds, text = [], value
+    for pattern in ENCODED_FORMATS[fmt]:
+        text, marks = _fold_escapes(text, pattern)
+        folds.append((text, marks))
+    scrubbed = scrub_text(text, ctx)
+    for folded, marks in reversed(folds):
+        placed = _placed_marks(marks, folded, scrubbed)
+        if placed is None:
+            ctx.problems.append(
+                f"{_dot(path)}: declared {fmt}, and a substitution moved the "
+                "text an escape sat in, so the escaping cannot be put back "
+                "where the producer wrote it — reclassify, or hand the run a "
+                "names list that does not cut across an escaped span"
+            )
+            return value
+        scrubbed = _restore_escapes(scrubbed, placed)
+    return scrubbed
 
 
 # ── the manifest, and the walk it governs ────────────────────────────────
@@ -783,6 +935,8 @@ def _substitute(value, fmt: str | None, path: tuple, ctx: Ctx):
         return replaced
     if fmt == "hostname":
         return _host_replacement(ctx, value)
+    if fmt in ENCODED_FORMATS:
+        return _scrub_encoded(value, fmt, path, ctx)
     # name, path, prose, or no format: free text that may embed anything.
     # All four take the SAME pass — prose differs only in that finding nothing
     # is not a refusal, because a log line is allowed to be about nothing.
@@ -831,7 +985,8 @@ def _scrub_leaf(value, entry: dict, path: tuple, ctx: Ctx):
         isinstance(value, str)
         and replaced == value
         and len(ctx.problems) == before  # not already refused for this leaf
-        and entry.get("format") != PROSE  # see FORMATS: prose may honestly hold none
+        # see FORMATS: prose and the two escaped formats may honestly hold none
+        and entry.get("format") not in FOUND_NOTHING_EXEMPT
         and not _keeps_unchanged(value)
     ):
         ctx.problems.append(

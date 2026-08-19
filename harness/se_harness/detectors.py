@@ -160,6 +160,30 @@ V6_CANDIDATE = re.compile(
 # something.
 ID_KEY = re.compile(r"(?i)(wwn|guid|serial|devid|uuid|(^|[_-])id([_-]|$))")
 
+# ── one channel this module deliberately does not read ───────────────────
+#
+# Every pattern above reads a string AS WRITTEN, and a producer that writes an
+# identifier in its own escaping is therefore invisible here: systemd spells
+# one partition UUID three ways in a single ListUnits row — plain in the
+# device's description, `\x2d`-escaped in the unit name derived from it, and
+# escaped again as `_5cx2d` in the object path derived from the name — and
+# this module reports nothing on two of the three.
+#
+# Scanning the folded reading as well was tried and REMOVED, measured rather
+# than argued. It caught none of those UUIDs, because a dashed UUID is only a
+# finding under an id-ish key and a unit name is not one; and it invented two
+# it could not resolve, because `dev-virtio\x2dports-org.qemu.guest_agent`
+# folds into the by-id serial shape while `org.qemu.guest_agent` is a port
+# name identical on every QEMU guest. A gate a correct capture cannot pass is
+# not a gate, and the only ways past it were to weaken this module's serial
+# rule or to let the scrubber mangle a meaningful name.
+#
+# So this channel has ONE opinion rather than two: the scrubber's `unit_name`
+# and `object_path` formats, declared per leaf in the manifest, fold before
+# they substitute. Named here because a bound nobody wrote down reads as
+# coverage — and because the asymmetry is the shape this module exists to
+# refuse, admitted deliberately in one place instead of arriving by accident.
+
 # This side's own copy of the well-known constants that may appear anywhere:
 # protocol-assigned, identical on every machine on earth. Duplicated from the
 # shipped table on purpose — importing it would let one wrong edit blind both

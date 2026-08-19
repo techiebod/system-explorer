@@ -55,6 +55,7 @@ GO_COLLECTORS = {
     "resources": "./cmd/se-collect-resources",
     "downloaders": "./cmd/se-collect-downloaders",
     "hardware": "./cmd/se-collect-hardware",
+    "units": "./cmd/se-collect-units",
 }
 
 

@@ -49,6 +49,15 @@ mkdir -p "$payload_dir"
 # it — a stem that happened to contain a dot would otherwise silently opt out
 # of the JSON check.
 #
+# The left-hand side may also be the literal `@bundle`, and then the command
+# prints ONE json object mapping payload file name to document and this script
+# splits it locally. That exists for an interface whose payloads are not
+# independent: units needs four documents that are one consistent reading of one
+# bus — which units systemd could not load, and which of them are services,
+# decide which per-unit replies are fetched — and four ssh calls would take four
+# snapshots of a unit table that moves. A set that disagrees with itself replays
+# as a broken capture, so it is captured in one reading or not at all.
+#
 # devlinks is the storage adapter's _devlinks() acquisition, captured as the
 # same {alias path: kernel name} map it builds live: vdev resolution goes
 # through that map and nothing else, so a replay without it can only say
@@ -420,6 +429,78 @@ print(json.dumps(seen.get(want, {}), indent=1, sort_keys=True))
 hostname_py='
 import socket
 print(socket.gethostname().split(".")[0])
+# The units acquisition, as busctl renders it. DESIGN ruled on 2026-08-19 that
+# the native document for a D-Bus interface is systemd'"'"'s OWN rendering —
+# `busctl call … --json=short`, which carries the type signature beside the data
+# — so nothing here transcribes a reply into a shape this repository invented.
+#
+# The call SET is derived the way the adapter derives it, from the listing:
+# one GetAll per unit systemd could not load, one Get per service and scope. That
+# is a second reading of the same rule and it is deliberate — the capture must be
+# a function of the interface rather than of any implementation, and a request
+# the adapter makes and this misses is refused loudly by the replay seam rather
+# than swallowed into a thinner row.
+#
+# Every reply is keyed on the busctl argument line after the destination, which
+# is what makes a captured value checkable: paste the key after
+# `busctl call org.freedesktop.systemd1 `, add --json=short, compare.
+units_py='
+import json, subprocess, sys
+DEST = "org.freedesktop.systemd1"
+MPATH = "/org/freedesktop/systemd1"
+MIFACE = "org.freedesktop.systemd1.Manager"
+PROPS = "org.freedesktop.DBus.Properties"
+UNIT = "org.freedesktop.systemd1.Unit"
+SLICED = {"service": "org.freedesktop.systemd1.Service",
+          "scope": "org.freedesktop.systemd1.Scope"}
+
+def call(path, iface, member, signature="", args=()):
+    argv = ["busctl", "call", DEST, path, iface, member]
+    if signature:
+        argv += [signature] + list(args)
+    argv += ["--json=short"]
+    proc = subprocess.run(argv, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise SystemExit("FAILED " + " ".join(argv) + ": " + proc.stderr.strip())
+    key = " ".join([path, iface, member] +
+                   ([signature] + list(args) if signature else []))
+    return key, json.loads(proc.stdout)
+
+listing_key, listing = call(MPATH, MIFACE, "ListUnits")
+files_key, files = call(MPATH, MIFACE, "ListUnitFiles")
+rows = sorted(listing["data"][0])
+properties = {}
+for row in rows:
+    if row[2] == "not-found":
+        key, document = call(row[6], PROPS, "GetAll", "s", [UNIT])
+        properties[key] = document
+slices = {}
+for row in rows:
+    iface = SLICED.get(row[0].rsplit(".", 1)[-1])
+    if iface:
+        key, document = call(row[6], PROPS, "Get", "ss", [iface, "Slice"])
+        slices[key] = document
+json.dump({"listunits.json": {listing_key: listing},
+           "listunitfiles.json": {files_key: files},
+           "unit-properties.json": properties,
+           "unit-slice.json": slices}, sys.stdout)
+'
+# The local half of the bundle form. Payload names are checked rather than
+# trusted: the remote side names the files this writes, and a name carrying a
+# path separator would write outside the variant.
+split_py='
+import json, os, sys
+directory = sys.argv[1]
+bundle = os.path.join(directory, ".bundle.json")
+documents = json.load(open(bundle))
+for name, document in sorted(documents.items()):
+    if os.sep in name or name.startswith("."):
+        raise SystemExit("refusing payload name " + repr(name))
+    with open(os.path.join(directory, name), "w") as handle:
+        json.dump(document, handle, indent=2)
+        handle.write("\n")
+    print("      " + name + ": " + str(len(document)) + " replies")
+os.remove(bundle)
 '
 declare -a acquisitions
 case "$collector" in
@@ -515,6 +596,10 @@ case "$collector" in
             "lscpu.json|lscpu -J"
             "hostname|python3 -c '$hostname_py'"
         )
+    units)
+        # One bundle, because the four documents are one reading of one bus and
+        # the per-unit half is chosen by what the listing said.
+        acquisitions=("@bundle|python3 -c '$units_py'")
         ;;
     unbound)
         # unbound-control speaks the control socket for us, and prints the
@@ -594,6 +679,10 @@ case "$collector" in
     # and util-linux is what `lscpu -J` is. A field's presence here is a fact
     # about whichever of the three added it.
     hardware) version_probe='echo "linux-$(uname -r) udev-$(udevadm --version) util-linux-$(lscpu --version | grep -o "[0-9.]*$")"' ;;
+    # busctl reports systemd's version, which is the version the unit table and
+    # its property set are facts about — and it is the same binary the capture
+    # reads through, so a guest that can produce a payload can always answer.
+    units) version_probe="busctl --version | head -1" ;;
     traefik) version_probe="curl -s \"\$SE_TRAEFIK_URL/api/version\" | head -c 120" ;;
     # The instance reporting on itself, which is the build that actually
     # answered — a container tag or a package name would say what was deployed,
@@ -650,6 +739,24 @@ for entry in "${acquisitions[@]}"; do
     file="${entry%%|*}"
     command="${entry#*|}"
     echo "  $file  <-  $command"
+    # A bundle is one reading split locally: the remote side names the files,
+    # this side writes them, and the split is also the JSON check — a bundle
+    # that does not parse never becomes a payload.
+    if [[ $file == @bundle ]]; then
+        if ! ssh "${ssh_opts[@]}" -- "$target" "$remote_env$command" > "$payload_dir/.bundle.json"; then
+            echo "  FAILED: $command" >&2
+            echo "  A collector that cannot read its interface on this guest is a" >&2
+            echo "  finding about the guest, not a payload to commit." >&2
+            rm -f "$payload_dir/.bundle.json"
+            exit 1
+        fi
+        if ! python3 -c "$split_py" "$payload_dir"; then
+            echo "  FAILED: the bundle did not split — text-scraping is forbidden (DESIGN 18)" >&2
+            rm -f "$payload_dir/.bundle.json"
+            exit 1
+        fi
+        continue
+    fi
     if ! ssh "${ssh_opts[@]}" -- "$target" "$remote_env$command" > "$payload_dir/$file"; then
         echo "  FAILED: $command" >&2
         echo "  A collector that cannot read its interface on this guest is a" >&2

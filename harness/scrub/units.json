@@ -1,0 +1,541 @@
+{
+  "#": "Scrub manifest for the units collector: the four request/response maps the adapter's acquisition path produces against systemd's D-Bus interface, each committed under the payload stem the replay seam reads. The native document for a D-Bus reply is systemd's own rendering \u2014 `busctl call \u2026 --json=short`, which carries the type signature beside the data (DESIGN's 2026-08-19 ruling) \u2014 so every value below sits under a `type`/`data` pair, and every root key IS the busctl argument line that produced the reply beside it.",
+  "#SHAPES": "Four stems rather than one map, because a manifest classifies by PATH and one path means different things in different replies: index 1 of a row is a unit's description in ListUnits and a unit file's enablement state in ListUnitFiles. Scoping every entry to its stem is what lets one file cover four shapes. Where two stems would need the same pattern key under different classifications \u2014 a JSON object can carry a key once \u2014 the ListUnitFiles entries name the single out-argument by index (`data.0`) where the ListUnits ones wildcard it (`data.*`); both address the same position and neither can reach the other's document.",
+  "#ESCAPINGS": "THE FINDING THIS FILE WAS WRITTEN AROUND, and the reason two entries carry format unit_name and object_path rather than prose. systemd writes one identifier three ways inside a single ListUnits row: a partition UUID appears plain in the device unit's description (/dev/disk/by-uuid/<uuid>), `\\x2d`-escaped in the unit NAME derived from that path, and escaped a second time as `_5cx2d` in the D-Bus object path derived from the name. The free-text pass reads a leaf as written, so two of the three were invisible to it, and the independent detectors reported ZERO findings on the unscrubbed capture \u2014 measured, not assumed: 54 strings in this variant carry an identifier that only folding reveals, and the run substitutes 20 distinct partition and filesystem UUIDs and 7 ZFS partlabel ids across the three spellings. Classifying those leaves `prose` would have taken the found-nothing exemption over a value that had plenty to find, which is worse than a refusal: it is a manifest saying the value was scrubbed. The two encoding formats fold before they substitute and restore the escaping afterwards, so all three spellings of one identifier now come back as one replacement and the specimen stays internally consistent.",
+  "#DETECTOR_BOUND": "The independent detectors do NOT fold these escapings, so this channel has one opinion rather than two \u2014 the asymmetry se_harness/detectors.py exists to refuse, admitted here deliberately rather than by accident. Folding there was tried and measured: it caught none of these UUIDs, because a dashed UUID is a finding only under an id-ish key and a unit name is not one, and it invented two it could not resolve, because `dev-virtio\\x2dports-org.qemu.guest_agent` folds into the by-id serial shape while that port name is identical on every QEMU guest. The bound is stated in detectors.py beside the reason.",
+  "#nothing": "Load, active, sub and freezer states; job modes and job types; unit-file enablement and preset; every timestamp, timeout, limit and exit status; every boolean; and systemd's own clean-mode and marker vocabularies. These are states, counts and the distribution's own words \u2014 the same strings on every machine running the same software. The job object path (/org/freedesktop/systemd1/job/<n>) is here too: it names a queue position, not a unit.",
+  "#names": "Unit names, descriptions, fragment and drop-in paths, documentation URIs and the mount paths a unit declares are CONTENT \u2014 words somebody chose, which is DESIGN 21's own example for the class. Most of them are the distribution's words on this guest and the pass finds nothing in them, which is why they take an exemption format; what the pass DOES find is the identifiers systemd embeds in a device unit's name.",
+  "#BOUND_operator_words": "THE BOUND, because these entries are only sufficient given what this guest runs. The free-text pass substitutes shapes \u2014 UUIDs, WWNs, MACs, addresses, by-id serials \u2014 and a word somebody chose has no shape. So a unit an operator wrote (`billing-api.service`), a home directory mount (`home-alice.mount`), a ZFS dataset mount, a libvirt machine scope (`machine-qemu\\x2d1\\x2d<domain>.scope`) and a docker scope's 64-hex container id all pass through these entries verbatim. On this capture that is `labtank.mount`, `system-explorer.slice` and eight docker scopes: a lab pool, this product's own slice, and container ids, which harness/scrub/docker.json already rules disclose nothing because a docker id is minted from randomness and denotes nothing outside the daemon that minted it. A capture from a host running somebody's actual stacks carries operator-chosen words here and needs the names list (--hostnames) extended to cover them BEFORE it is scrubbed. Nothing mechanical will force it.",
+  "#BOUND_not_found_only": "unit-properties holds a GetAll per unit systemd could NOT load, which is the only Properties.GetAll the acquisition path makes. Three entries are safely `nothing` only because of that. Conditions and Asserts are structurally empty for a unit with no fragment \u2014 there is no file to read a condition from \u2014 and on a loaded unit they carry condition parameters: kernel command-line values, paths, host names. InvocationID is empty for the same reason, and on a loaded unit it is sixteen bytes that identify one start; as an array of integers no substitution rule could engage on it, so such a capture must be refused rather than scrubbed. A variant that ever GetAlls a loaded unit moves all three.",
+  "#unreached": "The type-specific interfaces \u2014 org.freedesktop.systemd1.Service, .Scope, .Timer \u2014 are reached by get_object and get_evidence, never by acquire, so they are outside this corpus and outside this file. Service carries Environment, where an operator's credentials live and which the adapter redacts on the way out; the deny-by-default walk is what will force this file to grow before such a payload can be committed. The Get on the acquisition path names exactly one property of those interfaces, Slice, and its reply is the only leaf of theirs classified here.",
+  "~key": {
+    "discloses": "content",
+    "format": "object_path"
+  },
+  "*.type": {
+    "discloses": "nothing"
+  },
+  "*.data.*.*.0": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "listunits"
+  },
+  "*.data.*.*.1": {
+    "discloses": "content",
+    "format": "prose",
+    "payload": "listunits"
+  },
+  "*.data.*.*.2": {
+    "discloses": "nothing",
+    "payload": "listunits"
+  },
+  "*.data.*.*.3": {
+    "discloses": "nothing",
+    "payload": "listunits"
+  },
+  "*.data.*.*.4": {
+    "discloses": "nothing",
+    "payload": "listunits"
+  },
+  "*.data.*.*.5": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "listunits"
+  },
+  "*.data.*.*.6": {
+    "discloses": "content",
+    "format": "object_path",
+    "payload": "listunits"
+  },
+  "*.data.*.*.7": {
+    "discloses": "nothing",
+    "payload": "listunits"
+  },
+  "*.data.*.*.8": {
+    "discloses": "nothing",
+    "payload": "listunits"
+  },
+  "*.data.*.*.9": {
+    "discloses": "content",
+    "format": "object_path",
+    "payload": "listunits"
+  },
+  "*.data.0.*.0": {
+    "discloses": "content",
+    "format": "prose",
+    "payload": "listunitfiles"
+  },
+  "*.data.0.*.1": {
+    "discloses": "nothing",
+    "payload": "listunitfiles"
+  },
+  "*.data.*.AccessSELinuxContext.data": {
+    "discloses": "content",
+    "format": "prose",
+    "payload": "unit-properties"
+  },
+  "*.data.*.ActivationDetails.data.*.*": {
+    "discloses": "content",
+    "format": "prose",
+    "payload": "unit-properties"
+  },
+  "*.data.*.ActiveEnterTimestamp.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.ActiveEnterTimestampMonotonic.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.ActiveExitTimestamp.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.ActiveExitTimestampMonotonic.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.ActiveState.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.After.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.AllowIsolate.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.AssertResult.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.AssertTimestamp.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.AssertTimestampMonotonic.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.Asserts.data.*.*": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.Before.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.BindsTo.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.BoundBy.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.CanClean.data.*": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.CanFreeze.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.CanIsolate.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.CanLiveMount.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.CanReload.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.CanStart.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.CanStop.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.CollectMode.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.ConditionResult.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.ConditionTimestamp.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.ConditionTimestampMonotonic.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.Conditions.data.*.*": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.ConflictedBy.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.Conflicts.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.ConsistsOf.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.DebugInvocation.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.DefaultDependencies.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.Description.data": {
+    "discloses": "content",
+    "format": "prose",
+    "payload": "unit-properties"
+  },
+  "*.data.*.Documentation.data.*": {
+    "discloses": "content",
+    "format": "prose",
+    "payload": "unit-properties"
+  },
+  "*.data.*.DropInPaths.data.*": {
+    "discloses": "content",
+    "format": "prose",
+    "payload": "unit-properties"
+  },
+  "*.data.*.FailureAction.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.FailureActionExitStatus.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.Following.data": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.FragmentPath.data": {
+    "discloses": "content",
+    "format": "prose",
+    "payload": "unit-properties"
+  },
+  "*.data.*.FreezerState.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.Id.data": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.IgnoreOnIsolate.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.InactiveEnterTimestamp.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.InactiveEnterTimestampMonotonic.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.InactiveExitTimestamp.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.InactiveExitTimestampMonotonic.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.InvocationID.data.*": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.Job.data.*": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.JobRunningTimeoutUSec.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.JobTimeoutAction.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.JobTimeoutRebootArgument.data": {
+    "discloses": "content",
+    "format": "prose",
+    "payload": "unit-properties"
+  },
+  "*.data.*.JobTimeoutUSec.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.JoinsNamespaceOf.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.LoadError.data.*": {
+    "discloses": "content",
+    "format": "prose",
+    "payload": "unit-properties"
+  },
+  "*.data.*.LoadState.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.Markers.data.*": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.Names.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.NeedDaemonReload.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.OnFailure.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.OnFailureJobMode.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.OnFailureOf.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.OnSuccess.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.OnSuccessJobMode.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.OnSuccessOf.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.PartOf.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.Perpetual.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.PropagatesReloadTo.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.PropagatesStopTo.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.RebootArgument.data": {
+    "discloses": "content",
+    "format": "prose",
+    "payload": "unit-properties"
+  },
+  "*.data.*.Refs.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.RefuseManualStart.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.RefuseManualStop.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.ReloadPropagatedFrom.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.RequiredBy.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.Requires.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.RequiresMountsFor.data.*": {
+    "discloses": "content",
+    "format": "prose",
+    "payload": "unit-properties"
+  },
+  "*.data.*.Requisite.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.RequisiteOf.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.SliceOf.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.SourcePath.data": {
+    "discloses": "content",
+    "format": "prose",
+    "payload": "unit-properties"
+  },
+  "*.data.*.StartLimitAction.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.StartLimitBurst.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.StartLimitIntervalUSec.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.StateChangeTimestamp.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.StateChangeTimestampMonotonic.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.StopPropagatedFrom.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.StopWhenUnneeded.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.SubState.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.SuccessAction.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.SuccessActionExitStatus.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.SurviveFinalKillSignal.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.Transient.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.TriggeredBy.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.Triggers.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.UnitFilePreset.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.UnitFileState.data": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.UpheldBy.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.Upholds.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.WantedBy.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.Wants.data.*": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-properties"
+  },
+  "*.data.*.WantsMountsFor.data.*": {
+    "discloses": "content",
+    "format": "prose",
+    "payload": "unit-properties"
+  },
+  "*.data.*.~key": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.*.type": {
+    "discloses": "nothing",
+    "payload": "unit-properties"
+  },
+  "*.data.*.type": {
+    "discloses": "nothing",
+    "payload": "unit-slice"
+  },
+  "*.data.*.data": {
+    "discloses": "content",
+    "format": "unit_name",
+    "payload": "unit-slice"
+  }
+}

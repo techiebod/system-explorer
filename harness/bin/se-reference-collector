@@ -76,9 +76,12 @@ if os.environ.get("SE_REPLAY_NOW"):
 import httpx  # noqa: E402
 
 from system_explorer.agent import envelope as env  # noqa: E402
+# units acquires through the shared D-Bus singleton rather than a
+# module function, so the seam needs the interface constant it keys on.
+from system_explorer.agent.sysbus import PROPERTIES  # noqa: E402
 from system_explorer.agent.adapters import (  # noqa: E402
     bazarr, docker, downloaders, hardware, kea, logs, network, packages,
-    resources, servarr, storage, traefik, unbound, vms,
+    resources, servarr, storage, traefik, unbound, units, vms,
 )
 
 # Which module-level acquisition each collector redirects, and what payload
@@ -430,7 +433,7 @@ SEAM = {
         # corpus.NAMED_RESIDUALS["hardware/udisks2-smart"] — and refusing is
         # what the adapter's own degradation already handles, by the same path
         # a host with no udisks2 on the bus takes.
-        "bus": "udisks2",
+        "refusing_bus": "udisks2",
         # env.HOST is read from the kernel at import and hardware mints the
         # platform object's id from its hostname, so an unpinned replay names
         # the object after whichever machine is REPLAYING and one capture
@@ -438,6 +441,28 @@ SEAM = {
         # the capture's own payload, which is the discipline every acquisition
         # here takes: the corpus, never the replaying host.
         "host": {"hostname": "hostname"},
+    },
+    # ── the fifth seam kind: an interface that answers REQUESTS ─────────
+    "units": {
+        "module": units,
+        "adapter": units.Adapter,
+        "interface": "systemd on the system bus",
+        "collections": ["units"],
+        # Everything this adapter reads goes through one shared singleton —
+        # `from ..sysbus import BUS` — so there is no module-level acquisition
+        # to redirect and no per-instance fetcher to bind. The seam is the
+        # singleton itself: `units.BUS` is replaced by an object answering the
+        # same two coroutines against the capture.
+        #
+        # The payload is a request/response MAP rather than one document,
+        # because this interface has no single document to be. A collection
+        # here is 2 manager calls, one Properties.GetAll per unit systemd could
+        # not load, and one Properties.Get per service and scope — 284 replies
+        # on the guest this was captured from — and each is keyed on the
+        # request that produced it: the busctl argument line, path first, so a
+        # reader can paste a key after `busctl call org.freedesktop.systemd1 `,
+        # add `--json=short`, and compare against the value beside it.
+        "bus": "BUS",
         "instance": {},
     },
     "network": {
@@ -643,6 +668,187 @@ class RefusingBus:
 
     async def get_all(self, destination, path, interface):
         return await self.call(destination, path, interface, "GetAll")
+# ── the D-Bus seam: busctl's own JSON, decoded the way dbus-fast is ──────
+#
+# DESIGN's 2026-08-19 ruling: the native document for a D-Bus interface is
+# systemd's OWN rendering, `busctl call … --json=short`, which carries the type
+# signature beside the data ({"type":"a(ssssssouso)","data":[…]}). So nothing
+# below transcribes a reply into a shape this repository invented — it decodes
+# a self-describing document using the signature the document states, which is
+# what makes a `from` path into it checkable by re-running one command.
+#
+# The decode target is exactly what `sysbus.unwrap` hands the adapter: variants
+# replaced by their values, structs and arrays as lists, dicts as dicts, `ay`
+# base64-wrapped. Signature-driven and never shape-guessed, because a{sv} and a
+# variant are both JSON objects and only the signature tells them apart.
+
+
+def complete_types(signature: str) -> list[str]:
+    """A signature split into its complete types — one per reply argument."""
+    types, index = [], 0
+    while index < len(signature):
+        width = type_width(signature, index)
+        types.append(signature[index:index + width])
+        index += width
+    return types
+
+
+def type_width(signature: str, index: int) -> int:
+    kind = signature[index]
+    if kind == "a":
+        return 1 + type_width(signature, index + 1)
+    if kind in "({":
+        closing = ")" if kind == "(" else "}"
+        depth = 0
+        for offset in range(index, len(signature)):
+            if signature[offset] in "({":
+                depth += 1
+            elif signature[offset] in ")}":
+                depth -= 1
+                if depth == 0:
+                    if signature[offset] != closing:
+                        raise ValueError(f"unbalanced signature {signature!r}")
+                    return offset - index + 1
+        raise ValueError(f"unterminated container in signature {signature!r}")
+    return 1
+
+
+# The integer tokens. Kept apart from `d` because a double that arrived as an
+# int would silently become one, and pass-through numbers keep the WIRE's type
+# (DESIGN 19's ruling on typed equality).
+DBUS_INTEGERS = frozenset("ynqiuxth")
+
+
+def decode_typed(signature: str, value):
+    """One value, decoded under the type the document declares for it."""
+    kind = signature[0]
+    if kind == "a":
+        inner = signature[1:]
+        if inner.startswith("{"):
+            key_type = inner[1]
+            if key_type != "s":
+                raise ValueError(f"dict key type {key_type!r} is not captured yet")
+            value_type = inner[2:-1]
+            return {k: decode_typed(value_type, v) for k, v in value.items()}
+        if inner == "y":
+            # dbus-fast unmarshals `ay` to bytes and sysbus.unwrap base64-wraps
+            # it, because a byte string is not JSON. Reproduced here so the two
+            # readings of one property cannot differ — though nothing on the
+            # acquisition path reads one, so no committed pair judges this arm.
+            import base64
+            return {"__bytes_base64__":
+                    base64.b64encode(bytes(value)).decode("ascii")}
+        return [decode_typed(inner, item) for item in value]
+    if kind == "(":
+        parts = complete_types(signature[1:-1])
+        return [decode_typed(part, item)
+                for part, item in zip(parts, value, strict=True)]
+    if kind == "v":
+        # The one place the document nests its own type: a variant is
+        # {"type": …, "data": …}, and unwrap replaces it by its value.
+        return decode_typed(value["type"], value["data"])
+    if kind == "b":
+        if not isinstance(value, bool):
+            raise ValueError(f"boolean member is {value!r}")
+        return value
+    if kind == "d":
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"double member is {value!r}")
+        return float(value)
+    if kind in DBUS_INTEGERS:
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError(f"{signature} member is {value!r}")
+        return value
+    if kind in "sog":
+        if not isinstance(value, str):
+            raise ValueError(f"{signature} member is {value!r}")
+        return value
+    raise ValueError(f"signature {signature!r} is not decoded yet")
+
+
+def decode_reply(document: dict) -> list:
+    """A busctl document as the reply BODY the adapter would have received.
+
+    `data` is the argument list and `type` is their concatenated signature, so
+    the two zip — which is also the check that the document is the one it says
+    it is.
+    """
+    return [decode_typed(part, value) for part, value
+            in zip(complete_types(document["type"]), document["data"], strict=True)]
+
+
+def bus_request(path: str, interface: str, member: str,
+                signature: str, body: list) -> str:
+    """The key one reply is committed under: the busctl argument line.
+
+    Path, interface, member — the address DESIGN's ruling names — followed by
+    the signature and arguments where there are any, because `Get` on one
+    object path is two different questions depending on which interface and
+    property it names. Everything after `busctl call org.freedesktop.systemd1 `,
+    verbatim, so re-running a captured request is a copy and a paste.
+    """
+    parts = [path, interface, member]
+    if signature:
+        parts.append(signature)
+        parts.extend(str(argument) for argument in body)
+    return " ".join(parts)
+
+
+class CapturedBus:
+    """`units.BUS`, answering from the capture instead of from the system bus.
+
+    Deny-by-default like every other seam kind: a request the variant did not
+    stage raises rather than reaching the bus of whichever machine is replaying
+    the corpus. But the adapter CATCHES broadly on both per-unit paths — a unit
+    genuinely can vanish between the listing and the probe, and the adapter is
+    right to survive that — so a miss here would be swallowed into a plausible
+    row instead of a loud failure. Every miss is therefore recorded as well as
+    raised, and the run fails on the record: the call set is a function of the
+    ListUnits document, so a request that was not captured is a broken capture
+    and never a statement about a machine.
+    """
+
+    def __init__(self, documents: dict[str, dict]) -> None:
+        self._documents = documents
+        self.uncaptured: list[str] = []
+
+    async def call(self, destination: str, path: str, interface: str, member: str,
+                   signature: str = "", body: list | None = None) -> list:
+        request = bus_request(path, interface, member, signature, body or [])
+        document = self._documents.get(request)
+        if document is None:
+            self.uncaptured.append(request)
+            raise RuntimeError(
+                f"{request!r} was not captured in this variant; the bus seam "
+                "refuses to read the system bus of the machine replaying the "
+                "corpus"
+            )
+        return decode_reply(document)
+
+    async def get_all(self, destination: str, path: str, interface: str) -> dict:
+        body = await self.call(destination, path, PROPERTIES, "GetAll", "s",
+                               [interface])
+        return body[0]
+
+
+def captured_requests(payloads: dict[str, object]) -> dict[str, dict]:
+    """Every staged reply, keyed by its request, across every payload file.
+
+    One collection is hundreds of replies of four shapes, so they are committed
+    in one file per SHAPE — the scrub manifest classifies by path, and a
+    manifest cannot say that index 1 of a row is a description in one document
+    and an enablement state in another. The seam addresses them as one map,
+    because the adapter addresses the bus and not a file.
+    """
+    documents: dict[str, dict] = {}
+    for stem, payload in sorted(payloads.items()):
+        if not isinstance(payload, dict):
+            fail(f"payload {stem!r} is not a request/response map")
+        for request, document in payload.items():
+            if request in documents:
+                fail(f"{request!r} is staged twice; one request, one reply")
+            documents[request] = document
+    return documents
 
 
 class CapturedResponse:
@@ -798,7 +1004,8 @@ def run(collector: str, generations: dict[str, int], payload_dir: Path) -> None:
     # as "this variant captured nothing" and decline `absent` — which commits,
     # and retires every object the collection had.
     if any(spec.get(kind) for kind in
-           ("methods", "fleet_methods", "arg_acquisitions", "path_acquisitions")):
+           ("methods", "fleet_methods", "arg_acquisitions",
+            "path_acquisitions", "bus")):
         present = present or list(payloads)
     absent = not present
 
@@ -830,8 +1037,23 @@ def run(collector: str, generations: dict[str, int], payload_dir: Path) -> None:
     for attribute, payload_name in spec.get("path_acquisitions", {}).items():
         setattr(module, attribute,
                 by_path(attribute, payload_name, payloads.get(payload_name)))
-    if "bus" in spec:
-        module.BUS = RefusingBus(spec["bus"])
+    # Two seam kinds for one interface, and they are opposites — which is why
+    # they have separate keys after both arrived on the same one and each
+    # collector then took the other's branch.
+    #
+    # `refusing_bus` is for a collector that reads the bus but whose variant
+    # captured no reply: hardware's one udisks2 call. It must reach NO bus, so
+    # the singleton raises, and _drive_health catches that and records udisks2
+    # as absent — which is what a host without the daemon produces anyway.
+    #
+    # `bus` is for a collector whose whole acquisition IS the bus: units, where
+    # the payload set is a request/response map rather than documents.
+    if spec.get("refusing_bus"):
+        module.BUS = RefusingBus(spec["refusing_bus"])
+    bus = None
+    if spec.get("bus"):
+        bus = CapturedBus(captured_requests(payloads))
+        setattr(module, spec["bus"], bus)
 
     out = Emitter(
         sys.stdout,
@@ -912,6 +1134,16 @@ def run(collector: str, generations: dict[str, int], payload_dir: Path) -> None:
                 f"{collector}/{collection}: acquisition raised "
                 f"{type(exc).__name__}: {exc}"
             )
+        # Before the commit, and that is the whole of it. The adapter swallows
+        # a failed per-unit read on purpose — a unit really can vanish between
+        # the listing and the probe — so a payload the variant never staged
+        # becomes a row that merely looks thinner, and a commit over those rows
+        # would claim authority for a collection nobody fully read.
+        if bus is not None and bus.uncaptured:
+            fail(f"{collector}: {len(bus.uncaptured)} request(s) the variant "
+                 f"did not stage, first {bus.uncaptured[:3]} — the call set is "
+                 "a function of the captured listing, so this is a broken "
+                 "capture and not a reading of any machine")
         out.commit(collection, *out.items(collection, items))
 
     out.end()
