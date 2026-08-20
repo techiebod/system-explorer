@@ -239,8 +239,14 @@ splits it instead, because the two halves have different futures. What a host
 what kernel and configuration revision each carries — ports now, and `packages`
 must read a NixOS host, because those are questions an operator asks on any
 machine and two of the three answers already exist. What *changed between two
-generations* does not port and is not queued either: it becomes a plugin once
-the plugin surface exists, so `_delta_rows`, `_package_rows`, `_etc_rows`,
+generations* does not port and is not queued either. **It becomes a plugin
+that this repository does not own** — ruled 2026-08-20: the estate computes
+the closure delta, because the estate is what deploys and already produces
+two of its four answers, and system-explorer owes only the SURFACE a plugin
+attaches to. That is the sharper reading of a sentence that used to say "once
+the plugin surface exists", which left the owner unstated and was taken by
+two sessions to mean this repository would build both. So `_delta_rows`,
+`_package_rows`, `_etc_rows`,
 `_aggregate_rows` and the /etc collapse and enumerate ceilings leave the
 rewrite's scope rather than sitting inside it as debt.
 
