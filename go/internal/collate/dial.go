@@ -187,3 +187,55 @@ func Session(
 	}
 	return WriteSession(ctx, conn, st, collectors, id, host, bootID, gap)
 }
+
+
+// HubLink is one collator's standing relationship with its hub across
+// many connections. It exists for exactly one piece of state: WHEN this
+// collator last had a live connection, which is the only thing that can
+// turn a reconnect into a stated history gap.
+//
+// A checkpoint deliberately does not replay what happened during a
+// partition — a condition that appeared and resolved while the link was
+// down is lost, because the alternative is an unbounded queue whose
+// failure mode is the collator dying of somebody else's outage. So the
+// gap is STATED, and a collator that forgot when it went away could not
+// state it. Its absence and a gap of zero are different claims.
+type HubLink struct {
+	// lastConnected is a boot-clock reading, zero before the first
+	// connection. Boot clock rather than wall: a gap measured across a
+	// clock that can step is a gap that can be negative.
+	lastConnected float64
+	connected     bool
+}
+
+// Gap is the interval to state on the NEXT session, or nil for a first
+// connection with nothing to have missed.
+//
+// Nil is returned exactly once per boot, and that is the point: after
+// the first disconnection every session carries an interval, so a hub
+// can always tell "nothing was missed" from "nothing was recorded".
+func (l *HubLink) Gap(now float64) *HistoryGap {
+	if l.lastConnected == 0 {
+		return nil
+	}
+	if now < l.lastConnected {
+		// The boot clock went backwards, which it cannot within one boot.
+		// Rather than state a negative interval, state none and let the
+		// hub read a first connection — a wrong gap is a timeline with a
+		// hole somewhere else.
+		return nil
+	}
+	return &HistoryGap{From: l.lastConnected, To: now}
+}
+
+// Opened records that a session is live. Called after the dial succeeds
+// and not before: a dial that failed is not a connection, and treating it
+// as one would shrink the next gap to exclude an outage that happened.
+func (l *HubLink) Opened(now float64) { l.connected = true }
+
+// Closed records that the connection has ended, at now. This is the
+// reading the next Gap is measured from.
+func (l *HubLink) Closed(now float64) {
+	l.connected = false
+	l.lastConnected = now
+}

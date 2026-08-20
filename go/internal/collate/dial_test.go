@@ -141,3 +141,54 @@ func TestEmitsSessionSamples(t *testing.T) {
 		}
 	}
 }
+
+// A reconnect states its gap, and a first connection states that it has
+// none. The two are different claims and the difference is the whole
+// reason the member is required rather than optional.
+func TestHubLinkStatesItsGap(t *testing.T) {
+	link := &HubLink{}
+	if gap := link.Gap(100); gap != nil {
+		t.Fatalf("a first connection has nothing to have missed: %+v", gap)
+	}
+	link.Opened(100)
+	link.Closed(140)
+
+	gap := link.Gap(200)
+	if gap == nil {
+		t.Fatal("a reconnect after a disconnection has an interval to state")
+	}
+	if gap.From != 140 || gap.To != 200 {
+		t.Fatalf("the gap runs from the disconnection to now: %+v", gap)
+	}
+
+	// And it keeps stating one for the rest of the boot: after the first
+	// disconnection there is always an interval, so a hub can tell
+	// "nothing was missed" from "nothing was recorded".
+	link.Opened(200)
+	link.Closed(210)
+	if second := link.Gap(300); second == nil || second.From != 210 {
+		t.Fatalf("every later reconnect states its own interval: %+v", second)
+	}
+}
+
+func TestAFailedDialDoesNotShrinkTheNextGap(t *testing.T) {
+	// Opened is called after a successful dial; a dial that failed is not
+	// a connection, and treating it as one would exclude an outage that
+	// happened from the interval that reports it.
+	link := &HubLink{}
+	link.Opened(100)
+	link.Closed(140)
+	if gap := link.Gap(500); gap.From != 140 {
+		t.Fatalf("the gap is measured from the last CLOSE: %+v", gap)
+	}
+}
+
+func TestABackwardClockStatesNoGapRatherThanANegativeOne(t *testing.T) {
+	link := &HubLink{}
+	link.Opened(100)
+	link.Closed(140)
+	if gap := link.Gap(120); gap != nil {
+		t.Fatalf("a negative interval is a timeline with a hole somewhere "+
+			"else; state none instead: %+v", gap)
+	}
+}

@@ -117,6 +117,9 @@ func Main() int {
 	for _, c := range collectors {
 		go collectorLoop(st, c)
 	}
+	if os.Getenv("SE_HUB_ADDR") != "" {
+		go hubLoop(st, collectors, bootID)
+	}
 	select {} // the loops and the listener are the process
 }
 
@@ -216,11 +219,9 @@ func dialHubOnce(st *store.Store, collectors []collectorConfig, bootID string) e
 	// the collator already trusts beats inventing a second source of
 	// identity for it.
 	id := fmt.Sprintf("cp-%s-%d", host, int64(BootNow()*1e6))
-	// History gap is nil for now: this process holds no memory of a
-	// previous connection, and a fabricated interval would be worse than
-	// the stated absence of one. The daemon's reconnect loop is what will
-	// carry it, and until that exists every session is a first connection
-	// and says so.
+	// A one-shot process holds no memory of a previous connection, so its
+	// session is a first connection and says so. The daemon's loop below
+	// is what carries a gap across reconnects.
 	return Session(context.Background(), addr, cfg, st, declarers, id, host, bootID, nil)
 }
 
@@ -239,4 +240,49 @@ func hubTLS() (*tls.Config, error) {
 			"the only one left")
 	}
 	return ClientConfig(cert, key, ca)
+}
+
+
+// hubReconnect paces a collator that cannot reach its hub. Unhurried on
+// purpose: the hub being down costs the ESTATE view and costs this host
+// nothing, because the collator serves its own API in full either way.
+// A tight retry would turn somebody else's outage into this host's load.
+const hubReconnect = 30 * time.Second
+
+// hubLoop keeps one session open, and states the gap when it reconnects.
+//
+// A session that ends for any reason — the hub restarting, the link
+// dropping, the hub refusing the checkpoint — is a disconnection, and the
+// interval until the next one is what the next checkpoint states. That
+// includes a refusal, deliberately: the hub did not take our state, so
+// whatever happened next is as unrecorded as if the link had been down.
+func hubLoop(st *store.Store, collectors []collectorConfig, bootID string) {
+	addr, host := os.Getenv("SE_HUB_ADDR"), os.Getenv("SE_HOST")
+	if host == "" {
+		fmt.Fprintln(os.Stderr, "se-collate: SE_HUB_ADDR is set and SE_HOST is not; "+
+			"not dialling, because a checkpoint names its own scope")
+		return
+	}
+	cfg, err := hubTLS()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "se-collate: %v\n", err)
+		return
+	}
+	declarers := map[string]Declarer{}
+	for _, c := range collectors {
+		declarers[c.name] = &wire.Client{Socket: c.socket}
+	}
+	link := &HubLink{}
+	for {
+		now := BootNow()
+		gap := link.Gap(now)
+		id := fmt.Sprintf("cp-%s-%d", host, int64(now*1e6))
+		link.Opened(now)
+		if err := Session(context.Background(), addr, cfg, st, declarers,
+			id, host, bootID, gap); err != nil {
+			fmt.Fprintf(os.Stderr, "se-collate: hub session: %v\n", err)
+		}
+		link.Closed(BootNow())
+		time.Sleep(hubReconnect)
+	}
 }
