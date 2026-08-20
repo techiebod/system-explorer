@@ -420,6 +420,20 @@ Two supporting changes came with it. The store now keeps declaration **documents
 > | Relations visibly distinct by observability | §27: "An asserted relation styled like a confirmed one is not a cosmetic bug. It is the founding failure re-entering through layer 6 after five other layers went to considerable trouble to prevent it" |
 > | Default hiding, with its four invariants | Not in DESIGN — this is the shipping UI's, and it is the one body of knowledge that genuinely has to be carried across rather than implemented from the spec |
 >
+> **The port dropped structure, judgement and object density — not facts.** Surveyed against `units` and `hardware/scsi`, the two the owner names as the ones the old code got right:
+>
+> · **The object's TYPE never reaches the wire**, and it is load-bearing. `scsi-host`/`expander`/`disk`/`enclosure` and `service`/`slice`/`device`/`mount` drive severity dispatch, the `Kind` column, the facet bar and every default-hide rule. `go/cmd/se-collect-hardware/inventory.go` says so outright: *"The TYPE never reaches the wire — the stream carries name, facts and `at` and nothing else — but it decides which health statement a row is entitled to."* Without it, `hardware/scsi` renders a controller as a disk with every disk column blank, *"which is exactly how an operator concluded the collection was broken."*
+>
+> · **`depth` has no home, and both sides say the order IS the collection.** `units.py`: *"the systemctl-status order is part of what the collection IS, not a presentation step collect() adds."* The port reproduces the ordering and records why it is fragile: *"Nothing on the wire carries the depth — a stream's record order is not significant (DESIGN 19) — so this is reproduced because the order is what the collection IS."*
+>
+> · **Neither collector declares `rules`**, so the opinion mechanism built for gate 5 has nothing to run on the two collections in question. That silently drops `restart-churn`, `unit-health`, every SMART verdict and the PCIe link-rate opinion — and the last of those exists because *"a 6 Gbps drive at 1.5 Gbps, or a SAS phy that came up at half rate, looks perfectly healthy in every other fact."*
+>
+> · **Neither declares `relations` or `names`.** `units` loses `member-of` to its slice and `runs` to a libvirt domain; `hardware` loses `attached-to` a PCI function, `backs` a block device and `member-of` an enclosure. `names` is where `WWN`/`SASAddress` would live — *"A kernel name renumbers when enumeration order shifts and this does not, so it is what a join survives a reboot on."*
+>
+> · **Object density is gone.** The port declares exactly the ROW facts, so `LoadError`, `NRestarts`, `Result`, `MainPID`, `NextElapse` and their siblings are unreachable — and `NRestarts` is the sole input to `restart-churn`. §27's own measurement is that objects are **8.4× the bytes of the rows**; the port carries the rows.
+>
+> · **The declared `answer` lists lost argued columns.** `hardware/scsi` drops `Kind`, `Transport`, `Link`, `Devices` and `EnclosureSlot` — each with a recorded incident behind it, including the `Link` composite that exists because *"an identical speed pair sat next to a differing width pair and the warning looked self-contradictory."* And `Devices` is what lets a childless SATA port be hidden as noise, so dropping it takes the hide rule with it.
+>
 > **Two things the port owes before the renderer can obey the spec.** A row needs its `type` to facet on and its `depth` to nest by; the shipping envelope carries both per item and `se.stream/1`'s `object` record carries neither. And the collections' declared `answer` lists were written independently of the shipping UI's argued column presets — compared route by route: **3 identical, 14 differing, 14 not ported** — so each divergence is a decision somebody should take rather than an accident to inherit.
 
 Phase 6 — the cut — is not started, and it is owner-supervised by its own rule.
