@@ -192,3 +192,64 @@ def assemble(
         sources_unreadable=tuple(sorted(sources_unreadable)),
     )
     return EstateView(rows=rows, reach=estate.reaches(), coverage=coverage)
+
+
+@dataclass(frozen=True)
+class HeldOpinion:
+    """One opinion the hub accepted, with where it came from."""
+
+    host: str
+    collection: str
+    generation: int
+    object_id: str
+    instance: str | None
+    key: str
+    level: str
+    grounds: str
+    sentence: str
+    cites: tuple[str, ...]
+
+    @property
+    def scope_key(self) -> tuple[str, str, str, str | None]:
+        return (self.host, self.object_id, self.key, self.instance)
+
+
+def opinions(estate: Estate, declarations: Declarations) -> tuple[HeldOpinion, ...]:
+    """Every opinion a promoted checkpoint carried, minus the ones no
+    declaration backs.
+
+    **Acceptance item 7's last half, at the tier that holds declarations.**
+    The collator already refuses a rule citing a fact its collection does
+    not declare, and this is the same test at the other end — because the
+    two are different failures. There, a collector's own table reached
+    outside itself; here, an opinion arrived from somewhere naming a fact
+    the hub holds no axis for, and rendering it would put a verdict on a
+    page with nothing a reader could open behind it.
+
+    Dropped opinions are NOT silently discarded: they are refused at the
+    checkpoint when their subject is missing, and the ones dropped here
+    are the ones whose citations no declaration backs, which is a
+    statement about the declaration rather than about the object.
+    """
+    out: list[HeldOpinion] = []
+    for host in estate.hosts():
+        snapshot = estate.visible(host)
+        if snapshot is None:
+            continue
+        for name in sorted(snapshot.collections):
+            state = snapshot.collections[name]
+            if state.opinions is None:
+                continue
+            axes = declarations.facts(host, name)
+            for opinion in state.opinions:
+                cites = tuple(opinion.get("cites") or ())
+                if axes is None or any(c not in axes for c in cites):
+                    continue
+                out.append(HeldOpinion(
+                    host=host, collection=name, generation=state.generation,
+                    object_id=opinion["object"], instance=opinion.get("instance"),
+                    key=opinion["key"], level=opinion["level"],
+                    grounds=opinion["grounds"], sentence=opinion["sentence"],
+                    cites=cites,
+                ))
+    return tuple(out)

@@ -169,6 +169,13 @@
             "$ref": "#/$defs/fact"
           }
         },
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/rule"
+          },
+          "description": "This collection's self-evident opinions, kept as data so they can be read before they run. A collector this repository does not ship brings its own rules the same way it brings its own facts, which is the whole of what makes a plugin able to say why one of its facts is alarming (DESIGN appendix C, ruled 2026-08-20)."
+        },
         "relations": {
           "type": "array",
           "items": {
@@ -498,7 +505,7 @@
               }
             }
           },
-          "description": "Law 4: a derived fact names the facts it consumed — a derivation with no stated inputs cannot be re-checked."
+          "description": "Law 4: a derived fact names the facts it consumed \u2014 a derivation with no stated inputs cannot be re-checked."
         },
         {
           "if": {
@@ -519,6 +526,212 @@
           "description": "A percentage with no denominator is a number pretending to be an answer (DESIGN 27, 28)."
         }
       ]
+    },
+    "condition": {
+      "description": "One test over one collection's declared facts. The set is CLOSED and small on purpose: a rule table is opinions kept as data, reviewable before it runs, and an expression language that could grow would become a plugin-supplied evaluator by increments \u2014 unbounded, and third-party code in the judging path. Every leaf names a fact, and a fact a rule names must be declared by the same collection (DESIGN 17, acceptance item 7).",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "fact",
+            "equals"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "fact": {
+              "type": "string"
+            },
+            "equals": {}
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "fact",
+            "not_equals"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "fact": {
+              "type": "string"
+            },
+            "not_equals": {}
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "fact",
+            "in"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "fact": {
+              "type": "string"
+            },
+            "in": {
+              "type": "array",
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "fact",
+            "at_least"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "fact": {
+              "type": "string"
+            },
+            "at_least": {
+              "type": "number"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "fact",
+            "at_most"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "fact": {
+              "type": "string"
+            },
+            "at_most": {
+              "type": "number"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "fact",
+            "present"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "fact": {
+              "type": "string"
+            },
+            "present": {
+              "type": "boolean"
+            }
+          },
+          "description": "Whether the fact has a value at all. Present is NOT truthiness: zero, false and the empty string are readings, and a rule that treated them as absence would be the null-fact family arriving in the judging layer."
+        },
+        {
+          "type": "object",
+          "required": [
+            "fact",
+            "non_empty"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "fact": {
+              "type": "string"
+            },
+            "non_empty": {
+              "type": "boolean"
+            }
+          },
+          "description": "For list facts: whether the list has members. Separate from `present` because an empty list is a reading and a missing list is not."
+        },
+        {
+          "type": "object",
+          "required": [
+            "all"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "all": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/condition"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "any"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "any": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/condition"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "not"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "not": {
+              "$ref": "#/$defs/condition"
+            }
+          }
+        }
+      ]
+    },
+    "rule": {
+      "type": "object",
+      "required": [
+        "key",
+        "level",
+        "grounds",
+        "when",
+        "sentence",
+        "cites"
+      ],
+      "additionalProperties": false,
+      "description": "One self-evident opinion, as DATA. Self-evident is not a preference here, it is what a collector can know: intent never reaches a host, so a rule that travels with a declaration cannot be intent-relative and this member holds no other kind. Intent-relative opinions are the hub's, from intent (DESIGN 17).",
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "Stable, and part of a finding's identity \u2014 renaming one resets a lifecycle, so it is versioned like a fact name rather than edited freely."
+        },
+        "level": {
+          "$ref": "se.vocabularies.1.json#/$defs/level"
+        },
+        "grounds": {
+          "enum": [
+            "interface",
+            "threshold"
+          ],
+          "description": "Where the judgement comes from, and the distinction is load-bearing rather than decorative. `interface` means the system itself declares the fault \u2014 systemd says `failed`, ZFS says `DEGRADED` \u2014 and no number of ours is involved. `threshold` means the number IS ours: 98% full and three days to expiry encode a risk appetite, a workload and a renewal lead time that vary by host and by owner. A surface that rendered both identically would present our opinion as the machine's (DESIGN 17)."
+        },
+        "when": {
+          "$ref": "#/$defs/condition"
+        },
+        "sentence": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What to say. It states the condition, never the remedy: a rule that told an operator what to do would be this product acting through prose."
+        },
+        "cites": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          },
+          "description": "The declared facts a reader can go and look at. At least one, always: an opinion citing nothing is an assertion, and every name here must be declared by this collection \u2014 which is acceptance item 7 at the rule table."
+        }
+      }
     }
   }
 }

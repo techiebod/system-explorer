@@ -64,6 +64,12 @@ class CollectionSnapshot:
     freshness: str
     stale_reason: str | None
     objects: tuple[dict[str, Any], ...]
+    #: None when the collection declared no rule table at all; an empty
+    #: tuple when it declared one and nothing fired. Different readings:
+    #: the first is "nobody could judge this", the second is "judged, and
+    #: nothing is wrong", and collapsing them would be the product's own
+    #: absence-as-health failure inside its opinion channel.
+    opinions: tuple[dict[str, Any], ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -225,12 +231,25 @@ class Receiver:
                 "state-truncated",
                 f"{name} promised {promised} objects and sent {len(objects)}",
             )
+        opinions = record.get("opinions")
+        if opinions is not None:
+            known = {obj.get("id") for obj in objects}
+            for opinion in opinions:
+                if opinion.get("object") not in known:
+                    self._open = None
+                    raise CheckpointRefused(
+                        "opinion-orphaned",
+                        f"{name} carries an opinion about {opinion.get('object')!r}, "
+                        "which this collection did not send; an opinion whose subject "
+                        "nobody can open is a verdict with nothing to go and look at",
+                    )
         open_.states[name] = CollectionSnapshot(
             name=name,
             generation=record["generation"],
             freshness=entry["freshness"],
             stale_reason=entry.get("stale_reason"),
             objects=tuple(objects),
+            opinions=None if opinions is None else tuple(opinions),
         )
         return None
 

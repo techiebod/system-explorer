@@ -2,11 +2,17 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "se.checkpoint.1.json",
   "title": "System Explorer collator-to-hub checkpoint record",
-  "description": "One NDJSON line of the checkpoint a collator sends after connecting to a hub (DESIGN 06). A hub that only receives has no way of its own to know when it knows enough to answer, so the order is fixed and the completeness is explicit: declarations, then a checkpoint, then the ordinary stream. The checkpoint OPENS with a manifest naming every collection this collator declares with its current generation and freshness, and CLOSES with a terminal record. It is promoted ALL AT ONCE — until the terminal record arrives, nothing in it is visible to a roll-up, a problem domain or a projection, and the host is `unswept`. Without that the failure is specific and quiet: the hub receives one collection, considers the host swept, recomputes an estate finding over a subset and RESOLVES it — a finding cleared by partial knowledge, arriving during recovery when nobody is looking. Every record type is closed, for the reason se.stream.1 states.",
+  "description": "One NDJSON line of the checkpoint a collator sends after connecting to a hub (DESIGN 06). A hub that only receives has no way of its own to know when it knows enough to answer, so the order is fixed and the completeness is explicit: declarations, then a checkpoint, then the ordinary stream. The checkpoint OPENS with a manifest naming every collection this collator declares with its current generation and freshness, and CLOSES with a terminal record. It is promoted ALL AT ONCE \u2014 until the terminal record arrives, nothing in it is visible to a roll-up, a problem domain or a projection, and the host is `unswept`. Without that the failure is specific and quiet: the hub receives one collection, considers the host swept, recomputes an estate finding over a subset and RESOLVES it \u2014 a finding cleared by partial knowledge, arriving during recovery when nobody is looking. Every record type is closed, for the reason se.stream.1 states.",
   "oneOf": [
-    {"$ref": "#/$defs/manifest"},
-    {"$ref": "#/$defs/collection_state"},
-    {"$ref": "#/$defs/terminal"}
+    {
+      "$ref": "#/$defs/manifest"
+    },
+    {
+      "$ref": "#/$defs/collection_state"
+    },
+    {
+      "$ref": "#/$defs/terminal"
+    }
   ],
   "$defs": {
     "identity": {
@@ -21,10 +27,19 @@
     },
     "manifest": {
       "type": "object",
-      "required": ["record", "checkpoint", "host", "boot_id", "collections", "declarations"],
+      "required": [
+        "record",
+        "checkpoint",
+        "host",
+        "boot_id",
+        "collections",
+        "declarations"
+      ],
       "additionalProperties": false,
       "properties": {
-        "record": {"const": "manifest"},
+        "record": {
+          "const": "manifest"
+        },
         "checkpoint": {
           "$ref": "#/$defs/identity",
           "description": "Identifies this checkpoint, and is echoed by every record in it and by the terminal. A hub receiving a record whose checkpoint id is not the one it is accumulating has two checkpoints interleaved on one connection, which is a protocol error rather than a merge: promoting a mixture would promote a state that existed at no moment."
@@ -36,40 +51,60 @@
         "boot_id": {
           "$ref": "#/$defs/identity",
           "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-          "not": {"const": "00000000-0000-0000-0000-000000000000"},
+          "not": {
+            "const": "00000000-0000-0000-0000-000000000000"
+          },
           "description": "The boot whose clock every `at` in this checkpoint belongs to. Carried here rather than per record because one checkpoint is one collator's state at one moment; a hub comparing ages across a reboot must compare clock domains, never subtract across them (DESIGN 09)."
         },
         "collections": {
           "type": "array",
           "minItems": 1,
-          "items": {"$ref": "#/$defs/manifest_entry"},
+          "items": {
+            "$ref": "#/$defs/manifest_entry"
+          },
           "description": "EVERY collection this collator declares, including the ones it has never applied and the ones that are stale. Not merely the ones with something to send: a manifest listing only what follows would make completeness unfalsifiable, and the hub could not tell a collection that is missing from one that is empty. minItems 1 because a collator declaring no collection has nothing to check point."
         },
         "declarations": {
           "type": "array",
           "minItems": 1,
-          "items": {"$ref": "#/$defs/identity"},
+          "items": {
+            "$ref": "#/$defs/identity"
+          },
           "description": "The declaration hashes in force for this checkpoint, one per collector. The hub cannot render or serve MCP without the fact axes, so the declarations travel up before the state does; these hashes are what a hub matches its held copies against, and an unknown one is fetched rather than guessed."
         }
       }
     },
     "manifest_entry": {
       "type": "object",
-      "required": ["collection", "generation", "freshness"],
+      "required": [
+        "collection",
+        "generation",
+        "freshness"
+      ],
       "additionalProperties": false,
       "properties": {
-        "collection": {"$ref": "#/$defs/collection_name"},
+        "collection": {
+          "$ref": "#/$defs/collection_name"
+        },
         "generation": {
           "type": "integer",
           "minimum": 0,
           "description": "The generation currently APPLIED for this collection, or 0 for one that has never applied. Zero is a reading rather than a gap: a collection whose collector has never successfully committed is a real state, and it is the state a hub must be able to tell from a collection it simply did not hear about."
         },
         "freshness": {
-          "enum": ["current", "stale"],
+          "enum": [
+            "current",
+            "stale"
+          ],
           "description": "Whether the applied state is believed current. Stale is what a decline other than `absent` leaves behind: prior state stands and is marked, because nothing was established (DESIGN 19)."
         },
         "stale_reason": {
-          "enum": ["absent", "unauthorised", "unavailable", "unsupported"],
+          "enum": [
+            "absent",
+            "unauthorised",
+            "unavailable",
+            "unsupported"
+          ],
           "description": "Present exactly when freshness is stale, and it is the decline reason that made it so. A stale collection whose reason is not carried tells a hub that something is wrong and not what, which is the shape an operator cannot act on."
         },
         "objects": {
@@ -80,23 +115,63 @@
       },
       "allOf": [
         {
-          "if": {"properties": {"freshness": {"const": "stale"}}, "required": ["freshness"]},
-          "then": {"required": ["stale_reason"]}
+          "if": {
+            "properties": {
+              "freshness": {
+                "const": "stale"
+              }
+            },
+            "required": [
+              "freshness"
+            ]
+          },
+          "then": {
+            "required": [
+              "stale_reason"
+            ]
+          }
         },
         {
-          "if": {"properties": {"freshness": {"const": "current"}}, "required": ["freshness"]},
-          "then": {"not": {"required": ["stale_reason"]}}
+          "if": {
+            "properties": {
+              "freshness": {
+                "const": "current"
+              }
+            },
+            "required": [
+              "freshness"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "stale_reason"
+              ]
+            }
+          }
         }
       ]
     },
     "collection_state": {
       "type": "object",
-      "required": ["record", "checkpoint", "collection", "generation", "objects"],
+      "required": [
+        "record",
+        "checkpoint",
+        "collection",
+        "generation",
+        "objects"
+      ],
       "additionalProperties": false,
       "properties": {
-        "record": {"const": "collection_state"},
-        "checkpoint": {"$ref": "#/$defs/identity"},
-        "collection": {"$ref": "#/$defs/collection_name"},
+        "record": {
+          "const": "collection_state"
+        },
+        "checkpoint": {
+          "$ref": "#/$defs/identity"
+        },
+        "collection": {
+          "$ref": "#/$defs/collection_name"
+        },
         "generation": {
           "type": "integer",
           "minimum": 1,
@@ -104,33 +179,105 @@
         },
         "objects": {
           "type": "array",
-          "items": {"type": "object"},
-          "description": "The applied objects for this collection, in the collator's own order. An EMPTY array is a reading — the collection applied and holds nothing, which is what a decline of `absent` leaves — and it is why this member is required rather than omitted when empty: an absent array and an empty one would be a hub's only evidence of the difference between a collection that holds nothing and one nobody sent."
+          "items": {
+            "type": "object"
+          },
+          "description": "The applied objects for this collection, in the collator's own order. An EMPTY array is a reading \u2014 the collection applied and holds nothing, which is what a decline of `absent` leaves \u2014 and it is why this member is required rather than omitted when empty: an absent array and an empty one would be a hub's only evidence of the difference between a collection that holds nothing and one nobody sent."
+        },
+        "opinions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "object",
+              "key",
+              "level",
+              "grounds",
+              "sentence",
+              "cites"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "object": {
+                "type": "string"
+              },
+              "instance": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "key": {
+                "type": "string"
+              },
+              "level": {
+                "$ref": "se.vocabularies.1.json#/$defs/level"
+              },
+              "grounds": {
+                "enum": [
+                  "interface",
+                  "threshold"
+                ]
+              },
+              "sentence": {
+                "type": "string"
+              },
+              "cites": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "description": "The self-evident opinions this collection's rule table produced, minted at the COLLATOR because that is the lowest tier that can reach the facts (law 2). Carried beside the objects rather than inside them: an opinion has its own key and its own lifecycle at the hub, and burying it in a row is how it stops being something a reader can act on. Absent means the collection declared no rules; an empty array means it declared some and none fired, and those are different readings."
         }
       }
     },
     "terminal": {
       "type": "object",
-      "required": ["record", "checkpoint", "collections", "history_gap"],
+      "required": [
+        "record",
+        "checkpoint",
+        "collections",
+        "history_gap"
+      ],
       "additionalProperties": false,
       "properties": {
-        "record": {"const": "terminal"},
-        "checkpoint": {"$ref": "#/$defs/identity"},
+        "record": {
+          "const": "terminal"
+        },
+        "checkpoint": {
+          "$ref": "#/$defs/identity"
+        },
         "collections": {
           "type": "integer",
           "minimum": 0,
           "description": "How many collection_state records this checkpoint sent. The completeness check, and it is a COUNT for the reason every commit's counts are: a receiver that had to infer completeness from the terminal's mere arrival could not tell a checkpoint that finished from one whose middle was lost. The hub promotes only if this equals what it received and the manifest agrees."
         },
         "history_gap": {
-          "type": ["object", "null"],
-          "required": ["from", "to"],
+          "type": [
+            "object",
+            "null"
+          ],
+          "required": [
+            "from",
+            "to"
+          ],
           "additionalProperties": false,
           "properties": {
-            "from": {"type": "number", "description": "CLOCK_BOOTTIME seconds at which this collator last had a live connection to this hub."},
-            "to": {"type": "number", "description": "CLOCK_BOOTTIME seconds at which it reconnected."}
+            "from": {
+              "type": "number",
+              "description": "CLOCK_BOOTTIME seconds at which this collator last had a live connection to this hub."
+            },
+            "to": {
+              "type": "number",
+              "description": "CLOCK_BOOTTIME seconds at which it reconnected."
+            }
           },
-          "description": "The interval over which transitions were NOT delivered, or null for a first connection with nothing to have missed. A checkpoint deliberately does not replay what happened during a partition — a condition that appeared and resolved while the link was down is lost, because the alternative is an unbounded queue whose failure mode is the collator dying of somebody else's outage. So the gap is STATED. Required rather than optional, and null rather than omitted, because a missing member and a stated absence of gap are the difference between a timeline with a hole in it and a timeline that says where its hole is."
-          }
+          "description": "The interval over which transitions were NOT delivered, or null for a first connection with nothing to have missed. A checkpoint deliberately does not replay what happened during a partition \u2014 a condition that appeared and resolved while the link was down is lost, because the alternative is an unbounded queue whose failure mode is the collator dying of somebody else's outage. So the gap is STATED. Required rather than optional, and null rather than omitted, because a missing member and a stated absence of gap are the difference between a timeline with a hole in it and a timeline that says where its hole is."
+        }
       }
     }
   }

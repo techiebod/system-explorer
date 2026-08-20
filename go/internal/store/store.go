@@ -76,6 +76,11 @@ CREATE TABLE IF NOT EXISTS rejections (
   reason     TEXT NOT NULL,
   detail     TEXT
 );
+CREATE TABLE IF NOT EXISTS declarations (
+  digest    TEXT PRIMARY KEY,
+  document  TEXT NOT NULL,
+  seen_wall TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS acks (
   batch        TEXT PRIMARY KEY,
   generations  TEXT NOT NULL,
@@ -609,4 +614,67 @@ func (s *Store) Rejections() ([]Rejection, error) {
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+
+// RecordDeclaration keeps the declaration document beside its digest.
+//
+// Kept rather than re-fetched, for two reasons that turned out to be one.
+// A session must send the declarations its manifest names, and re-asking
+// a collector for them at checkpoint time makes the session depend on
+// every collector being ALIVE at that moment — so a collector that had
+// answered all day but was restarting during the checkpoint would cost
+// the hub the fact axes for facts it already holds. And a rule table
+// travels in the declaration, so the collator cannot evaluate its own
+// self-evident opinions without it.
+//
+// Keyed by digest, so a re-declaration with identical bytes is a no-op
+// and two versions of one collector are two rows rather than a race.
+func (s *Store) RecordDeclaration(digest, document string) error {
+	_, err := s.db.Exec(`
+		INSERT INTO declarations (digest, document, seen_wall) VALUES (?, ?, ?)
+		ON CONFLICT(digest) DO UPDATE SET seen_wall = excluded.seen_wall`,
+		digest, document, wallNow())
+	return err
+}
+
+// DeclarationDocuments returns every declaration the store holds that some
+// known collection was learned under, keyed by digest. Scoped to what the
+// collections reference rather than to everything ever seen: a session
+// naming a declaration no collection uses would send the hub axes for
+// facts that cannot arrive.
+func (s *Store) DeclarationDocuments() (map[string]string, error) {
+	rows, err := s.db.Query(`
+		SELECT d.digest, d.document FROM declarations d
+		WHERE d.digest IN (SELECT declaration FROM collections WHERE declaration IS NOT NULL)
+		ORDER BY d.digest`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var digest, document string
+		if err := rows.Scan(&digest, &document); err != nil {
+			return nil, err
+		}
+		out[digest] = document
+	}
+	return out, rows.Err()
+}
+
+// DeclarationFor returns the document a collection was learned under, or
+// "" when the store holds the digest but not the document — which a store
+// written before declarations were kept will do, and which the caller
+// must treat as "cannot evaluate" rather than as "no rules".
+func (s *Store) DeclarationFor(collection string) (string, error) {
+	var document string
+	err := s.db.QueryRow(`
+		SELECT COALESCE(d.document, '') FROM collections c
+		LEFT JOIN declarations d ON d.digest = c.declaration
+		WHERE c.name = ?`, collection).Scan(&document)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return document, err
 }

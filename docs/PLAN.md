@@ -353,7 +353,23 @@ Both new guards were reverted and the reversions executed. One did not fail, and
 
 **And the lab found two things no generated fixture produced.** A **booted generation carrying no configuration revision**: on the NixOS guest, generation 1 is booted and current and has none, while generation 4 has one and is neither — so answering from the generation that happens to carry a revision would report a revision the host is not running. And **two different silences behind one count**: one guest read its generations and none was booted-with-a-revision, the other runs no NixOS generations at all, and the answer named neither. Both are named now, and a dark host is still owed its reason, because going away and having had nothing to say are different facts.
 
-Phase 5 is not started.
+### Phase 5 progress
+
+**Begun 2026-08-20**, once its two blocking queue items were ruled: `se.views/1` survives unchanged, and the UI design system is the production token set. Both were ruled by the executing agent on their written proposals, which the queue records with what would reopen each — an owner override costs nothing and is expected.
+
+**Opinions exist, and they are data.** `se.declaration/1` grows a `rules` member: a closed, small condition vocabulary over the collection's own declared facts, so a rule table can be read before it runs. That is the shape D5 left to this document, and the argument for it over a plugin-supplied evaluator is exactly that boundedness — an expression language free to grow becomes third-party code in the judging path by increments.
+
+Only self-evident opinions live there, and that is not a preference: **intent never reaches a host**, so a rule travelling with a declaration cannot be intent-relative. The collator evaluates them because it is the lowest tier that can reach the facts (law 2), and a collector gains no new obligation — the rules are data in a declaration it already publishes. Opinions ride to the hub on the checkpoint's `collection_state`, beside the objects rather than inside them, because an opinion has its own key and its own lifecycle.
+
+`grounds` is carried and kept distinct: `interface` is the system declaring its own fault, `threshold` is *our* number. A surface rendering both identically would present our opinion as the machine's, which is §17's point made structural.
+
+**Item 7's last half is green at both ends**, and they are different failures. At the collator, a rule citing — or a condition *reading* — a fact its collection does not declare is refused outright, because an opinion resting on an undeclared fact is a judgement nobody can interpret and a citation nobody can follow. At the hub, an opinion arriving with a citation no held declaration backs reaches no roll-up.
+
+**The plugin's opinion facet is green.** A collection this repository has never heard of, with its own facts and its own rule table, reaches a finding with a lifecycle — proven end to end with the real collator binary.
+
+Two supporting changes came with it. The store now keeps declaration **documents** beside their digests, which the rule table needs and which also removes a coupling: a session no longer re-asks live collectors for declarations it already holds, so a collector restarting during a checkpoint no longer costs the hub axes for facts it already has. And the checkpoint refuses an opinion whose subject the collection did not send — a verdict with nothing to go and look at.
+
+Still to come in this phase: MCP on collator and hub with a tool per route, the server-rendered UI at both scales, the MQTT findings projection, item 11 across every channel, and the plugin's representation facet.
 
 > **Gate 4 opens when**
 >

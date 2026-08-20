@@ -40,6 +40,11 @@ func AcquireOnce(ctx context.Context, st *store.Store, client *wire.Client) erro
 
 	// The generation is issued and durable BEFORE the request goes out:
 	// a crash from here on can only ever waste a number, never reuse one.
+	// Kept before the generations are issued, so the document is durable
+	// by the time any collection references its digest.
+	if err := st.RecordDeclaration(declHash, string(declBytes)); err != nil {
+		return fmt.Errorf("record declaration: %w", err)
+	}
 	issued, err := st.IssueGenerations(names, declHash)
 	if err != nil {
 		return fmt.Errorf("issue generations: %w", err)

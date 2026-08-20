@@ -83,6 +83,10 @@ type collectionStateRecord struct {
 	Collection string             `json:"collection"`
 	Generation uint64             `json:"generation"`
 	Objects    []checkpointObject `json:"objects"`
+	// Absent when the collection declares no rules; an empty array when it
+	// declares some and none fired. Different readings, so omitempty would
+	// be wrong — the pointer is what keeps them apart.
+	Opinions *[]Opinion `json:"opinions,omitempty"`
 }
 
 type terminalRecord struct {
@@ -184,9 +188,33 @@ func WriteCheckpoint(w io.Writer, st *store.Store, id, host, bootID string, gap 
 			}
 			objects = append(objects, co)
 		}
+		// Self-evident opinions, minted here because this is the lowest
+		// tier that can reach the facts (law 2). A declaration the store
+		// cannot produce yields no rules and no opinions member at all,
+		// which says "cannot evaluate" rather than "nothing is wrong".
+		var opinions *[]Opinion
+		document, err := st.DeclarationFor(cs.Name)
+		if err != nil {
+			return fmt.Errorf("read declaration for %s: %w", cs.Name, err)
+		}
+		rules, err := RulesFor(document, cs.Name)
+		if err != nil {
+			return fmt.Errorf("%s: %w", cs.Name, err)
+		}
+		if rules != nil {
+			fired := []Opinion{}
+			for _, o := range objects {
+				var facts map[string]any
+				if err := json.Unmarshal(o.Facts, &facts); err != nil {
+					continue
+				}
+				fired = append(fired, Judge(rules, o.ID, o.Instance, facts)...)
+			}
+			opinions = &fired
+		}
 		if err := enc.Encode(collectionStateRecord{
 			Record: "collection_state", Checkpoint: id, Collection: cs.Name,
-			Generation: cs.Generation, Objects: objects,
+			Generation: cs.Generation, Objects: objects, Opinions: opinions,
 		}); err != nil {
 			return fmt.Errorf("write state for %s: %w", cs.Name, err)
 		}
