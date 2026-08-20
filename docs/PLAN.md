@@ -402,6 +402,25 @@ Two supporting changes came with it. The store now keeps declaration **documents
 > The gap is not the eighteen unported collections above, and is worse than them: **on a collection that IS ported, the rewrite's page is a dump.** The shipping UI renders one fact per column, states what its default filter is hiding and offers to reveal it, facets by a fact's values, nests slices over their units, links a machine scope to the guest it runs and a docker scope to the container it holds, and reaches evidence and lookup from a row. The rewrite's page joins the facts into one cell with commas and truncates.
 >
 > Reopened rather than amended, because the clause as written is the right clause.
+>
+> **And the specification was never missing.** §27 and §28 already say what a surface owes, in detail, and `surface/render.py` implements almost none of it. This is not knowledge to be recovered from the shipping UI — it is the rewrite's own design document, ignored by the rewrite's own renderer. What §27 calls "rendering instructions" — a fact's type, unit, temperament, kind and origin — the renderer never reads.
+>
+> **The work list, each item against the rule it breaks:**
+>
+> | Owed | The rule it currently breaks |
+> |---|---|
+> | Columns from the collection's declared `answer` | §27: a row carries "the collection's declared `answer` facts, plus warn/critical verdicts", because "a table is scanned, not read. A row that carries everything carries nothing" |
+> | A fact's widget from its declaration | §28: "A fact's shape is a function of its declaration… the alternative is the renderer guessing." Every row of that table is unimplemented: enum chips, a boolean's two declared labels, one byte ladder, a counter's companion rate, a percent's denominator, a gauge's bound, a timestamp's relative age |
+> | **A list of uniform objects as a nested table** | §28, verbatim: "a structured value earns structure; comma-joining it destroys it" — which is exactly what the renderer does to every fact |
+> | The five render states kept apart | §28: "The most common rendering bug in this product's history is collapsing these into a blank cell." `absent`, `unobservable`, `declined` and `stale` have no rendering at all today |
+> | Prose and lists never clipped | §28: "a security statement is load-bearing text; truncating it changes what it says" — the firewall-rule inversion, reintroduced by CSS |
+> | The absent-severity mark distinct from a neutral one | SPEC §8: "a UI that renders absence as neutrality re-asserts the judgement the agent withheld" |
+> | Four distinct empty states | The shipping UI distinguishes unavailable / declined / acquisition-failed / honestly-empty; the rewrite's table renders an empty `<tbody>` for all four |
+> | Evidence one step from any fact | §27's third density, and §28: "Evidence is always one step from any fact, at any depth, in either axis" |
+> | Relations visibly distinct by observability | §27: "An asserted relation styled like a confirmed one is not a cosmetic bug. It is the founding failure re-entering through layer 6 after five other layers went to considerable trouble to prevent it" |
+> | Default hiding, with its four invariants | Not in DESIGN — this is the shipping UI's, and it is the one body of knowledge that genuinely has to be carried across rather than implemented from the spec |
+>
+> **Two things the port owes before the renderer can obey the spec.** A row needs its `type` to facet on and its `depth` to nest by; the shipping envelope carries both per item and `se.stream/1`'s `object` record carries neither. And the collections' declared `answer` lists were written independently of the shipping UI's argued column presets — compared route by route: **3 identical, 14 differing, 14 not ported** — so each divergence is a decision somebody should take rather than an accident to inherit.
 
 Phase 6 — the cut — is not started, and it is owner-supervised by its own rule.
 
