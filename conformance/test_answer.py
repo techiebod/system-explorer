@@ -198,3 +198,34 @@ def test_an_undeclared_revision_reaches_no_answer() -> None:
     answer = estate_current(view, estate, intent)
     assert not [b for b in answer["basis"] if b["kind"] == "observed"]
     assert answer["epistemic"] == "unknown"
+
+
+def test_a_dark_contributor_moves_freshness_and_not_coverage() -> None:
+    """Three axes, not two. A host that told us and then went dark has
+    covered its share of the question — its reading stands — and what
+    changed is that nobody is confirming it any more."""
+    answer_live, estate, intent, _ = build(
+        host("storage-1", "4f9c2e1"), host("edge-1", "4f9c2e1"))
+    assert answer_live["freshness"] == "current"
+    assert answer_live["epistemic"] == "complete"
+
+    estate.disconnected("edge-1")
+    declarations = Declarations()
+    for name in ("storage-1", "edge-1"):
+        declarations.add(name, NIX_DECLARATION, "sha256:nix")
+    dark = estate_current(assemble(estate, intent, declarations), estate, intent)
+    assert dark["freshness"] == "stale"
+    assert dark["epistemic"] == "complete", (
+        "folding staleness into coverage is the same merge the verdict and "
+        "epistemic split exists to prevent, one axis over"
+    )
+    assert "before going dark" in dark["answer"]
+    # And monotonicity still holds across the change.
+    assert VERDICT_RANK[dark["verdict"]] >= VERDICT_RANK[answer_live["verdict"]]
+    assert EPISTEMIC_RANK[dark["epistemic"]] >= EPISTEMIC_RANK[answer_live["epistemic"]]
+
+
+def test_a_host_with_no_reading_at_all_still_narrows_coverage() -> None:
+    answer, *_ = build(host("storage-1", "4f9c2e1"), host("edge-1", None))
+    assert answer["epistemic"] == "partial"
+    assert answer["verdict"] != "healthy"

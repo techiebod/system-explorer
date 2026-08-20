@@ -11,9 +11,14 @@ The derivation is §24's revision comparison: every host's deployment
 revision, held against each other. It is a hub derivation for the reason
 every hub derivation is one — no tier below can see a second host.
 
-**Health and knowledge are separate axes.** `verdict` says what the
-evidence says about the system; `epistemic` says how much of the question
-the evidence covered. Merging them corrupts both directions: an unknown
+**Health, knowledge and currency are three axes, not two.** `verdict`
+says what the evidence says about the system; `epistemic` says how much
+of the question the evidence covered; `freshness` says whether it is
+still being said. A host that told us and then went dark has covered its
+share of the question — its reading stands — and what changed is that
+nobody is confirming it any more. Folding that into `epistemic` would put
+staleness into the coverage axis, which is the same merge the first two
+axes exist to prevent, one axis over. Merging them corrupts both directions: an unknown
 estate becomes warning-level unhealthy, and a real defect gets softened
 because coverage was partial. So a dark host never moves the verdict — it
 makes the answer narrower, and saying so on a different axis is what lets
@@ -140,7 +145,17 @@ def estate_current(
 
     distinct = sorted(set(revisions.values()))
     answered = len(revisions)
-    unanswered = len(declined) + len(dark) + len(unswept)
+    # A host that has no reading at all is what narrows the question. A
+    # DARK host with a reading is a different case and belongs on a
+    # different axis: it told us, and then stopped, so the question is
+    # fully covered and the evidence is last-known rather than current.
+    # Counting it as unanswered would put staleness into `epistemic`,
+    # which is the same merge the verdict/epistemic split exists to
+    # prevent, one axis over.
+    unanswered = len(set(view.reach) - set(revisions))
+    stale_contributors = sorted(
+        host for host in revisions if view.reach.get(host) is Reach.DARK
+    )
 
     # Everything the estate could not account for. It bears on the VERDICT
     # here, and would not on a per-object question — see the module note
@@ -173,6 +188,10 @@ def estate_current(
     if unanswered:
         sentence += (
             f" {unanswered} of {len(view.reach)} declared hosts could not answer."
+        )
+    if stale_contributors:
+        sentence += (
+            f" {', '.join(stale_contributors)} last said so before going dark."
         )
     if view.coverage.unclassified:
         sentence += (
@@ -214,7 +233,10 @@ def estate_current(
         "answer": sentence,
         "verdict": verdict,
         "epistemic": epistemic,
-        "freshness": "current",
+        # Its own axis, and the one a dark contributor moves. Health is
+        # what the evidence says, epistemic is how much of the question it
+        # covered, and freshness is whether it is still being said.
+        "freshness": "stale" if stale_contributors else "current",
         "basis": basis,
         "reach": reach,
         "contributors": [f"nix/{COLLECTION}"],
