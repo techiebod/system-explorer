@@ -1506,29 +1506,38 @@ A problem domain is not a page template. It is an object, minted at the hub, wit
   "scope": "estate",
   "question": "are all hosts up to date?",
 
-  "answer": "No. edge-1 is four revisions behind. Two of five declared hosts could not answer — one dark since last night, one not a NixOS host — and a sixth candidate is discovered and unclassified.",
+  "answer": "No. The two hosts that could answer are running different configuration revisions. Three of five declared hosts could not answer — one dark since last night, one not a NixOS host, one never heard from since this hub started — and a sixth candidate is discovered and unclassified.",
 
   "verdict":   "degraded",
   "epistemic": "partial",
   "freshness": "current",
 
   "basis": [
-    {"claim":"the estate declares revision 41 current",
+    {"claim":"the estate declares five hosts",
      "kind":"declared", "origin":"intent@r41",
-     "value_as_read":41, "ref":"/hub/intent/r41#revision"},
+     "value_as_read":["storage-1","edge-1","nas-1","build-1","gw-1"],
+     "ref":"/hub/intent/r41#membership/hosts"},
 
-    {"claim":"edge-1's booted generation carries configuration revision 37",
-     "kind":"observed", "origin":"edge-1/nix/generations",
-     "value_as_read":"37",
+    {"claim":"storage-1's booted generation was built from configuration revision 4f9c2e1",
+     "kind":"observed", "origin":"storage-1/nix/generations",
+     "value_as_read":"4f9c2e1…",
      "batch":"01JC8M…", "generation":221,
      "evidence_digest":"sha256:9c40…", "canon":"jcs/1",
-     "from":"/generations/2/configurationRevision",
+     "from":"/generations/7/configurationRevision",
+     "ref":"/v1/nix/generations/generation:207"},
+
+    {"claim":"edge-1's booted generation was built from configuration revision 9ab31d0",
+     "kind":"observed", "origin":"edge-1/nix/generations",
+     "value_as_read":"9ab31d0…",
+     "batch":"01JC8P…", "generation":94,
+     "evidence_digest":"sha256:2be7…", "canon":"jcs/1",
+     "from":"/generations/3/configurationRevision",
      "ref":"/v1/nix/generations/generation:214"},
 
-    {"claim":"edge-1 is four revisions behind the estate's declared current",
-     "kind":"derived", "origin":"hub", "rule":"membership.revision-behind@1",
+    {"claim":"the estate is not running one configuration revision",
+     "kind":"derived", "origin":"hub", "rule":"membership.revision-divergence@1",
      "observability":"confirmed",
-     "consumed":["/hub/intent/r41#revision",
+     "consumed":["/v1/nix/generations/generation:207",
                  "/v1/nix/generations/generation:214"],
      "window":{"from":"2026-08-20T09:00:00Z","to":"2026-08-20T09:20:00Z","complete":true}}
   ],
@@ -1537,6 +1546,7 @@ A problem domain is not a page template. It is an object, minted at the hub, wit
     "consulted": ["storage-1/nix", "edge-1/nix"],
     "declined":  [{"host":"nas-1","collection":"nix/generations","reason":"unsupported"}],
     "dark":      [{"host":"build-1","since":"2026-08-19T23:41:07Z"}],
+    "unswept":   ["gw-1"],
     "coverage":  {"declared":["storage-1","edge-1","nas-1","build-1","gw-1"],
                   "discovered_not_declared":["gw-2"], "unclassified":["gw-2"],
                   "sources_readable":["tailnet-control-plane","link-layer"],
@@ -1547,7 +1557,7 @@ A problem domain is not a page template. It is an object, minted at the hub, wit
 }
 ```
 
-This is the question §23 opens with, in the shape that would have answered it correctly. The old product answered *yes* because every host it knew about was current; here the same true observation sits beside a coverage list naming a candidate nobody has classified, and the honest reading — right answer, incomplete question — is carried on `epistemic` rather than smuggled into `verdict`. `nas-1` declining `unsupported` is the other half of the same discipline: not a NixOS host, so it has no generation, which is a stated answer and not a gap.
+This is the question §23 opens with, in the shape that would have answered it correctly. The old product answered *yes* because every host it knew about agreed; here the comparison is the same one — §24's revision comparison, which is a derivation no tier below the hub can perform — but it arrives beside a coverage list naming a candidate nobody has classified, and the honest reading, *right answer to a question three hosts did not answer*, is carried on `epistemic` rather than smuggled into `verdict`. The three non-answers are three different claims and the schema keeps them apart: `nas-1` **declined** `unsupported` — not a NixOS host, so it has no generation, which is a stated answer rather than a gap; `build-1` is **dark**, having told this hub things and stopped; `gw-1` is **unswept**, never heard from since the hub started, which is a claim about the hub rather than about the host and is why it carries no `since`.
 
 **And the same object for a plugin's domain.** Everything in the basis below is supplied by the estate's `protection` plugin — its collections, its facts, its rule, and the intent stanza the rule reads — and the hub mints the answer exactly as it minted the one above, knowing nothing about backups.
 
