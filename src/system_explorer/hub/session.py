@@ -94,6 +94,40 @@ class Declarations:
     def holds(self, digest: str) -> bool:
         return digest in self._by_hash
 
+    def shape(self, host: str, collection: str) -> Mapping[str, Any] | None:
+        """The collection's declared shape, verbatim from its declaration.
+
+        The declarations travel up precisely because **the hub cannot
+        render or serve MCP without the fact axes**, and until now this
+        class exposed only the fact NAMES — so a renderer could tell that
+        a fact was declared and nothing about how to show it. The axes
+        were held all along, in `_by_hash`; what was missing was a way to
+        ask.
+
+        What a renderer needs and this returns: `answer`, the ordered
+        facts that answer the collection's question and therefore its
+        columns; each fact's `type`, `unit`, `labels`, `values` and
+        `sentence`; the `prefix` its ids are minted under; and the
+        `ceiling` that says how much it may hold.
+        """
+        for document in self._by_hash.values():
+            for candidate in document.get("collections") or ():
+                if candidate["name"] == collection and (
+                    (host, collection) in self._facts
+                ):
+                    return candidate
+        return None
+
+    def answer(self, host: str, collection: str) -> tuple[str, ...]:
+        """The declared columns, in the order the collection declares.
+
+        Empty when the hub holds no declaration for the pair — which is
+        NOT the same as a collection with no answer facts, and a caller
+        that renders an empty table for the first has hidden the second.
+        """
+        shape = self.shape(host, collection)
+        return tuple(shape.get("answer") or ()) if shape else ()
+
     def facts(self, host: str, collection: str) -> frozenset[str] | None:
         """The declared fact names, or None when the hub holds no
         declaration for this pair. None is not an empty set: one means

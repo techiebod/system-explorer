@@ -120,3 +120,47 @@ def test_one_hosts_declaration_is_not_anothers(samples) -> None:
     )
     assert held.declares("storage-1", "pools", "State")
     assert not held.declares("edge-1", "pools", "State")
+
+
+def test_the_hub_can_reach_the_axes_it_was_sent() -> None:
+    """Declarations travel up because the hub cannot render or serve MCP
+    without the fact axes. Holding them and exposing only the fact NAMES
+    is the same as not having them: a renderer could tell a fact was
+    declared and nothing about how to show it, which is how the estate
+    page ended up joining every fact into one cell."""
+    held = Declarations()
+    document = {
+        "schema": "se.declaration/1", "collector": "units", "version": "1.0.0",
+        "collections": [{
+            "name": "units", "question": "what is running?", "prefix": "unit",
+            "freshness": "60s", "perishability": "perishable",
+            "answer": ["ActiveState", "SubState", "Description"],
+            "ceiling": {"records": 4096, "bytes": 1048576},
+            "facts": {
+                "ActiveState": {"type": "enum", "values": ["active", "failed"],
+                                "temperament": "state", "kind": "observed",
+                                "discloses": "nothing", "sentence": "systemd's own word."},
+                "SubState": {"type": "string", "temperament": "state",
+                             "kind": "observed", "discloses": "nothing", "sentence": "."},
+                "Description": {"type": "string", "temperament": "configuration",
+                                "kind": "observed", "discloses": "content",
+                                "sentence": "."},
+            },
+        }],
+    }
+    held.add("storage-1", document, "sha256:u")
+
+    # The columns, in the declared order — not sorted, not invented.
+    assert held.answer("storage-1", "units") == (
+        "ActiveState", "SubState", "Description")
+
+    shape = held.shape("storage-1", "units")
+    assert shape["prefix"] == "unit"
+    assert shape["ceiling"]["records"] == 4096
+    assert shape["facts"]["ActiveState"]["values"] == ["active", "failed"]
+    assert shape["facts"]["ActiveState"]["sentence"] == "systemd's own word."
+
+    # And a pair nobody declared reaches nothing, which a caller must not
+    # render as a collection that declared no columns.
+    assert held.answer("edge-1", "units") == ()
+    assert held.shape("edge-1", "units") is None
