@@ -253,3 +253,34 @@ def test_a_peer_that_closes_before_identifying_itself() -> None:
     assert not thread.is_alive(), "the peer session did not end when the peer left"
     b.close()
     assert result and result[0].reason == "no-handshake"
+
+
+def test_a_peer_that_vanishes_mid_exchange_is_a_departure_not_a_crash() -> None:
+    """A reset and an orderly close mean the same thing to a hub, and the
+    platform decides which one it sees. CI on Linux caught this where
+    darwin could not: an unhandled reset killed the serving thread, which
+    would lose the estate view to a sibling's reboot.
+
+    Forced here rather than hoped for: SO_LINGER with a zero timeout makes
+    close() send RST, so both platforms take the reset path.
+    """
+    import socket as _socket
+    import struct
+    import threading
+
+    a, b = _socket.socketpair()
+    result: list[object] = []
+
+    def serve_b():
+        with b.makefile("rb") as bi, b.makefile("wb") as bo:
+            result.append(peer_session(bi, bo, offer("site-b", intent_for()),
+                                       "site-b", answer=lambda r: {}))
+
+    thread = threading.Thread(target=serve_b)
+    thread.start()
+    a.setsockopt(_socket.SOL_SOCKET, _socket.SO_LINGER, struct.pack("ii", 1, 0))
+    a.close()
+    thread.join(timeout=10)
+    assert not thread.is_alive(), "the serving thread must not die on a reset"
+    assert result and result[0].reason == "no-handshake"
+    b.close()

@@ -248,13 +248,37 @@ def peer_session(
 
 
 def _write(stream, record: Mapping[str, Any]) -> None:
+    """Write one record, treating a vanished peer as a vanished peer.
+
+    A sibling that goes away mid-exchange is ordinary on a real network,
+    and the transport reports it differently depending on the platform
+    and on how the far side left: an orderly close surfaces as EOF, an
+    abrupt one as a reset. Both mean the same thing here, so both are
+    swallowed and the caller finds out on the next read.
+    """
     line = (json.dumps(record, separators=(",", ":")) + "\n").encode("utf-8")
-    stream.write(line)
-    stream.flush()
+    try:
+        stream.write(line)
+        stream.flush()
+    except (BrokenPipeError, ConnectionResetError, ValueError, OSError):
+        return
 
 
 def _read(stream) -> dict[str, Any] | None:
-    raw = stream.readline()
+    """One record, or None when the peer is gone.
+
+    **A reset is a departure, not a crash.** Found by CI on Linux, 2026-08-20:
+    a peer that closes without a handshake makes `readline` return empty on
+    darwin and raise ConnectionResetError on linux, and the unhandled raise
+    killed the serving thread rather than reporting the sibling gone. A hub
+    whose federation thread dies on an ordinary reset would lose the estate
+    view to a sibling's reboot — the same shape as absence being reported as
+    health, one layer down.
+    """
+    try:
+        raw = stream.readline()
+    except (ConnectionResetError, ConnectionAbortedError, TimeoutError, ValueError, OSError):
+        return None
     if not raw:
         return None
     return json.loads(raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else raw)
