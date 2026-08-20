@@ -149,7 +149,7 @@ The unevenness is the design. A lab where every guest had everything would test 
 
 The second blocker was the seam, and it was the real one: **ten of the seventeen unported adapters have no module-level acquisition at all**, so the monkeypatch the harness had could not reach them. Three seam kinds now cover the fleet — argument-dispatched module readers, instance methods, and instance methods returning an HTTP response — all deny-by-default, all proven on real captures.
 
-**Captured and replaying: `vms`, `packages`, `docker`, `traefik`.** traefik's pair is committed — the first capture this product has taken from an HTTP interface, and it found a null fact value on three of three services the moment it ran. `docker`'s payloads are captured and held OUT of the tree until its scrub manifest classifies them: its documents carry real MACs and host mount paths, and the deny-by-default walk is refusing an imperfect manifest, which is the gate working rather than an obstacle to route around.
+**Captured and replaying: `vms`, `packages`, `docker`, `traefik`.** traefik's pair is committed — the first capture this product has taken from an HTTP interface, and it found a null fact value on three of three services the moment it ran. `docker`'s payloads were captured and held OUT of the tree until its scrub manifest classified them: its documents carry real MACs and host mount paths, and the deny-by-default walk refused an imperfect manifest, which was the gate working rather than an obstacle to route around. `corpus/docker/healthy` landed once the manifest passed.
 
 **GATE 3 IS OPEN, 2026-08-20.** Every clause of the criterion below is met and
 each was measured rather than argued:
@@ -186,6 +186,18 @@ run the thing they read.
 **What the gate does NOT claim**, stated because a clean report invites the
 wrong reading: not that the collectors are correct, only that two independent
 implementations reading one machine at one moment agree.
+
+**And the census changed hours after the gate opened, without the gate moving.**
+The ruling recorded in DESIGN's appendix C on 2026-08-20 — anything an estate
+generates that is not normal NixOS or Linux stays out of the public product —
+moves the whole `protection` collector to an estate plugin and `nix`'s
+`Deployment` fact with it. Going forward the count is **nineteen first-party
+collectors and one estate-bound**, and `Deployment` joins `nix`'s five delta
+facts as a named divergence until the estate sequences it out. None of that is
+retracted from the paragraphs above: twenty were ported and nineteen judged
+clean on two hosts, which is what was measured, and a ruling taken after a
+measurement does not unmake it. The gate is open on the evidence it was opened
+on; what follows it is a smaller product, not a weaker claim.
 
 **Where gate 3 stood earlier on 2026-08-19.** The parity report
 (`docs/PARITY-REPORT.md`) is **clean — 18 of 18**, up from 8 this morning. Two
@@ -250,6 +262,27 @@ two sessions to mean this repository would build both. So `_delta_rows`,
 `_aggregate_rows` and the /etc collapse and enumerate ceilings leave the
 rewrite's scope rather than sitting inside it as debt.
 
+**Later the same day that ruling generalised, and it took a larger collector
+with it.** Anything an estate generates that is not normal NixOS or Linux stays
+out of the public product — which moves the whole `protection` collector, three
+collections and forty facts, and `nix`'s `Deployment` fact. `se-generation.json`
+stays. The ruling and its measurements are in DESIGN's appendix C; what belongs
+here is the consequence for sequencing, because **a plugin defines four layers
+and this plan owed an owner for each of them.**
+
+| Facet a plugin needs | State | Owed by |
+|---|---|---|
+| observations — `collect` over the socket, the declaration travelling with the binary | exists, by construction | done |
+| identities — the object prefixes it claims | exists | done |
+| intent — somewhere for a hub-tier plugin to declare what should be true | `se.intent/1` enumerates one estate's stanza and closes the document | **phase 4**, where intent lands |
+| opinions — a way to say what makes a published fact alarming | no member of a declaration is a rule | **phase 5**, where opinions first exist to be judged |
+| representation — a state word or severity the product does not know | a lint-enforced literal in `app.js` that no endpoint publishes | **phase 5**, with the surfaces |
+| conformance — corpus, mutation guard and comparator entry for a plugin's own facts | the harness is public, not packaged for outside use | **phase 6**, at the cut, or the estate inherits facts nothing judges |
+
+Recorded because the sentence above it — "system-explorer owes only the SURFACE
+a plugin attaches to" — named an owner for the plugin and none for the surface,
+which is the same defect one level up from the one it corrected.
+
 **That produces a named parity divergence, which is the third clause working
 rather than being waived.** The shipping adapter keeps emitting
 `ComparedWithGeneration`, `DeltaCounts` and their siblings until the cut,
@@ -289,11 +322,13 @@ smaller transcription than the deferral assumed.
 
 ### Phase 4 — hub and protocol (medium)
 
-The Python hub evolves: the connection reverses (collator dials in), checkpoint protocol with manifest and atomic promotion, `unswept` and the freeze, declarations travelling up, findings re-keyed to the new scope with the reset displayed. The intent declaration and hash federation land, tested with **two guests as two sites** — including the NAT-mode dial direction. First problem-domain object assembled end to end.
+The Python hub evolves: the connection reverses (collator dials in), checkpoint protocol with manifest and atomic promotion, `unswept` and the freeze, declarations travelling up, findings re-keyed to the new scope with the reset displayed. The intent declaration and hash federation land, tested with **two guests as two sites** — including the NAT-mode dial direction. Intent grows its plugin-supplied stanza, per the table above. First problem-domain object assembled end to end — **`are all hosts up to date`**, the first founding failure's own question, worked in full in DESIGN §25; the protection answer beside it there is a plugin's and not this phase's to assemble.
+
+**Begun 2026-08-20**, the day gate 3 opened. `contract/se.checkpoint.1.json` landed with its eighteen rejection cases and the three-record worked example in DESIGN §06 — the wire meaning of a complete checkpoint, which is what the crash suite in the gate below is judged against. Nothing else in this phase is started, and no gate-4 clause is met yet.
 
 > **Gate 4 opens when**
 >
-> items 9 and 10 pass · **item 1's hub half** — two instances with identical native names never merge across two collators either · **item 6's hub half** — cross-host re-testing against intent, where `resolved-later` stops being one collator's two batches · **item 7's roll-up half** — an undeclared fact reaches no roll-up · the checkpoint crash suite is green · a two-guest estate renders one coherent view with reach and coverage stated.
+> items 9 and 10 pass · **item 1's hub half** — two instances with identical native names never merge across two collators either · **item 6's hub half** — cross-host re-testing against intent, where `resolved-later` stops being one collator's two batches · **item 7's roll-up half** — an undeclared fact reaches no roll-up · the checkpoint crash suite is green · a two-guest estate renders one coherent view with reach and coverage stated · the intent declaration validates a stanza this repository's schema does not enumerate, so a hub-tier plugin has somewhere to declare intent.
 
 ### Phase 5 — surfaces (medium, parallel)
 
@@ -301,7 +336,7 @@ Server-rendered HTML/CSS UI at both scales from one token system; MCP on collato
 
 > **Gate 5 opens when**
 >
-> item 11 across every channel including UI, MCP and MQTT · **item 7's last half** — an undeclared fact reaches no opinion and no answer, judgeable only once opinions and the answer surfaces exist · MCP-parity check · UI smoke on both scales.
+> item 11 across every channel including UI, MCP and MQTT · **item 7's last half** — an undeclared fact reaches no opinion and no answer, judgeable only once opinions and the answer surfaces exist · MCP-parity check · UI smoke on both scales · **the plugin's two remaining facets** — an opinion declared by a collector this repository does not ship reaches a finding, and a plugin either speaks the product's severity and state vocabulary by stated rule or those enums are published and `app.js` stops keeping a copy no endpoint serves.
 
 ### Phase 6 — the cut (small, supervised)
 
