@@ -58,6 +58,8 @@ type objectView struct {
 func NewHandler(st *store.Store, now func() float64, bootID string) http.Handler {
 	mux := http.NewServeMux()
 
+	registerPage(mux, st, now, bootID)
+
 	mux.HandleFunc("GET /v1/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]bool{"ok": true})
 	})

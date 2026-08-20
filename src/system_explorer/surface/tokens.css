@@ -1,0 +1,119 @@
+/* The design system, carried forward (DESIGN appendix C, ruled 2026-08-20).
+
+   The palette, type scale, spacing and chips below are the ones the
+   shipping UI already uses. They are THE library: no external framework,
+   because the phase that would adopt one is the same phase that has to
+   render two scales from a single token set, and importing somebody
+   else's vocabulary is the moment the product stops owning its own.
+
+   Colour is SEMANTIC only. --ok / --warn / --crit carry an opinion's
+   level and nothing else; there is no decorative colour here, and a
+   renderer that reached for --accent to mean "bad" would be inventing a
+   second severity vocabulary beside the declared one.
+
+   Both scales — the collator's host page and the hub's estate page —
+   serve this one file. Two renderers, one token set, which is the whole
+   of what "one design system" is allowed to mean. */
+
+:root {
+  --bg:        #0e1116;
+  --panel:     #141922;
+  --panel-2:   #1a212c;
+  --border:    #232b37;
+  --border-2:  #2d3745;
+  --text:      #d9e1ea;
+  --text-dim:  #8a97a6;
+  --text-faint:#5c6875;
+  --ident:     #c7d3e2;
+  --accent:    #6aa1ff;
+  --accent-bg: rgba(106,161,255,.10);
+  --ok:        #55b98a;
+  --warn:      #e0b640;
+  --crit:      #ef6d6d;
+  --sel:       rgba(106,161,255,.14);
+  --shadow:    0 8px 28px rgba(0,0,0,.45);
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+:root[data-theme="light"] {
+  --bg:        #f4f6f9;
+  --panel:     #ffffff;
+  --panel-2:   #eef1f5;
+  --border:    #dde3ea;
+  --border-2:  #cbd4de;
+  --text:      #1c2530;
+  --text-dim:  #5b6877;
+  --text-faint:#93a0ae;
+  --ident:     #253141;
+  --accent:    #2f6fdb;
+  --accent-bg: rgba(47,111,219,.09);
+  --ok:        #218a5f;
+  --warn:      #a97d0a;
+  --crit:      #c94a4a;
+  --sel:       rgba(47,111,219,.10);
+  --shadow:    0 8px 28px rgba(30,40,60,.12);
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f4f6f9; --panel: #ffffff; --panel-2: #eef1f5;
+    --border: #dde3ea; --border-2: #cbd4de;
+    --text: #1c2530; --text-dim: #5b6877; --text-faint: #93a0ae;
+    --ident: #253141; --accent: #2f6fdb; --accent-bg: rgba(47,111,219,.09);
+    --ok: #218a5f; --warn: #a97d0a; --crit: #c94a4a;
+    --sel: rgba(47,111,219,.10); --shadow: 0 8px 28px rgba(30,40,60,.12);
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 13px/1.45 var(--sans);
+  -webkit-font-smoothing: antialiased;
+  padding: 1.5rem;
+}
+h1, h2, h3 { font-weight: 600; margin: 0 0 .5rem; text-wrap: balance; }
+h1 { font-size: 1.4rem; }
+h2 { font-size: 1.05rem; margin-top: 1.75rem; }
+a { color: var(--accent); }
+main { max-width: 72rem; margin: 0 auto; }
+
+.ident { font-family: var(--mono); color: var(--ident); }
+.dim   { color: var(--text-dim); }
+.faint { color: var(--text-faint); }
+
+.panel {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 6px; padding: 1rem; margin-bottom: 1rem;
+}
+
+/* Wide content scrolls inside its own container so the page body never
+   scrolls sideways. */
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid var(--border); }
+th { color: var(--text-dim); font-weight: 500; }
+td.num { font-variant-numeric: tabular-nums; text-align: right; }
+
+/* Chips carry state in FORM as well as in words, so what needs attention
+   reads at a glance rather than being counted. */
+.chip {
+  display: inline-block; padding: .05rem .45rem; border-radius: 999px;
+  border: 1px solid var(--border-2); font-size: 11.5px;
+  background: var(--panel-2); color: var(--text-dim);
+}
+.chip.info { border-color: var(--border-2); }
+.chip.warn { border-color: var(--warn); color: var(--warn); }
+.chip.critical { border-color: var(--crit); color: var(--crit); }
+.chip.ok { border-color: var(--ok); color: var(--ok); }
+
+/* Grounds is a separate axis from level, and it is rendered as one: an
+   opinion resting on OUR threshold must never look like the machine
+   declaring its own fault (DESIGN 17). */
+.grounds { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
+.grounds.threshold { color: var(--warn); }
+.grounds.interface { color: var(--text-dim); }
+
+.reach { display: flex; flex-wrap: wrap; gap: .4rem; margin: .5rem 0; }
+.answer { font-size: 1.05rem; margin: .25rem 0 .75rem; }
+footer { margin-top: 2rem; color: var(--text-faint); font-size: 11.5px; }

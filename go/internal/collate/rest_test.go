@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/techiebod/system-explorer/go/internal/store"
@@ -318,5 +319,85 @@ func TestTwoInstancesAreDistinguishableOnTheWire(t *testing.T) {
 	}
 	if rows[1]["instance"] != "radarr" {
 		t.Fatalf("named instance must serialise as its name, got %v", rows[1]["instance"])
+	}
+}
+
+// The host page: the collator's own scale of the UI. It must answer
+// whether or not a hub is reachable, which is the founding invariant.
+func TestHostPageRendersWithoutAHub(t *testing.T) {
+	st := seeded(t)
+	rr := get(t, NewHandler(st, func() float64 { return 26.0 }, fakeBootID), "/")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("%d", rr.Code)
+	}
+	body := rr.Body.String()
+	for _, want := range []string{"<!doctype html>", "This host", "identity", "--ok:"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("page is missing %q", want)
+		}
+	}
+	if !strings.Contains(rr.Header().Get("Content-Security-Policy"), "default-src 'none'") {
+		t.Fatal("the page carries no script and the header must say so")
+	}
+	if strings.Contains(body, "<script") {
+		t.Fatal("server-rendered means no script, structurally")
+	}
+}
+
+func TestHostPageEscapesWhatItDidNotWrite(t *testing.T) {
+	st := openStore(t)
+	if _, err := st.IssueGenerations([]string{"identity"}, "sha256:test"); err != nil {
+		t.Fatal(err)
+	}
+	hostile := `<script>alert("x")</script>`
+	if _, err := st.ApplyCommit("identity", store.HostNative, 1, "b1", fakeBootID,
+		[]store.Object{{ID: "identity:h", Name: hostile,
+			Facts: json.RawMessage(`{"OsId":"` + `nixos` + `"}`), At: 10}}); err != nil {
+		t.Fatal(err)
+	}
+	body := get(t, NewHandler(st, func() float64 { return 26.0 }, fakeBootID), "/").Body.String()
+	if strings.Contains(body, "<script>alert") {
+		t.Fatal("facts carry text this product did not write; a page that trusted " +
+			"it would turn a read-only observer into a delivery mechanism")
+	}
+}
+
+func TestHostPageSaysWhenNothingCouldJudge(t *testing.T) {
+	// A collection whose declaration the store cannot produce is UNJUDGED,
+	// and unjudged must not render the same as clean.
+	st := seeded(t)
+	body := get(t, NewHandler(st, func() float64 { return 26.0 }, fakeBootID), "/").Body.String()
+	if !strings.Contains(body, "no rule table could be read") {
+		t.Fatalf("unobservable and healthy must not render the same:\n%s", body[:400])
+	}
+}
+
+func TestHostPageShowsOpinionsWithTheirGrounds(t *testing.T) {
+	st := openStore(t)
+	document := declWithRules(`[{"key":"pool-degraded","level":"critical",
+	 "grounds":"interface","when":{"fact":"State","equals":"degraded"},
+	 "sentence":"ZFS reports this pool degraded.","cites":["State"]}]`)
+	digest := "sha256:pools"
+	if err := st.RecordDeclaration(digest, document); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.IssueGenerations([]string{"pools"}, digest); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.ApplyCommit("pools", store.HostNative, 1, "b1", fakeBootID,
+		[]store.Object{{ID: "pools:tank", Name: "tank",
+			Facts: json.RawMessage(`{"State":"degraded"}`), At: 10}}); err != nil {
+		t.Fatal(err)
+	}
+	body := get(t, NewHandler(st, func() float64 { return 26.0 }, fakeBootID), "/").Body.String()
+	if !strings.Contains(body, "ZFS reports this pool degraded.") {
+		t.Fatal("the sentence comes from the declaration, and must reach the page")
+	}
+	if !strings.Contains(body, `class="grounds interface"`) {
+		t.Fatal("grounds is its own axis: our threshold must never look like the " +
+			"machine declaring its own fault")
+	}
+	if !strings.Contains(body, `class="chip critical"`) {
+		t.Fatal("the level comes from the rule table")
 	}
 }
