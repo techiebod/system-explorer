@@ -330,7 +330,11 @@ The Python hub evolves: the connection reverses (collator dials in), checkpoint 
 
 Two findings came out of building it, both recorded where they were found. **Acceptance item 1 had a hole one tier below the tier it was tested at**: two instances mint the same id, the store kept them apart by scope, and the read API dropped the scope — so both rows reached a consumer identical. Gate 3 claimed item 1's collator half on the store's own test, which was true and did not reach the serving path. Fixed, and the checkpoint carries `instance` for the same reason. And **a manifest that under-reports is invisible to every receiver-side check**, found by reverting the emitter: the manifest is the only account of what the sender declares, so it makes the *stream's* completeness falsifiable and never its own. DESIGN §06 says so now, and the rule lives beside the store that knows the answer.
 
-Still to come in this phase: the dial itself, `unswept` and the freeze wired into findings, declarations travelling up, findings re-keyed, intent and hash federation on two guests, and the first problem-domain object.
+**The freeze holds, which is the rest of item 9.** Absence only resolves where the host could look, carried forward from the shipping hub's own rule and given the state the new architecture adds. Six blindnesses, each stated separately because an operator reading a frozen finding has to know which silence they are looking at: unswept, dark, a stale collection, a collection the collator no longer names, one that has never applied, and evidence that has not moved since the finding was raised. That last one is the guard against a changed *rule* quietly resolving findings over facts that never changed. A finding carries every contributor rather than one batch id, so two of three inputs returning resolves nothing — which a single id could not have expressed.
+
+Both new guards were reverted and the reversions executed. One did not fail, and the reason was worth having: the unswept check was written twice by two routes to the same condition, so no reversion of either could falsify it. Deduplicated, and the second attempt fails three tests including item 9's own.
+
+Still to come in this phase: the dial itself, the freeze wired into a findings registry, declarations travelling up, findings re-keyed with the reset displayed, intent and hash federation on two guests, and the first problem-domain object.
 
 > **Gate 4 opens when**
 >
