@@ -69,6 +69,12 @@ class Declarations:
 
     _by_hash: dict[str, Mapping[str, Any]] = field(default_factory=dict, init=False)
     _facts: dict[tuple[str, str], frozenset[str]] = field(default_factory=dict, init=False)
+    #: (host, collection) -> fact -> what the value tells a reader. Kept
+    #: because `secret` is a credential the wire must never carry, and a
+    #: hub that trusted every collector to have withheld it at source
+    #: would be trusting code this repository does not ship.
+    _discloses: dict[tuple[str, str], dict[str, str]] = field(
+        default_factory=dict, init=False)
 
     def add(self, host: str, document: Mapping[str, Any], digest: str) -> None:
         if document.get("schema") != "se.declaration/1":
@@ -79,9 +85,11 @@ class Declarations:
             )
         self._by_hash[digest] = document
         for collection in document.get("collections") or ():
-            self._facts[(host, collection["name"])] = frozenset(
-                (collection.get("facts") or {}).keys()
-            )
+            facts = collection.get("facts") or {}
+            self._facts[(host, collection["name"])] = frozenset(facts)
+            self._discloses[(host, collection["name"])] = {
+                name: (spec or {}).get("discloses", "") for name, spec in facts.items()
+            }
 
     def holds(self, digest: str) -> bool:
         return digest in self._by_hash
@@ -96,6 +104,17 @@ class Declarations:
     def declares(self, host: str, collection: str, fact: str) -> bool:
         declared = self.facts(host, collection)
         return declared is not None and fact in declared
+
+    def secret(self, host: str, collection: str, fact: str) -> bool:
+        """Whether the declaration says this value is a credential.
+
+        `secret` means withheld at source and never emitted, so one
+        arriving here is already a collector misbehaving — which is
+        exactly why the hub checks rather than assumes. A plugin is code
+        this repository does not ship, and defence that only works when
+        everybody behaves is not defence.
+        """
+        return self._discloses.get((host, collection), {}).get(fact) == "secret"
 
 
 @dataclass

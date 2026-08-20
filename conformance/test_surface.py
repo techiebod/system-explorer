@@ -199,3 +199,57 @@ def test_both_scales_serve_one_token_set() -> None:
         "the collator's embedded token set has drifted from the canonical one; "
         "two design systems is what 'one token set' was ruled against"
     )
+
+
+def test_a_plugins_own_state_word_renders_with_no_code_change() -> None:
+    """The representation facet, structurally. The renderer switches on
+    nothing, so a vocabulary this repository has never seen reaches the
+    page the day a plugin publishes it."""
+    view, answer = built(
+        [{"id": "widgets:left", "name": "left", "instance": None,
+          "facts": {"State": "wobbling-badly"}}])
+    html = render.estate_page(view, answer, [])
+    assert "wobbling-badly" in html
+
+
+def test_a_plugin_cannot_introduce_a_severity() -> None:
+    """The other half: bound by the contract rather than by convention.
+    A rule's level $refs the closed vocabulary, so this is a schema
+    refusal and not a rendering one."""
+    import json as _json
+    from pathlib import Path as _Path
+
+    from jsonschema import Draft202012Validator
+    from referencing import Registry, Resource
+
+    contract = _Path(__file__).resolve().parent.parent / "contract"
+    registry = Registry()
+    for path in sorted(contract.glob("*.json")):
+        schema = _json.loads(path.read_text())
+        registry = registry.with_resource(schema["$id"], Resource.from_contents(schema))
+    validator = Draft202012Validator(
+        _json.loads((contract / "se.declaration.1.json").read_text()), registry=registry)
+
+    document = {
+        "schema": "se.declaration/1", "collector": "widgets", "version": "1.0.0",
+        "collections": [{
+            "name": "widgets", "question": "q", "prefix": "widget",
+            "freshness": "60s", "perishability": "perishable", "answer": ["Spin"],
+            "facts": {"Spin": {"type": "integer", "temperament": "gauge",
+                               "kind": "observed", "discloses": "nothing",
+                               "sentence": "."}},
+            "rules": [{"key": "k", "level": "apocalyptic", "grounds": "interface",
+                       "when": {"fact": "Spin", "at_most": 1}, "sentence": "s",
+                       "cites": ["Spin"]}],
+            # Every collection must state its disclosure posture — a
+            # plugin's included. Discovered by writing this test without
+            # one and being refused, which is the contract working.
+            "redaction_exemption": "Widget telemetry holds no credential.",
+        }],
+    }
+    assert any(e.json_path.endswith("level") for e in validator.iter_errors(document)), (
+        "a plugin inventing a severity would give the product a level no "
+        "surface knows how to rank"
+    )
+    document["collections"][0]["rules"][0]["level"] = "critical"
+    assert not list(validator.iter_errors(document))

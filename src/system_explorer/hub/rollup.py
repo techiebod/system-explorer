@@ -58,6 +58,10 @@ class EstateRow:
     #: Facts refused for having no declared axis, named per member so the
     #: reason can be shown beside the row rather than recomputed.
     undeclared: tuple[str, ...] = ()
+    #: Facts the declaration marks as credentials. NAMED and not carried:
+    #: an operator must be able to see that a value was withheld rather
+    #: than conclude it was absent, and the name is not the secret.
+    withheld: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -84,16 +88,24 @@ class EstateView:
 
 def _declared_facts(
     declarations: Declarations, host: str, collection: str, facts: Mapping[str, Any]
-) -> tuple[dict[str, Any], list[str]]:
+) -> tuple[dict[str, Any], list[str], list[str]]:
     axes = declarations.facts(host, collection)
     if axes is None:
         # Nobody has declared this pair at all. Every fact is refused, and
         # the whole set is named: "no declaration" and "no facts declared"
         # are different states and this is the first.
-        return {}, sorted(facts)
-    kept = {name: value for name, value in facts.items() if name in axes}
+        return {}, sorted(facts), []
+    # A value the declaration calls a credential is dropped before it can
+    # reach any channel — page, route, tool or broker. It should never
+    # have been emitted; the hub checking anyway is what makes that true
+    # of collectors this repository does not ship.
+    withheld = sorted(
+        name for name in facts
+        if name in axes and declarations.secret(host, collection, name))
+    kept = {name: value for name, value in facts.items()
+            if name in axes and name not in withheld}
     refused = sorted(name for name in facts if name not in axes)
-    return kept, refused
+    return kept, refused, withheld
 
 
 def assemble(
@@ -140,14 +152,14 @@ def assemble(
                     kind = next(
                         (o.kind for o in intent.objects if o.id == estate_id), None
                     )
-                kept, refused = _declared_facts(
+                kept, refused, withheld = _declared_facts(
                     declarations, host, collection, obj.get("facts") or {}
                 )
                 if row_id not in grouped:
                     order.append(row_id)
                     grouped[row_id] = {
-                        "kind": kind, "scoped": scoped,
-                        "members": [], "facts": {}, "undeclared": set(),
+                        "kind": kind, "scoped": scoped, "members": [], "facts": {},
+                        "undeclared": set(), "withheld": set(),
                     }
                 entry = grouped[row_id]
                 entry["members"].append(
@@ -156,6 +168,7 @@ def assemble(
                 )
                 entry["facts"].update(kept)
                 entry["undeclared"].update(refused)
+                entry["withheld"].update(withheld)
 
     rows = tuple(
         EstateRow(
@@ -165,6 +178,7 @@ def assemble(
             members=tuple(grouped[row_id]["members"]),
             facts=dict(grouped[row_id]["facts"]),
             undeclared=tuple(sorted(grouped[row_id]["undeclared"])),
+            withheld=tuple(sorted(grouped[row_id]["withheld"])),
         )
         for row_id in sorted(order)
     )

@@ -71,6 +71,7 @@ def table(view_of: Callable[[], Any]) -> tuple[Route, ...]:
         return {"objects": [
             {"id": row.id, "estate_scoped": row.estate_scoped,
              "facts": dict(row.facts), "undeclared": list(row.undeclared),
+             "withheld": list(row.withheld),
              "members": [{"host": m.host, "collection": m.collection,
                           "object": m.object_id, "instance": m.instance}
                          for m in row.members]}
@@ -79,7 +80,8 @@ def table(view_of: Callable[[], Any]) -> tuple[Route, ...]:
     def collection(host: str, name: str) -> Any:
         state = view_of()
         return {"objects": [
-            {"id": row.id, "facts": dict(row.facts), "undeclared": list(row.undeclared)}
+            {"id": row.id, "facts": dict(row.facts), "undeclared": list(row.undeclared),
+             "withheld": list(row.withheld)}
             for row in state.view.rows
             for m in row.members if m.host == host and m.collection == name]}
 

@@ -164,10 +164,17 @@ def rows_panel(rows: Iterable[Any]) -> str:
             f'<div class="faint">no declared axis: {", ".join(_e(f) for f in row.undeclared)}</div>'
             if row.undeclared else ""
         )
+        # Named, never valued. An operator must be able to tell a withheld
+        # credential from an absent fact, and the NAME is not the secret.
+        held = (
+            f'<div class="faint">withheld (declared secret): '
+            f'{", ".join(_e(f) for f in row.withheld)}</div>'
+            if row.withheld else ""
+        )
         body.append(
             f'<tr><td class="ident">{_e(row.id)}</td>'
             f'<td>{_chip("estate" if row.estate_scoped else "host")}</td>'
-            f"<td>{facts}{refused}</td></tr>"
+            f"<td>{facts}{refused}{held}</td></tr>"
         )
     return (
         '<section class="panel"><h2>Objects</h2><div class="scroll"><table>'
