@@ -9,8 +9,9 @@ where they disagree, the document wins and these get fixed.
 | `se.vocabularies.1.json` | the closed vocabularies every other schema draws on | appendix A |
 | `se.declaration.1.json` | a collector's static declaration | 19 |
 | `se.stream.1.json` | one NDJSON record of a collect batch | 19 |
-| `se.intent.1.json` | the estate's intent declaration | 21 |
-| `se.answer.1.json` | a problem-domain answer | 24 |
+| `se.intent.1.json` | the estate's intent declaration | 22 |
+| `se.answer.1.json` | a problem-domain answer | 25 |
+| `se.checkpoint.1.json` | one record of a collator-to-hub checkpoint | 06 |
 
 Rules, from the document:
 
