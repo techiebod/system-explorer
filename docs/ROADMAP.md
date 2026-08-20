@@ -1,18 +1,25 @@
 # System Explorer — Roadmap
 
-**Status:** Accepted direction
+**Status:** SUPERSEDED 2026-08-20 for direction; still current for the shipping product
 **Date:** 2026-08-09
 **Contract:** [SPEC.md](SPEC.md) — authoritative for current behaviour
+**Superseded by:** [DESIGN.md](DESIGN.md) and [PLAN.md](PLAN.md)
 
 The demand signal behind this roadmap is a running backlog of questions the
 observer could not yet answer. It is kept privately with the deployment that
 raised them, because each entry cites a specific host and its evidence;
 findings graduate into this file once they are general.
 
-This file is the single statement of where the product is and where it goes
-next. It condenses and supersedes the original implementation plan and the
-long-form vision; when this roadmap and the code disagree, fix whichever is
-wrong the same day.
+This file condenses and supersedes the original implementation plan and the
+long-form vision, and it was the single statement of where the product goes
+next until 2026-08-20. **It is no longer that.** A three-tier rewrite is under
+way; [DESIGN.md](DESIGN.md) is the record of intent and outranks every other
+artefact here, and [PLAN.md](PLAN.md) holds its phases and gates. What remains
+true below is the account of the product **as shipped** and the reasoning that
+produced it — where this file and the code disagree about today, fix whichever
+is wrong the same day; where it and DESIGN disagree about the future, DESIGN
+wins and this file is not updated to match. It is disposed of at the cut,
+alongside SPEC.md, per PLAN's gate 6.
 
 ## 1. Where the product is
 

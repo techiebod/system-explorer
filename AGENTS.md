@@ -1,8 +1,22 @@
 # AGENTS.md — System Explorer
 
 Guidance for AI coding agents installing or working on System Explorer.
-Humans: start with [README.md](README.md); the contract is
-[docs/SPEC.md](docs/SPEC.md).
+Humans: start with [README.md](README.md).
+
+> **Read this before writing any code.** A three-tier rewrite — collector,
+> collator, hub — is under way in `go/`, `harness/` and `contract/`.
+> **[docs/DESIGN.md](docs/DESIGN.md) is the record of intent and outranks every
+> other artefact in this repository, including the code and this file**;
+> [docs/PLAN.md](docs/PLAN.md) holds the phases and their gates. Silence in
+> DESIGN is a blocker, not a licence to choose: if it does not say, the answer
+> is queued in its appendix C and the work stops until it is ruled.
+>
+> The document below describes the product **shipping today**, which the
+> rewrite replaces at the cut. It stays normative for what is deployed, and it
+> is the wrong thing to build against. The specific trap DESIGN's appendix B
+> names: SPEC describes an agent that accepts inbound HTTP, the rewrite
+> reverses that connection, and an agent following SPEC would build a port the
+> new architecture exists to remove.
 
 ## What this is
 

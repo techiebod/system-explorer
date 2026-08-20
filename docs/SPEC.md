@@ -1,7 +1,7 @@
 # System Explorer — Specification
 
 **Version:** 0.6
-**Status:** Accepted for build
+**Status:** Accepted for build; SUPERSEDED 2026-08-20 for everything future — see [DESIGN.md](DESIGN.md) and [PLAN.md](PLAN.md). This document remains normative for the product **currently deployed** and is disposed of at the cut (PLAN gate 6). Build nothing new against it.
 **Supersedes:** SE-001 through SE-006 — the predecessor design suite,
 condensed into this document; per-document disposition in Appendix A
 **Direction:** [ROADMAP.md](ROADMAP.md) — status, priorities, and the estate/portability tracks

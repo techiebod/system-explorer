@@ -5,10 +5,19 @@ network, hardware and the NixOS deployment itself, presented as a graph of
 native objects with provenance — consumed by AI agents over HTTP/MCP and by
 the operator through a designed UI. One contract for both.
 
+> **A three-tier rewrite is under way, and it is where the direction lives.**
+> [docs/DESIGN.md](docs/DESIGN.md) is the record of intent and outranks every
+> other document here, including this one; [docs/PLAN.md](docs/PLAN.md) is the
+> phased plan and its gates. The documents below describe the product **running
+> today**, which the rewrite replaces at the cut — they stay normative for what
+> is deployed and are not the place to learn where this is going.
+
 | | |
 |---|---|
-| Specification | [docs/SPEC.md](docs/SPEC.md) — authoritative for current behaviour |
-| Roadmap | [docs/ROADMAP.md](docs/ROADMAP.md) — status, direction, portability track |
+| Model and direction | [docs/DESIGN.md](docs/DESIGN.md) — the rewrite's record of intent, and what outranks everything else |
+| Plan and gates | [docs/PLAN.md](docs/PLAN.md) — phases 0–6, and what each gate claims |
+| Specification | [docs/SPEC.md](docs/SPEC.md) — the shipping product, superseded at the cut |
+| Roadmap | [docs/ROADMAP.md](docs/ROADMAP.md) — the shipping product's direction, superseded |
 | Contract | [schema/](schema/) — JSON Schemas plus example envelopes |
 | Conformance suite | [conformance/](conformance/) — the spec's teeth |
 | VM test matrix | [test/vm-lab/](test/vm-lab/) — disposable Fedora/Debian/Ubuntu/NixOS guests for packaging tests |
