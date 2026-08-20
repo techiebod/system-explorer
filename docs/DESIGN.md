@@ -387,6 +387,20 @@ Which side dials is a deployment choice and must be stated per pair rather than 
 >
 > An estate-scoped finding — a coverage gap, a cross-host comparison, a protection-chain verdict — could be derived by either hub, and two hubs each persisting their own copy diverge at the first partition and disagree about acknowledgements forever after. So **the intent document names one hub as the owner of estate-scoped finding lifecycle**; the sibling serves those findings read-only, marked with their origin. Site-scoped findings stay with the site's own hub, untouched. The cheapest rule that prevents the split-brain, and it costs one member in the intent schema.
 
+> **What the one-owner rule does not have to solve, and what it must `[decision]`**
+>
+> Three things that look like problems here are answered by mechanisms already in this document, and saying so is what keeps the rule as small as it is.
+>
+> **Identity needs no negotiation.** A relation's key is derived from the source object's id, the type, the declared discriminator and the target's name *as published* — never from a resolved id (§13). Two hubs deriving the same key from the same published names is arithmetic rather than agreement, so there is no protocol to design here and nothing to reconcile after a partition.
+>
+> **The declarations already agree, or federation has already refused.** Estate intent is held by every hub and its hash is exchanged on connect. Two hubs describing different estates never reach the point of disagreeing about a finding; they are refusing to merge, legibly, for a stated reason.
+>
+> **What is left is the real one, and it is a taxonomy rather than a conflict.** A machine can state observations about itself and desires it holds about other machines, and nothing else. One host declaring that its data must reach a destination is a *desire*; the far side declaring a target that receives it is what makes the pair authoritative. Where the two do not correspond — a desire nothing answers, a target nothing sends to — that is not a fault in the model to be resolved away. It is the condition an admin most needs shown, and across two sites it is the ordinary case rather than the exception.
+>
+> **And law 5 says which hub may resolve such a mismatch: neither, alone.** A tier that cannot reach the facts must say so rather than read green, so a hub seeing one end states what it saw and what it could not reach. Minting a resolution from one end would be owner-scoping again — the workaround §06 opens by diagnosing — moved up a tier: a judgement made where half its evidence is not.
+>
+> One surface consequence, recorded here rather than discovered in phase 5: a mismatch renders as a row of its own, carrying both ends and its reach, and never as an error state decorating one of them.
+
 ### The cut
 
 The replacement is a **big-bang cutover, not a strangler**. The new stack is built to completion against its own harnesses (§18), lands first on the estate's disposable canary host, and then replaces the old agent outright. No dual-mode hub, no per-host migration state machine, no findings-key mapping — that is machinery for protecting an estate this product does not yet have, and the effort goes into arriving sooner instead.
@@ -2109,7 +2123,7 @@ Twelve tests, written before the components they judge. A package is not done be
 
 Everything below is blocked awaiting a ruling, per the governance rule at the head of this document. A ruled item leaves this list and its section loses its chip.
 
-- **Estate findings have one owner**, named in intent (§06) — blocks phase 4, written proposal in place.
+- **Estate findings have one owner**, named in intent (§06) — blocks phase 4, written proposal in place, **sharpened 2026-08-20**: three of the four problems the proposal looked like it had are answered by mechanisms already in this document — deterministic relation keys, the intent hash, and law 5 — and what remains is a taxonomy rather than a conflict, namely that a desire one machine holds and another does not answer is a finding to display rather than a fault to resolve. Still queued, because the member it costs in the intent schema is a schema change and phase 4 is where intent lands.
 - **`se.views/1` survives unchanged** (§29) — blocks phase 5, written proposal in place.
 - **Disclosure is declared per value as `discloses`** (§21) — settled; the vocabulary and the well-known table are in appendix A.
 - **The UI design system is the production token set, no external library** (§06) — blocks phase 5, written proposal in place.
