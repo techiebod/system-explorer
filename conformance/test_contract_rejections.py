@@ -154,14 +154,22 @@ INTENT_DOC = {
         "discovery": [{"collection": "net/peers", "independence": "control-plane"}],
         "hosts": {"storage-1": {"roles": ["storage"]}},
     },
-    "protection": [
-        {
-            "target": "tank/photos",
-            "owner": "storage-1",
-            "class": "irreplaceable",
-            "destinations": ["repository:offsite"],
+    # Protection's intent is a plugin's since the 2026-08-20 ruling, so it
+    # rides in `plugins` — which is also what keeps this base document a
+    # worked example of the extension member rather than of a first-party
+    # concern the contract no longer names.
+    "plugins": {
+        "protection": {
+            "targets": [
+                {
+                    "target": "tank/photos",
+                    "owner": "storage-1",
+                    "class": "irreplaceable",
+                    "destinations": ["repository:offsite"],
+                }
+            ]
         }
-    ],
+    },
 }
 
 ANSWER_DOC = {

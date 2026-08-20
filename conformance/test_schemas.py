@@ -9,6 +9,7 @@ contract: our own fixtures are validated with every declared object closed,
 so opening the wire does not license this agent to invent or misspell fields.
 """
 
+import json
 import re
 
 import jsonschema
@@ -59,12 +60,42 @@ def test_the_schema_id_scan_finds_the_ids_we_know_about():
     )
 
 
+# The rewrite publishes its schemas in contract/ while the shipping product
+# publishes in schema/, and both live in one package until the cut. A lint
+# that knew only one directory would fault the new stack for publishing
+# where the plan says to publish — so it asks both, and the id is the same
+# question either way: did anybody write this schema down?
+def _contract_ids() -> set[str]:
+    """contract/ names its files se.<name>.<version>.json and its $id is the
+    filename, so the schema id is the same string with the LAST dot made a
+    slash — se.checkpoint.1.json is se.checkpoint/1."""
+    ids = set()
+    for path in sorted((PACKAGE_DIR.parent.parent / "contract").glob("*.json")):
+        stem = json.loads(path.read_text()).get("$id", "").removesuffix(".json")
+        name, _, version = stem.rpartition(".")
+        if name and version:
+            ids.add(f"{name}/{version}")
+    return ids
+
+
+CONTRACT_IDS = _contract_ids()
+
+
+def test_the_contract_scan_finds_the_rewrites_schemas():
+    """Anti-vacuity, the same argument as the scan above: a contract
+    directory that moved would make the check below pass for ever."""
+    assert {"se.declaration/1", "se.stream/1", "se.checkpoint/1"} <= CONTRACT_IDS, (
+        f"the contract scan found only {sorted(CONTRACT_IDS)}"
+    )
+
+
 def test_every_emitted_schema_id_has_a_published_schema():
     """An envelope naming a schema nobody wrote is unversioned in practice:
     no consumer can validate it and no producer profile can constrain it."""
-    undeclared = {name: sites for name, sites in EMITTED.items() if name not in SCHEMAS}
+    published = set(SCHEMAS) | CONTRACT_IDS
+    undeclared = {name: sites for name, sites in EMITTED.items() if name not in published}
     assert not undeclared, (
-        "these envelopes declare a schema that does not exist in schema/: "
+        "these envelopes declare a schema published in neither schema/ nor contract/: "
         + "; ".join(f"{name} (emitted at {', '.join(sites)})"
                     for name, sites in sorted(undeclared.items()))
     )
