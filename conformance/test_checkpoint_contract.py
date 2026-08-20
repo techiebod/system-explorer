@@ -54,8 +54,13 @@ def _validator() -> Draft202012Validator:
     return Draft202012Validator(schema, registry=registry)
 
 
-@pytest.fixture(scope="module")
-def samples() -> dict[str, list[dict]]:
+def emit_samples() -> dict[str, list[dict]]:
+    """Run the Go emitter and return every sample it wrote, parsed.
+
+    Shared with the receiver suite, so both judge the SAME bytes: a
+    receiver proven against hand-written records would be proven against
+    somebody's idea of the emitter rather than against the emitter.
+    """
     go = shutil.which("go")
     if go is None:
         pytest.skip("go toolchain not present")
@@ -75,6 +80,11 @@ def samples() -> dict[str, list[dict]]:
     )
     return {p.stem: [json.loads(line) for line in p.read_text().splitlines() if line.strip()]
             for p in files}
+
+
+@pytest.fixture(scope="module")
+def samples() -> dict[str, list[dict]]:
+    return emit_samples()
 
 
 def test_every_record_validates(samples: dict[str, list[dict]]) -> None:
