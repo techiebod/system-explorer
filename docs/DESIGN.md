@@ -1632,6 +1632,16 @@ The derivation is deliberately crude, and closed: **complete** — everything co
 
 "Degrade the verdict when a host is dark" was the obvious rule and it is the wrong one. The dark host does not make the storage sicker; it makes the answer narrower, and saying so on a different axis is what lets a reader tell a broken estate from an unobserved one at a glance.
 
+> **Except where the question is universally quantified, and that is not the axes merging `[decision]`**
+>
+> *Is this pool healthy* is a claim about one object. A host nobody could reach does not make that pool sicker, its verdict must not move, and only `epistemic` narrows — the rule above, exactly as stated.
+>
+> *Are ALL hosts up to date* is a claim over the estate, and **a conjunction with an unknown conjunct is not true.** An unreachable host leaves the proposition unestablished, which is a fact about the answer rather than a health claim softened by ignorance. So that answer may not read `healthy` while a declared host is unaccounted for or a discovered candidate is unclassified, and `epistemic` still says which it was.
+>
+> The two are the same rule seen from two question shapes, and **the difference is the quantifier** — which is why this belongs beside the monotonicity rule rather than inside a template. Getting it wrong in this direction *is* the founding failure: *yes, all hosts are up to date* was true of every host the registry knew about, and the registry was the problem.
+>
+> Found on 2026-08-20 by the monotonicity rule itself: the first implementation of §25's worked answer read `degraded` for two divergent hosts and `healthy` once the divergent one was removed. The acceptance test caught its own subject.
+
 > **The monotonicity rule, which is the acceptance test for all of this**
 >
 > **Removing evidence, or making a source dark, must never improve either the verdict or the epistemic status.**
