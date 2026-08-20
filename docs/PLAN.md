@@ -334,7 +334,20 @@ Two findings came out of building it, both recorded where they were found. **Acc
 
 Both new guards were reverted and the reversions executed. One did not fail, and the reason was worth having: the unswept check was written twice by two routes to the same condition, so no reversion of either could falsify it. Deduplicated, and the second attempt fails three tests including item 9's own.
 
-Still to come in this phase: the dial itself, the freeze wired into a findings registry, declarations travelling up, findings re-keyed with the reset displayed, intent and hash federation on two guests, and the first problem-domain object.
+**Every deliverable of this phase has landed except one, and the exception is environmental rather than unfinished.** The connection reverses — `se-collate` dials its hub, sends declarations then a checkpoint, and closes; mutual identity is required and plaintext must be asked for by name, because reversing the connection removes the network as a containment layer and identity is the only one left. Intent landed with its plugin stanza and its canonical hash. Declarations travel up and index per host, so one host's declaration never vouches for another's facts. Findings are re-keyed with the reset displayed. Two hubs federate over a socket, agree or refuse on the intent hash with versions beside it, and refuse a third site's request by name. And `are all hosts up to date` — the founding failure's own question — assembles from two real collator sessions and validates against `se.answer/1`.
+
+> **Gate 4 — clause by clause, 2026-08-20**
+>
+> · **item 9** — green. `unswept`, `connected` and `dark` are distinguishable, the freeze holds with six separately-stated blindnesses, and a dark host keeps its last promoted state.
+> · **item 10** — green. NAT-mode dial direction stated per pair and refused when both sides agree, one hop holding by capability, a forwarded request refused by name, and protocol and semantic versions checked beside the intent hash.
+> · **item 1's hub half** — green, at gate 4's own wording: two instances, identical native names, two collators, four rows that stay four and are distinguishable by id alone.
+> · **item 6's hub half** — green. `resolved-later` across two collators, with the key unchanged through the upgrade.
+> · **item 7's roll-up half** — green. An undeclared fact reaches no roll-up and no basis, and is named rather than dropped silently.
+> · **the checkpoint crash suite** — green at all three boundaries, judged against `boundaries.json` rather than against restated expectations, with recovery asserted too — a hub that refused everything would otherwise pass all three.
+> · **the intent declaration validates a stanza this repository's schema does not enumerate** — green, and protection is the worked example of it.
+> · **a two-guest estate renders one coherent view with reach and coverage stated** — **NOT JUDGED, and not claimed.** The property is proven at the CI tier: two real collator sessions through the real hub into one estate, with reach and coverage stated and the estate's founding question answered over it. What is unproven is the clause as written, which standing rule 3 puts on two lab guests as two sites. **`virsh` is not installed on the machine this work was done on**, so the lab could not be brought up at all — which is a probe that could not run rather than a test that passed. Gate 4 is therefore **not declared open**: unobservable and healthy must not render the same, and a gate opened on a clause nobody could evaluate would be this suite's own founding failure wearing the suite's numbering.
+
+Phase 5 is not started.
 
 > **Gate 4 opens when**
 >

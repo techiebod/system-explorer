@@ -36,8 +36,9 @@ this hub's to measure.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from .intent import Intent
 
@@ -195,3 +196,65 @@ class SiblingAges:
             "age_at_origin_s": self.told_own_hub_s,
             "age_in_transit_s": self.told_this_hub_s,
         }
+
+
+# --- the federation session on a socket -------------------------------
+
+def peer_session(
+    stream_in,
+    stream_out,
+    local: Handshake,
+    own_site: str,
+    answer: Callable[[SiblingRequest], Any],
+) -> Refusal | None:
+    """Serve one peer: handshake, then requests, until the peer goes away.
+
+    The handshake is first and its refusal is terminal — a hub that
+    answered one request before checking would have merged two worldviews
+    for exactly as long as it took to notice.
+    """
+    _write(stream_out, {"record": "handshake", **local.as_wire()})
+    opening = _read(stream_in)
+    if opening is None:
+        return Refusal("no-handshake", "the peer closed before identifying itself")
+    if opening.get("record") != "handshake":
+        return Refusal(
+            "handshake-expected",
+            f"a peer session opens with a handshake, not {opening.get('record')!r}",
+        )
+    refusal = review(local, opening)
+    if refusal is not None:
+        _write(stream_out, {"record": "refused", "reason": refusal.reason,
+                            "detail": refusal.detail})
+        return refusal
+    _write(stream_out, {"record": "agreed"})
+
+    while (request := _read(stream_in)) is not None:
+        if request.get("record") != "request":
+            _write(stream_out, {"record": "refused", "reason": "unknown-record",
+                                "detail": f"{request.get('record')!r} is not a request"})
+            continue
+        sibling = SiblingRequest(
+            origin_site=request.get("origin_site", ""),
+            for_site=request.get("for_site", ""),
+        )
+        denial = serve(sibling, own_site)
+        if denial is not None:
+            _write(stream_out, {"record": "refused", "reason": denial.reason,
+                                "detail": denial.detail})
+            continue
+        _write(stream_out, {"record": "answer", "body": answer(sibling)})
+    return None
+
+
+def _write(stream, record: Mapping[str, Any]) -> None:
+    line = (json.dumps(record, separators=(",", ":")) + "\n").encode("utf-8")
+    stream.write(line)
+    stream.flush()
+
+
+def _read(stream) -> dict[str, Any] | None:
+    raw = stream.readline()
+    if not raw:
+        return None
+    return json.loads(raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else raw)

@@ -22,6 +22,7 @@ from system_explorer.hub.federation import (
     SiblingRequest,
     dial_agreement,
     offer,
+    peer_session,
     review,
     serve,
 )
@@ -117,3 +118,138 @@ def test_a_siblings_data_carries_two_ages() -> None:
         "collapsing them into one figure is how doubly-stale data gets "
         "presented as current, and only the second is this hub's to measure"
     )
+
+
+# --- two hubs, over real sockets --------------------------------------
+
+def _pair():
+    """A connected socket pair as two (in, out) file objects."""
+    import socket as _socket
+
+    a, b = _socket.socketpair()
+    return (a.makefile("rb"), a.makefile("wb")), (b.makefile("rb"), b.makefile("wb")), (a, b)
+
+
+def run_pair(local_a, local_b, site_a, site_b, requests):
+    """Drive both sides of a peer session and return what each concluded."""
+    import threading
+
+    (a_in, a_out), (b_in, b_out), socks = _pair()
+    outcome: dict[str, object] = {}
+
+    def serve_b():
+        outcome["b"] = peer_session(
+            b_in, b_out, local_b, site_b,
+            answer=lambda request: {"site": site_b, "hosts": ["storage-1"]},
+        )
+
+    thread = threading.Thread(target=serve_b)
+    thread.start()
+
+    replies = []
+    try:
+        # a plays the originating side: read b's handshake, send its own.
+        theirs = _read_line(a_in)
+        _write_line(a_out, {"record": "handshake", **local_a.as_wire()})
+        verdict = _read_line(a_in)
+        outcome["a_saw"] = (theirs, verdict)
+        if verdict.get("record") == "agreed":
+            for request in requests:
+                _write_line(a_out, {"record": "request", **request})
+                replies.append(_read_line(a_in))
+    finally:
+        # Shut the write side down rather than closing a file object: the
+        # peer's loop ends on EOF, and another makefile on the same socket
+        # keeps it alive, so a close alone leaves the peer reading for
+        # ever. A test that waited out a join timeout instead would be a
+        # test that passes slowly today and flakes later.
+        import socket as _socket
+
+        a_out.flush()
+        socks[0].shutdown(_socket.SHUT_WR)
+        thread.join(timeout=10)
+        assert not thread.is_alive(), "the peer session did not end on EOF"
+        for f in (a_in, a_out, b_in, b_out):
+            try:
+                f.close()
+            except OSError:
+                pass
+        socks[0].close()
+        socks[1].close()
+    outcome["replies"] = replies
+    return outcome
+
+
+def _write_line(stream, record):
+    import json as _json
+
+    stream.write((_json.dumps(record, separators=(",", ":")) + "\n").encode())
+    stream.flush()
+
+
+def _read_line(stream):
+    import json as _json
+
+    raw = stream.readline()
+    return _json.loads(raw.decode()) if raw else None
+
+
+def test_two_hubs_holding_one_estate_agree_over_a_socket() -> None:
+    intent = intent_for()
+    outcome = run_pair(offer("site-a", intent), offer("site-b", intent),
+                       "site-a", "site-b",
+                       requests=[{"origin_site": "site-a", "for_site": "site-b"}])
+    theirs, verdict = outcome["a_saw"]
+    assert theirs["record"] == "handshake" and theirs["site"] == "site-b"
+    assert verdict["record"] == "agreed"
+    assert outcome["b"] is None
+    assert outcome["replies"][0]["record"] == "answer"
+    assert outcome["replies"][0]["body"]["hosts"] == ["storage-1"]
+
+
+def test_two_hubs_holding_different_estates_refuse_over_a_socket() -> None:
+    """And the refusal is terminal: a hub that answered one request before
+    checking would have merged two worldviews for as long as it took to
+    notice."""
+    outcome = run_pair(offer("site-a", intent_for(41)), offer("site-b", intent_for(42)),
+                       "site-a", "site-b",
+                       requests=[{"origin_site": "site-a", "for_site": "site-b"}])
+    _theirs, verdict = outcome["a_saw"]
+    assert verdict["record"] == "refused"
+    assert verdict["reason"] == "intent-mismatch"
+    assert outcome["b"] is not None and outcome["b"].reason == "intent-mismatch"
+    assert outcome["replies"] == [], "nothing is served after a refused handshake"
+
+
+def test_a_third_sites_request_is_refused_over_a_socket() -> None:
+    intent = intent_for()
+    outcome = run_pair(offer("site-a", intent), offer("site-b", intent),
+                       "site-a", "site-b",
+                       requests=[{"origin_site": "site-a", "for_site": "site-c"}])
+    reply = outcome["replies"][0]
+    assert reply["record"] == "refused" and reply["reason"] == "would-forward", (
+        "one hop holds: a hub answers for its own hosts and for a sibling's "
+        "only by asking the sibling"
+    )
+
+
+def test_a_peer_that_closes_before_identifying_itself() -> None:
+    import socket as _socket
+    import threading
+
+    a, b = _socket.socketpair()
+    result: list[object] = []
+
+    def serve_b():
+        with b.makefile("rb") as bi, b.makefile("wb") as bo:
+            result.append(peer_session(bi, bo, offer("site-b", intent_for()),
+                                       "site-b", answer=lambda r: {}))
+
+    thread = threading.Thread(target=serve_b)
+    thread.start()
+    a.shutdown(_socket.SHUT_RDWR)
+    a.close()
+    thread.join(timeout=10)
+    assert not thread.is_alive(), "the peer session did not end when the peer left"
+    b.close()
+    assert result and result[0].reason == "no-handshake"
