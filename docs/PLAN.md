@@ -187,6 +187,18 @@ run the thing they read.
 wrong reading: not that the collectors are correct, only that two independent
 implementations reading one machine at one moment agree.
 
+> **Gate 3's claim was collector-level, and the question was collection-level. Corrected 2026-08-20.**
+>
+> "Twenty of twenty collectors ported" and "nineteen of nineteen clean on two hosts" are both true, and neither is what a person wants to know. A collector is *ported* at the granularity of a **binary**. Counted at the granularity that reaches a page: the shipping adapters serve **58 collections and the port serves 40**, so **eighteen are not built** — and they are the ones with data on every Linux host. `network` kept 2 of 10, losing links, routes, listening, resolver, nft-tables, port-exposure and tailscale. `storage` kept 1 of 6, losing block-devices, mounts, arrays and datasets. `system` kept 1 of 5, losing time, boot and overview.
+>
+> **The parity comparator could not see it, and that is the worse half.** `SERVES` is a hand-maintained list of which collections to compare, and it had been filled in with exactly what the port implements — so both implementations were asked only for what the port already had, agreed, and reported clean. A second guard held `SERVES` against the replay seam's table, and *both* are shaped like the port, so three lists agreed with each other and none was ever held against the reference. **That is this estate's most repeated defect occurring inside the guard built to catch it**, and the comparator's own comment names the shape — "a collection served but never compared is the hole `nft-rules` sat in" — while fixing one instance rather than inverting the rule.
+>
+> Found by the owner opening the UI and saying it looked empty, which no assertion in the suite had managed to say. `conformance/test_port_completeness.py` is the inversion: **deny-by-default over the reference**, so every collection the shipping product serves must be ported, deliberately dropped with a ruling, or listed as owed. Three are dropped by ruling (two `lookups`, now a verb; `system/self`, which the collator's own cost record replaces) and fifteen are owed.
+>
+> One further claim of gate 3's is simply wrong: *"`system` is the twentieth and has no second implementation to disagree with."* `adapters/system.py` serves `identity` among five collections. It was never compared, and comparing it needs a replay seam that does not exist for that adapter — recorded as owed rather than quietly added.
+>
+> **Gate 3 is not reopened.** What it measured, it measured; the port agrees with the reference everywhere both implement. What it did not measure is now named, counted and guarded, and gate 6 cannot be reached while the owed list is non-empty.
+
 **And the census changed hours after the gate opened, without the gate moving.**
 The ruling recorded in DESIGN's appendix C on 2026-08-20 — anything an estate
 generates that is not normal NixOS or Linux stays out of the public product —
