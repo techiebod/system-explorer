@@ -153,6 +153,53 @@ def answer_panel(answer: Mapping[str, Any]) -> str:
     )
 
 
+def index_panel(rows: Iterable[Any]) -> str:
+    """Host and collection, with counts and a link into each.
+
+    A flat table of every object in the estate is not a page. Measured on
+    two lab guests, 2026-08-20: twenty collectors produce ~2,000 objects
+    and half a megabyte of HTML, which renders and cannot be read. The
+    estate scale answers *where should I look*; the collection page
+    answers *what is there*. Splitting them is what makes either legible.
+    """
+    counts: dict[tuple[str, str], int] = {}
+    for row in rows:
+        for member in row.members:
+            counts[(member.host, member.collection)] = (
+                counts.get((member.host, member.collection), 0) + 1)
+    body = "".join(
+        f'<tr><td class="ident">{_e(host)}</td>'
+        f'<td><a href="/hosts/{_e(host)}/collections/{_e(collection)}">'
+        f'{_e(collection)}</a></td>'
+        f'<td class="num">{count}</td></tr>'
+        for (host, collection), count in sorted(counts.items())
+    )
+    if not body:
+        return ('<section class="panel"><h2>Collections</h2>'
+                '<p class="dim">No host has promoted a collection yet. The reach '
+                'above says whether that is because nobody has called in.</p></section>')
+    return (
+        '<section class="panel"><h2>Collections</h2><div class="scroll"><table>'
+        "<thead><tr><th>host</th><th>collection</th><th>objects</th></tr></thead>"
+        f"<tbody>{body}</tbody></table></div></section>"
+    )
+
+
+def collection_page(host: str, collection: str, rows: Iterable[Any]) -> str:
+    """One collection on one host — the scale at which objects are read."""
+    listed = [row for row in rows
+              if any(m.host == host and m.collection == collection
+                     for m in row.members)]
+    return page(
+        f"{collection} on {host}",
+        f'<h1><span class="ident">{_e(host)}</span> · {_e(collection)}</h1>'
+        f'<p class="dim"><a href="/">← the estate</a> · {len(listed)} objects</p>'
+        + rows_panel(listed)
+        + "<footer>Facts appear only where a declaration backs them; anything "
+          "refused or withheld is named on its row.</footer>",
+    )
+
+
 def rows_panel(rows: Iterable[Any]) -> str:
     body = []
     for row in rows:
@@ -190,7 +237,7 @@ def estate_page(view: Any, answer: Mapping[str, Any], held: Iterable[Any]) -> st
         + answer_panel(answer)
         + reach_panel(view.reach, view.coverage)
         + opinions_panel(held)
-        + rows_panel(view.rows)
+        + index_panel(view.rows)
         + "<footer>Server-rendered from the declarations each host published. "
           "Nothing on this page was decided by the page.</footer>",
     )

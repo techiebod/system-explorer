@@ -65,9 +65,14 @@ fi
 say "building linux/amd64 binaries"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "${STAGE}"' EXIT
+# ALL of them. Shipping a couple was the first version of this script and
+# it made the product look empty on a page — twenty collectors are ported
+# and two were deployed. A collector with nothing to read declines, with a
+# reason, which is the honest half of what there is to look at.
 ( cd "${REPO}/go"
-  for cmd in se-collate se-collect-system se-collect-nix; do
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "${STAGE}/${cmd}" "./cmd/${cmd}"
+  for dir in ./cmd/se-collate ./cmd/se-collect-*; do
+    cmd="$(basename "${dir}")"
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "${STAGE}/${cmd}" "${dir}"
   done )
 
 # The hub is stdlib-only, so a guest needs no dependencies at all.
@@ -105,10 +110,12 @@ for guest in "${GUEST_A}" "${GUEST_B}"; do
   on "${guest}" 'chmod +x ~/se-lab/se-collate ~/se-lab/se-collect-* ~/se-lab/lab-serve.py'
 done
 
-# NixOS-only collector: on a guest that is not NixOS it would decline on
-# every sweep, which is honest but noisy for someone looking at a page.
-on "${GUEST_A}" 'grep -qi nixos /etc/os-release || rm -f ~/se-lab/se-collect-nix'
-on "${GUEST_B}" 'grep -qi nixos /etc/os-release || rm -f ~/se-lab/se-collect-nix'
+# Nothing is removed for being inapplicable. A collector that cannot read
+# its interface says so — `unsupported` on a guest with no ZFS,
+# `unavailable` where a service is not running, `absent` where a file is
+# not there — and those declines are half of what a person should see. A
+# page with fewer rows and no explanation is the failure this product is
+# named after.
 
 for guest in "${GUEST_A}" "${GUEST_B}"; do
   on "${guest}" 'sudo systemctl stop se-lab-hub se-lab-collator 2>/dev/null; pkill -f lab-serve.py || true' || true

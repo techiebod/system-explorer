@@ -85,6 +85,14 @@ def handler_class(view_of: Callable[[], State]) -> type[BaseHTTPRequestHandler]:
                     state.view, state.answers[0], state.opinions).encode()
                 self._send(200, body, "text/html; charset=utf-8")
                 return
+            if path.startswith("/hosts/") and "/collections/" in path:
+                parts = [p for p in path.strip("/").split("/") if p]
+                if len(parts) == 4:
+                    state = view_of()
+                    body = render.collection_page(
+                        parts[1], parts[3], state.view.rows).encode()
+                    self._send(200, body, "text/html; charset=utf-8")
+                    return
             if path == "/v1/routes":
                 # The tier publishes its own table, which is what lets an
                 # MCP surface generate a tool per route without this

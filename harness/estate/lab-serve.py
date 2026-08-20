@@ -36,6 +36,24 @@ sys.path.insert(0, str(LAB))
 ROLE = sys.argv[1]
 
 
+def launch(binary: Path) -> list[str]:
+    """How to run one collector on a lab guest.
+
+    In the real deployment systemd grants each collector exactly the
+    authority its declaration asks for — a group, a capability, a read
+    path — and that per-collector narrowness IS the security design. A
+    lab guest is disposable and has no such unit, so collectors that
+    declare any authority beyond ordinary reads are run under sudo here.
+    That is a LAB SHORTCUT and a superset of what production grants: it
+    shows what a collector can read when it has what it asked for, and it
+    is not how the estate runs them.
+    """
+    declares_authority = binary.name not in {"se-collect-system", "se-collect-traefik"}
+    if declares_authority and os.geteuid() != 0:
+        return ["sudo", "-n", str(binary)]
+    return [str(binary)]
+
+
 def serve_collectors(work: Path) -> dict[str, Path]:
     """Every collector binary present, each on its own unix socket.
 
@@ -60,7 +78,7 @@ def serve_collectors(work: Path) -> dict[str, Path]:
                     return
                 with conn:
                     try:
-                        subprocess.run([str(binary)], stdin=conn.fileno(),
+                        subprocess.run(launch(binary), stdin=conn.fileno(),
                                        stdout=conn.fileno(),
                                        stderr=subprocess.DEVNULL, timeout=120)
                     except Exception:

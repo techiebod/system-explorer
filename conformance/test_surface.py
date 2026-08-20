@@ -38,6 +38,16 @@ def declaration(*facts: str) -> dict:
     }
 
 
+def rendered_rows(view, answer, host="storage-1", collection="pools") -> str:
+    """The collection page — the scale objects are actually read at.
+
+    The estate page indexes; this lists. Assertions about a ROW belong
+    here for the same reason the split exists: a flat table of every
+    object in the estate renders and cannot be read.
+    """
+    return render.collection_page(host, collection, view.rows)
+
+
 def built(objects, facts=("State",)):
     estate = Estate(declared=("storage-1",))
     declarations = Declarations()
@@ -62,7 +72,7 @@ def test_third_party_text_cannot_escape_the_page() -> None:
     hostile = '<script>alert("x")</script>'
     view, answer = built([{ "id": "pools:tank", "name": "tank", "instance": None,
                             "facts": {"State": hostile}}])
-    html = render.estate_page(view, answer, [])
+    html = rendered_rows(view, answer)
     assert "<script>alert" not in html
     assert "&lt;script&gt;" in html
 
@@ -71,7 +81,7 @@ def test_an_attribute_break_is_escaped_too() -> None:
     hostile = '" onmouseover="alert(1)'
     view, answer = built([{ "id": "pools:tank", "name": hostile, "instance": None,
                             "facts": {"State": hostile}}])
-    html = render.estate_page(view, answer, [])
+    html = rendered_rows(view, answer)
     assert 'onmouseover="alert' not in html
     assert "&quot;" in html
 
@@ -120,7 +130,7 @@ def test_undeclared_facts_are_named_on_the_row() -> None:
     view, answer = built(
         [{"id": "pools:tank", "name": "tank", "instance": None,
           "facts": {"State": "ok", "Smuggled": "x"}}])
-    html = render.estate_page(view, answer, [])
+    html = rendered_rows(view, answer)
     assert "no declared axis" in html and "Smuggled" in html
     assert ">x<" not in html, "the value itself must not be rendered as a fact"
 
@@ -208,7 +218,7 @@ def test_a_plugins_own_state_word_renders_with_no_code_change() -> None:
     view, answer = built(
         [{"id": "widgets:left", "name": "left", "instance": None,
           "facts": {"State": "wobbling-badly"}}])
-    html = render.estate_page(view, answer, [])
+    html = rendered_rows(view, answer)
     assert "wobbling-badly" in html
 
 
@@ -253,3 +263,20 @@ def test_a_plugin_cannot_introduce_a_severity() -> None:
     )
     document["collections"][0]["rules"][0]["level"] = "critical"
     assert not list(validator.iter_errors(document))
+
+
+
+def test_the_estate_page_indexes_rather_than_listing() -> None:
+    """Measured on two lab guests, 2026-08-20: twenty collectors produce
+    about two thousand objects and half a megabyte of HTML, which renders
+    and cannot be read. The estate scale answers WHERE TO LOOK; the
+    collection page answers what is there."""
+    many = [{"id": f"pools:p{i}", "name": f"p{i}", "instance": None,
+             "facts": {"State": "ok"}} for i in range(400)]
+    view, answer = built(many)
+    estate = render.estate_page(view, answer, [])
+    assert "pools:p399" not in estate, "the estate page must not list every object"
+    assert 'href="/hosts/storage-1/collections/pools"' in estate
+    assert ">400<" in estate, "it carries the count, so a reader knows the size"
+    # And the collection page does list them.
+    assert "pools:p399" in rendered_rows(view, answer)

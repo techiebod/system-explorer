@@ -85,13 +85,15 @@ def test_the_canary_is_actually_planted(planted) -> None:
     assert facts["ApiToken"] == CANARY, "the canary must be in the state being swept"
 
 
-def test_the_estate_page_carries_no_canary(planted) -> None:
+def test_neither_rendered_page_carries_the_canary(planted) -> None:
     base, *_ = planted
-    body = fetch(base + "/")
-    assert CANARY not in body
-    # And it says the value was WITHHELD rather than leaving a reader to
-    # conclude it was absent.
-    assert "withheld (declared secret)" in body and "ApiToken" in body
+    estate = fetch(base + "/")
+    assert CANARY not in estate
+    # The estate page indexes; the collection page lists, and it is where
+    # a withheld value must be NAMED rather than left to read as absent.
+    collection = fetch(base + "/hosts/storage-1/collections/creds")
+    assert CANARY not in collection
+    assert "withheld (declared secret)" in collection and "ApiToken" in collection
 
 
 def test_no_json_route_carries_the_canary(planted) -> None:
