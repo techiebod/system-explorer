@@ -3,6 +3,7 @@
 package collate
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -438,5 +439,73 @@ func TestTheTierPublishesItsRoutes(t *testing.T) {
 			fakeBootID), path); got.Code != http.StatusOK {
 			t.Fatalf("%s published and answered %d", path, got.Code)
 		}
+	}
+}
+
+// Acceptance item 11 at the collator's own channels. The hub sweeps its
+// four; these are the two this tier owns, swept next to the store that
+// holds the facts.
+func TestNoCanaryReachesTheCollatorsChannels(t *testing.T) {
+	const canary = "se-canary-9d41f2b7c0e5-do-not-publish"
+	st := openStore(t)
+	document := `{"schema":"se.declaration/1","collector":"vault","version":"1.0.0",
+	 "collections":[{"name":"creds","question":"q","prefix":"cred","freshness":"60s",
+	 "perishability":"perishable","answer":["Endpoint"],
+	 "facts":{"Endpoint":{"type":"string","temperament":"configuration","kind":"observed","discloses":"location","sentence":"."},
+	          "ApiToken":{"type":"string","temperament":"configuration","kind":"observed","discloses":"secret","sentence":"."}},
+	 "rules":[{"key":"vault-reachable","level":"info","grounds":"interface",
+	           "when":{"fact":"Endpoint","present":true},
+	           "sentence":"The vault endpoint is configured.","cites":["Endpoint"]}]}]}`
+	if err := st.RecordDeclaration("sha256:vault", document); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.IssueGenerations([]string{"creds"}, "sha256:vault"); err != nil {
+		t.Fatal(err)
+	}
+	facts := `{"Endpoint":"https://vault.example","ApiToken":"` + canary + `"}`
+	if _, err := st.ApplyCommit("creds", store.HostNative, 1, "b1", fakeBootID,
+		[]store.Object{{ID: "creds:vault", Name: "vault",
+			Facts: json.RawMessage(facts), At: 10}}); err != nil {
+		t.Fatal(err)
+	}
+	// Anti-vacuity: the canary really is in the state being swept.
+	rows, err := st.Objects("creds")
+	if err != nil || !strings.Contains(string(rows[0].Facts), canary) {
+		t.Fatalf("the canary must be planted for the sweep to mean anything: %v", err)
+	}
+
+	handler := NewHandler(st, func() float64 { return 26.0 }, fakeBootID)
+	// Every route the tier publishes, walked from the table it publishes —
+	// not the ones this test's author remembered.
+	published := get(t, handler, "/v1/routes")
+	var table struct {
+		Routes []struct {
+			Path string `json:"path"`
+		} `json:"routes"`
+	}
+	if err := json.Unmarshal(published.Body.Bytes(), &table); err != nil {
+		t.Fatal(err)
+	}
+	paths := []string{"/", "/v1/routes"}
+	for _, route := range table.Routes {
+		paths = append(paths, strings.ReplaceAll(route.Path, "{name}", "creds"))
+	}
+	for _, path := range paths {
+		body := get(t, handler, path).Body.String()
+		if strings.Contains(body, canary) {
+			t.Fatalf("%s published a declared credential", path)
+		}
+	}
+
+	// And the checkpoint, which is the channel that leaves the host.
+	var buf bytes.Buffer
+	if err := WriteCheckpoint(&buf, st, "cp-1", "storage-1", fakeBootID, nil); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(buf.String(), canary) {
+		t.Fatal("a declared credential reached the hub")
+	}
+	if !strings.Contains(buf.String(), "vault.example") {
+		t.Fatal("only the credential is withheld; the rest of the row must survive")
 	}
 }

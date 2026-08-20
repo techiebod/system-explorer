@@ -47,6 +47,10 @@ type Opinion struct {
 	Cites    []string `json:"cites"`
 }
 
+type declaredFact struct {
+	Discloses string `json:"discloses"`
+}
+
 type declaredCollection struct {
 	Name  string                     `json:"name"`
 	Facts map[string]json.RawMessage `json:"facts"`
@@ -296,4 +300,41 @@ func compare(value any, want json.RawMessage, ok func(a, b float64) bool) (bool,
 		return false, err
 	}
 	return ok(number, threshold), nil
+}
+
+
+// SecretFacts names the values a collection declares as credentials.
+//
+// `secret` means withheld at source and never emitted, so one arriving
+// here is already a collector misbehaving — which is exactly why every
+// tier that can check does. A plugin is code this repository does not
+// ship, and defence that only works when everybody behaves is not
+// defence. The NAME is not the secret and is reported, so a reader can
+// tell a withheld value from an absent one.
+func SecretFacts(document, collection string) (map[string]bool, error) {
+	if document == "" {
+		return nil, nil
+	}
+	var doc struct {
+		Collections []struct {
+			Name  string                  `json:"name"`
+			Facts map[string]declaredFact `json:"facts"`
+		} `json:"collections"`
+	}
+	if err := json.Unmarshal([]byte(document), &doc); err != nil {
+		return nil, fmt.Errorf("declaration is unreadable: %w", err)
+	}
+	for _, c := range doc.Collections {
+		if c.Name != collection {
+			continue
+		}
+		out := map[string]bool{}
+		for name, spec := range c.Facts {
+			if spec.Discloses == "secret" {
+				out[name] = true
+			}
+		}
+		return out, nil
+	}
+	return nil, nil
 }

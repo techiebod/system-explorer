@@ -113,10 +113,19 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 		if err != nil {
 			return "", err
 		}
+		secrets, err := SecretFacts(document, cs.Name)
+		if err != nil {
+			return "", err
+		}
 		for _, o := range rows {
 			var facts map[string]any
 			if json.Unmarshal(o.Facts, &facts) != nil {
 				continue
+			}
+			// Never on this page, and never into a rule either: a
+			// credential deciding an opinion would put it in the sentence.
+			for name := range secrets {
+				delete(facts, name)
 			}
 			var instance *string
 			if o.Scope != store.HostNative {

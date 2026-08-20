@@ -132,9 +132,27 @@ func NewHandler(st *store.Store, now func() float64, bootID string) http.Handler
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		// Withheld here as on every other channel. Found by the canary
+		// sweep, which had been written against the page and the
+		// checkpoint and not against this route — which is the whole
+		// reason item 11 is worded "no output channel" rather than as a
+		// list somebody maintains.
+		document, err := st.DeclarationFor(name)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		secrets, err := SecretFacts(document, name)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		views := make([]objectView, 0, len(rows))
 		for _, o := range rows {
 			v := objectView{ID: o.ID, Name: o.Name, Facts: o.Facts, At: o.At}
+			if len(secrets) > 0 {
+				v.Facts = withoutSecrets(o.Facts, secrets)
+			}
 			if o.Scope != store.HostNative {
 				v.Instance = &o.Scope
 			}

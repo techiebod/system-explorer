@@ -369,7 +369,23 @@ Only self-evident opinions live there, and that is not a preference: **intent ne
 
 Two supporting changes came with it. The store now keeps declaration **documents** beside their digests, which the rule table needs and which also removes a coupling: a session no longer re-asks live collectors for declarations it already holds, so a collector restarting during a checkpoint no longer costs the hub axes for facts it already has. And the checkpoint refuses an opinion whose subject the collection did not send — a verdict with nothing to go and look at.
 
-Still to come in this phase: MCP on collator and hub with a tool per route, the server-rendered UI at both scales, the MQTT findings projection, item 11 across every channel, and the plugin's representation facet.
+**Both scales render on the server, from one token set.** The producer renders, so §27 — the renderer knows nothing the producer knows — is settled structurally rather than by discipline, and the browser-side fourth-copy bugs this product has shipped three of become impossible. Neither renderer holds a severity table, a state table or a fact glossary. The token set is two files because the two renderers are in two languages and neither toolchain reads the other's tree; drift between them is a test failure, and the coverage is stated at the top of the copy.
+
+**One route table, three consumers.** The hub declares its routes once; the HTTP surface, the estate page and MCP are generated from it, so a tool per route is a property of the construction. Both tiers publish their own table, which is what lets one MCP surface become either — and why a plugin's collection is reachable the day it exists, since the tools are per ROUTE and never per collection.
+
+**MQTT is a projection out**: publish-only, findings and never facts, discovery retained and state never, availability driven by reach, and a republish protocol without which refusing retain is just silence. A resolved finding's discovery entry is removed rather than set to a good value.
+
+> **Gate 5 — clause by clause, 2026-08-20**
+>
+> · **item 11 across every channel including UI, MCP and MQTT** — green, and it found a real gap while being written. Every fact declares what it tells a reader and `secret` means withheld at source, but nothing enforced it, so a collector emitting one anyway would have had it rendered. Both tiers now drop declared credentials before any channel sees them and NAME what they withheld. The sweep walks each tier's **published route table** rather than a list its author remembered, which is how it caught the collator's objects route after the page and the checkpoint had already been fixed.
+> · **item 7's last half** — green at both ends. At the collator a rule citing, or a condition merely reading, an undeclared fact is refused; at the hub an opinion whose citations no held declaration backs reaches no roll-up and no answer.
+> · **MCP-parity check** — green, and structural rather than remembered.
+> · **UI smoke on both scales** — green: the collator's host page answers whether or not a hub is reachable, and the hub's estate page carries the answer, the reach, the opinions and the objects.
+> · **the plugin's two remaining facets** — green. An opinion declared by a collector this repository has never heard of reaches a finding with a lifecycle, proven end to end with the real collator binary. And a plugin is bound to the product's severity vocabulary by the CONTRACT — a rule's `level` `$ref`s the closed set — while state words need no binding at all, because a server-rendered page switches on nothing.
+>
+> **GATE 5 IS OPEN, 2026-08-20.**
+
+Phase 6 — the cut — is not started, and it is owner-supervised by its own rule.
 
 > **Gate 4 opens when**
 >

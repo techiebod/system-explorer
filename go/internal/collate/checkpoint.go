@@ -180,9 +180,24 @@ func WriteCheckpoint(w io.Writer, st *store.Store, id, host, bootID string, gap 
 		}
 		// Never nil: an empty array is the reading that a decline of
 		// `absent` leaves behind, and null would be a different claim.
+		document, err := st.DeclarationFor(cs.Name)
+		if err != nil {
+			return fmt.Errorf("read declaration for %s: %w", cs.Name, err)
+		}
+		secrets, err := SecretFacts(document, cs.Name)
+		if err != nil {
+			return fmt.Errorf("%s: %w", cs.Name, err)
+		}
 		objects := make([]checkpointObject, 0, len(rows))
 		for _, o := range rows {
 			co := checkpointObject{ID: o.ID, Name: o.Name, Facts: o.Facts, At: o.At}
+			// A declared credential never leaves this process, on any
+			// channel. It should not have been stored either; dropping it
+			// on the way out is what makes that true of collectors this
+			// repository does not ship.
+			if len(secrets) > 0 {
+				co.Facts = withoutSecrets(o.Facts, secrets)
+			}
 			if o.Scope != store.HostNative {
 				co.Instance = &o.Scope
 			}
@@ -193,10 +208,6 @@ func WriteCheckpoint(w io.Writer, st *store.Store, id, host, bootID string, gap 
 		// cannot produce yields no rules and no opinions member at all,
 		// which says "cannot evaluate" rather than "nothing is wrong".
 		var opinions *[]Opinion
-		document, err := st.DeclarationFor(cs.Name)
-		if err != nil {
-			return fmt.Errorf("read declaration for %s: %w", cs.Name, err)
-		}
 		rules, err := RulesFor(document, cs.Name)
 		if err != nil {
 			return fmt.Errorf("%s: %w", cs.Name, err)
@@ -227,4 +238,32 @@ func WriteCheckpoint(w io.Writer, st *store.Store, id, host, bootID string, gap 
 		return fmt.Errorf("write terminal: %w", err)
 	}
 	return nil
+}
+
+
+// withoutSecrets drops declared credentials from a fact mapping, keeping
+// everything else byte-identical where it can.
+func withoutSecrets(raw json.RawMessage, secrets map[string]bool) json.RawMessage {
+	var facts map[string]json.RawMessage
+	if json.Unmarshal(raw, &facts) != nil {
+		// Unreadable facts are sent as they were rather than silently
+		// blanked: this function withholds credentials, and pretending it
+		// can parse what it cannot would be a different claim.
+		return raw
+	}
+	changed := false
+	for name := range facts {
+		if secrets[name] {
+			delete(facts, name)
+			changed = true
+		}
+	}
+	if !changed {
+		return raw
+	}
+	out, err := json.Marshal(facts)
+	if err != nil {
+		return json.RawMessage(`{}`)
+	}
+	return out
 }
