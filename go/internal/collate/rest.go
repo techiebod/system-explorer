@@ -60,6 +60,14 @@ func NewHandler(st *store.Store, now func() float64, bootID string) http.Handler
 
 	registerPage(mux, st, now, bootID)
 
+	// The tier publishes its own route table, which is what lets an MCP
+	// surface generate a tool per route without knowing at build time what
+	// routes a tier has — and it is why a plugin's collection is reachable
+	// the day it exists: the tools are per ROUTE, never per collection.
+	mux.HandleFunc("GET /v1/routes", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]any{"routes": publishedRoutes})
+	})
+
 	mux.HandleFunc("GET /v1/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]bool{"ok": true})
 	})
@@ -214,4 +222,36 @@ func writeJSON(w http.ResponseWriter, v any) {
 		// body that half-arrived. Nothing to do but drop the connection.
 		return
 	}
+}
+
+
+// publishedRoutes is this tier's read surface, declared once and served
+// so an MCP surface can become it. The warning a model needs about
+// third-party text is the consumer's to attach — it is the same sentence
+// at both scales, and duplicating it here would be a second copy of a
+// thing the consumer already says.
+//
+// Every entry is a GET. No mutating route exists to misconfigure, which
+// is read-only as a structural property rather than a policy.
+var publishedRoutes = []map[string]any{
+	{"path": "/v1/health", "tool": "host_health",
+		"summary": "Whether this collator is answering at all.",
+		"params": []string{}},
+	{"path": "/v1/collections", "tool": "list_collections",
+		"summary": "Every collection this host holds, with its generation, its " +
+			"object count and how fresh the applied state is. An age is served " +
+			"only within the boot that produced it; across a reboot the clock " +
+			"domain is stated rather than subtracted through.",
+		"params": []string{}},
+	{"path": "/v1/collections/{name}/objects", "tool": "get_collection",
+		"summary": "One collection's applied objects. Reaches a plugin's " +
+			"collection the day it exists, because nothing here names a " +
+			"first-party one.",
+		"params": []string{"name"}},
+	{"path": "/v1/collections/{name}/relations", "tool": "get_relations",
+		"summary": "One collection's assembled relations, each carrying its " +
+			"observability — asserted is NOT a degraded confirmed, and an " +
+			"unresolved target renders as an edge into open space rather than " +
+			"as no edge at all.",
+		"params": []string{"name"}},
 }

@@ -401,3 +401,42 @@ func TestHostPageShowsOpinionsWithTheirGrounds(t *testing.T) {
 		t.Fatal("the level comes from the rule table")
 	}
 }
+
+// Both scales publish their own route table, so one MCP surface can
+// become either without knowing at build time what routes a tier has.
+func TestTheTierPublishesItsRoutes(t *testing.T) {
+	rr := get(t, NewHandler(seeded(t), func() float64 { return 26.0 }, fakeBootID),
+		"/v1/routes")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("%d", rr.Code)
+	}
+	var payload struct {
+		Routes []struct {
+			Path, Tool, Summary string
+			Params              []string
+		} `json:"routes"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if len(payload.Routes) < 4 {
+		t.Fatalf("a tier that publishes no routes has no surface: %+v", payload.Routes)
+	}
+	seen := map[string]bool{}
+	for _, route := range payload.Routes {
+		if route.Path == "" || route.Tool == "" || route.Summary == "" {
+			t.Fatalf("a route with no tool or no summary cannot become one: %+v", route)
+		}
+		if seen[route.Tool] {
+			t.Fatalf("two routes claim the tool %q", route.Tool)
+		}
+		seen[route.Tool] = true
+		// Every published route must actually answer, or the table is a
+		// promise the tier does not keep.
+		path := strings.ReplaceAll(route.Path, "{name}", "identity")
+		if got := get(t, NewHandler(seeded(t), func() float64 { return 26.0 },
+			fakeBootID), path); got.Code != http.StatusOK {
+			t.Fatalf("%s published and answered %d", path, got.Code)
+		}
+	}
+}
