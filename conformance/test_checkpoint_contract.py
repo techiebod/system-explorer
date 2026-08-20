@@ -66,7 +66,8 @@ def emit_samples() -> dict[str, list[dict]]:
         pytest.skip("go toolchain not present")
     out = Path(tempfile.mkdtemp(prefix="se-checkpoint-samples"))
     run = subprocess.run(
-        [go, "test", "./internal/collate/", "-run", "TestEmitsConformanceSamples", "-count=1"],
+        [go, "test", "./internal/collate/", "-count=1",
+         "-run", "TestEmitsConformanceSamples|TestEmitsSessionSamples"],
         cwd=REPO / "go",
         env={**os.environ, "SE_CHECKPOINT_SAMPLES": str(out)},
         capture_output=True,
@@ -78,8 +79,29 @@ def emit_samples() -> dict[str, list[dict]]:
         "the emitter produced no samples — a green run over an empty set is "
         "the vacuous pass this suite exists to refuse"
     )
-    return {p.stem: [json.loads(line) for line in p.read_text().splitlines() if line.strip()]
-            for p in files}
+    parsed = {p.stem: [json.loads(line) for line in p.read_text().splitlines() if line.strip()]
+              for p in files}
+    for p in sorted((out / "sessions").glob("*.jsonl")):
+        parsed["session:" + p.stem] = [
+            json.loads(line) for line in p.read_text().splitlines() if line.strip()
+        ]
+    return parsed
+
+
+def checkpoints_only(samples: dict[str, list[dict]]) -> dict[str, list[dict]]:
+    """Drop the session samples' declaration framing.
+
+    A session opens with records the checkpoint schema has never heard of,
+    deliberately — the framing CARRIES a declaration and is not one — so
+    the checkpoint half is what this file judges, and the framing is
+    judged where it is consumed, in the session suite.
+    """
+    out = {}
+    for name, records in samples.items():
+        kept = [r for r in records if r.get("record") != "declaration"]
+        if kept:
+            out[name] = kept
+    return out
 
 
 @pytest.fixture(scope="module")
@@ -89,7 +111,7 @@ def samples() -> dict[str, list[dict]]:
 
 def test_every_record_validates(samples: dict[str, list[dict]]) -> None:
     validator = _validator()
-    for name, records in samples.items():
+    for name, records in checkpoints_only(samples).items():
         assert records, f"{name}: no records"
         for i, record in enumerate(records):
             errors = sorted(validator.iter_errors(record), key=str)
@@ -100,7 +122,7 @@ def test_every_record_validates(samples: dict[str, list[dict]]) -> None:
 
 def test_each_checkpoint_is_well_formed(samples: dict[str, list[dict]]) -> None:
     """The rules that span records, which no single-record schema can hold."""
-    for name, records in samples.items():
+    for name, records in checkpoints_only(samples).items():
         assert records[0]["record"] == "manifest", f"{name}: opens with a manifest"
         assert records[-1]["record"] == "terminal", f"{name}: closes with a terminal"
         ids = {r["checkpoint"] for r in records}

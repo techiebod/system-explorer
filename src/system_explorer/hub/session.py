@@ -14,6 +14,15 @@ kind the same way; asking "which phase is this connection in" is the
 question the protocol actually answers, and sniffing shapes would be a
 second, weaker copy of the ordering rule.
 
+**A declaration arrives framed, and its digest is a JOIN KEY at this hop
+rather than an integrity check.** The collator computed it over the exact
+bytes the collector emitted and already refused the batch if
+`begin.declaration` disagreed — integrity belongs to that hop, where the
+bytes are. What the hub needs is a key to join a manifest entry to the
+axes it names, so the framing carries the document parsed and the digest
+beside it, and re-hashing here would commit to a re-serialisation the
+collector never made.
+
 **On a reversed connection an unknown declaration hash cannot be
 fetched.** The contract's own note says an unknown one is fetched rather
 than guessed, which was written before the connection reversed: a hub has
@@ -105,17 +114,12 @@ class Session:
         if self.phase is Phase.DECLARATIONS:
             if record.get("record") == "manifest":
                 return self._open_checkpoint(record)
-            if digest is None:
-                raise SessionRefused(
-                    "declaration-unhashed",
-                    "a declaration arrives with the hash of the bytes it was sent as; "
-                    "computing one here would commit to a re-serialisation",
-                )
+            document, digest = self._unframe(record, digest)
             # Held rather than indexed: a declaration belongs to a host and
             # the host's name is not known until the manifest names it. The
             # transport's idea of who dialled is not a reading of the
             # machine, and a NAT-mode dial makes it wrong.
-            self._pending.append((record, digest))
+            self._pending.append((document, digest))
             return None
         if self.phase is Phase.CHECKPOINT:
             snapshot = self._receiver.ingest(dict(record))
@@ -128,6 +132,48 @@ class Session:
             "stream-unimplemented",
             "the ordinary stream after a checkpoint is not built yet",
         )
+
+    @staticmethod
+    def _unframe(
+        record: Mapping[str, Any], digest: str | None
+    ) -> tuple[Mapping[str, Any], str]:
+        """Take the declaration and its digest out of the session framing.
+
+        Two shapes are accepted and they are one shape: a framed record
+        from the wire, and a bare document with its digest passed beside
+        it, which is how a caller drives a session without a socket. The
+        second exists for tests and for anything that already holds the
+        pair — never as a second wire format.
+        """
+        if record.get("record") == "declaration":
+            document = record.get("document")
+            framed = record.get("digest")
+            if not isinstance(document, Mapping) or not framed:
+                raise SessionRefused(
+                    "declaration-unframed",
+                    "a framed declaration carries `document` and `digest`",
+                )
+            return document, framed
+        kind = record.get("record")
+        if kind in {"collection_state", "terminal"}:
+            # A checkpoint record with no manifest ahead of it. Named for
+            # what it is rather than for the member it happens to lack:
+            # "unhashed" would send somebody looking at the collator's
+            # hashing when the fault is the order.
+            raise SessionRefused(
+                "out-of-order",
+                f"a {kind} record arrived in the declaration phase; the order is "
+                "declarations, then a checkpoint, and a checkpoint opens with its "
+                "manifest",
+            )
+        if digest is None:
+            raise SessionRefused(
+                "declaration-unhashed",
+                "a declaration arrives with the digest the collator computed over the "
+                "collector's own bytes; computing one here would commit to a "
+                "re-serialisation the collector never made",
+            )
+        return record, digest
 
     def _open_checkpoint(self, manifest: Mapping[str, Any]) -> None:
         host = manifest.get("host")
