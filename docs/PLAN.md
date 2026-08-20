@@ -395,7 +395,13 @@ Two supporting changes came with it. The store now keeps declaration **documents
 > · **UI smoke on both scales** — green: the collator's host page answers whether or not a hub is reachable, and the hub's estate page carries the answer, the reach, the opinions and the objects.
 > · **the plugin's two remaining facets** — green. An opinion declared by a collector this repository has never heard of reaches a finding with a lifecycle, proven end to end with the real collator binary. And a plugin is bound to the product's severity vocabulary by the CONTRACT — a rule's `level` `$ref`s the closed set — while state words need no binding at all, because a server-rendered page switches on nothing.
 >
-> **GATE 5 IS OPEN, 2026-08-20.**
+> **GATE 5 WAS DECLARED OPEN AND IS REOPENED, 2026-08-20.** The surfaces clause is not met.
+>
+> `UI smoke on both scales` was satisfied by assertions that cannot see the thing they were supposed to judge. Escaping, no-vocabulary-copies, self-containment, page size — every property its author thought of, and not one of them can tell a usable page from a debug dump. **The gate was opened on a check that enumerated what its author thought of and reported success about the rest**, which is the defect this suite exists to catch, in the clause about the surface a person actually looks at. It was found by the owner opening the page, not by the suite.
+>
+> The gap is not the eighteen unported collections above, and is worse than them: **on a collection that IS ported, the rewrite's page is a dump.** The shipping UI renders one fact per column, states what its default filter is hiding and offers to reveal it, facets by a fact's values, nests slices over their units, links a machine scope to the guest it runs and a docker scope to the container it holds, and reaches evidence and lookup from a row. The rewrite's page joins the facts into one cell with commas and truncates.
+>
+> Reopened rather than amended, because the clause as written is the right clause.
 
 Phase 6 — the cut — is not started, and it is owner-supervised by its own rule.
 
