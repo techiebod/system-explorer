@@ -229,3 +229,42 @@ def test_a_host_with_no_reading_at_all_still_narrows_coverage() -> None:
     answer, *_ = build(host("storage-1", "4f9c2e1"), host("edge-1", None))
     assert answer["epistemic"] == "partial"
     assert answer["verdict"] != "healthy"
+
+
+def test_every_silent_host_says_why_it_was_silent() -> None:
+    """Measured on a real lab guest, 2026-08-20: two hosts contributed no
+    revision for two different reasons and the answer reported one count.
+    Reporting the reasons that fit the reach vocabulary and staying silent
+    about the rest is the estate's most repeated defect."""
+    estate = Estate(declared=("storage-1", "edge-1", "nas-1"))
+    declarations = Declarations()
+    # storage-1 read its generations; none is booted-with-a-revision.
+    unrevised = HostSnapshot(
+        host="storage-1", checkpoint="cp", boot_id=BOOT,
+        collections={"generations": CollectionSnapshot(
+            name="generations", generation=7, freshness="current", stale_reason=None,
+            objects=({"id": "generation:1", "name": "1", "instance": None,
+                      "facts": {"Booted": True}},))},
+        declarations=("sha256:nix",), history_gap=None)
+    # edge-1 is not a NixOS host at all.
+    no_nix = HostSnapshot(
+        host="edge-1", checkpoint="cp", boot_id=BOOT, collections={},
+        declarations=("sha256:x",), history_gap=None)
+    for snapshot in (unrevised, no_nix):
+        declarations.add(snapshot.host, NIX_DECLARATION, "sha256:nix")
+        estate.promote(snapshot)
+    estate.disconnected("storage-1")  # dark, and still owed an explanation
+
+    intent = Intent.load({
+        "schema": "se.intent/1", "estate": "home", "revision": 41,
+        "reviewed": "2026-08-20",
+        "membership": {"hosts": {h: {} for h in ("storage-1", "edge-1", "nas-1")}}})
+    answer = estate_current(assemble(estate, intent, declarations), estate, intent)
+
+    assert "booted generation carries no revision" in answer["answer"]
+    assert "runs no NixOS generations" in answer["answer"]
+    assert "has not reported since this hub started" in answer["answer"]
+    # A dark host is still owed its reason: going away and having had
+    # nothing to say are different facts.
+    assert "storage-1" in answer["answer"] and "edge-1" in answer["answer"]
+    assert {d["reason"] for d in answer["reach"]["declined"]} == {"unsupported"}

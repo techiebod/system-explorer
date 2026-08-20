@@ -129,19 +129,40 @@ def estate_current(
             unswept.append(host)
         elif reach is Reach.DARK:
             dark.append({"host": host, "since": "unknown"})
+    # Why each host contributed no reading, host by host. A dark host is
+    # NOT skipped here: it went away, and the reason it had nothing to say
+    # while it was here is a different fact from its going away. Reporting
+    # only the reasons that fit the reach vocabulary and staying silent
+    # about the rest is this estate's most repeated defect, and it hid two
+    # different silences behind one count on a real host on 2026-08-20.
+    silent: dict[str, str] = {}
     for host in sorted(set(view.reach) - set(revisions) - set(unswept)):
-        if any(d["host"] == host for d in dark):
-            continue
         snapshot = estate.visible(host)
         if snapshot is None:
+            silent[host] = "nothing promoted"
             continue
         state = snapshot.collections.get(COLLECTION)
         if state is None:
             declined.append({"host": host, "collection": f"nix/{COLLECTION}",
                              "reason": "unsupported"})
+            silent[host] = "runs no NixOS generations"
+        elif state.generation == 0:
+            declined.append({"host": host, "collection": f"nix/{COLLECTION}",
+                             "reason": state.stale_reason or "unavailable"})
+            silent[host] = "has never read its generations"
         elif state.freshness != "current" and state.stale_reason:
             declined.append({"host": host, "collection": f"nix/{COLLECTION}",
                              "reason": state.stale_reason})
+            silent[host] = f"generations are stale ({state.stale_reason})"
+        else:
+            # It read its generations and none of them is BOTH booted and
+            # carrying a revision. Not a decline — the collector answered
+            # — so it belongs in the sentence rather than in `declined`,
+            # and it must not be silently folded into a count. Measured on
+            # a real guest: the booted generation carried no revision while
+            # a later, unbooted one did, and answering from that one would
+            # be reporting a revision the host is not running.
+            silent[host] = "its booted generation carries no revision"
 
     distinct = sorted(set(revisions.values()))
     answered = len(revisions)
@@ -186,8 +207,13 @@ def estate_current(
         epistemic = "complete" if unaccounted == 0 \
             and not view.coverage.sources_unreadable else "partial"
     if unanswered:
+        named = "; ".join(f"{host} {why}" for host, why in sorted(silent.items()))
+        for host in sorted(unswept):
+            named = f"{host} has not reported since this hub started" + (
+                f"; {named}" if named else "")
         sentence += (
-            f" {unanswered} of {len(view.reach)} declared hosts could not answer."
+            f" {unanswered} of {len(view.reach)} declared hosts could not answer"
+            + (f" — {named}." if named else ".")
         )
     if stale_contributors:
         sentence += (
