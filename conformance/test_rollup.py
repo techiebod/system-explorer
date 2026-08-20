@@ -209,3 +209,31 @@ def test_coverage_is_identities_and_separates_ruled_from_unruled() -> None:
     )
     assert c.sources_readable == ("tailnet-control-plane",)
     assert c.sources_unreadable == ("site-dhcp",)
+
+
+def test_two_instances_across_two_collators_stay_four_rows() -> None:
+    """Gate 4's wording of item 1's hub half, exactly: identical native
+    names, two instances, two collators. Every pair of these four is a
+    merge somebody could plausibly write, and none of them may happen."""
+    estate = Estate()
+    for host in ("storage-1", "edge-1"):
+        estate.promote(snapshot(host, "identity", [
+            {"id": "identity:indexer:3", "name": "indexer:3", "instance": None,
+             "facts": {"Port": f"{host}-host-native"}},
+            {"id": "identity:indexer:3", "name": "indexer:3", "instance": "radarr",
+             "facts": {"Port": f"{host}-radarr"}},
+        ]))
+    view = assemble(
+        estate, intent_for(),
+        declarations_for(("storage-1", declaration("servarr", "identity", "Port")),
+                         ("edge-1", declaration("servarr", "identity", "Port"))),
+    )
+    assert len(view.rows) == 4, [r.id for r in view.rows]
+    assert {r.facts["Port"] for r in view.rows} == {
+        "storage-1-host-native", "storage-1-radarr",
+        "edge-1-host-native", "edge-1-radarr",
+    }
+    # And every row is distinguishable by id alone, because a consumer
+    # that had to read the facts to tell them apart has already merged
+    # them everywhere it counts them.
+    assert len({r.id for r in view.rows}) == 4

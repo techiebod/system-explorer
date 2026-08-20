@@ -7,10 +7,26 @@
 //	SE_LISTEN      read API bind address (default 127.0.0.1:8095)
 //	SE_ONESHOT     run one acquisition round and exit — the crash
 //	               harness's vehicle, and a person's smoke test
+//	SE_HUB_ADDR    host:port of this site's hub. ABSENT IS A COMPLETE
+//	               PRODUCT, not a degraded one: a host with no hub still
+//	               serves its own API in full, which is the founding
+//	               invariant that aggregation is never a precondition for
+//	               observation (DESIGN §08).
+//	SE_HOST        this collator's own scope name, required with
+//	               SE_HUB_ADDR. Not derived from the connection, because
+//	               the transport's idea of who dialled is not a reading of
+//	               the machine and a NAT-mode dial makes it wrong.
+//	SE_HUB_CA      the hub's certificate authority
+//	SE_CLIENT_CERT the collator's own client identity
+//	SE_CLIENT_KEY  its key
+//	SE_HUB_INSECURE  dial without TLS. Must be asked for BY NAME — an
+//	               insecure default would mean a misconfigured estate
+//	               streams its state in clear and nothing says so.
 package collate
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
@@ -69,6 +85,13 @@ func Main() int {
 			if err := AcquireOnce(context.Background(), st, &wire.Client{Socket: c.socket}); err != nil {
 				fmt.Fprintf(os.Stderr, "se-collate: %s: %v\n", c.name, err)
 			}
+		}
+		// And then, if a hub is configured, tell it. One round and one
+		// session is what a smoke test and the transport suite both need,
+		// and it is the same code path the daemon runs.
+		if err := dialHubOnce(st, collectors, bootID); err != nil {
+			fmt.Fprintf(os.Stderr, "se-collate: hub: %v\n", err)
+			return 1
 		}
 		return 0
 	}
@@ -164,4 +187,56 @@ func nextInterval(client *wire.Client) time.Duration {
 		return retryInterval
 	}
 	return interval
+}
+
+
+// dialHubOnce sends one session to the configured hub, or does nothing
+// when none is configured — which is a complete product and not a
+// degraded one.
+func dialHubOnce(st *store.Store, collectors []collectorConfig, bootID string) error {
+	addr := os.Getenv("SE_HUB_ADDR")
+	if addr == "" {
+		return nil
+	}
+	host := os.Getenv("SE_HOST")
+	if host == "" {
+		return fmt.Errorf("SE_HUB_ADDR is set and SE_HOST is not; a checkpoint " +
+			"names its own scope and the transport cannot name it")
+	}
+	cfg, err := hubTLS()
+	if err != nil {
+		return err
+	}
+	declarers := map[string]Declarer{}
+	for _, c := range collectors {
+		declarers[c.name] = &wire.Client{Socket: c.socket}
+	}
+	// The checkpoint id is minted per session from the boot clock: it has
+	// to be unique within a connection and nothing more, and a reading
+	// the collator already trusts beats inventing a second source of
+	// identity for it.
+	id := fmt.Sprintf("cp-%s-%d", host, int64(BootNow()*1e6))
+	// History gap is nil for now: this process holds no memory of a
+	// previous connection, and a fabricated interval would be worse than
+	// the stated absence of one. The daemon's reconnect loop is what will
+	// carry it, and until that exists every session is a first connection
+	// and says so.
+	return Session(context.Background(), addr, cfg, st, declarers, id, host, bootID, nil)
+}
+
+// hubTLS builds the mutual identity, or refuses. Plaintext must be asked
+// for by name: an insecure default would mean a misconfigured estate
+// streams its whole state in clear and nothing anywhere says so.
+func hubTLS() (*tls.Config, error) {
+	if os.Getenv("SE_HUB_INSECURE") != "" {
+		return nil, nil
+	}
+	cert, key, ca := os.Getenv("SE_CLIENT_CERT"), os.Getenv("SE_CLIENT_KEY"), os.Getenv("SE_HUB_CA")
+	if cert == "" || key == "" || ca == "" {
+		return nil, fmt.Errorf("SE_CLIENT_CERT, SE_CLIENT_KEY and SE_HUB_CA are all " +
+			"required to dial a hub (or SE_HUB_INSECURE, deliberately): reversing the " +
+			"connection removes the network as a containment layer, so identity is " +
+			"the only one left")
+	}
+	return ClientConfig(cert, key, ca)
 }
