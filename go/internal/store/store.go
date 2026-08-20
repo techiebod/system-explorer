@@ -54,7 +54,8 @@ CREATE TABLE IF NOT EXISTS collections (
   content_hash TEXT,
   boot_id      TEXT,
   stale        INTEGER NOT NULL DEFAULT 0,
-  stale_reason TEXT
+  stale_reason TEXT,
+  declaration  TEXT
 );
 CREATE TABLE IF NOT EXISTS objects (
   collection TEXT NOT NULL,
@@ -103,7 +104,49 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("apply schema: %w", err)
 	}
+	if err := migrate(db); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return &Store{db: db}, nil
+}
+
+// migrate adds columns that CREATE TABLE IF NOT EXISTS cannot: an
+// existing store keeps the table it already has, so a new column has to
+// be asked for by name. Additive only, and each step names the store it
+// is upgrading FROM, because a migration nobody can date is one nobody
+// can reason about.
+//
+// The `declaration` column was added on 2026-08-20 for the checkpoint's
+// manifest, which must name the declaration each collection was learned
+// under. A store written before it carries NULL, and BuildCheckpoint
+// refuses to invent a hash for those rows rather than sending one the
+// hub would fetch and fail to match.
+func migrate(db *sql.DB) error {
+	var has bool
+	rows, err := db.Query(`SELECT name FROM pragma_table_info('collections')`)
+	if err != nil {
+		return fmt.Errorf("inspect collections: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return err
+		}
+		if name == "declaration" {
+			has = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if !has {
+		if _, err := db.Exec(`ALTER TABLE collections ADD COLUMN declaration TEXT`); err != nil {
+			return fmt.Errorf("add collections.declaration: %w", err)
+		}
+	}
+	return nil
 }
 
 func (s *Store) Close() error { return s.db.Close() }
@@ -115,7 +158,7 @@ func wallNow() string { return time.Now().UTC().Format(time.RFC3339Nano) }
 // crash between issuing and applying can never lead to a reuse. A fresh
 // acquisition always takes a new generation; only re-sending bytes
 // already captured may reuse one (DESIGN §19).
-func (s *Store) IssueGenerations(names []string) (map[string]uint64, error) {
+func (s *Store) IssueGenerations(names []string, declaration string) (map[string]uint64, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return nil, err
@@ -124,10 +167,15 @@ func (s *Store) IssueGenerations(names []string) (map[string]uint64, error) {
 	issued := map[string]uint64{}
 	for _, name := range names {
 		var gen uint64
+		// The declaration is stamped here rather than at apply, because
+		// this is the moment the collector told us the collection exists
+		// — a collection that never applies is still one the hub must be
+		// able to resolve fact axes for, and it is exactly the row the
+		// manifest carries at generation 0.
 		err := tx.QueryRow(`
-			INSERT INTO collections (name, issued_gen) VALUES (?, 1)
-			ON CONFLICT(name) DO UPDATE SET issued_gen = issued_gen + 1
-			RETURNING issued_gen`, name).Scan(&gen)
+			INSERT INTO collections (name, issued_gen, declaration) VALUES (?, 1, ?)
+			ON CONFLICT(name) DO UPDATE SET issued_gen = issued_gen + 1, declaration = excluded.declaration
+			RETURNING issued_gen`, name, declaration).Scan(&gen)
 		if err != nil {
 			return nil, fmt.Errorf("issue generation for %s: %w", name, err)
 		}
@@ -436,6 +484,10 @@ type CollectionState struct {
 	ObjectCount int
 	Stale       bool
 	StaleReason *string
+	// Declaration is the declaration hash this collection was last
+	// learned under, or nil for a store written before the column
+	// existed. Nil is a stated unknown and never a hash to invent.
+	Declaration *string
 }
 
 // Collections reports every known collection. OldestAt is MIN(at) over
@@ -445,7 +497,8 @@ func (s *Store) Collections() ([]CollectionState, error) {
 	rows, err := s.db.Query(`
 		SELECT c.name, c.applied_gen, c.applied_at, c.boot_id, c.stale, c.stale_reason,
 		       (SELECT COUNT(*) FROM objects o WHERE o.collection = c.name),
-		       (SELECT MIN(o.at) FROM objects o WHERE o.collection = c.name)
+		       (SELECT MIN(o.at) FROM objects o WHERE o.collection = c.name),
+		       c.declaration
 		FROM collections c ORDER BY c.name`)
 	if err != nil {
 		return nil, err
@@ -454,12 +507,15 @@ func (s *Store) Collections() ([]CollectionState, error) {
 	var out []CollectionState
 	for rows.Next() {
 		var cs CollectionState
-		var appliedAt, bootID, staleReason sql.NullString
+		var appliedAt, bootID, staleReason, declaration sql.NullString
 		var stale int
 		var oldest sql.NullFloat64
 		if err := rows.Scan(&cs.Name, &cs.Generation, &appliedAt, &bootID, &stale,
-			&staleReason, &cs.ObjectCount, &oldest); err != nil {
+			&staleReason, &cs.ObjectCount, &oldest, &declaration); err != nil {
 			return nil, err
+		}
+		if declaration.Valid && declaration.String != "" {
+			cs.Declaration = &declaration.String
 		}
 		if appliedAt.Valid {
 			cs.AppliedAt = &appliedAt.String
@@ -485,13 +541,19 @@ type ObjectRow struct {
 	Name  string
 	Facts json.RawMessage
 	At    float64
+	// Scope is the instance the object was published under, HostNative
+	// for an instance-less batch. It is part of the row and not merely
+	// part of the primary key: two instances mint the SAME id string,
+	// so a reader handed rows without it sees one object twice and has
+	// no way to tell that it is two (acceptance item 1).
+	Scope string
 }
 
 // Objects lists a collection's applied objects, every scope, ordered by
-// id for a stable read.
+// scope then id for a stable read.
 func (s *Store) Objects(collection string) ([]ObjectRow, error) {
 	rows, err := s.db.Query(`
-		SELECT id, name, facts, at FROM objects
+		SELECT id, name, facts, at, scope FROM objects
 		WHERE collection = ? ORDER BY scope, id`, collection)
 	if err != nil {
 		return nil, err
@@ -501,7 +563,7 @@ func (s *Store) Objects(collection string) ([]ObjectRow, error) {
 	for rows.Next() {
 		var o ObjectRow
 		var facts string
-		if err := rows.Scan(&o.ID, &o.Name, &facts, &o.At); err != nil {
+		if err := rows.Scan(&o.ID, &o.Name, &facts, &o.At, &o.Scope); err != nil {
 			return nil, err
 		}
 		o.Facts = json.RawMessage(facts)

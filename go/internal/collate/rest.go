@@ -36,11 +36,18 @@ type collectionView struct {
 	StaleReason         *string  `json:"stale_reason"`
 }
 
+// objectView is one applied object as the API serves it. Instance is a
+// required member and never omitempty: two instances mint the same id,
+// so a row without it is indistinguishable from its sibling — and
+// letting an ABSENT member mean host-native would be the magic value the
+// identity model refuses, readable only by somebody who already knows
+// the convention. Null is the host-native reading, spelled out.
 type objectView struct {
-	ID    string          `json:"id"`
-	Name  string          `json:"name"`
-	Facts json.RawMessage `json:"facts"`
-	At    float64         `json:"at"`
+	ID       string          `json:"id"`
+	Instance *string         `json:"instance"`
+	Name     string          `json:"name"`
+	Facts    json.RawMessage `json:"facts"`
+	At       float64         `json:"at"`
 }
 
 // NewHandler builds the read API over one store. now is the boot-clock
@@ -117,7 +124,11 @@ func NewHandler(st *store.Store, now func() float64, bootID string) http.Handler
 		}
 		views := make([]objectView, 0, len(rows))
 		for _, o := range rows {
-			views = append(views, objectView{ID: o.ID, Name: o.Name, Facts: o.Facts, At: o.At})
+			v := objectView{ID: o.ID, Name: o.Name, Facts: o.Facts, At: o.At}
+			if o.Scope != store.HostNative {
+				v.Instance = &o.Scope
+			}
+			views = append(views, v)
 		}
 		writeJSON(w, views)
 	})

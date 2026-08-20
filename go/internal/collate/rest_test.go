@@ -16,7 +16,7 @@ import (
 func seeded(t *testing.T) *store.Store {
 	t.Helper()
 	st := openStore(t)
-	if _, err := st.IssueGenerations([]string{"identity"}); err != nil {
+	if _, err := st.IssueGenerations([]string{"identity"}, "sha256:test"); err != nil {
 		t.Fatal(err)
 	}
 	objects := []store.Object{
@@ -264,5 +264,59 @@ func TestRelationsRouteRendersResolutionAndObservability(t *testing.T) {
 		if row["observability"] != "asserted" {
 			t.Fatalf("%s: observability is required and stated, not inferred: %+v", name, row)
 		}
+	}
+}
+
+// Acceptance item 1, at the SERVING path rather than in the store. The
+// store keeps two instances apart by scope and its own test proves it —
+// but Objects() dropped the scope column, so both rows reached this API
+// carrying the identical minted id and nothing to tell them apart. A
+// consumer reading two rows called `identity:indexer:3` cannot say which
+// instance either belongs to, which is the merge item 1 forbids arriving
+// one layer later than the layer that was tested.
+//
+// Found 2026-08-20 while building the checkpoint, which would have
+// inherited it and made item 1's hub half unreachable.
+func TestTwoInstancesAreDistinguishableOnTheWire(t *testing.T) {
+	st := openStore(t)
+	for range 2 {
+		if _, err := st.IssueGenerations([]string{"identity"}, "sha256:test"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	apply := func(instance string, gen uint64, batch, facts string) {
+		t.Helper()
+		outcome, err := st.ApplyCommit("identity", instance, gen, batch, fakeBootID,
+			[]store.Object{{ID: "identity:indexer:3", Name: "indexer:3",
+				Facts: json.RawMessage(facts), At: 10}})
+		if err != nil || outcome != store.OutcomeApplied {
+			t.Fatalf("apply %q: %v %s", instance, err, outcome)
+		}
+	}
+	apply(store.HostNative, 1, "b1", `{"Port":1}`)
+	apply("radarr", 2, "b2", `{"Port":2}`)
+
+	h := NewHandler(st, func() float64 { return 26.0 }, fakeBootID)
+	rr := get(t, h, "/v1/collections/identity/objects")
+	var rows []map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &rows); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("two instances, two rows: %s", rr.Body.String())
+	}
+	// Present on BOTH rows, never omitted: "absent means host-native"
+	// would be the magic value the identity design refuses, and a reader
+	// would have to know the convention to interpret the row at all.
+	for i, row := range rows {
+		if _, ok := row["instance"]; !ok {
+			t.Fatalf("row %d carries no instance member: %v", i, row)
+		}
+	}
+	if rows[0]["instance"] != nil {
+		t.Fatalf("host-native instance must serialise as null, got %v", rows[0]["instance"])
+	}
+	if rows[1]["instance"] != "radarr" {
+		t.Fatalf("named instance must serialise as its name, got %v", rows[1]["instance"])
 	}
 }

@@ -34,7 +34,7 @@ func obj(name, facts string, at float64) Object {
 
 func issue(t *testing.T, st *Store, names ...string) map[string]uint64 {
 	t.Helper()
-	issued, err := st.IssueGenerations(names)
+	issued, err := st.IssueGenerations(names, "sha256:test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestIssuedGenerationsAreMonotonicAndPersisted(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer st2.Close()
-	issued, err := st2.IssueGenerations([]string{"identity"})
+	issued, err := st2.IssueGenerations([]string{"identity"}, "sha256:test")
 	if err != nil {
 		t.Fatal(err)
 	}
