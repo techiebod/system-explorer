@@ -40,6 +40,7 @@ STREAM = "se.stream.1.json"
 DECLARATION = "se.declaration.1.json"
 INTENT = "se.intent.1.json"
 ANSWER = "se.answer.1.json"
+CHECKPOINT = "se.checkpoint.1.json"
 
 
 def _registry(override: dict | None = None) -> Registry:
@@ -280,6 +281,46 @@ COMPLETE_BESIDE_DARK = _answer(
 # ── the bases are accepted, or every rejection below is vacuous ──────────
 
 
+# ── the checkpoint's bases (DESIGN 06) ───────────────────────────────────
+
+MANIFEST = {
+    "record": "manifest",
+    "checkpoint": "cp-1",
+    "host": "storage-1",
+    "boot_id": "5e000000-0000-4000-8000-000000000001",
+    "declarations": ["sha256:11e4"],
+    "collections": [{"collection": "pools", "generation": 412, "freshness": "current"}],
+}
+
+COLLECTION_STATE = {
+    "record": "collection_state",
+    "checkpoint": "cp-1",
+    "collection": "pools",
+    "generation": 412,
+    "objects": [],
+}
+
+TERMINAL = {
+    "record": "terminal",
+    "checkpoint": "cp-1",
+    "collections": 1,
+    "history_gap": None,
+}
+
+
+def _checkpoint(base: dict, **overrides) -> dict:
+    document = copy.deepcopy(base)
+    document.update(overrides)
+    return document
+
+
+def _manifest_entry(**overrides) -> dict:
+    """A manifest carrying exactly one collection entry, mutated."""
+    entry = {"collection": "pools", "generation": 412, "freshness": "current"}
+    entry.update(overrides)
+    return _checkpoint(MANIFEST, collections=[entry])
+
+
 @pytest.mark.parametrize(
     "schema_file,document",
     [
@@ -307,6 +348,25 @@ COMPLETE_BESIDE_DARK = _answer(
         ),
         # null instance is the one legal null: host-native scope (DESIGN 19).
         pytest.param(STREAM, _stream(BEGIN, instance=None), id="instance-null"),
+        pytest.param(CHECKPOINT, MANIFEST, id="manifest"),
+        pytest.param(CHECKPOINT, COLLECTION_STATE, id="collection_state"),
+        pytest.param(CHECKPOINT, TERMINAL, id="terminal"),
+        # A stale collection carries the reason that made it stale, and a
+        # never-applied one is generation 0 — both readings, both accepted.
+        pytest.param(
+            CHECKPOINT,
+            _manifest_entry(generation=0, freshness="stale", stale_reason="unsupported"),
+            id="never-applied-and-stale",
+        ),
+        # An empty object array is the reading a decline of `absent` leaves:
+        # the collection applied and holds nothing.
+        pytest.param(CHECKPOINT, COLLECTION_STATE, id="collection-state-empty"),
+        # A gap that happened, stated with both ends.
+        pytest.param(
+            CHECKPOINT,
+            _checkpoint(TERMINAL, history_gap={"from": 81422.5, "to": 98301.0}),
+            id="history-gap-stated",
+        ),
     ],
 )
 def test_the_base_documents_are_accepted(schema_file: str, document: dict) -> None:
@@ -321,6 +381,101 @@ def test_the_base_documents_are_accepted(schema_file: str, document: dict) -> No
 # ── rejections: one minimal violating document per rule ──────────────────
 
 REJECTIONS = [
+    # -- the checkpoint (DESIGN 06). Every rule here exists because the
+    #    failure it prevents is quiet: a hub that promotes a fragment
+    #    recomputes an estate finding over a subset and RESOLVES it, during
+    #    recovery, when nobody is looking. --
+    #
+    # Closure, on all three records, for the reason se.stream/1 states.
+    pytest.param(CHECKPOINT, _checkpoint(MANIFEST, swept=True), id="cp-manifest-unknown-member"),
+    pytest.param(CHECKPOINT, _checkpoint(COLLECTION_STATE, stale=True), id="cp-state-unknown-member"),
+    pytest.param(CHECKPOINT, _checkpoint(TERMINAL, complete=True), id="cp-terminal-unknown-member"),
+    # A manifest naming no collection: completeness over an empty promise is
+    # vacuous, and a collator that declares nothing has nothing to checkpoint.
+    pytest.param(CHECKPOINT, _checkpoint(MANIFEST, collections=[]), id="cp-manifest-empty"),
+    # And one carrying no declaration hash: the hub cannot render or serve MCP
+    # without the fact axes, so a checkpoint whose declarations are unstated is
+    # state the receiver has no vocabulary for.
+    pytest.param(CHECKPOINT, _checkpoint(MANIFEST, declarations=[]), id="cp-manifest-no-declarations"),
+    # STALE WITHOUT ITS REASON. The pair that matters most in the manifest: a
+    # stale collection whose reason is not carried tells a hub that something
+    # is wrong and not what, which is the shape an operator cannot act on.
+    pytest.param(CHECKPOINT, _manifest_entry(freshness="stale"), id="cp-stale-without-reason"),
+    # And the inverse, which is the one a permissive schema would let through:
+    # `current` with a decline reason attached is a collection claiming to be
+    # both fine and refused, and only one of those can be a reading.
+    pytest.param(
+        CHECKPOINT,
+        _manifest_entry(freshness="current", stale_reason="unavailable"),
+        id="cp-current-with-reason",
+    ),
+    # A stale reason outside the closed decline vocabulary — invented reasons
+    # are how a decline stops being checkable one tier down.
+    pytest.param(
+        CHECKPOINT,
+        _manifest_entry(freshness="stale", stale_reason="dark"),
+        id="cp-stale-reason-invented",
+    ),
+    # A negative generation: the authority issues from zero upward, so this is
+    # a number no collator minted.
+    pytest.param(CHECKPOINT, _manifest_entry(generation=-1), id="cp-generation-negative"),
+    # Generation 0 on a STATE record. Zero is a legal manifest reading — never
+    # applied — and an illegal one here: a collection that never applied has no
+    # objects to send, so a state record under it is a claim about a
+    # generation that does not exist.
+    pytest.param(
+        CHECKPOINT, _checkpoint(COLLECTION_STATE, generation=0), id="cp-state-generation-zero"
+    ),
+    # The objects array omitted rather than empty. An absent array and an empty
+    # one would be the hub's only evidence of the difference between a
+    # collection that holds nothing and one nobody sent.
+    pytest.param(
+        CHECKPOINT,
+        {k: v for k, v in COLLECTION_STATE.items() if k != "objects"},
+        id="cp-state-objects-omitted",
+    ),
+    # The terminal's count omitted. A receiver that inferred completeness from
+    # the terminal's mere arrival could not tell a checkpoint that finished
+    # from one whose middle was lost.
+    pytest.param(
+        CHECKPOINT,
+        {k: v for k, v in TERMINAL.items() if k != "collections"},
+        id="cp-terminal-without-count",
+    ),
+    # history_gap OMITTED rather than null. The whole point of the member: a
+    # missing one and a stated absence of gap are the difference between a
+    # timeline with a hole in it and a timeline that says where its hole is.
+    pytest.param(
+        CHECKPOINT,
+        {k: v for k, v in TERMINAL.items() if k != "history_gap"},
+        id="cp-terminal-gap-omitted",
+    ),
+    # A half-stated gap: one end is not an interval.
+    pytest.param(
+        CHECKPOINT,
+        _checkpoint(TERMINAL, history_gap={"from": 81422.5}),
+        id="cp-gap-half-stated",
+    ),
+    # The nil boot id and the dashless machine-id spelling, refused here for
+    # the reasons se.stream/1 refuses them: a checkpoint's ages are meaningless
+    # without the clock domain they belong to.
+    pytest.param(
+        CHECKPOINT,
+        _checkpoint(MANIFEST, boot_id="00000000-0000-0000-0000-000000000000"),
+        id="cp-boot-id-nil",
+    ),
+    pytest.param(
+        CHECKPOINT,
+        _checkpoint(MANIFEST, boot_id="5e0000000000400080000000000000001"),
+        id="cp-boot-id-dashless",
+    ),
+    # An empty host: a join over "" merges everything it touches, and the hub
+    # keys a collator's whole state on this.
+    pytest.param(CHECKPOINT, _checkpoint(MANIFEST, host=""), id="cp-host-empty"),
+    # A collection name the declaration could not have declared.
+    pytest.param(
+        CHECKPOINT, _manifest_entry(collection="Pools"), id="cp-collection-name-shape"
+    ),
     # -- closure (the finding: constraint-free schemas; nothing asserted
     #    rejection, so unknown members rode every record unchallenged) --
     # the Go-marshalled stability classes: names is closed to
@@ -686,4 +841,27 @@ def test_a_gutted_schema_is_caught_by_this_suite() -> None:
         "a schema stripped of every constraint still rejected the "
         "Go-marshalled names document — the rejection above is not coming "
         "from the schema, so this suite could not notice a gutting"
+    )
+
+
+def test_a_gutted_checkpoint_schema_is_caught_by_this_suite() -> None:
+    """The same tripwire for the checkpoint, on the rule it exists for.
+
+    The stream's tripwire proves the stream's cases come from the stream's
+    constraints; it says nothing about a schema added later, and a per-schema
+    tripwire is the only shape that does. `stale` without its reason is the
+    case chosen because it is the one a permissive schema most obviously
+    lets through: both members are well-typed and the defect is only in
+    their combination, so it is the rejection that would survive longest
+    while coming from nowhere.
+    """
+    gutted = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": CHECKPOINT,
+    }
+    validator = Draft202012Validator(gutted, registry=_registry(override=gutted))
+    assert not list(validator.iter_errors(_manifest_entry(freshness="stale"))), (
+        "a checkpoint schema stripped of every constraint still rejected a "
+        "stale collection with no reason — that rejection is not coming from "
+        "the schema, so this suite could not notice a gutting of it"
     )

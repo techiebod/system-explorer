@@ -35,6 +35,7 @@ PRODUCT_SCHEMAS = {
     "se.stream/1": "se.stream.1.json",
     "se.intent/1": "se.intent.1.json",
     "se.answer/1": "se.answer.1.json",
+    "se.checkpoint/1": "se.checkpoint.1.json",
 }
 
 FENCE = re.compile(r"^```(json|jsonl)\s+schema=(\S+)\n(.*?)^```$", re.M | re.S)

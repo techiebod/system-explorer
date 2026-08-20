@@ -327,6 +327,16 @@ Nothing about a hub that only receives makes it obvious when it knows enough to 
 >
 > Without that, the failure is specific and quiet: the hub receives one collection, considers the host swept, recomputes an estate finding over a subset, and *resolves* it — a finding cleared by partial knowledge, which is the failure this whole document is written against, arriving during recovery when nobody is looking.
 
+One checkpoint, on the wire:
+
+```jsonl schema=se.checkpoint/1
+{"record":"manifest","checkpoint":"cp-8f21","host":"storage-1","boot_id":"5e000000-0000-4000-8000-000000000001","declarations":["sha256:11e4","sha256:9a03"],"collections":[{"collection":"pools","generation":412,"freshness":"current","objects":2},{"collection":"leases","generation":0,"freshness":"stale","stale_reason":"unsupported"}]}
+{"record":"collection_state","checkpoint":"cp-8f21","collection":"pools","generation":412,"objects":[{"id":"pool:tank","facts":{"Health":"DEGRADED"}},{"id":"pool:scratch","facts":{"Health":"ONLINE"}}]}
+{"record":"terminal","checkpoint":"cp-8f21","collections":1,"history_gap":{"from":81422.5,"to":98301.0}}
+```
+
+Three things in it are the whole of why the shape is this shape. **`leases` is in the manifest and sends no state**, because it has never applied — generation 0, stale, and the reason it is stale is carried. A manifest that listed only what follows would make completeness unfalsifiable, and the hub could not tell a collection that is missing from one that is empty. **The terminal counts the state records** rather than merely arriving, for the reason every commit carries counts: a receiver that inferred completeness from arrival alone cannot tell a checkpoint that finished from one whose middle was lost. And **`history_gap` is stated rather than omitted** — it is required, and null on a first connection — because a missing member and a stated absence of gap are the difference between a timeline with a hole in it and a timeline that says where its hole is.
+
 And a finding remembers **every input that produced it** — each contributing host, collection, generation and arrival — not a single batch id. One generation cannot say whether the two other collections that fed a cross-host answer have come back yet, and a finding that cannot enumerate its own contributors cannot tell "all my evidence returned and the condition is gone" from "one third of my evidence returned".
 
 Without that rule a hub restart leaves collections at long cadence, or invoked only on demand, missing for hours while everything on screen looks settled. And one thing the checkpoint deliberately does *not* attempt: replaying every transition that occurred during a partition. A condition that appeared and resolved while the link was down is **lost, and the gap is stated** — a `history-gap` marker over the disconnected interval — because the alternative is an unbounded queue whose failure mode is the collator dying of somebody else's outage. A stated gap is a worse answer than complete history and a far better one than a confident timeline with a hole in it.
