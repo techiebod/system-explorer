@@ -29,12 +29,32 @@ HTTP_PORT=9601
 COLLATOR_PORT=8095
 
 say() { printf '[lab-up] %s\n' "$*" >&2; }
-on()  { ssh -F "${SSH_CONFIG}" -o BatchMode=yes "$1" "${@:2}"; }
+on()  { ssh -F "${SSH_CONFIG}" -n -o BatchMode=yes "$1" "${@:2}"; }
+
+# Started as a transient SYSTEMD UNIT rather than a detached shell job.
+#
+# Two rounds of nohup/setsid/exec gymnastics failed to let ssh return: the
+# session stays open while anything still holds the channel, and chasing
+# that is chasing the wrong problem. systemd-run hands the process to pid
+# 1 and returns immediately — and it is also how the thing is really
+# deployed, so a person testing gets `systemctl status` and `journalctl`
+# rather than a log file and a pgrep.
+on_unit() {
+  local guest="$1" unit="$2" command="$3"
+  ssh -F "${SSH_CONFIG}" -n -o BatchMode=yes "${guest}" \
+    "sudo systemctl reset-failed ${unit} 2>/dev/null; \
+     sudo systemd-run --unit=${unit} --collect \
+       --uid=\$(id -u) --gid=\$(id -g) \
+       --working-directory=/home/\$(id -un)/se-lab \
+       --setenv=PATH=/usr/bin:/bin:/usr/local/bin \
+       --setenv=HOME=/home/\$(id -un) \
+       ${command}"
+}
 
 if [[ "${1:-up}" == "down" ]]; then
   for guest in "${GUEST_A}" "${GUEST_B}"; do
     say "stopping on ${guest}"
-    on "${guest}" 'pkill -f lab-serve.py || true; pkill -f se-collate || true' || true
+    on "${guest}" 'sudo systemctl stop se-lab-hub se-lab-collator 2>/dev/null; pkill -f lab-serve.py || true; pkill -f se-collate || true' || true
   done
   say "stopped. The guests are still up; use vm-lab down to destroy them."
   exit 0
@@ -77,7 +97,10 @@ JSON
 
 for guest in "${GUEST_A}" "${GUEST_B}"; do
   say "shipping to ${guest}"
-  on "${guest}" 'rm -rf ~/se-lab && mkdir -p ~/se-lab'
+  # sudo, because an earlier run's unit may have left root-owned
+  # bytecode in the tree. Deleting only this directory, only on a
+  # disposable guest.
+  on "${guest}" 'sudo rm -rf ~/se-lab && mkdir -p ~/se-lab'
   scp -F "${SSH_CONFIG}" -q -r "${STAGE}/." "${guest}:se-lab/"
   on "${guest}" 'chmod +x ~/se-lab/se-collate ~/se-lab/se-collect-* ~/se-lab/lab-serve.py'
 done
@@ -87,8 +110,12 @@ done
 on "${GUEST_A}" 'grep -qi nixos /etc/os-release || rm -f ~/se-lab/se-collect-nix'
 on "${GUEST_B}" 'grep -qi nixos /etc/os-release || rm -f ~/se-lab/se-collect-nix'
 
+for guest in "${GUEST_A}" "${GUEST_B}"; do
+  on "${guest}" 'sudo systemctl stop se-lab-hub se-lab-collator 2>/dev/null; pkill -f lab-serve.py || true' || true
+done
+
 say "starting the hub on ${GUEST_B}"
-on "${GUEST_B}" "cd ~/se-lab && setsid nohup python3 lab-serve.py hub ${SESSION_PORT} ${HTTP_PORT} > ~/se-lab/hub.log 2>&1 < /dev/null & sleep 1"
+on_unit "${GUEST_B}" se-lab-hub "python3 lab-serve.py hub ${SESSION_PORT} ${HTTP_PORT}"
 
 IP_B="$(on "${GUEST_B}" "hostname -I | awk '{print \$1}'" | tr -d '\r')"
 IP_A="$(on "${GUEST_A}" "hostname -I | awk '{print \$1}'" | tr -d '\r')"
@@ -96,7 +123,7 @@ IP_A="$(on "${GUEST_A}" "hostname -I | awk '{print \$1}'" | tr -d '\r')"
 for pair in "${GUEST_A}:${HOST_A}" "${GUEST_B}:${HOST_B}"; do
   guest="${pair%%:*}"; host="${pair##*:}"
   say "starting the collator on ${guest} as ${host}"
-  on "${guest}" "cd ~/se-lab && setsid nohup python3 lab-serve.py collator ${host} ${IP_B}:${SESSION_PORT} 0.0.0.0:${COLLATOR_PORT} > ~/se-lab/collator.log 2>&1 < /dev/null & sleep 1"
+  on_unit "${guest}" se-lab-collator "python3 lab-serve.py collator ${host} ${IP_B}:${SESSION_PORT} 0.0.0.0:${COLLATOR_PORT}"
 done
 
 say "waiting for the first checkpoint"
@@ -123,13 +150,16 @@ Then, in a browser:
 Worth doing while you are in there, because each shows something a test
 can only assert:
 
-  · Stop the hub  (ssh ${GUEST_B} 'pkill -f "lab-serve.py hub"')  and
+  · Stop the hub  (ssh -F ${SSH_CONFIG} ${GUEST_B} 'sudo systemctl stop se-lab-hub')  and
     reload 8081. The host page still answers. That is the founding
     invariant — aggregation is never a precondition for observation.
   · Reload 8080 after that and watch the hosts go DARK rather than the
     page going blank or green.
   · curl http://127.0.0.1:8080/v1/routes  — every tool MCP would expose.
 
-  ./harness/estate/lab-up.sh down   stops the processes, leaves the guests
+Logs:  ssh -F ${SSH_CONFIG} ${GUEST_B} 'sudo journalctl -u se-lab-hub -f'
+       ssh -F ${SSH_CONFIG} ${GUEST_A} 'sudo journalctl -u se-lab-collator -f'
+
+  ./harness/estate/lab-up.sh down   stops the units, leaves the guests
 ── ────────────────────────────────────────────────────────────────────
 TXT

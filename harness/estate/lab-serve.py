@@ -79,7 +79,15 @@ if ROLE == "collator":
         raise SystemExit("no se-collect-* binary beside this script")
     print(f"[{host}] collectors: {', '.join(sorted(sockets))}", flush=True)
     print(f"[{host}] host page: http://{listen}/", flush=True)
-    os.execve(str(LAB / "se-collate"), [str(LAB / "se-collate")], {
+    # NOT exec: this process IS the collectors' socket server, and
+    # replacing its image would take the serving threads with it, leaving
+    # the socket files in place with nothing behind them. The collator
+    # then reports "connection refused" on every collector and sends the
+    # hub a session with no declarations at all — which is exactly what
+    # happened the first time this ran on a guest, and what no unit test
+    # could have shown, because in a test the collector is a fixture in
+    # the same process rather than a child of it.
+    collator = subprocess.Popen([str(LAB / "se-collate")], env={
         "PATH": os.environ["PATH"],
         "SE_STATE_DIR": str(work / "state"),
         "SE_COLLECTORS": ",".join(f"{n}={p}" for n, p in sorted(sockets.items())),
@@ -88,6 +96,7 @@ if ROLE == "collator":
         "SE_HOST": host,
         "SE_HUB_INSECURE": "1",
     })
+    raise SystemExit(collator.wait())
 
 if ROLE != "hub":
     raise SystemExit(f"unknown role {ROLE!r}")
