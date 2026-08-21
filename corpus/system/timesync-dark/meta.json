@@ -1,0 +1,25 @@
+{
+  "collector": "system",
+  "collections": ["identity", "time"],
+  "variant": "timesync-dark",
+  "provenance": "captured-then-scrubbed",
+  "os": "ubuntu",
+  "os_version": "26.04",
+  "source_version": "systemd 258 (ubuntu 26.04)",
+  "captured": "2026-08-21T14:48:00Z",
+  "regenerable": true,
+  "canaries": [],
+  "anonymised": true,
+  "note": "The chrony shape, captured from life rather than staged: this guest's kernel reports the clock synchronised (NTPSynchronized true) while systemd-timesyncd is not running, so timesync1's GetAll genuinely failed at capture and is staged as `false` — the request-observed-to-fail marker, distinct from a request nobody staged, which the replay seam refuses as uncaptured. The four timesync facts must come back as unobservable records with the one shared spelling, the collection must still commit its object, and the time-sync rule must NOT fire: the clock IS synchronised, whoever synchronised it.",
+  "anchors": [
+    {"collection": "identity", "object": "host-77df07",
+     "fact": "OsId", "value": "ubuntu"},
+    {"collection": "time", "object": "host-77df07",
+     "fact": "NTPSynchronized", "value": true},
+    {"collection": "time", "object": "host-77df07",
+     "fact": "CurrentTime", "value": "2026-08-21T14:48:50Z"},
+    {"collection": "identity", "commit_objects": 1},
+    {"collection": "time", "commit_objects": 1}
+  ],
+  "anchors_note": "Staged truth transcribed by hand: TimeUSec 1787323730222360 rendered at seconds precision UTC. The unobservable set (CurrentNTPServer, SystemNTPServers, FallbackNTPServers, PollIntervalSeconds — reason unavailable, one constant detail) and the commit's unobservable count of 4 are pinned by the expected stream."
+}

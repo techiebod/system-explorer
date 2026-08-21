@@ -75,7 +75,6 @@ NOT_YET_PORTED: dict[str, str] = {
     "storage/mounts": "mount points on every host.",
     "storage/arrays": "md arrays.",
     "storage/datasets": "ZFS datasets — the level protection joins against.",
-    "system/time": "clock and sync state, which §09's skew work needs.",
     "system/boot": "boot time and kernel command line.",
     "system/overview": "the per-host summary the old UI opened on.",
     "plex/requests": "seerr requests.",
@@ -87,11 +86,13 @@ NOT_YET_PORTED: dict[str, str] = {
 #: adapter, and one adapter has no such seam yet. An entry here is owed
 #: work, never a decision.
 NO_REPLAY_SEAM: dict[str, str] = {
-    "system": "the system adapter reads the host's own identity files and no "
-              "payload-staging seam was ever written for it; its corpus is "
-              "port self-capture only. Live comparison runs since R2 "
-              "(register row 27); the replay seam is owed with R3b's system "
-              "collections.",
+    "system": "no payload-staging seam was ever written for the system "
+              "adapter, so the corpus venues replay its captures through the "
+              "PORT only — time landed at R3b on captured-then-scrubbed "
+              "guest payloads without one. Live comparison runs since R2 "
+              "(register row 27) and is system's only reference-vs-port "
+              "venue; the Python seam stays owed while its collections "
+              "port.",
 }
 
 
@@ -369,12 +370,6 @@ def _declares(collector: str, member: str) -> bool:
     return bool(collections) and all(c.get(member) for c in collections.values())
 
 
-def _any_rules() -> bool:
-    return any(c.get("rules")
-               for collections in ported_collections().values()
-               for c in collections.values())
-
-
 REGISTER: tuple[Row, ...] = (
     Row(1, "`object` verb — object density behind the row facts",
         "owed", "R3c/R3d", lambda: _verb_landed("object"),
@@ -407,11 +402,14 @@ REGISTER: tuple[Row, ...] = (
                  and _declares("hardware", "relations")),
         "same scope and same limit as row 6."),
     Row(8, "rule tables fleet-wide (restart-churn, SMART verdicts, link-rate…)",
-        "owed", "R3c/R3d", _any_rules,
-        "the probe sees whether ANY first-party declaration carries a rule "
-        "table; parity of judgement against the reference's opinions is not "
-        "mechanically checkable — the old rules are code — and is judged at "
-        "the retrofit."),
+        "owed", "R3c/R3d",
+        lambda: _declares("units", "rules") and _declares("hardware", "rules"),
+        "the first table landed with system/time at R3b, so 'any table "
+        "exists' stopped discriminating; the probe now reads the champions, "
+        "whose named rules (restart-churn, SMART verdicts, link-rate) are "
+        "this row's own examples. Parity of judgement against the "
+        "reference's opinions is not mechanically checkable — the old rules "
+        "are code — and is judged at the retrofit."),
     Row(9, "the unported collections (network, storage, system, plex)",
         "owed", "R3b/R3d", lambda: not NOT_YET_PORTED,
         "the probe is the register's own owed list emptying; that each entry "

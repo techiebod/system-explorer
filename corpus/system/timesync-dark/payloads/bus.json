@@ -1,0 +1,38 @@
+{
+  "/org/freedesktop/timedate1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.timedate1": {
+    "type": "a{sv}",
+    "data": [
+      {
+        "Timezone": {
+          "type": "s",
+          "data": "Etc/UTC"
+        },
+        "LocalRTC": {
+          "type": "b",
+          "data": false
+        },
+        "CanNTP": {
+          "type": "b",
+          "data": true
+        },
+        "NTP": {
+          "type": "b",
+          "data": true
+        },
+        "NTPSynchronized": {
+          "type": "b",
+          "data": true
+        },
+        "TimeUSec": {
+          "type": "t",
+          "data": 1787323730222360
+        },
+        "RTCTimeUSec": {
+          "type": "t",
+          "data": 1787323730000000
+        }
+      }
+    ]
+  },
+  "/org/freedesktop/timesync1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.timesync1.Manager": false
+}

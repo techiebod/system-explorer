@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math"
+	"time"
 )
 
 // Stream records as Go structs, every member the contract names and no
@@ -25,16 +27,25 @@ type beginRecord struct {
 }
 
 type objectRecord struct {
-	Record     string            `json:"record"`
-	Collection string            `json:"collection"`
-	Name       string            `json:"name"`
-	Type       string            `json:"type,omitempty"`
-	Facts      map[string]string `json:"facts"`
+	Record     string         `json:"record"`
+	Collection string         `json:"collection"`
+	Name       string         `json:"name"`
+	Type       string         `json:"type,omitempty"`
+	Facts      map[string]any `json:"facts"`
 	// Present only when a declared fact genuinely is not: we looked, and
 	// the document has no such property — distinct from unobservable,
 	// each on its own channel, never a null (DESIGN 19).
 	Absent []string `json:"absent,omitempty"`
 	At     float64  `json:"at"`
+}
+
+type unobservableRecord struct {
+	Record     string `json:"record"`
+	Collection string `json:"collection"`
+	Name       string `json:"name"`
+	Fact       string `json:"fact"`
+	Reason     string `json:"reason"`
+	Detail     string `json:"detail,omitempty"`
 }
 
 type declineRecord struct {
@@ -116,9 +127,14 @@ func collect(stdout, stderr io.Writer, src source, order []string, generations m
 		Generations: generations,
 	})
 
+	served := map[string]func(*emitter, io.Writer, source, string, uint64, *int) int{
+		"identity": collectIdentity,
+		"time":     collectTime,
+	}
 	objects := 0
 	for _, collection := range order {
-		if collection != "identity" {
+		serve, known := served[collection]
+		if !known {
 			// A name this collector never published is declined, not
 			// sanitised and not crashed on (DESIGN 18). unsupported —
 			// the reason that reaches whoever maintains the request —
@@ -127,11 +143,11 @@ func collect(stdout, stderr io.Writer, src source, order []string, generations m
 				Record:     "decline",
 				Collection: collection,
 				Reason:     "unsupported",
-				Detail:     "this collector serves identity only",
+				Detail:     "this collector does not serve this collection",
 			})
 			continue
 		}
-		if code := collectIdentity(out, stderr, src, collection, generations[collection], &objects); code != exitOK {
+		if code := serve(out, stderr, src, collection, generations[collection], &objects); code != exitOK {
 			return code
 		}
 	}
@@ -217,7 +233,7 @@ func collectIdentity(out *emitter, stderr io.Writer, src source, collection stri
 	}
 
 	doc := parseOsRelease(raw)
-	facts := map[string]string{"Hostname": host}
+	facts := map[string]any{"Hostname": host}
 	var absent []string
 	for _, f := range identityFacts {
 		// A key present with an empty value states nothing a reader can
@@ -251,6 +267,187 @@ func collectIdentity(out *emitter, stderr io.Writer, src source, collection stri
 		Collection: collection,
 		Generation: generation,
 		Objects:    1,
+	})
+	return exitOK
+}
+
+// The timesync facts, named once: the four readings that come through
+// timesync1 and go dark together when it does. One constant detail for the
+// unobservable records, because it travels to a hub and out over MCP, and
+// two implementations answering one condition with two sentences is the
+// vms address-note defect again.
+var timesyncFacts = [...]string{
+	"CurrentNTPServer", "SystemNTPServers", "FallbackNTPServers",
+	"PollIntervalSeconds",
+}
+
+const timesyncDark = "systemd-timesyncd is not answering on the system bus"
+
+// usecToISO renders a systemd realtime timestamp (microseconds since the
+// epoch) exactly as the reference does: UTC, seconds precision. Zero and
+// the unset sentinel are "no reading", the caller's absent case.
+func usecToISO(usec uint64) (string, bool) {
+	const unsetU64 = ^uint64(0)
+	if usec == 0 || usec == unsetU64 {
+		return "", false
+	}
+	return time.Unix(int64(usec/1e6), 0).UTC().Format("2006-01-02T15:04:05Z"), true
+}
+
+// collectTime serves the time collection: timedate1 is the collection —
+// dark, it declines — while timesync1 is four facts within it, and dark it
+// makes exactly those unobservable, because a chrony host has a perfectly
+// synchronised clock this collector can still say that much about.
+func collectTime(out *emitter, stderr io.Writer, src source, collection string, generation uint64, objects *int) int {
+	at, err := src.stamp(*objects)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return exitRuntime
+	}
+
+	raw, err := src.timedate1()
+	switch {
+	case errors.Is(err, errNoSystemd):
+		// Authoritative-empty: no busctl is no systemd and no timedated —
+		// a truthful reading that must commit zero, so a host rebuilt
+		// without systemd does not serve its old clock facts forever.
+		out.emit(declineRecord{Record: "decline", Collection: collection,
+			Reason: "absent", Detail: "no systemd time services on this host"})
+		out.emit(commitRecord{Record: "commit", Collection: collection, Generation: generation})
+		return exitOK
+	case errors.Is(err, errUncaptured):
+		fmt.Fprintln(stderr, err)
+		return exitRuntime
+	case err != nil:
+		// Present but not answering: nothing established, no commit —
+		// prior state stands, marked stale by the collator.
+		out.emit(declineRecord{Record: "decline", Collection: collection,
+			Reason: "unavailable", Detail: "systemd is here and timedate1 did not answer on the system bus"})
+		fmt.Fprintln(stderr, "timedate1:", err)
+		return exitOK
+	}
+	props, err := propertiesOf(raw)
+	if err != nil {
+		out.emit(declineRecord{Record: "decline", Collection: collection,
+			Reason: "unavailable", Detail: "timedate1 answered with a document this collector cannot read"})
+		fmt.Fprintln(stderr, "timedate1:", err)
+		return exitOK
+	}
+
+	host, err := src.hostname()
+	if err != nil {
+		if errors.Is(err, errUncaptured) {
+			fmt.Fprintln(stderr, err)
+			return exitRuntime
+		}
+		out.emit(declineRecord{Record: "decline", Collection: collection,
+			Reason: "unavailable", Detail: "the kernel hostname did not answer"})
+		fmt.Fprintln(stderr, "hostname:", err)
+		return exitOK
+	}
+
+	facts := map[string]any{}
+	var absent []string
+	if tz, ok := propString(props, "Timezone"); ok && tz != "" {
+		facts["Timezone"] = tz
+	} else {
+		absent = append(absent, "Timezone")
+	}
+	for _, name := range [...]string{"LocalRTC", "NTP", "NTPSynchronized"} {
+		if b, ok := propBool(props, name); ok {
+			facts[name] = b
+		} else {
+			absent = append(absent, name)
+		}
+	}
+	if usec, ok := propU64(props, "TimeUSec"); ok {
+		if iso, real := usecToISO(usec); real {
+			facts["CurrentTime"] = iso
+		} else {
+			absent = append(absent, "CurrentTime")
+		}
+	} else {
+		absent = append(absent, "CurrentTime")
+	}
+
+	var unobservable []unobservableRecord
+	sraw, err := src.timesync1()
+	switch {
+	case errors.Is(err, errUncaptured):
+		fmt.Fprintln(stderr, err)
+		return exitRuntime
+	case err != nil:
+		// timesync1 dark — timesyncd not running, or busctl could not ask
+		// it. Either way the four facts were not read, and saying which
+		// beats a silent thinner row: the reason is the same reading the
+		// reference states in its source note, one spelling both sides.
+		for _, fact := range timesyncFacts {
+			unobservable = append(unobservable, unobservableRecord{
+				Record: "unobservable", Collection: collection, Name: host,
+				Fact: fact, Reason: "unavailable", Detail: timesyncDark})
+		}
+	default:
+		sprops, perr := propertiesOf(sraw)
+		if perr != nil {
+			for _, fact := range timesyncFacts {
+				unobservable = append(unobservable, unobservableRecord{
+					Record: "unobservable", Collection: collection, Name: host,
+					Fact: fact, Reason: "unavailable", Detail: timesyncDark})
+			}
+			fmt.Fprintln(stderr, "timesync1:", perr)
+			break
+		}
+		if server, ok := propString(sprops, "ServerName"); ok && server != "" {
+			facts["CurrentNTPServer"] = server
+		} else {
+			// timesyncd is here and has selected no server: we looked,
+			// there is no such property right now — absent, not a "".
+			absent = append(absent, "CurrentNTPServer")
+		}
+		if servers, ok := propStrings(sprops, "SystemNTPServers"); ok {
+			facts["SystemNTPServers"] = servers
+		} else {
+			absent = append(absent, "SystemNTPServers")
+		}
+		if servers, ok := propStrings(sprops, "FallbackNTPServers"); ok {
+			facts["FallbackNTPServers"] = servers
+		} else {
+			absent = append(absent, "FallbackNTPServers")
+		}
+		min, okMin := propU64(sprops, "PollIntervalMinUSec")
+		max, okMax := propU64(sprops, "PollIntervalMaxUSec")
+		if okMin && okMax {
+			// RoundToEven, because the reference rounds with Python's
+			// round(): half-even, and a port that rounded half-up would
+			// disagree by one second exactly on the boundary readings.
+			facts["PollIntervalSeconds"] = []int64{
+				int64(math.RoundToEven(float64(min) / 1e6)),
+				int64(math.RoundToEven(float64(max) / 1e6)),
+			}
+		} else {
+			absent = append(absent, "PollIntervalSeconds")
+		}
+	}
+
+	out.emit(objectRecord{
+		Record:     "object",
+		Type:       "time",
+		Collection: collection,
+		Name:       host,
+		Facts:      facts,
+		Absent:     absent,
+		At:         at,
+	})
+	*objects++
+	for _, record := range unobservable {
+		out.emit(record)
+	}
+	out.emit(commitRecord{
+		Record:       "commit",
+		Collection:   collection,
+		Generation:   generation,
+		Objects:      1,
+		Unobservable: len(unobservable),
 	})
 	return exitOK
 }

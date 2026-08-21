@@ -13,12 +13,16 @@ import (
 // value itself, which is what lets the at-before-read test below fail if
 // the stamp ever moves after the reads.
 type fakeSource struct {
-	calls   []string
-	tick    float64
-	osrel   []byte
-	oserr   error
-	host    string
-	hosterr error
+	calls    []string
+	tick     float64
+	osrel    []byte
+	oserr    error
+	host     string
+	hosterr  error
+	timedate []byte
+	tderr    error
+	timesync []byte
+	tserr    error
 }
 
 func (f *fakeSource) note(what string) float64 {
@@ -40,6 +44,20 @@ func (f *fakeSource) stamp(int) (float64, error) { return f.note("stamp"), nil }
 func (f *fakeSource) osRelease() ([]byte, error) {
 	f.note("os-release")
 	return f.osrel, f.oserr
+}
+func (f *fakeSource) timedate1() ([]byte, error) {
+	f.note("timedate1")
+	if f.timedate == nil && f.tderr == nil {
+		return nil, errCallFailed
+	}
+	return f.timedate, f.tderr
+}
+func (f *fakeSource) timesync1() ([]byte, error) {
+	f.note("timesync1")
+	if f.timesync == nil && f.tserr == nil {
+		return nil, errCallFailed
+	}
+	return f.timesync, f.tserr
 }
 func (f *fakeSource) hostname() (string, error) {
 	f.note("hostname")

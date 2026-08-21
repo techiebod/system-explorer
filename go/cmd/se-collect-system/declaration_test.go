@@ -45,6 +45,11 @@ func TestTheDeclarationCarriesThePinnedContract(t *testing.T) {
 			} `json:"facts"`
 			Redactions []any  `json:"redactions"`
 			Exemption  string `json:"redaction_exemption"`
+			Rules      []struct {
+				Key     string `json:"key"`
+				Level   string `json:"level"`
+				Grounds string `json:"grounds"`
+			} `json:"rules"`
 		} `json:"collections"`
 	}
 	if err := json.Unmarshal(declarationBytes, &declaration); err != nil {
@@ -53,8 +58,8 @@ func TestTheDeclarationCarriesThePinnedContract(t *testing.T) {
 	if declaration.Schema != "se.declaration/1" || declaration.Collector != "system" {
 		t.Fatalf("collector %q under schema %q", declaration.Collector, declaration.Schema)
 	}
-	if len(declaration.Collections) != 1 {
-		t.Fatalf("one collection, identity; got %d", len(declaration.Collections))
+	if len(declaration.Collections) != 2 {
+		t.Fatalf("two collections, identity then time; got %d", len(declaration.Collections))
 	}
 	collection := declaration.Collections[0]
 	if collection.Name != "identity" || collection.Freshness != "1h" {
@@ -96,5 +101,57 @@ func TestTheDeclarationCarriesThePinnedContract(t *testing.T) {
 	}
 	if len(collection.Redactions) != 0 {
 		t.Fatal("an exemption beside a redaction list is two rulings contradicting each other in one document")
+	}
+}
+
+// The time collection's own pins: the discloses classes (three location
+// facts — the timezone and the server names — must never quietly become
+// "nothing"), the moving reading declared as the gauge it is, and the
+// fleet's first rule table with its grounds stated as OURS.
+func TestTheTimeDeclarationPinsItsClasses(t *testing.T) {
+	var declaration struct {
+		Collections []struct {
+			Name  string `json:"name"`
+			Facts map[string]struct {
+				Temperament string `json:"temperament"`
+				Discloses   string `json:"discloses"`
+			} `json:"facts"`
+			Rules []struct {
+				Key     string   `json:"key"`
+				Level   string   `json:"level"`
+				Grounds string   `json:"grounds"`
+				Cites   []string `json:"cites"`
+			} `json:"rules"`
+		} `json:"collections"`
+	}
+	if err := json.Unmarshal(declarationBytes, &declaration); err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, c := range declaration.Collections {
+		if c.Name != "time" {
+			continue
+		}
+		found = true
+		for fact, want := range map[string]string{
+			"Timezone": "location", "CurrentNTPServer": "location",
+			"SystemNTPServers": "location", "FallbackNTPServers": "location",
+			"NTP": "nothing", "NTPSynchronized": "nothing",
+		} {
+			if got := c.Facts[fact].Discloses; got != want {
+				t.Errorf("%s discloses %q, pinned %q", fact, got, want)
+			}
+		}
+		if c.Facts["CurrentTime"].Temperament != "gauge" {
+			t.Error("CurrentTime moves between any two correct runs; anything " +
+				"but gauge would make the comparator read time passing as a defect")
+		}
+		if len(c.Rules) != 1 || c.Rules[0].Key != "time-sync" ||
+			c.Rules[0].Level != "warn" || c.Rules[0].Grounds != "threshold" {
+			t.Fatalf("the time-sync rule is pinned warn/threshold: %+v", c.Rules)
+		}
+	}
+	if !found {
+		t.Fatal("no time collection declared")
 	}
 }

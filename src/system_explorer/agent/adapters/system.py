@@ -416,6 +416,11 @@ class Adapter:
         # that was not just observed, which keeps this coalescing, not
         # caching (SPEC section 2, rule 4).
         self._observed: dict[str, dict] = {}
+        # The stream channels per collection (absent, unobservable), parked
+        # the same way and attached to the ITEM in acquire() — beside the
+        # observation, not inside it, so the old envelope keeps its shape
+        # while the reference stream says what the port says (R3b).
+        self._channels: dict[str, dict] = {}
 
     def collections(self) -> list[str]:
         return ["identity", "time", "boot", "overview", "self"]
@@ -478,23 +483,45 @@ class Adapter:
             "CurrentTime": env.usec_to_iso(props.get("TimeUSec")),
         }
         notes = []
+        # The two non-value channels, stated rather than left as silently
+        # thinner rows (DESIGN 19), added with the R3b port so the two
+        # implementations make the same statements: absent is "we looked and
+        # there is no such property", unobservable is "it could not be read".
+        absent = [name for name, value in facts.items() if value is None]
+        unobservable: list[dict] = []
         # NTP source detail comes from timesyncd where it runs; a chrony host
         # simply lacks these facts rather than faking them.
         try:
             sync = await BUS.get_all(TIMESYNC1, TIMESYNC1_PATH, TIMESYNC1_MANAGER)
-            poll_min = sync.get("PollIntervalMinUSec")
-            poll_max = sync.get("PollIntervalMaxUSec")
+            if sync.get("ServerName"):
+                facts["CurrentNTPServer"] = sync["ServerName"]
+            else:
+                # timesyncd is here and has selected no server yet: absent,
+                # never an empty string dressed as a reading.
+                absent.append("CurrentNTPServer")
             facts.update({
-                "CurrentNTPServer": sync.get("ServerName") or None,
                 "SystemNTPServers": sync.get("SystemNTPServers") or [],
                 "FallbackNTPServers": sync.get("FallbackNTPServers") or [],
-                "PollIntervalSeconds": [
-                    round(poll_min / 1e6) if isinstance(poll_min, int) else None,
-                    round(poll_max / 1e6) if isinstance(poll_max, int) else None,
-                ],
             })
+            poll_min = sync.get("PollIntervalMinUSec")
+            poll_max = sync.get("PollIntervalMaxUSec")
+            if isinstance(poll_min, int) and isinstance(poll_max, int):
+                facts["PollIntervalSeconds"] = [round(poll_min / 1e6),
+                                                round(poll_max / 1e6)]
+            else:
+                absent.append("PollIntervalSeconds")
         except Exception:  # noqa: BLE001 - timesyncd absent is a fact, not a failure
             notes.append("timesync1 unavailable; NTP source facts need systemd-timesyncd.")
+            # One spelling on both implementations, because the detail
+            # travels to a hub and out over MCP (the vms address-note
+            # lesson): the port's constant is this exact sentence.
+            unobservable.extend(
+                {"fact": name, "reason": "unavailable",
+                 "detail": "systemd-timesyncd is not answering on the system bus"}
+                for name in ("CurrentNTPServer", "SystemNTPServers",
+                             "FallbackNTPServers", "PollIntervalSeconds"))
+        self._channels["time"] = {"absent": sorted(absent),
+                                  "unobservable": unobservable}
 
         obj = env.obj_ref(f"time:{env.HOST['hostname']}", "time", env.HOST["hostname"])
         return env.observation(
@@ -664,11 +691,15 @@ class Adapter:
         self._observed[collection] = obs
         # healthy=None keeps the single-object rows' historical shape: no
         # opinions omits the severity field rather than asserting "ok".
-        return [env.item_summary(
+        item = env.item_summary(
             obs["object"]["id"], obs["object"]["type"], obs["object"]["native_id"],
             obs["facts"],
             opinions=obs.get("opinions", []), healthy=None,
-        )]
+        )
+        for channel, values in self._channels.get(collection, {}).items():
+            if values:
+                item[channel] = values
+        return [item]
 
     async def collect(self, collection: str, query: dict, limit: int | None, cursor: str | None) -> dict:
         fetched = await self.acquire(collection)

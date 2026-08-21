@@ -1,0 +1,6 @@
+{"record":"begin","request":"replay","batch":"replay","declaration":"sha256:17d319d0b3ed3af7534824e5a5b32006ce3aaf0c41fdbd928f3817a79133aff0","boot_id":"5cb0781a-58cc-ba61-e64e-3c90732537cb","timens":0,"instance":null,"generations":{"identity":76644,"time":76661}}
+{"record":"object","collection":"identity","name":"host-9330c2","type":"identity","facts":{"Hostname":"host-9330c2","OsId":"debian","OsPrettyName":"Debian GNU/Linux 13 (trixie)","OsVersionId":"13"},"at":1}
+{"record":"commit","collection":"identity","generation":76644,"objects":1,"assertions":0,"unobservable":0}
+{"record":"object","collection":"time","name":"host-9330c2","type":"time","facts":{"CurrentNTPServer":"2.debian.pool.ntp.org","CurrentTime":"2026-08-21T14:48:47Z","FallbackNTPServers":["0.debian.pool.ntp.org","1.debian.pool.ntp.org","2.debian.pool.ntp.org","3.debian.pool.ntp.org"],"LocalRTC":false,"NTP":true,"NTPSynchronized":true,"PollIntervalSeconds":[32,2048],"SystemNTPServers":[],"Timezone":"Etc/UTC"},"at":1.001}
+{"record":"commit","collection":"time","generation":76661,"objects":1,"assertions":0,"unobservable":0}
+{"record":"end","request":"replay","batch":"replay","cpu_ms":0.5,"wall_ms":1}

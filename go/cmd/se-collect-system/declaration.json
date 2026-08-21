@@ -8,6 +8,9 @@
       "/usr/lib/os-release",
       "/proc/sys/kernel/random/boot_id",
       "/proc/self/timens_offsets"
+    ],
+    "commands": [
+      "busctl"
     ]
   },
   "probe": "the kernel hostname and the boot id are readable; os-release may still be honestly missing, which is an absent decline, never a probe failure",
@@ -18,8 +21,14 @@
       "prefix": "host",
       "freshness": "1h",
       "perishability": "reconstructible",
-      "answer": ["Hostname", "OsPrettyName"],
-      "ceiling": { "records": 4, "bytes": 65536 },
+      "answer": [
+        "Hostname",
+        "OsPrettyName"
+      ],
+      "ceiling": {
+        "records": 4,
+        "bytes": 65536
+      },
       "facts": {
         "OsId": {
           "type": "string",
@@ -57,13 +66,169 @@
       "reference_commands": [
         {
           "purpose": "the same identity document, by hand",
-          "argv": ["cat", "/etc/os-release"]
+          "argv": [
+            "cat",
+            "/etc/os-release"
+          ]
         },
         {
           "purpose": "the hostname as the kernel reports it",
-          "argv": ["uname", "-n"]
+          "argv": [
+            "uname",
+            "-n"
+          ]
         }
       ]
+    },
+    {
+      "name": "time",
+      "question": "is this machine's clock synchronised, and through what?",
+      "prefix": "time",
+      "freshness": "5m",
+      "perishability": "sampled",
+      "answer": [
+        "Timezone",
+        "NTP",
+        "NTPSynchronized",
+        "CurrentNTPServer"
+      ],
+      "ceiling": {
+        "records": 4,
+        "bytes": 65536
+      },
+      "facts": {
+        "Timezone": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "location",
+          "from": "/data/0/Timezone/data",
+          "sentence": "The configured timezone, as timedated states it \u2014 a location statement by construction, which is why it is classed as one."
+        },
+        "LocalRTC": {
+          "type": "boolean",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/data/0/LocalRTC/data",
+          "sentence": "Whether the hardware clock is kept in local time rather than UTC \u2014 the dual-boot arrangement that makes two systems argue over one RTC."
+        },
+        "NTP": {
+          "type": "boolean",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/data/0/NTP/data",
+          "sentence": "Whether systemd's network time synchronisation is enabled."
+        },
+        "NTPSynchronized": {
+          "type": "boolean",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/data/0/NTPSynchronized/data",
+          "sentence": "Whether the kernel reports the clock synchronised, whoever synchronised it \u2014 true under chrony as much as under timesyncd."
+        },
+        "CurrentTime": {
+          "type": "string",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/data/0/TimeUSec/data",
+          "sentence": "The wall clock at acquisition, UTC, seconds precision. A gauge: two correct readings differ by however long passed between them, and a hub compares wall readings across hosts to observe skew (DESIGN 09)."
+        },
+        "CurrentNTPServer": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "location",
+          "from": "/data/0/ServerName/data",
+          "sentence": "The server timesyncd is currently using. Absent where timesyncd has selected none yet, unobservable where timesyncd is not the syncer at all \u2014 two different statements, on their own channels."
+        },
+        "SystemNTPServers": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "location",
+          "from": "/data/0/SystemNTPServers/data",
+          "sentence": "The configured server list, which is often an internal name \u2014 the reason this whole family is classed as location."
+        },
+        "FallbackNTPServers": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "location",
+          "from": "/data/0/FallbackNTPServers/data",
+          "sentence": "The compiled-in fallbacks timesyncd would use with nothing configured."
+        },
+        "PollIntervalSeconds": {
+          "type": "list",
+          "temperament": "state",
+          "kind": "derived",
+          "discloses": "nothing",
+          "from": "/data/0/PollIntervalMinUSec/data",
+          "sentence": "The [minimum, maximum] polling bounds timesyncd currently applies, rounded to whole seconds from the microsecond pair the interface serves.",
+          "derived_from": [
+            "PollIntervalMinUSec",
+            "PollIntervalMaxUSec"
+          ]
+        }
+      },
+      "rules": [
+        {
+          "key": "time-sync",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "all": [
+              {
+                "fact": "NTP",
+                "equals": true
+              },
+              {
+                "fact": "NTPSynchronized",
+                "equals": false
+              }
+            ]
+          },
+          "sentence": "NTP is enabled but the clock is not synchronised.",
+          "cites": [
+            "NTP",
+            "NTPSynchronized"
+          ]
+        }
+      ],
+      "reference_commands": [
+        {
+          "purpose": "the same properties, by hand",
+          "argv": [
+            "timedatectl",
+            "show"
+          ]
+        },
+        {
+          "purpose": "the sync source detail, where timesyncd runs",
+          "argv": [
+            "timedatectl",
+            "timesync-status"
+          ]
+        },
+        {
+          "purpose": "the exact document this collector parses",
+          "argv": [
+            "busctl",
+            "call",
+            "org.freedesktop.timedate1",
+            "/org/freedesktop/timedate1",
+            "org.freedesktop.DBus.Properties",
+            "GetAll",
+            "s",
+            "org.freedesktop.timedate1",
+            "--json=short"
+          ]
+        }
+      ],
+      "redaction_exemption": "every served fact is a declared scalar or server-name list from the two GetAll replies; the location-classed members (timezone, server names) are declared as such and handled by disclosure policy, and no free-form document is served as evidence"
     }
   ]
 }

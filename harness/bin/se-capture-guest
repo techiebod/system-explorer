@@ -509,6 +509,28 @@ payloads = {name + ".json": seen.get(name, {})
 payloads["receipts-dir.json"] = nixos.receipts_dir()
 print(json.dumps(payloads, indent=1, sort_keys=True))
 '
+# The two bus documents behind system/time, as one request->document map:
+# the value false stages "the call failed at capture", a real observation
+# of the guest (timesyncd not running is exactly this), distinct from a
+# request nobody staged — which the replay seam refuses as uncaptured.
+system_bus_py='
+import json, subprocess
+def call(dest, req):
+    argv = ["busctl", "call", dest] + req.split() + ["--json=short"]
+    try:
+        done = subprocess.run(argv, capture_output=True, text=True, timeout=30)
+    except Exception:
+        return False
+    if done.returncode != 0:
+        return False
+    return json.loads(done.stdout)
+requests = {
+ "/org/freedesktop/timedate1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.timedate1": "org.freedesktop.timedate1",
+ "/org/freedesktop/timesync1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.timesync1.Manager": "org.freedesktop.timesync1",
+}
+print(json.dumps({req: call(dest, req) for req, dest in requests.items()}, indent=1))
+'
+
 hostname_py='
 import socket
 print(socket.gethostname().split(".")[0])
@@ -863,6 +885,14 @@ case "$collector" in
             "queue.json|python3 -c '$downloaders_sab_py' queue"
         )
         ;;
+    system)
+        acquisitions=(
+            "os-release|cat /etc/os-release"
+            "hostname|python3 -c '$hostname_py'"
+            "boot_id|cat /proc/sys/kernel/random/boot_id"
+            "bus.json|python3 -c '$system_bus_py'"
+        )
+        ;;
     *)
         echo "unknown collector '$collector'" >&2
         exit 2
@@ -872,6 +902,7 @@ esac
 version_probe=""
 case "$collector" in
     storage) version_probe="zfs version | head -1" ;;
+    system) version_probe="busctl --version | head -1" ;;
     network) version_probe="nft --version" ;;
     vms) version_probe="virsh --version" ;;
     packages) version_probe="dpkg-query --version 2>/dev/null | head -1 || rpm --version" ;;

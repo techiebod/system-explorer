@@ -52,12 +52,25 @@ REQUIRED_META = (
 #                 A walk keyed on the name alone answers for both at once.
 #   named-map   — a chain reached only through `vmap @name`, whose verdicts
 #                 live in the map OBJECT, in no rule's expression at all.
+#
+# The two time kinds were added together at R3b, when system/time landed as
+# the first collection whose facts come through two bus interfaces that can
+# go dark independently:
+#   time-synced   — both interfaces answer: the full fact set, the poll
+#                   bounds, and the server the host is actually using.
+#   timesync-dark — timedate1 answers while timesync1 has nobody behind it
+#                   (the chrony shape, captured from life): four facts come
+#                   back unobservable, the collection still commits, and
+#                   the time-sync rule must NOT fire — the clock IS
+#                   synchronised, whoever synchronised it.
 VALID_VARIANTS = frozenset(
     {
         "healthy",
         "degraded",
         "absent",
         "empty-ruleset",
+        "time-synced",
+        "timesync-dark",
         "canary",
         "goto",
         "asymmetric",

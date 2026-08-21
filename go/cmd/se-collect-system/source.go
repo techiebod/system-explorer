@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -38,6 +40,13 @@ type source interface {
 	stamp(i int) (float64, error)
 	osRelease() ([]byte, error)
 	hostname() (string, error)
+	// The two bus documents behind the time collection, each busctl's own
+	// JSON rendering of a GetAll reply. An error wrapping errCallFailed is
+	// the interface not answering — an observation, routed per collection;
+	// an error wrapping errNoSystemd is busctl itself missing, the absent
+	// reading; anything else is "I could not run".
+	timedate1() ([]byte, error)
+	timesync1() ([]byte, error)
 	// costs are end's advisory self-report (DESIGN 19): bounded by the
 	// judge, authenticated only by the collator's own slice accounting.
 	costs() (cpuMS, wallMS float64)
@@ -53,6 +62,30 @@ func newSource(getenv func(string) string) source {
 	}
 	return liveSource{started: time.Now()}
 }
+
+// errCallFailed marks a bus interface that did not answer — busctl ran and
+// the call failed, or the capture staged exactly that outcome. It is an
+// OBSERVATION: what it means is per collection (timesync1 dark makes four
+// facts unobservable; timedate1 dark declines the collection), and only
+// the collect path knows which.
+var errCallFailed = errors.New("the interface did not answer")
+
+// errNoSystemd marks busctl itself missing. systemd's own binary ships in
+// the same package as the services it talks to, so a host without it runs
+// no timedated — the absent reading, which commits zero (DESIGN 19), so a
+// host rebuilt without systemd does not serve its old clock facts forever.
+var errNoSystemd = errors.New("no busctl, so no systemd time services")
+
+// The busctl argument line after the destination — both halves of the
+// seam: the live source runs it, the replay source looks it up in the
+// staged bus.json map. One builder, because the corpus is KEYED on this
+// string (the units collector's convention, carried over).
+const (
+	timedate1Request = "/org/freedesktop/timedate1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.timedate1"
+	timesync1Request = "/org/freedesktop/timesync1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.timesync1.Manager"
+	timedate1Dest    = "org.freedesktop.timedate1"
+	timesync1Dest    = "org.freedesktop.timesync1"
+)
 
 // ── live ────────────────────────────────────────────────────────────────
 
@@ -86,6 +119,43 @@ func (liveSource) osRelease() ([]byte, error) {
 }
 
 func (liveSource) hostname() (string, error) { return os.Hostname() }
+
+// Matching the reference's own patience with the bus; a service that has
+// not answered a GetAll in this long is not about to.
+const busCallTimeout = 30 * time.Second
+
+// busCall runs one busctl invocation. Each token is a separate argument,
+// never interpolated into a command string (DESIGN 18). The reply bound is
+// implicit — a GetAll here is a few kilobytes and cmd.Output buffers it —
+// and a failed call becomes errCallFailed with busctl's own words on
+// stderr only: they name services and errnos, which is content for a
+// person debugging, not for a record that leaves the host.
+func busCall(stderr io.Writer, destination string, request string) ([]byte, error) {
+	tool, err := exec.LookPath("busctl")
+	if err != nil {
+		return nil, fmt.Errorf("%v: %w", err, errNoSystemd)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), busCallTimeout)
+	defer cancel()
+	args := append([]string{"call", destination}, strings.Fields(request)...)
+	args = append(args, "--json=short")
+	out, err := exec.CommandContext(ctx, tool, args...).Output()
+	if err != nil {
+		if exit, ok := err.(*exec.ExitError); ok && len(exit.Stderr) > 0 {
+			fmt.Fprintf(stderr, "busctl %s: %s\n", destination, strings.TrimSpace(string(exit.Stderr)))
+		}
+		return nil, fmt.Errorf("busctl %s: %w", destination, errCallFailed)
+	}
+	return out, nil
+}
+
+func (liveSource) timedate1() ([]byte, error) {
+	return busCall(os.Stderr, timedate1Dest, timedate1Request)
+}
+
+func (liveSource) timesync1() ([]byte, error) {
+	return busCall(os.Stderr, timesync1Dest, timesync1Request)
+}
 
 func (s liveSource) costs() (float64, float64) {
 	cpu := 0.0
@@ -157,6 +227,33 @@ func (r replaySource) hostname() (string, error) {
 	}
 	return name, nil
 }
+
+// bus resolves one staged bus request from the variant's bus.json — a map
+// of request line to busctl document. The value false stages "the call
+// failed at capture": a real observation of the machine the payloads came
+// from, distinct from a request nobody staged, which stays errUncaptured
+// and fatal so a thin capture cannot quietly become a decline.
+func (r replaySource) bus(request string) ([]byte, error) {
+	raw, err := os.ReadFile(filepath.Join(r.dir, "bus.json"))
+	if err != nil {
+		return nil, fmt.Errorf("bus.json %w: %v", errUncaptured, err)
+	}
+	var staged map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &staged); err != nil {
+		return nil, fmt.Errorf("bus.json is not a request/response map: %v", err)
+	}
+	document, ok := staged[request]
+	if !ok {
+		return nil, fmt.Errorf("%q %w", request, errUncaptured)
+	}
+	if string(document) == "false" {
+		return nil, fmt.Errorf("%q: %w (staged at capture)", request, errCallFailed)
+	}
+	return document, nil
+}
+
+func (r replaySource) timedate1() ([]byte, error) { return r.bus(timedate1Request) }
+func (r replaySource) timesync1() ([]byte, error) { return r.bus(timesync1Request) }
 
 func (replaySource) costs() (float64, float64) { return 0.5, 1.0 }
 

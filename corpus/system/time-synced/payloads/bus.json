@@ -1,0 +1,126 @@
+{
+  "/org/freedesktop/timedate1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.timedate1": {
+    "type": "a{sv}",
+    "data": [
+      {
+        "Timezone": {
+          "type": "s",
+          "data": "Etc/UTC"
+        },
+        "LocalRTC": {
+          "type": "b",
+          "data": false
+        },
+        "CanNTP": {
+          "type": "b",
+          "data": true
+        },
+        "NTP": {
+          "type": "b",
+          "data": true
+        },
+        "NTPSynchronized": {
+          "type": "b",
+          "data": true
+        },
+        "TimeUSec": {
+          "type": "t",
+          "data": 1787323727298359
+        },
+        "RTCTimeUSec": {
+          "type": "t",
+          "data": 1787323727000000
+        }
+      }
+    ]
+  },
+  "/org/freedesktop/timesync1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.timesync1.Manager": {
+    "type": "a{sv}",
+    "data": [
+      {
+        "LinkNTPServers": {
+          "type": "as",
+          "data": []
+        },
+        "SystemNTPServers": {
+          "type": "as",
+          "data": []
+        },
+        "RuntimeNTPServers": {
+          "type": "as",
+          "data": []
+        },
+        "FallbackNTPServers": {
+          "type": "as",
+          "data": [
+            "0.debian.pool.ntp.org",
+            "1.debian.pool.ntp.org",
+            "2.debian.pool.ntp.org",
+            "3.debian.pool.ntp.org"
+          ]
+        },
+        "ServerName": {
+          "type": "s",
+          "data": "2.debian.pool.ntp.org"
+        },
+        "ServerAddress": {
+          "type": "(iay)",
+          "data": [
+            2,
+            [
+              145,
+              40,
+              176,
+              243
+            ]
+          ]
+        },
+        "RootDistanceMaxUSec": {
+          "type": "t",
+          "data": 5000000
+        },
+        "PollIntervalMinUSec": {
+          "type": "t",
+          "data": 32000000
+        },
+        "PollIntervalMaxUSec": {
+          "type": "t",
+          "data": 2048000000
+        },
+        "PollIntervalUSec": {
+          "type": "t",
+          "data": 512000000
+        },
+        "NTPMessage": {
+          "type": "(uuuuittayttttbtt)",
+          "data": [
+            0,
+            4,
+            4,
+            1,
+            -25,
+            0,
+            0,
+            [
+              71,
+              80,
+              83,
+              0
+            ],
+            1787323531350110,
+            1787323531354101,
+            1787323531354106,
+            1787323531356603,
+            false,
+            5,
+            636
+          ]
+        },
+        "Frequency": {
+          "type": "x",
+          "data": 134948
+        }
+      }
+    ]
+  }
+}
