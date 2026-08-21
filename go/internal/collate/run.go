@@ -198,7 +198,6 @@ func nextInterval(client *wire.Client) time.Duration {
 	return interval
 }
 
-
 // dialHubOnce sends one session to the configured hub, or does nothing
 // when none is configured — which is a complete product and not a
 // degraded one.
@@ -247,7 +246,6 @@ func hubTLS() (*tls.Config, error) {
 	}
 	return ClientConfig(cert, key, ca)
 }
-
 
 // hubReconnect paces a collator that cannot reach its hub. Unhurried on
 // purpose: the hub being down costs the ESTATE view and costs this host

@@ -309,7 +309,6 @@ func compare(value any, want json.RawMessage, ok func(a, b float64) bool) (bool,
 	return ok(number, threshold), nil
 }
 
-
 // SecretFacts names the values a collection declares as credentials.
 //
 // `secret` means withheld at source and never emitted, so one arriving

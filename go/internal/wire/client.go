@@ -180,8 +180,8 @@ type DeclarationCollection struct {
 }
 
 type DeclarationRelation struct {
-	Type         string   `json:"type"`
-	CarriesFacts bool     `json:"carries_facts"`
+	Type         string `json:"type"`
+	CarriesFacts bool   `json:"carries_facts"`
 	// The facts that distinguish parallel instances. Absent asserts the
 	// type is at-most-singular between any pair — an assertion that is
 	// checkable, because a second instance arriving is then an error the

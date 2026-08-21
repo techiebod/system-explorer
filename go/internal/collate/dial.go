@@ -188,7 +188,6 @@ func Session(
 	return WriteSession(ctx, conn, st, collectors, id, host, bootID, gap)
 }
 
-
 // HubLink is one collator's standing relationship with its hub across
 // many connections. It exists for exactly one piece of state: WHEN this
 // collator last had a live connection, which is the only thing that can

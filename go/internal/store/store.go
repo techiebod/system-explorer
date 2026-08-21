@@ -706,7 +706,6 @@ func (s *Store) Rejections() ([]Rejection, error) {
 	return out, rows.Err()
 }
 
-
 // RecordDeclaration keeps the declaration document beside its digest.
 //
 // Kept rather than re-fetched, for two reasons that turned out to be one.

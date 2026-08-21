@@ -72,12 +72,12 @@ type Object struct {
 	// none (ruled 2026-08-21): scsi-host vs disk, service vs slice. It
 	// decides which health statement a row is entitled to, so it is
 	// carried verbatim rather than inferred anywhere downstream.
-	Type       string
-	Facts      json.RawMessage
-	Names      json.RawMessage // nil when the record carried none
-	Absent     []string
-	Evidence   json.RawMessage // nil when the record carried none
-	At         float64
+	Type     string
+	Facts    json.RawMessage
+	Names    json.RawMessage // nil when the record carried none
+	Absent   []string
+	Evidence json.RawMessage // nil when the record carried none
+	At       float64
 }
 
 // Relation is a relation_assertion as received. The collator core stores

@@ -241,7 +241,6 @@ func WriteCheckpoint(w io.Writer, st *store.Store, id, host, bootID string, gap 
 	return nil
 }
 
-
 // withoutSecrets drops declared credentials from a fact mapping, keeping
 // everything else byte-identical where it can.
 func withoutSecrets(raw json.RawMessage, secrets map[string]bool) json.RawMessage {

@@ -48,9 +48,9 @@ type collectionView struct {
 // identity model refuses, readable only by somebody who already knows
 // the convention. Null is the host-native reading, spelled out.
 type objectView struct {
-	ID       string          `json:"id"`
-	Instance *string         `json:"instance"`
-	Name     string          `json:"name"`
+	ID       string  `json:"id"`
+	Instance *string `json:"instance"`
+	Name     string  `json:"name"`
 	// Omitted when the object carries none: a homogeneous collection
 	// genuinely has no type, and inventing one would be this tier
 	// deciding something the producer did not say.
@@ -319,7 +319,6 @@ func writeJSON(w http.ResponseWriter, v any) {
 	}
 }
 
-
 // publishedRoutes is this tier's read surface, declared once and served
 // so an MCP surface can become it. The warning a model needs about
 // third-party text is the consumer's to attach — it is the same sentence
@@ -331,7 +330,7 @@ func writeJSON(w http.ResponseWriter, v any) {
 var publishedRoutes = []map[string]any{
 	{"path": "/v1/health", "tool": "host_health",
 		"summary": "Whether this collator is answering at all.",
-		"params": []string{}},
+		"params":  []string{}},
 	{"path": "/v1/status", "tool": "host_status",
 		"summary": "The attention surface: per collection, the worst level " +
 			"the declared rules fired and how many objects need attention — " +
