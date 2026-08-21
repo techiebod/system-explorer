@@ -75,7 +75,6 @@ NOT_YET_PORTED: dict[str, str] = {
     "storage/mounts": "mount points on every host.",
     "storage/arrays": "md arrays.",
     "storage/datasets": "ZFS datasets — the level protection joins against.",
-    "system/boot": "boot time and kernel command line.",
     "plex/requests": "seerr requests.",
 }
 

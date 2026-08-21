@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -54,6 +55,17 @@ type source interface {
 	// Under replay a payload nobody staged reads as a file the captured
 	// machine lacked; the meta anchors are what catch a thin capture.
 	proc(name string) string
+	systemd1() ([]byte, error)
+	// nix is nil off NixOS; efivars is nil on a BIOS host — each absence
+	// is a reading, never an error.
+	nix() *nixPointers
+	// efivars returns raw variable payloads (attribute header included)
+	// keyed by bare variable name, nil where there is no efivarfs.
+	efivars() map[string][]byte
+	// partitionDevice resolves a GPT partition UUID to its kernel device
+	// name, "" where the alias tree has no such link — which is exactly
+	// what makes a boot entry stale.
+	partitionDevice(partitionUUID string) string
 	// sysBlock is the whole-device membership /proc/diskstats rows are
 	// filtered against (partition rows double-count their parent).
 	sysBlock() map[string]bool
@@ -103,9 +115,22 @@ var errNoSystemd = errors.New("no busctl, so no systemd time services")
 const (
 	timedate1Request = "/org/freedesktop/timedate1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.timedate1"
 	timesync1Request = "/org/freedesktop/timesync1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.timesync1.Manager"
+	systemd1Request  = "/org/freedesktop/systemd1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.systemd1.Manager"
 	timedate1Dest    = "org.freedesktop.timedate1"
 	timesync1Dest    = "org.freedesktop.timesync1"
+	systemd1Dest     = "org.freedesktop.systemd1"
 )
+
+// nixPointers is the three system closures that can disagree, plus the raw
+// profile link the generation number is read off. nil means "not a NixOS
+// host" — the /run/current-system probe failed — which sends the four
+// pointer facts to the absent list on both implementations alike.
+type nixPointers struct {
+	Current     string `json:"current"`
+	Booted      string `json:"booted"`
+	Default     string `json:"default"`
+	ProfileLink string `json:"profile_link"`
+}
 
 // ── live ────────────────────────────────────────────────────────────────
 
@@ -175,6 +200,69 @@ func (liveSource) timedate1() ([]byte, error) {
 
 func (liveSource) timesync1() ([]byte, error) {
 	return busCall(os.Stderr, timesync1Dest, timesync1Request)
+}
+
+func (liveSource) systemd1() ([]byte, error) {
+	return busCall(os.Stderr, systemd1Dest, systemd1Request)
+}
+
+func (liveSource) nix() *nixPointers {
+	if _, err := os.Lstat("/run/current-system"); err != nil {
+		return nil
+	}
+	resolve := func(path string) string {
+		resolved, err := filepath.EvalSymlinks(path)
+		if err != nil {
+			return ""
+		}
+		return resolved
+	}
+	link, _ := os.Readlink("/nix/var/nix/profiles/system")
+	return &nixPointers{
+		Current:     resolve("/run/current-system"),
+		Booted:      resolve("/run/booted-system"),
+		Default:     resolve("/nix/var/nix/profiles/system"),
+		ProfileLink: link,
+	}
+}
+
+func (liveSource) partitionDevice(partitionUUID string) string {
+	resolved, err := filepath.EvalSymlinks("/dev/disk/by-partuuid/" + partitionUUID)
+	if err != nil {
+		return ""
+	}
+	return filepath.Base(resolved)
+}
+
+const efivarsDir = "/sys/firmware/efi/efivars"
+const efiGlobalGUID = "8be4df61-93ca-11d2-aa0d-00e098032b8c"
+
+func (liveSource) efivars() map[string][]byte {
+	entries, err := os.ReadDir(efivarsDir)
+	if err != nil {
+		return nil
+	}
+	out := map[string][]byte{}
+	for _, entry := range entries {
+		name, found := strings.CutSuffix(entry.Name(), "-"+efiGlobalGUID)
+		if !found {
+			continue
+		}
+		// Only the variables the boot facts read: the namespace is large
+		// and mostly vendor noise, and reading it all would make the
+		// authority claim wider than the declaration's.
+		if name != "BootOrder" && name != "BootCurrent" && name != "BootNext" &&
+			name != "SecureBoot" && name != "SetupMode" && name != "Timeout" &&
+			!isBootEntryName(name) {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(efivarsDir, entry.Name()))
+		if err != nil {
+			continue
+		}
+		out[name] = raw
+	}
+	return out
 }
 
 // The live homes of the overview documents, payload name to path — one
@@ -356,6 +444,53 @@ func (r replaySource) cpus() int {
 }
 
 func (r replaySource) wallNow() float64 { return r.nowPin }
+
+func (r replaySource) systemd1() ([]byte, error) { return r.bus(systemd1Request) }
+
+func (r replaySource) nix() *nixPointers {
+	raw, err := os.ReadFile(filepath.Join(r.dir, "nix-pointers.json"))
+	if err != nil {
+		return nil
+	}
+	var pointers nixPointers
+	if json.Unmarshal(raw, &pointers) != nil {
+		return nil
+	}
+	return &pointers
+}
+
+// partitionDevice under replay reads the staged uuid→kernel map; a uuid
+// the capture never staged resolves to nothing, which replays as the
+// stale entry it was on the captured machine.
+func (r replaySource) partitionDevice(partitionUUID string) string {
+	raw, err := os.ReadFile(filepath.Join(r.dir, "partuuid.json"))
+	if err != nil {
+		return ""
+	}
+	var staged map[string]string
+	if json.Unmarshal(raw, &staged) != nil {
+		return ""
+	}
+	return staged[partitionUUID]
+}
+
+func (r replaySource) efivars() map[string][]byte {
+	raw, err := os.ReadFile(filepath.Join(r.dir, "efivars.json"))
+	if err != nil {
+		return nil
+	}
+	var staged map[string]string
+	if json.Unmarshal(raw, &staged) != nil {
+		return nil
+	}
+	out := map[string][]byte{}
+	for name, encoded := range staged {
+		if data, err := base64.StdEncoding.DecodeString(encoded); err == nil {
+			out[name] = data
+		}
+	}
+	return out
+}
 
 func (replaySource) costs() (float64, float64) { return 0.5, 1.0 }
 

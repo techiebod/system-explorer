@@ -391,7 +391,7 @@ def _efi_facts() -> dict:
             else:
                 stale = True
         in_order = num in order_ids
-        entries.append({
+        entry = {
             "ID": f"Boot{num:04X}",
             "Description": option["description"],
             "Active": bool(option["attributes"] & 1),
@@ -400,7 +400,11 @@ def _efi_facts() -> dict:
             "Device": device,
             "FilePath": option["file_path"],
             "Stale": stale,
-        })
+        }
+        # Null members are omitted per entry, not carried (R3b): the stream
+        # refuses a null at any depth, and "no reading" inside an entry is
+        # a missing member exactly as it is at the top of a row.
+        entries.append({k: v for k, v in entry.items() if v is not None})
 
     facts = {
         "Firmware": "uefi",
@@ -411,6 +415,11 @@ def _efi_facts() -> dict:
         "BootOrder": [f"Boot{num:04X}" for num in order_ids],
         "BootTimeoutSeconds": _efi_u16("Timeout"),
         "BootEntries": entries,
+        # Derived so the boot-order-stale judgement can be data in the
+        # ported rule table: empty is the healthy reading on a UEFI host.
+        "StaleOrderedBootEntries": [entry["ID"] for entry in entries
+                                    if entry.get("Stale")
+                                    and entry.get("OrderPosition") is not None],
     }
     return facts
 
@@ -584,6 +593,15 @@ class Adapter:
             evidence_ref=env.evidence_ref("system", "time", obj['id']),
         )
 
+    #: The two fact families that go absent together, shared with the
+    #: ported collector's own grouped statements (R3b): efivarfs missing is
+    #: a BIOS host, /run/current-system missing is a non-NixOS host.
+    _EFI_FACTS = ("SecureBoot", "SetupMode", "BootCurrent", "BootNext",
+                  "BootOrder", "BootTimeoutSeconds", "BootEntries",
+                  "StaleOrderedBootEntries")
+    _NIX_FACTS = ("CurrentSystem", "BootedSystem", "SystemProfile",
+                  "SystemProfileGeneration")
+
     async def _boot(self) -> dict:
         manager = await BUS.get_all(SYSTEMD, SYSTEMD_PATH, SYSTEMD_MANAGER)
         boot_id = _read("/proc/sys/kernel/random/boot_id").replace("-", "")
@@ -626,10 +644,22 @@ class Adapter:
                 "SystemProfileGeneration": default_gen,
             })
 
+
         # The firmware's view: what will actually boot, in what order, and
         # whether Secure Boot would block it. Pure efivarfs reads — threaded,
         # because efivarfs is notoriously slow and would stall the loop.
         facts.update(await anyio.to_thread.run_sync(_efi_facts))
+
+        # The absent channel, grouped as the sources go dark (R3b): the two
+        # implementations must make the same statements about what was NOT
+        # there, and null members must never reach a stream that refuses
+        # them at any depth.
+        absent = sorted(
+            [name for name, value in facts.items() if value is None]
+            + ([] if _is_nixos() else list(self._NIX_FACTS))
+            + (list(self._EFI_FACTS) if facts.get("Firmware") == "bios" else []))
+        facts = {k: v for k, v in facts.items() if v is not None}
+        self._channels["boot"] = {"absent": absent}
 
         obj = env.obj_ref(f"boot:{boot_id or env.HOST['hostname']}", "boot", boot_id or "unknown")
         return env.observation(

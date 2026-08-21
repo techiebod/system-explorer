@@ -112,5 +112,21 @@
     "whole": {
       "discloses": "nothing"
     }
+  },
+  "#boot": "the boot payloads: EFI variables base64-raw and the partition-uuid resolution map beside them, and \u2014 on a NixOS guest \u2014 the three system pointers. Partition UUIDs travel VERBATIM, deliberately: the same uuids sit inside the binary EFI load options where no text pass can substitute them, and a map scrubbed out of step with the binaries would replay every entry as stale. Honest for LAB GUESTS, whose disks are minted for a disposable image; an ESTATE capture must not pass through these entries. nix-pointers store paths can embed a hostname in the system name \u2014 reclassify before capturing from a NixOS host that is not a lab guest.",
+  "efivars:~key": {
+    "discloses": "nothing"
+  },
+  "efivars:*": {
+    "discloses": "nothing"
+  },
+  "partuuid:~key": {
+    "discloses": "nothing"
+  },
+  "partuuid:*": {
+    "discloses": "nothing"
+  },
+  "nix-pointers:*": {
+    "discloses": "nothing"
   }
 }

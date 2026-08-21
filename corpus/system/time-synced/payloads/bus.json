@@ -25,11 +25,11 @@
         },
         "TimeUSec": {
           "type": "t",
-          "data": 1787324676999704
+          "data": 1787325616511026
         },
         "RTCTimeUSec": {
           "type": "t",
-          "data": 1787324677000000
+          "data": 1787325616000000
         }
       }
     ]
@@ -89,7 +89,7 @@
         },
         "PollIntervalUSec": {
           "type": "t",
-          "data": 1024000000
+          "data": 2048000000
         },
         "NTPMessage": {
           "type": "(uuuuittayttttbtt)",
@@ -107,18 +107,545 @@
               83,
               0
             ],
-            1787324043600096,
-            1787324043603876,
-            1787324043603881,
-            1787324043607934,
+            1787325067850162,
+            1787325067855144,
+            1787325067855148,
+            1787325067857403,
             false,
-            6,
-            661
+            7,
+            641
           ]
         },
         "Frequency": {
           "type": "x",
-          "data": 130584
+          "data": 152404
+        }
+      }
+    ]
+  },
+  "/org/freedesktop/systemd1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.systemd1.Manager": {
+    "type": "a{sv}",
+    "data": [
+      {
+        "Version": {
+          "type": "s",
+          "data": "257.13-1~deb13u1"
+        },
+        "Features": {
+          "type": "s",
+          "data": "+PAM +AUDIT +SELINUX +APPARMOR +IMA +IPE +SMACK +SECCOMP +GCRYPT -GNUTLS +OPENSSL +ACL +BLKID +CURL +ELFUTILS +FIDO2 +IDN2 -IDN +IPTC +KMOD +LIBCRYPTSETUP +LIBCRYPTSETUP_PLUGINS +LIBFDISK +PCRE2 +PWQUALITY +P11KIT +QRENCODE +TPM2 +BZIP2 +LZ4 +XZ +ZLIB +ZSTD +BPF_FRAMEWORK +BTF -XKBCOMMON -UTMP +SYSVINIT +LIBARCHIVE"
+        },
+        "Virtualization": {
+          "type": "s",
+          "data": "kvm"
+        },
+        "ConfidentialVirtualization": {
+          "type": "s",
+          "data": ""
+        },
+        "Architecture": {
+          "type": "s",
+          "data": "x86-64"
+        },
+        "Tainted": {
+          "type": "s",
+          "data": "unmerged-bin"
+        },
+        "FirmwareTimestamp": {
+          "type": "t",
+          "data": 0
+        },
+        "FirmwareTimestampMonotonic": {
+          "type": "t",
+          "data": 0
+        },
+        "LoaderTimestamp": {
+          "type": "t",
+          "data": 0
+        },
+        "LoaderTimestampMonotonic": {
+          "type": "t",
+          "data": 0
+        },
+        "KernelTimestamp": {
+          "type": "t",
+          "data": 1787323013202436
+        },
+        "KernelTimestampMonotonic": {
+          "type": "t",
+          "data": 0
+        },
+        "InitRDTimestamp": {
+          "type": "t",
+          "data": 0
+        },
+        "InitRDTimestampMonotonic": {
+          "type": "t",
+          "data": 0
+        },
+        "UserspaceTimestamp": {
+          "type": "t",
+          "data": 1787323014378640
+        },
+        "UserspaceTimestampMonotonic": {
+          "type": "t",
+          "data": 1176204
+        },
+        "FinishTimestamp": {
+          "type": "t",
+          "data": 1787323019858480
+        },
+        "FinishTimestampMonotonic": {
+          "type": "t",
+          "data": 6656045
+        },
+        "ShutdownStartTimestamp": {
+          "type": "t",
+          "data": 0
+        },
+        "ShutdownStartTimestampMonotonic": {
+          "type": "t",
+          "data": 0
+        },
+        "SecurityStartTimestamp": {
+          "type": "t",
+          "data": 1787323014383077
+        },
+        "SecurityStartTimestampMonotonic": {
+          "type": "t",
+          "data": 1180641
+        },
+        "SecurityFinishTimestamp": {
+          "type": "t",
+          "data": 1787323014384266
+        },
+        "SecurityFinishTimestampMonotonic": {
+          "type": "t",
+          "data": 1181831
+        },
+        "GeneratorsStartTimestamp": {
+          "type": "t",
+          "data": 1787323014536518
+        },
+        "GeneratorsStartTimestampMonotonic": {
+          "type": "t",
+          "data": 1334082
+        },
+        "GeneratorsFinishTimestamp": {
+          "type": "t",
+          "data": 1787323014662077
+        },
+        "GeneratorsFinishTimestampMonotonic": {
+          "type": "t",
+          "data": 1459641
+        },
+        "UnitsLoadStartTimestamp": {
+          "type": "t",
+          "data": 1787323014662085
+        },
+        "UnitsLoadStartTimestampMonotonic": {
+          "type": "t",
+          "data": 1459649
+        },
+        "UnitsLoadFinishTimestamp": {
+          "type": "t",
+          "data": 1787323014732182
+        },
+        "UnitsLoadFinishTimestampMonotonic": {
+          "type": "t",
+          "data": 1529746
+        },
+        "UnitsLoadTimestamp": {
+          "type": "t",
+          "data": 1787324418099177
+        },
+        "UnitsLoadTimestampMonotonic": {
+          "type": "t",
+          "data": 1403949865
+        },
+        "InitRDSecurityStartTimestamp": {
+          "type": "t",
+          "data": 0
+        },
+        "InitRDSecurityStartTimestampMonotonic": {
+          "type": "t",
+          "data": 0
+        },
+        "InitRDSecurityFinishTimestamp": {
+          "type": "t",
+          "data": 0
+        },
+        "InitRDSecurityFinishTimestampMonotonic": {
+          "type": "t",
+          "data": 0
+        },
+        "InitRDGeneratorsStartTimestamp": {
+          "type": "t",
+          "data": 0
+        },
+        "InitRDGeneratorsStartTimestampMonotonic": {
+          "type": "t",
+          "data": 0
+        },
+        "InitRDGeneratorsFinishTimestamp": {
+          "type": "t",
+          "data": 0
+        },
+        "InitRDGeneratorsFinishTimestampMonotonic": {
+          "type": "t",
+          "data": 0
+        },
+        "InitRDUnitsLoadStartTimestamp": {
+          "type": "t",
+          "data": 0
+        },
+        "InitRDUnitsLoadStartTimestampMonotonic": {
+          "type": "t",
+          "data": 0
+        },
+        "InitRDUnitsLoadFinishTimestamp": {
+          "type": "t",
+          "data": 0
+        },
+        "InitRDUnitsLoadFinishTimestampMonotonic": {
+          "type": "t",
+          "data": 0
+        },
+        "LogLevel": {
+          "type": "s",
+          "data": "info"
+        },
+        "LogTarget": {
+          "type": "s",
+          "data": "journal-or-kmsg"
+        },
+        "NNames": {
+          "type": "u",
+          "data": 315
+        },
+        "NFailedUnits": {
+          "type": "u",
+          "data": 0
+        },
+        "NJobs": {
+          "type": "u",
+          "data": 0
+        },
+        "NInstalledJobs": {
+          "type": "u",
+          "data": 256
+        },
+        "NFailedJobs": {
+          "type": "u",
+          "data": 0
+        },
+        "Progress": {
+          "type": "d",
+          "data": 1.0
+        },
+        "Environment": {
+          "type": "as",
+          "data": [
+            "LANG=C.UTF-8",
+            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
+          ]
+        },
+        "ConfirmSpawn": {
+          "type": "b",
+          "data": false
+        },
+        "ShowStatus": {
+          "type": "b",
+          "data": true
+        },
+        "UnitPath": {
+          "type": "as",
+          "data": [
+            "/etc/systemd/system.control",
+            "/run/systemd/system.control",
+            "/run/systemd/transient",
+            "/run/systemd/generator.early",
+            "/etc/systemd/system",
+            "/etc/systemd/system.attached",
+            "/run/systemd/system",
+            "/run/systemd/system.attached",
+            "/run/systemd/generator",
+            "/usr/local/lib/systemd/system",
+            "/usr/lib/systemd/system",
+            "/run/systemd/generator.late"
+          ]
+        },
+        "DefaultStandardOutput": {
+          "type": "s",
+          "data": "journal"
+        },
+        "DefaultStandardError": {
+          "type": "s",
+          "data": "inherit"
+        },
+        "WatchdogDevice": {
+          "type": "s",
+          "data": ""
+        },
+        "WatchdogLastPingTimestamp": {
+          "type": "t",
+          "data": 18446744073709551615
+        },
+        "WatchdogLastPingTimestampMonotonic": {
+          "type": "t",
+          "data": 18446744073709551615
+        },
+        "RuntimeWatchdogUSec": {
+          "type": "t",
+          "data": 0
+        },
+        "RuntimeWatchdogPreUSec": {
+          "type": "t",
+          "data": 0
+        },
+        "RuntimeWatchdogPreGovernor": {
+          "type": "s",
+          "data": ""
+        },
+        "RebootWatchdogUSec": {
+          "type": "t",
+          "data": 600000000
+        },
+        "KExecWatchdogUSec": {
+          "type": "t",
+          "data": 0
+        },
+        "ServiceWatchdogs": {
+          "type": "b",
+          "data": true
+        },
+        "ControlGroup": {
+          "type": "s",
+          "data": ""
+        },
+        "SystemState": {
+          "type": "s",
+          "data": "running"
+        },
+        "ExitCode": {
+          "type": "y",
+          "data": 0
+        },
+        "DefaultTimerAccuracyUSec": {
+          "type": "t",
+          "data": 60000000
+        },
+        "DefaultTimeoutStartUSec": {
+          "type": "t",
+          "data": 90000000
+        },
+        "DefaultTimeoutStopUSec": {
+          "type": "t",
+          "data": 90000000
+        },
+        "DefaultTimeoutAbortUSec": {
+          "type": "t",
+          "data": 90000000
+        },
+        "DefaultDeviceTimeoutUSec": {
+          "type": "t",
+          "data": 90000000
+        },
+        "DefaultRestartUSec": {
+          "type": "t",
+          "data": 100000
+        },
+        "DefaultStartLimitIntervalUSec": {
+          "type": "t",
+          "data": 10000000
+        },
+        "DefaultStartLimitBurst": {
+          "type": "u",
+          "data": 5
+        },
+        "DefaultCPUAccounting": {
+          "type": "b",
+          "data": true
+        },
+        "DefaultBlockIOAccounting": {
+          "type": "b",
+          "data": false
+        },
+        "DefaultIOAccounting": {
+          "type": "b",
+          "data": false
+        },
+        "DefaultIPAccounting": {
+          "type": "b",
+          "data": false
+        },
+        "DefaultMemoryAccounting": {
+          "type": "b",
+          "data": true
+        },
+        "DefaultTasksAccounting": {
+          "type": "b",
+          "data": true
+        },
+        "DefaultLimitCPU": {
+          "type": "t",
+          "data": 18446744073709551615
+        },
+        "DefaultLimitCPUSoft": {
+          "type": "t",
+          "data": 18446744073709551615
+        },
+        "DefaultLimitFSIZE": {
+          "type": "t",
+          "data": 18446744073709551615
+        },
+        "DefaultLimitFSIZESoft": {
+          "type": "t",
+          "data": 18446744073709551615
+        },
+        "DefaultLimitDATA": {
+          "type": "t",
+          "data": 18446744073709551615
+        },
+        "DefaultLimitDATASoft": {
+          "type": "t",
+          "data": 18446744073709551615
+        },
+        "DefaultLimitSTACK": {
+          "type": "t",
+          "data": 18446744073709551615
+        },
+        "DefaultLimitSTACKSoft": {
+          "type": "t",
+          "data": 8388608
+        },
+        "DefaultLimitCORE": {
+          "type": "t",
+          "data": 18446744073709551615
+        },
+        "DefaultLimitCORESoft": {
+          "type": "t",
+          "data": 0
+        },
+        "DefaultLimitRSS": {
+          "type": "t",
+          "data": 18446744073709551615
+        },
+        "DefaultLimitRSSSoft": {
+          "type": "t",
+          "data": 18446744073709551615
+        },
+        "DefaultLimitNOFILE": {
+          "type": "t",
+          "data": 524288
+        },
+        "DefaultLimitNOFILESoft": {
+          "type": "t",
+          "data": 1024
+        },
+        "DefaultLimitAS": {
+          "type": "t",
+          "data": 18446744073709551615
+        },
+        "DefaultLimitASSoft": {
+          "type": "t",
+          "data": 18446744073709551615
+        },
+        "DefaultLimitNPROC": {
+          "type": "t",
+          "data": 7543
+        },
+        "DefaultLimitNPROCSoft": {
+          "type": "t",
+          "data": 7543
+        },
+        "DefaultLimitMEMLOCK": {
+          "type": "t",
+          "data": 8388608
+        },
+        "DefaultLimitMEMLOCKSoft": {
+          "type": "t",
+          "data": 8388608
+        },
+        "DefaultLimitLOCKS": {
+          "type": "t",
+          "data": 18446744073709551615
+        },
+        "DefaultLimitLOCKSSoft": {
+          "type": "t",
+          "data": 18446744073709551615
+        },
+        "DefaultLimitSIGPENDING": {
+          "type": "t",
+          "data": 7543
+        },
+        "DefaultLimitSIGPENDINGSoft": {
+          "type": "t",
+          "data": 7543
+        },
+        "DefaultLimitMSGQUEUE": {
+          "type": "t",
+          "data": 819200
+        },
+        "DefaultLimitMSGQUEUESoft": {
+          "type": "t",
+          "data": 819200
+        },
+        "DefaultLimitNICE": {
+          "type": "t",
+          "data": 0
+        },
+        "DefaultLimitNICESoft": {
+          "type": "t",
+          "data": 0
+        },
+        "DefaultLimitRTPRIO": {
+          "type": "t",
+          "data": 0
+        },
+        "DefaultLimitRTPRIOSoft": {
+          "type": "t",
+          "data": 0
+        },
+        "DefaultLimitRTTIME": {
+          "type": "t",
+          "data": 18446744073709551615
+        },
+        "DefaultLimitRTTIMESoft": {
+          "type": "t",
+          "data": 18446744073709551615
+        },
+        "DefaultTasksMax": {
+          "type": "t",
+          "data": 2263
+        },
+        "DefaultMemoryPressureThresholdUSec": {
+          "type": "t",
+          "data": 200000
+        },
+        "DefaultMemoryPressureWatch": {
+          "type": "s",
+          "data": "auto"
+        },
+        "TimerSlackNSec": {
+          "type": "t",
+          "data": 50000
+        },
+        "DefaultOOMPolicy": {
+          "type": "s",
+          "data": "stop"
+        },
+        "DefaultOOMScoreAdjust": {
+          "type": "i",
+          "data": 0
+        },
+        "CtrlAltDelBurstAction": {
+          "type": "s",
+          "data": "reboot-force"
+        },
+        "SoftRebootsCount": {
+          "type": "u",
+          "data": 0
         }
       }
     ]

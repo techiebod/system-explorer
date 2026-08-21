@@ -3,7 +3,8 @@
   "collections": [
     "identity",
     "time",
-    "overview"
+    "overview",
+    "boot"
   ],
   "variant": "time-synced",
   "provenance": "captured-then-scrubbed",
@@ -14,7 +15,7 @@
   "regenerable": true,
   "canaries": [],
   "anonymised": true,
-  "note": "The first pair for the time collection (R3b): a guest whose clock is synchronised THROUGH systemd-timesyncd, so both bus documents answer \u2014 timedate1 for the collection, timesync1 for the four source facts. Every busctl document is byte-exact from the guest including the tuple-typed members this collector must skip unharmed (ServerAddress, NTPMessage); the hostname is substituted via the names mechanism, the boot id shape-preserved, and the bus documents travel verbatim because a lab guest's members are distribution constants \u2014 the scrub manifest states that coverage limit for estate captures. SystemNTPServers is genuinely [] on this guest and is anchored as such: an empty configured list is a reading, not an absence. Re-captured 2026-08-21T15:20Z to add the overview collection: ten proc documents plus the /sys/block listing, arcstats honestly not staged because neither guest runs ZFS \u2014 the ARC facts must come back absent, and MemUsedPercentAdjusted must equal MemUsedPercent.",
+  "note": "The first pair for the time collection (R3b): a guest whose clock is synchronised THROUGH systemd-timesyncd, so both bus documents answer \u2014 timedate1 for the collection, timesync1 for the four source facts. Every busctl document is byte-exact from the guest including the tuple-typed members this collector must skip unharmed (ServerAddress, NTPMessage); the hostname is substituted via the names mechanism, the boot id shape-preserved, and the bus documents travel verbatim because a lab guest's members are distribution constants \u2014 the scrub manifest states that coverage limit for estate captures. SystemNTPServers is genuinely [] on this guest and is anchored as such: an empty configured list is a reading, not an absence. Re-captured 2026-08-21T15:20Z to add the overview collection: ten proc documents plus the /sys/block listing, arcstats honestly not staged because neither guest runs ZFS \u2014 the ARC facts must come back absent, and MemUsedPercentAdjusted must equal MemUsedPercent. Extended again the same day with the boot collection: the guests turn out to boot UEFI, so the load-option parse and the partition resolution join are exercised by REAL firmware variables \u2014 three Boot entries, an order, a current \u2014 while SecureBoot/SetupMode variables are genuinely absent on these VMs and the NixOS pointer facts absent on both distros. Partition UUIDs travel verbatim, deliberately: the same bytes sit inside the binary load options where no text pass can substitute them (see the scrub manifest).",
   "anchors": [
     {
       "collection": "identity",
@@ -50,7 +51,7 @@
       "collection": "time",
       "object": "host-9330c2",
       "fact": "CurrentTime",
-      "value": "2026-08-21T15:04:36Z"
+      "value": "2026-08-21T15:20:16Z"
     },
     {
       "collection": "time",
@@ -89,6 +90,28 @@
     },
     {
       "collection": "overview",
+      "commit_objects": 1
+    },
+    {
+      "collection": "boot",
+      "object": "5cb0781a58ccba61e64e3c90732537cb",
+      "fact": "SystemState",
+      "value": "running"
+    },
+    {
+      "collection": "boot",
+      "object": "5cb0781a58ccba61e64e3c90732537cb",
+      "fact": "Firmware",
+      "value": "uefi"
+    },
+    {
+      "collection": "boot",
+      "object": "5cb0781a58ccba61e64e3c90732537cb",
+      "fact": "SystemdVersion",
+      "value": "257.13-1~deb13u1"
+    },
+    {
+      "collection": "boot",
       "commit_objects": 1
     }
   ],

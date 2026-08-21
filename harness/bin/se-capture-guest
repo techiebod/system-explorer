@@ -527,8 +527,67 @@ def call(dest, req):
 requests = {
  "/org/freedesktop/timedate1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.timedate1": "org.freedesktop.timedate1",
  "/org/freedesktop/timesync1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.timesync1.Manager": "org.freedesktop.timesync1",
+ "/org/freedesktop/systemd1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.systemd1.Manager": "org.freedesktop.systemd1",
 }
 print(json.dumps({req: call(dest, req) for req, dest in requests.items()}, indent=1))
+'
+
+# The NixOS pointers, emitted only where /run/current-system exists: no
+# output on an ordinary guest, which the optional-payload marker turns
+# into "not staged", which the replay seam reads as "not a NixOS host".
+nix_pointers_py='
+import json, os
+if os.path.exists("/run/current-system"):
+    def resolve(path):
+        try:
+            return os.path.realpath(path)
+        except OSError:
+            return ""
+    try:
+        link = os.readlink("/nix/var/nix/profiles/system")
+    except OSError:
+        link = ""
+    print(json.dumps({"current": resolve("/run/current-system"),
+                      "booted": resolve("/run/booted-system"),
+                      "default": resolve("/nix/var/nix/profiles/system"),
+                      "profile_link": link}))
+'
+
+# The EFI variables the boot facts read, raw and base64 (header included),
+# plus the partition-uuid resolution map for every entry that names one.
+# No output on a BIOS guest.
+efivars_py='
+import base64, glob, json, os, re
+DIR = "/sys/firmware/efi/efivars"
+GUID = "8be4df61-93ca-11d2-aa0d-00e098032b8c"
+if os.path.isdir(DIR):
+    wanted = {"BootOrder", "BootCurrent", "BootNext", "SecureBoot",
+              "SetupMode", "Timeout"}
+    out = {}
+    for path in sorted(glob.glob(DIR + "/*-" + GUID)):
+        name = os.path.basename(path)[:-len(GUID)-1]
+        if name not in wanted and not re.fullmatch(r"Boot[0-9A-Fa-f]{4}", name):
+            continue
+        try:
+            out[name] = base64.b64encode(open(path, "rb").read()).decode()
+        except OSError:
+            pass
+    if out:
+        print(json.dumps(out))
+'
+
+partuuid_py='
+import json, os
+tree = "/dev/disk/by-partuuid"
+if os.path.isdir(tree):
+    out = {}
+    for name in sorted(os.listdir(tree)):
+        try:
+            out[name] = os.path.basename(os.path.realpath(os.path.join(tree, name)))
+        except OSError:
+            pass
+    if out:
+        print(json.dumps(out))
 '
 
 hostname_py='
@@ -906,6 +965,9 @@ case "$collector" in
             "proc-diskstats|cat /proc/diskstats"
             "proc-arcstats?|cat /proc/spl/kstat/zfs/arcstats 2>/dev/null || true"
             "sys-block|ls /sys/block"
+            "nix-pointers.json?|python3 -c '$nix_pointers_py'"
+            "efivars.json?|sudo python3 -c '$efivars_py'"
+            "partuuid.json?|python3 -c '$partuuid_py'"
         )
         ;;
     *)

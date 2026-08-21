@@ -58,8 +58,8 @@ func TestTheDeclarationCarriesThePinnedContract(t *testing.T) {
 	if declaration.Schema != "se.declaration/1" || declaration.Collector != "system" {
 		t.Fatalf("collector %q under schema %q", declaration.Collector, declaration.Schema)
 	}
-	if len(declaration.Collections) != 3 {
-		t.Fatalf("three collections, identity then time then overview; got %d",
+	if len(declaration.Collections) != 4 {
+		t.Fatalf("four collections — identity, time, overview, boot; got %d",
 			len(declaration.Collections))
 	}
 	collection := declaration.Collections[0]

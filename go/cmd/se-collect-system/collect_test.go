@@ -27,6 +27,11 @@ type fakeSource struct {
 	blocks   map[string]bool
 	ncpu     int
 	now      float64
+	sysd     []byte
+	sderr    error
+	nixp     *nixPointers
+	vars     map[string][]byte
+	partmap  map[string]string
 }
 
 func (f *fakeSource) note(what string) float64 {
@@ -75,6 +80,18 @@ func (f *fakeSource) sysBlock() map[string]bool {
 }
 func (f *fakeSource) cpus() int        { return f.ncpu }
 func (f *fakeSource) wallNow() float64 { return f.now }
+func (f *fakeSource) systemd1() ([]byte, error) {
+	f.note("systemd1")
+	if f.sysd == nil && f.sderr == nil {
+		return nil, errCallFailed
+	}
+	return f.sysd, f.sderr
+}
+func (f *fakeSource) nix() *nixPointers          { return f.nixp }
+func (f *fakeSource) efivars() map[string][]byte { return f.vars }
+func (f *fakeSource) partitionDevice(uuid string) string {
+	return f.partmap[uuid]
+}
 func (f *fakeSource) hostname() (string, error) {
 	f.note("hostname")
 	if f.hosterr != nil {

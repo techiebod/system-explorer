@@ -131,6 +131,7 @@ func collect(stdout, stderr io.Writer, src source, order []string, generations m
 		"identity": collectIdentity,
 		"time":     collectTime,
 		"overview": collectOverview,
+		"boot":     collectBoot,
 	}
 	objects := 0
 	for _, collection := range order {

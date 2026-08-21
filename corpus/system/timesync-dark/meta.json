@@ -3,7 +3,8 @@
   "collections": [
     "identity",
     "time",
-    "overview"
+    "overview",
+    "boot"
   ],
   "variant": "timesync-dark",
   "provenance": "captured-then-scrubbed",
@@ -14,7 +15,7 @@
   "regenerable": true,
   "canaries": [],
   "anonymised": true,
-  "note": "The chrony shape, captured from life rather than staged: this guest's kernel reports the clock synchronised (NTPSynchronized true) while systemd-timesyncd is not running, so timesync1's GetAll genuinely failed at capture and is staged as `false` \u2014 the request-observed-to-fail marker, distinct from a request nobody staged, which the replay seam refuses as uncaptured. The four timesync facts must come back as unobservable records with the one shared spelling, the collection must still commit its object, and the time-sync rule must NOT fire: the clock IS synchronised, whoever synchronised it. Re-captured 2026-08-21T15:20Z to add the overview collection: ten proc documents plus the /sys/block listing, arcstats honestly not staged because neither guest runs ZFS \u2014 the ARC facts must come back absent, and MemUsedPercentAdjusted must equal MemUsedPercent.",
+  "note": "The chrony shape, captured from life rather than staged: this guest's kernel reports the clock synchronised (NTPSynchronized true) while systemd-timesyncd is not running, so timesync1's GetAll genuinely failed at capture and is staged as `false` \u2014 the request-observed-to-fail marker, distinct from a request nobody staged, which the replay seam refuses as uncaptured. The four timesync facts must come back as unobservable records with the one shared spelling, the collection must still commit its object, and the time-sync rule must NOT fire: the clock IS synchronised, whoever synchronised it. Re-captured 2026-08-21T15:20Z to add the overview collection: ten proc documents plus the /sys/block listing, arcstats honestly not staged because neither guest runs ZFS \u2014 the ARC facts must come back absent, and MemUsedPercentAdjusted must equal MemUsedPercent. Extended again the same day with the boot collection: the guests turn out to boot UEFI, so the load-option parse and the partition resolution join are exercised by REAL firmware variables \u2014 three Boot entries, an order, a current \u2014 while SecureBoot/SetupMode variables are genuinely absent on these VMs and the NixOS pointer facts absent on both distros. Partition UUIDs travel verbatim, deliberately: the same bytes sit inside the binary load options where no text pass can substitute them (see the scrub manifest).",
   "anchors": [
     {
       "collection": "identity",
@@ -32,7 +33,7 @@
       "collection": "time",
       "object": "host-77df07",
       "fact": "CurrentTime",
-      "value": "2026-08-21T15:04:44Z"
+      "value": "2026-08-21T15:20:24Z"
     },
     {
       "collection": "overview",
@@ -56,6 +57,28 @@
     },
     {
       "collection": "overview",
+      "commit_objects": 1
+    },
+    {
+      "collection": "boot",
+      "object": "5cb09a2704d8080e42248552818cbb45",
+      "fact": "SystemState",
+      "value": "running"
+    },
+    {
+      "collection": "boot",
+      "object": "5cb09a2704d8080e42248552818cbb45",
+      "fact": "Firmware",
+      "value": "uefi"
+    },
+    {
+      "collection": "boot",
+      "object": "5cb09a2704d8080e42248552818cbb45",
+      "fact": "SystemdVersion",
+      "value": "259.5-0ubuntu3"
+    },
+    {
+      "collection": "boot",
       "commit_objects": 1
     }
   ],

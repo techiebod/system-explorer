@@ -16,7 +16,12 @@
       "/proc/net/dev",
       "/proc/diskstats",
       "/proc/spl/kstat/zfs/arcstats",
-      "/sys/block"
+      "/sys/block",
+      "/run/current-system",
+      "/run/booted-system",
+      "/nix/var/nix/profiles",
+      "/sys/firmware/efi/efivars",
+      "/dev/disk/by-partuuid"
     ],
     "commands": [
       "busctl"
@@ -721,6 +726,277 @@
           "argv": [
             "cat",
             "/proc/spl/kstat/zfs/arcstats"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "boot",
+      "question": "what boot is this, did systemd finish it cleanly, and what would the firmware boot next time?",
+      "prefix": "boot",
+      "freshness": "5m",
+      "perishability": "sampled",
+      "answer": [
+        "SystemState",
+        "NFailedUnits",
+        "Firmware",
+        "FinishTimestamp"
+      ],
+      "ceiling": {
+        "records": 4,
+        "bytes": 262144
+      },
+      "facts": {
+        "BootID": {
+          "type": "string",
+          "temperament": "existence",
+          "kind": "observed",
+          "discloses": "identity",
+          "sentence": "The kernel's identifier for this boot, dashes stripped as journalctl spells it. Also this object's native name: a new boot is a new object."
+        },
+        "SystemState": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "systemd's own verdict word \u2014 running, degraded, maintenance \u2014 passed through exactly as the manager states it."
+        },
+        "NFailedUnits": {
+          "type": "integer",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "How many units are in the failed state right now. Degraded is DEFINED as this being non-zero, and each failed unit already carries its own verdict on the units collection."
+        },
+        "NJobs": {
+          "type": "integer",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Queued or running systemd jobs \u2014 non-zero while the manager is still working on something."
+        },
+        "SystemdVersion": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The running manager's version string, as it reports it."
+        },
+        "KernelTimestamp": {
+          "type": "timestamp",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "When the kernel started, on the wall clock, seconds precision."
+        },
+        "UserspaceTimestamp": {
+          "type": "timestamp",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "When userspace started."
+        },
+        "FinishTimestamp": {
+          "type": "timestamp",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "When systemd finished starting the boot's jobs. Absent while a boot is still in progress \u2014 a reading nobody took yet, never 1970."
+        },
+        "CurrentSystem": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The activated NixOS system closure \u2014 what is running now. Absent off NixOS."
+        },
+        "BootedSystem": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The closure this boot activated. Disagreeing with CurrentSystem means a switch has not been booted into yet."
+        },
+        "SystemProfile": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The system profile pointer \u2014 what the next boot would normally pick. A failed bootloader install leaves this and the bootloader disagreeing."
+        },
+        "SystemProfileGeneration": {
+          "type": "integer",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The generation number the profile link points at."
+        },
+        "Firmware": {
+          "type": "enum",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "How this machine boots. bios means no efivarfs, and every EFI fact is then absent rather than invented.",
+          "values": [
+            "bios",
+            "uefi"
+          ]
+        },
+        "SecureBoot": {
+          "type": "boolean",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Whether Secure Boot is enforcing. An unsigned boot chain (the NixOS systemd-boot default) will not boot while it is on."
+        },
+        "SetupMode": {
+          "type": "boolean",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Whether the firmware is in key-enrolment setup mode, in which Secure Boot enforcement is suspended."
+        },
+        "BootCurrent": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The entry the firmware actually used for this boot."
+        },
+        "BootNext": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "A one-shot override: the entry that boots next, once. Absent when none is armed."
+        },
+        "BootOrder": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The firmware's try-in-order list of entry IDs."
+        },
+        "BootTimeoutSeconds": {
+          "type": "integer",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "How long the firmware menu waits."
+        },
+        "BootEntries": {
+          "type": "list",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Every Boot#### variable, decoded: description, active flag, position in BootOrder, the GPT partition it points at resolved to a block device \u2014 or Stale where the partition no longer exists \u2014 and the loader path. Null members are omitted per entry, never carried."
+        },
+        "StaleOrderedBootEntries": {
+          "type": "list",
+          "temperament": "state",
+          "kind": "derived",
+          "discloses": "nothing",
+          "sentence": "The IDs of ordered entries whose target partition no longer resolves \u2014 the firmware will try them and fail. Empty is the healthy reading; the boot-order-stale rule fires on it being anything else.",
+          "derived_from": [
+            "BootEntries",
+            "BootOrder"
+          ]
+        }
+      },
+      "rules": [
+        {
+          "key": "secure-boot",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "fact": "SecureBoot",
+            "equals": true
+          },
+          "sentence": "Secure Boot is enabled: an unsigned boot chain (the NixOS systemd-boot default) will not boot while it is on.",
+          "cites": [
+            "SecureBoot"
+          ]
+        },
+        {
+          "key": "boot-order-stale",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "fact": "StaleOrderedBootEntries",
+            "non_empty": true
+          },
+          "sentence": "BootOrder references entries whose target partition no longer exists; the firmware will try them and fail before finding one that boots.",
+          "cites": [
+            "StaleOrderedBootEntries",
+            "BootOrder",
+            "BootEntries"
+          ]
+        },
+        {
+          "key": "boot-next",
+          "level": "info",
+          "grounds": "interface",
+          "when": {
+            "fact": "BootNext",
+            "present": true
+          },
+          "sentence": "A one-shot boot override is armed: the named entry boots next, once.",
+          "cites": [
+            "BootNext"
+          ]
+        },
+        {
+          "key": "system-state",
+          "level": "info",
+          "grounds": "interface",
+          "when": {
+            "fact": "SystemState",
+            "not_equals": "running"
+          },
+          "sentence": "systemd reports this boot in a non-running state. Degraded is defined as at least one failed unit, and each failed unit already carries its own verdict on the units collection \u2014 this is the same condition counted, kept off the attention roll-up.",
+          "cites": [
+            "SystemState",
+            "NFailedUnits"
+          ]
+        }
+      ],
+      "redaction_exemption": "every fact is a systemd manager property, a firmware variable decoded to entry IDs and loader paths, or a nix store path whose hash identifies public build inputs; the boot id is declared as the identity it is and handled by disclosure policy",
+      "reference_commands": [
+        {
+          "purpose": "systemd's own view of the boot",
+          "argv": [
+            "systemctl",
+            "status"
+          ]
+        },
+        {
+          "purpose": "the boot timeline",
+          "argv": [
+            "systemd-analyze"
+          ]
+        },
+        {
+          "purpose": "the firmware entries, decoded by the usual tool",
+          "argv": [
+            "efibootmgr",
+            "-v"
+          ]
+        },
+        {
+          "purpose": "this boot's id",
+          "argv": [
+            "cat",
+            "/proc/sys/kernel/random/boot_id"
+          ]
+        },
+        {
+          "purpose": "the three NixOS pointers, where NixOS runs",
+          "argv": [
+            "readlink",
+            "-f",
+            "/run/current-system",
+            "/run/booted-system",
+            "/nix/var/nix/profiles/system"
           ]
         }
       ]
