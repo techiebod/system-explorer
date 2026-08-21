@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "se.stream.1.json",
   "title": "System Explorer collect stream record",
-  "description": "One NDJSON line of a collect batch (DESIGN 19). A committed collection is authoritative; an uncommitted one is authoritative for nothing. There is no partial commit and no tombstone: everything a committed collection did not emit is gone, and a decline of absent commits empty. Every record type is closed: a member the contract does not name is a claim the judge cannot see (DESIGN 19, two regimes), and an open object is how a Go struct's exported field names shipped as {\"Stable\":…} without a single test going red.",
+  "description": "One NDJSON line of a collect batch (DESIGN 19). A committed collection is authoritative; an uncommitted one is authoritative for nothing. There is no partial commit and no tombstone: everything a committed collection did not emit is gone, and a decline of absent commits empty. Every record type is closed: a member the contract does not name is a claim the judge cannot see (DESIGN 19, two regimes), and an open object is how a Go struct's exported field names shipped as {\"Stable\":\u2026} without a single test going red.",
   "oneOf": [
     {
       "$ref": "#/$defs/begin"
@@ -60,7 +60,7 @@
           }
         ]
       },
-      "description": "One stability class's families: each family holds a scalar or a list of scalars — a pool has one guid and several by-id links."
+      "description": "One stability class's families: each family holds a scalar or a list of scalars \u2014 a pool has one guid and several by-id links."
     },
     "fact_value": {
       "type": [
@@ -76,7 +76,7 @@
       "additionalProperties": {
         "$ref": "#/$defs/fact_value"
       },
-      "description": "Any JSON value except null, at any depth: the type list omits null and the array/object branches recurse. The non-recursive rule this replaces refused a null only at the top of the facts dict and passed the same null nested one level down, inside a vdev row — which is exactly where marshalling a struct with nil members puts it."
+      "description": "Any JSON value except null, at any depth: the type list omits null and the array/object branches recurse. The non-recursive rule this replaces refused a null only at the top of the facts dict and passed the same null nested one level down, inside a vdev row \u2014 which is exactly where marshalling a struct with nil members puts it."
     },
     "facts": {
       "type": "object",
@@ -119,7 +119,7 @@
           "not": {
             "const": "00000000-0000-0000-0000-000000000000"
           },
-          "description": "UUID-shaped (8-4-4-4-12 hex) and never the nil UUID — the shape catches the stub and the nil placeholder, which is what a single capture can authenticate; a constant VALID id only varies across boots and is a cross-boot variant's to catch (DESIGN 19). The dashless 32-hex spelling is machine-id's, stable across boots, and refusing it is the point."
+          "description": "UUID-shaped (8-4-4-4-12 hex) and never the nil UUID \u2014 the shape catches the stub and the nil placeholder, which is what a single capture can authenticate; a constant VALID id only varies across boots and is a cross-boot variant's to catch (DESIGN 19). The dashless 32-hex spelling is machine-id's, stable across boots, and refusing it is the point."
         },
         "timens": {
           "type": "integer",
@@ -131,7 +131,7 @@
             "null"
           ],
           "minLength": 1,
-          "description": "Fleet-assigned instance this collector fronts; ids, origins and relations mint under (host, instance) scope. Null means host-native (DESIGN 11, 19) — and only null means it: \"\" would mint a third scope nobody declared."
+          "description": "Fleet-assigned instance this collector fronts; ids, origins and relations mint under (host, instance) scope. Null means host-native (DESIGN 11, 19) \u2014 and only null means it: \"\" would mint a third scope nobody declared."
         },
         "generations": {
           "type": "object",
@@ -166,10 +166,15 @@
         "name": {
           "$ref": "#/$defs/identity"
         },
+        "type": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "The object's structural kind \u2014 scsi-host, expander, disk; service, slice, device \u2014 ruled onto the wire 2026-08-21. It decides which health statement a row is entitled to, which columns read sensibly, what a facet bar can offer and what a hide rule may match, and it is derivable from nothing else on the wire. Optional because a homogeneous collection (packages, journal) genuinely has none; a heterogeneous collection omitting it is a port defect the reference-driven comparator sees."
+        },
         "names": {
           "type": "object",
           "additionalProperties": false,
-          "description": "Every native name observed for this thing, split by stability class; a join runs on stable only (DESIGN 16, 19). Closed to exactly these two classes: the marshalling bug this catches emitted {\"Stable\":…,\"Ephemeral\":…} and every name silently left the join.",
+          "description": "Every native name observed for this thing, split by stability class; a join runs on stable only (DESIGN 16, 19). Closed to exactly these two classes: the marshalling bug this catches emitted {\"Stable\":\u2026,\"Ephemeral\":\u2026} and every name silently left the join.",
           "properties": {
             "stable": {
               "$ref": "#/$defs/name_family"
@@ -300,7 +305,7 @@
           "observability"
         ]
       },
-      "description": "A collector never states observability — whether the far end was seen is a fact about another collector's output, which only the collator holds — and a target carries a name, never an id (DESIGN 13, 19). Both negatives are kept although closure now also refuses them: they encode rulings, not style."
+      "description": "A collector never states observability \u2014 whether the far end was seen is a fact about another collector's output, which only the collator holds \u2014 and a target carries a name, never an id (DESIGN 13, 19). Both negatives are kept although closure now also refuses them: they encode rulings, not style."
     },
     "unobservable": {
       "type": "object",
@@ -400,7 +405,7 @@
         "cpu_ms": {
           "type": "number",
           "minimum": 0,
-          "description": "Measured cost is advisory, never authenticated (DESIGN 19) — but bounded to what a clock can read: non-negative, and JSON itself excludes the non-finite."
+          "description": "Measured cost is advisory, never authenticated (DESIGN 19) \u2014 but bounded to what a clock can read: non-negative, and JSON itself excludes the non-finite."
         }
       },
       "not": {
@@ -408,7 +413,7 @@
           "complete"
         ]
       },
-      "description": "Always the whole collection: v1 has no partial commit, so a complete member may not appear (DESIGN 19). All three counts are required, never optional — a subject that can disable the truncation check by omitting a count has defeated it."
+      "description": "Always the whole collection: v1 has no partial commit, so a complete member may not appear (DESIGN 19). All three counts are required, never optional \u2014 a subject that can disable the truncation check by omitting a count has defeated it."
     },
     "end": {
       "type": "object",

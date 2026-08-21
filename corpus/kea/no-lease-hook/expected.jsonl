@@ -1,13 +1,13 @@
 {"record":"begin","request":"replay","batch":"replay","declaration":"sha256:60c8e1a4e542b7be66fe3ec27e7b3123630444889387cf09fdefe4a19e23be4b","boot_id":"5e000000-0000-4000-8000-000000000001","timens":0,"instance":null,"generations":{"daemon":62304,"reservations":62321,"subnets":62338}}
-{"record":"object","collection":"daemon","name":"kea-dhcp4","facts":{"Version":"3.0.3","Uptime":8821,"QueueDepthAverages":[0.0,0.0,0.0]},"at":1}
+{"record":"object","collection":"daemon","name":"kea-dhcp4","type":"kea-daemon","facts":{"Version":"3.0.3","Uptime":8821,"QueueDepthAverages":[0.0,0.0,0.0]},"at":1}
 {"record":"commit","collection":"daemon","generation":62304,"objects":1,"assertions":0,"unobservable":0}
-{"record":"object","collection":"reservations","name":"192.0.2.218","facts":{"IpAddress":"192.0.2.218","Subnet":"192.0.2.0/24"},"at":1.001}
-{"record":"object","collection":"reservations","name":"192.0.2.150","facts":{"IpAddress":"192.0.2.150","Subnet":"192.0.2.0/24"},"at":1.002}
-{"record":"object","collection":"reservations","name":"192.0.2.82","facts":{"IpAddress":"192.0.2.82","Hostname":"host-f6f88b","Subnet":"192.0.2.0/24"},"at":1.003}
-{"record":"object","collection":"reservations","name":"192.0.2.154","facts":{"IpAddress":"192.0.2.154","Subnet":"192.0.2.0/24"},"at":1.004}
-{"record":"object","collection":"reservations","name":"192.0.2.145","facts":{"IpAddress":"192.0.2.145","HwAddress":"02:d3:cc:e0:41:80","Subnet":"192.0.2.0/24"},"at":1.005}
-{"record":"object","collection":"reservations","name":"192.0.2.78","facts":{"IpAddress":"192.0.2.78","Subnet":"192.0.2.0/24"},"at":1.006}
+{"record":"object","collection":"reservations","name":"192.0.2.218","type":"dhcp-reservation","facts":{"IpAddress":"192.0.2.218","Subnet":"192.0.2.0/24"},"at":1.001}
+{"record":"object","collection":"reservations","name":"192.0.2.150","type":"dhcp-reservation","facts":{"IpAddress":"192.0.2.150","Subnet":"192.0.2.0/24"},"at":1.002}
+{"record":"object","collection":"reservations","name":"192.0.2.82","type":"dhcp-reservation","facts":{"IpAddress":"192.0.2.82","Hostname":"host-f6f88b","Subnet":"192.0.2.0/24"},"at":1.003}
+{"record":"object","collection":"reservations","name":"192.0.2.154","type":"dhcp-reservation","facts":{"IpAddress":"192.0.2.154","Subnet":"192.0.2.0/24"},"at":1.004}
+{"record":"object","collection":"reservations","name":"192.0.2.145","type":"dhcp-reservation","facts":{"IpAddress":"192.0.2.145","HwAddress":"02:d3:cc:e0:41:80","Subnet":"192.0.2.0/24"},"at":1.005}
+{"record":"object","collection":"reservations","name":"192.0.2.78","type":"dhcp-reservation","facts":{"IpAddress":"192.0.2.78","Subnet":"192.0.2.0/24"},"at":1.006}
 {"record":"commit","collection":"reservations","generation":62321,"objects":6,"assertions":0,"unobservable":0}
-{"record":"object","collection":"subnets","name":"192.0.2.0/24","facts":{"SubnetId":1,"Subnet":"192.0.2.0/24","LeaseTimeSeconds":3600,"DnsServers":"192.0.2.5, 192.0.2.146","Routers":"192.0.2.5","ReservationCount":6,"AssignedAddresses":0,"DeclinedAddresses":0,"TotalAddresses":200,"UsedPercent":0},"at":1.007}
+{"record":"object","collection":"subnets","name":"192.0.2.0/24","type":"dhcp-subnet","facts":{"SubnetId":1,"Subnet":"192.0.2.0/24","LeaseTimeSeconds":3600,"DnsServers":"192.0.2.5, 192.0.2.146","Routers":"192.0.2.5","ReservationCount":6,"AssignedAddresses":0,"DeclinedAddresses":0,"TotalAddresses":200,"UsedPercent":0},"at":1.007}
 {"record":"commit","collection":"subnets","generation":62338,"objects":1,"assertions":0,"unobservable":0}
 {"record":"end","request":"replay","batch":"replay","cpu_ms":0.5,"wall_ms":1}

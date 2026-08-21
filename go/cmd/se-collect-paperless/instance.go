@@ -249,6 +249,7 @@ func collectInstance(out *emitter, stderr io.Writer, src source, collection stri
 	}
 	out.emit(objectRecord{
 		Record:     "object",
+		Type:       "paperless-instance",
 		Collection: collection,
 		Name:       instanceName,
 		Facts:      row.encode(),

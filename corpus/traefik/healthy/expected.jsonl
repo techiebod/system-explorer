@@ -1,11 +1,11 @@
 {"record":"begin","request":"replay","batch":"replay","declaration":"sha256:3ec5322e299987858215fea9c5f53f4fc243c8f4ff8de24e76a2276c3920f1ee","boot_id":"5e000000-0000-4000-8000-000000000001","timens":0,"instance":null,"generations":{"overview":66394,"routers":66411,"services":66428}}
-{"record":"object","collection":"overview","name":"traefik","facts":{"Version":"3.1.7","RoutersTotal":2,"RoutersErrors":0,"RoutersWarnings":0,"ServicesTotal":3,"ServicesErrors":0,"ServicesWarnings":0,"MiddlewaresTotal":2,"MiddlewaresErrors":0,"MiddlewaresWarnings":0,"EntryPoints":["traefik","web"]},"at":1}
+{"record":"object","collection":"overview","name":"traefik","type":"traefik-overview","facts":{"Version":"3.1.7","RoutersTotal":2,"RoutersErrors":0,"RoutersWarnings":0,"ServicesTotal":3,"ServicesErrors":0,"ServicesWarnings":0,"MiddlewaresTotal":2,"MiddlewaresErrors":0,"MiddlewaresWarnings":0,"EntryPoints":["traefik","web"]},"at":1}
 {"record":"commit","collection":"overview","generation":66394,"objects":1,"assertions":0,"unobservable":0}
-{"record":"object","collection":"routers","name":"api@internal","facts":{"Rule":"PathPrefix(`/api`)","Service":"api@internal","EntryPoints":["traefik"],"Provider":"internal","Status":"enabled","Priority":9223372036854775806},"at":1.001}
-{"record":"object","collection":"routers","name":"dashboard@internal","facts":{"Rule":"PathPrefix(`/`)","Service":"dashboard@internal","EntryPoints":["traefik"],"Provider":"internal","Status":"enabled","Priority":9223372036854775805,"Middlewares":["dashboard_redirect@internal","dashboard_stripprefix@internal"]},"at":1.002}
+{"record":"object","collection":"routers","name":"api@internal","type":"traefik-router","facts":{"Rule":"PathPrefix(`/api`)","Service":"api@internal","EntryPoints":["traefik"],"Provider":"internal","Status":"enabled","Priority":9223372036854775806},"at":1.001}
+{"record":"object","collection":"routers","name":"dashboard@internal","type":"traefik-router","facts":{"Rule":"PathPrefix(`/`)","Service":"dashboard@internal","EntryPoints":["traefik"],"Provider":"internal","Status":"enabled","Priority":9223372036854775805,"Middlewares":["dashboard_redirect@internal","dashboard_stripprefix@internal"]},"at":1.002}
 {"record":"commit","collection":"routers","generation":66411,"objects":2,"assertions":0,"unobservable":0}
-{"record":"object","collection":"services","name":"api@internal","facts":{"Provider":"internal","Status":"enabled","UsedBy":["api@internal"]},"at":1.003}
-{"record":"object","collection":"services","name":"dashboard@internal","facts":{"Provider":"internal","Status":"enabled","UsedBy":["dashboard@internal"]},"at":1.004}
-{"record":"object","collection":"services","name":"noop@internal","facts":{"Provider":"internal","Status":"enabled"},"at":1.005}
+{"record":"object","collection":"services","name":"api@internal","type":"traefik-service","facts":{"Provider":"internal","Status":"enabled","UsedBy":["api@internal"]},"at":1.003}
+{"record":"object","collection":"services","name":"dashboard@internal","type":"traefik-service","facts":{"Provider":"internal","Status":"enabled","UsedBy":["dashboard@internal"]},"at":1.004}
+{"record":"object","collection":"services","name":"noop@internal","type":"traefik-service","facts":{"Provider":"internal","Status":"enabled"},"at":1.005}
 {"record":"commit","collection":"services","generation":66428,"objects":3,"assertions":0,"unobservable":0}
 {"record":"end","request":"replay","batch":"replay","cpu_ms":0.5,"wall_ms":1}

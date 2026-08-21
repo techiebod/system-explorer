@@ -156,10 +156,10 @@ func TestTheErrorListIsCarriedWholeAndAStringIsWrapped(t *testing.T) {
 // no CertResolver beside it is using a certificate the deployment supplied.
 func TestTheTlsBlocksPresenceIsTheFactAndTheResolverIsSeparate(t *testing.T) {
 	cases := map[string]string{
-		`{"name":"a","tls":{}}`:                              `{"EntryPoints":[],"Tls":true}`,
-		`{"name":"a","tls":{"certResolver":"lab"}}`:          `{"EntryPoints":[],"Tls":true,"CertResolver":"lab"}`,
-		`{"name":"a","tls":{"options":"default"}}`:           `{"EntryPoints":[],"Tls":true}`,
-		`{"name":"a"}`:                                       `{"EntryPoints":[]}`,
+		`{"name":"a","tls":{}}`:                     `{"EntryPoints":[],"Tls":true}`,
+		`{"name":"a","tls":{"certResolver":"lab"}}`: `{"EntryPoints":[],"Tls":true,"CertResolver":"lab"}`,
+		`{"name":"a","tls":{"options":"default"}}`:  `{"EntryPoints":[],"Tls":true}`,
+		`{"name":"a"}`:                              `{"EntryPoints":[]}`,
 		// Null is not a block, and it is not a false either: the reference's
 		// isinstance test refuses it, so the row says nothing about TLS.
 		`{"name":"a","tls":null}`: `{"EntryPoints":[]}`,

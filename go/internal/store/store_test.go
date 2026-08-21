@@ -3,6 +3,7 @@
 package store
 
 import (
+	"database/sql"
 	"encoding/json"
 	"path/filepath"
 	"testing"
@@ -364,5 +365,93 @@ func TestJudgeAckedDiscriminates(t *testing.T) {
 		if r.Reason != string(AckReused) || r.Batch != "batch-1" {
 			t.Fatalf("recorded against the reused id, by name: %+v", r)
 		}
+	}
+}
+
+// The applied order IS the collection for a hierarchical one — units'
+// systemctl-status walk, hardware's attachment tree — and this store
+// discarded it until 2026-08-21 by serving id-sorted rows, after both
+// implementations had each carefully produced an order nothing kept.
+func TestAppliedOrderIsServedBack(t *testing.T) {
+	st, _ := open(t)
+	issue(t, st, "units")
+	apply := func(gen uint64, batch string, objects []Object) {
+		t.Helper()
+		outcome, err := st.ApplyCommit("units", HostNative, gen, batch, testBootID, objects)
+		if err != nil || outcome != OutcomeApplied {
+			t.Fatalf("%v %s", err, outcome)
+		}
+	}
+	// Deliberately NOT alphabetical, and with types: the tree walk emits
+	// the root slice first, then its children, then the tail by kind.
+	emitted := []Object{
+		{ID: "units:-.slice", Name: "-.slice", Type: "slice",
+			Facts: json.RawMessage(`{}`), At: 10},
+		{ID: "units:init.scope", Name: "init.scope", Type: "scope",
+			Facts: json.RawMessage(`{}`), At: 10},
+		{ID: "units:apparmor.service", Name: "apparmor.service", Type: "service",
+			Facts: json.RawMessage(`{}`), At: 10},
+		{ID: "units:zfs.target", Name: "zfs.target", Type: "target",
+			Facts: json.RawMessage(`{}`), At: 10},
+		{ID: "units:basic.target", Name: "basic.target", Type: "target",
+			Facts: json.RawMessage(`{}`), At: 10},
+	}
+	apply(1, "b1", emitted)
+	rows, err := st.Objects("units")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, row := range rows {
+		if row.ID != emitted[i].ID {
+			t.Fatalf("row %d: served %s, applied %s — sorting is a consumer's "+
+				"choice to make and undo; the producer's order is not recoverable "+
+				"once discarded", i, row.ID, emitted[i].ID)
+		}
+		if row.Type != emitted[i].Type {
+			t.Fatalf("row %d: type %q served as %q", i, emitted[i].Type, row.Type)
+		}
+	}
+	// A re-apply is a NEW order, wholesale: the next batch's walk wins.
+	issue(t, st, "units")
+	reordered := []Object{emitted[3], emitted[0]}
+	apply(2, "b2", reordered)
+	rows, _ = st.Objects("units")
+	if len(rows) != 2 || rows[0].ID != "units:zfs.target" || rows[1].ID != "units:-.slice" {
+		t.Fatalf("the re-applied order must replace the old one: %+v", rows)
+	}
+}
+
+// A store written before 2026-08-21 has no type and no seq columns; it
+// must open, migrate, and serve — with old rows honestly untyped.
+func TestPreOrderStoreMigrates(t *testing.T) {
+	st, path := open(t)
+	issue(t, st, "identity")
+	mustApply(t, st, 1, "b1", obj("identity:h", `{"OsId":"nixos"}`, 10))
+	st.Close()
+	// Simulate the pre-migration shape by dropping the new columns.
+	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=busy_timeout(5000)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, stmt := range []string{
+		`ALTER TABLE objects DROP COLUMN type`,
+		`ALTER TABLE objects DROP COLUMN seq`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	db.Close()
+	st2, err := Open(path)
+	if err != nil {
+		t.Fatalf("a pre-2026-08-21 store must open and migrate: %v", err)
+	}
+	defer st2.Close()
+	rows, err := st2.Objects("identity")
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("%v %+v", err, rows)
+	}
+	if rows[0].Type != "" {
+		t.Fatalf("an old row is honestly untyped, got %q", rows[0].Type)
 	}
 }

@@ -177,6 +177,7 @@ func collectDaemon(out *emitter, stderr io.Writer, src source, collection string
 
 	out.emit(objectRecord{
 		Record:     "object",
+		Type:       "unbound-daemon",
 		Collection: collection,
 		Name:       daemonName,
 		Facts:      daemonRow(got).encode(),

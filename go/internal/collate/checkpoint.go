@@ -73,6 +73,7 @@ type checkpointObject struct {
 	ID       string          `json:"id"`
 	Instance *string         `json:"instance"`
 	Name     string          `json:"name"`
+	Type     string          `json:"type,omitempty"`
 	Facts    json.RawMessage `json:"facts"`
 	At       float64         `json:"at"`
 }
@@ -190,7 +191,7 @@ func WriteCheckpoint(w io.Writer, st *store.Store, id, host, bootID string, gap 
 		}
 		objects := make([]checkpointObject, 0, len(rows))
 		for _, o := range rows {
-			co := checkpointObject{ID: o.ID, Name: o.Name, Facts: o.Facts, At: o.At}
+			co := checkpointObject{ID: o.ID, Name: o.Name, Type: o.Type, Facts: o.Facts, At: o.At}
 			// A declared credential never leaves this process, on any
 			// channel. It should not have been stored either; dropping it
 			// on the way out is what makes that true of collectors this

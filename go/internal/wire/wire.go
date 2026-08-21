@@ -68,6 +68,11 @@ type Begin struct {
 type Object struct {
 	Collection string
 	Name       string
+	// Type is the object's structural kind, "" when the record carried
+	// none (ruled 2026-08-21): scsi-host vs disk, service vs slice. It
+	// decides which health statement a row is entitled to, so it is
+	// carried verbatim rather than inferred anywhere downstream.
+	Type       string
 	Facts      json.RawMessage
 	Names      json.RawMessage // nil when the record carried none
 	Absent     []string
@@ -544,7 +549,7 @@ func parseBegin(rec map[string]any, issued map[string]uint64) (*Begin, *Violatio
 func parseObject(rec map[string]any, issued map[string]uint64) (*Object, *Violation) {
 	if verr := fields(rec, "object",
 		[]string{"collection", "name", "facts", "at"},
-		[]string{"names", "absent", "evidence"}); verr != nil {
+		[]string{"type", "names", "absent", "evidence"}); verr != nil {
 		return nil, verr
 	}
 	o := &Object{}
@@ -554,6 +559,14 @@ func parseObject(rec map[string]any, issued map[string]uint64) (*Object, *Violat
 	}
 	if o.Name, verr = identity(rec, "object", "name"); verr != nil {
 		return nil, verr
+	}
+	if raw, present := rec["type"]; present {
+		s, ok := raw.(string)
+		if !ok || !collectionName.MatchString(s) {
+			return nil, violation("bad-type",
+				"object %s: type must be a lowercase name, got %v", o.Name, raw)
+		}
+		o.Type = s
 	}
 	facts, ok := rec["facts"].(map[string]any)
 	if !ok {

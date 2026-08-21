@@ -28,6 +28,7 @@ type objectRecord struct {
 	Record     string            `json:"record"`
 	Collection string            `json:"collection"`
 	Name       string            `json:"name"`
+	Type       string            `json:"type,omitempty"`
 	Facts      map[string]string `json:"facts"`
 	// Present only when a declared fact genuinely is not: we looked, and
 	// the document has no such property — distinct from unobservable,
@@ -237,6 +238,7 @@ func collectIdentity(out *emitter, stderr io.Writer, src source, collection stri
 	// observed: this collector does not know what id any collator minted.
 	out.emit(objectRecord{
 		Record:     "object",
+		Type:       "identity",
 		Collection: collection,
 		Name:       host,
 		Facts:      facts,

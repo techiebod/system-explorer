@@ -32,6 +32,7 @@ type objectRecord struct {
 	Record     string         `json:"record"`
 	Collection string         `json:"collection"`
 	Name       string         `json:"name"`
+	Type       string         `json:"type,omitempty"`
 	Facts      map[string]any `json:"facts"`
 	At         float64        `json:"at"`
 }
@@ -217,6 +218,7 @@ func emitChains(out *emitter, src source, collection string, doc jsonValue, obje
 		out.emit(objectRecord{
 			Record:     "object",
 			Collection: collection,
+			Type:       "chain",
 			// The chain's own three-part native name, spaces between: the
 			// same chain name in ip and ip6 is two chains, and a rule
 			// admitting a port in one says nothing about the other.
@@ -237,6 +239,7 @@ func emitRules(out *emitter, src source, collection string, doc jsonValue, objec
 		out.emit(objectRecord{
 			Record:     "object",
 			Collection: collection,
+			Type:       "rule",
 			// Keyed by the kernel's own handle, which is the right join key
 			// WITHIN a snapshot and not durable across a flush-and-restore.
 			Name:  row.name,

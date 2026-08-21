@@ -46,6 +46,9 @@ class Member:
     collection: str
     object_id: str
     instance: str | None
+    #: The object's structural kind, None when it carries none — on the
+    #: wire since 2026-08-21, and what a facet bar and a hide rule key on.
+    type: str | None = None
 
 
 @dataclass(frozen=True)
@@ -164,7 +167,8 @@ def assemble(
                 entry = grouped[row_id]
                 entry["members"].append(
                     Member(host=host, collection=collection,
-                           object_id=obj.get("id", native), instance=instance)
+                           object_id=obj.get("id", native), instance=instance,
+                           type=obj.get("type"))
                 )
                 entry["facts"].update(kept)
                 entry["undeclared"].update(refused)

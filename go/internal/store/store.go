@@ -62,10 +62,12 @@ CREATE TABLE IF NOT EXISTS objects (
   scope      TEXT NOT NULL,
   id         TEXT NOT NULL,
   name       TEXT NOT NULL,
+  type       TEXT,
   facts      TEXT NOT NULL,
   names      TEXT,
   absent     TEXT,
   at         REAL NOT NULL,
+  seq        INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (collection, scope, id)
 );
 CREATE TABLE IF NOT EXISTS rejections (
@@ -151,6 +153,38 @@ func migrate(db *sql.DB) error {
 			return fmt.Errorf("add collections.declaration: %w", err)
 		}
 	}
+	// `type` and `seq` were added on 2026-08-21 (PLAN R1): the object's
+	// structural kind, and the applied order — which the old store
+	// DISCARDED by serving id-sorted rows, while both implementations of
+	// units record that the systemctl-status order is the collection.
+	// Rows written before the columns carry "" and 0; a whole-collection
+	// re-apply (the ordinary case) replaces both.
+	objectCols := map[string]bool{}
+	orows, err := db.Query(`SELECT name FROM pragma_table_info('objects')`)
+	if err != nil {
+		return fmt.Errorf("inspect objects: %w", err)
+	}
+	defer orows.Close()
+	for orows.Next() {
+		var name string
+		if err := orows.Scan(&name); err != nil {
+			return err
+		}
+		objectCols[name] = true
+	}
+	if err := orows.Err(); err != nil {
+		return err
+	}
+	if !objectCols["type"] {
+		if _, err := db.Exec(`ALTER TABLE objects ADD COLUMN type TEXT`); err != nil {
+			return fmt.Errorf("add objects.type: %w", err)
+		}
+	}
+	if !objectCols["seq"] {
+		if _, err := db.Exec(`ALTER TABLE objects ADD COLUMN seq INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return fmt.Errorf("add objects.seq: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -199,6 +233,7 @@ func (s *Store) IssueGenerations(names []string, declaration string) (map[string
 type Object struct {
 	ID     string
 	Name   string
+	Type   string // "" when the record carried none
 	Facts  json.RawMessage
 	Names  json.RawMessage
 	Absent []string
@@ -329,6 +364,7 @@ func (s *Store) ApplyCommit(collection, scope string, gen uint64, batch, bootID 
 		collection, scope); err != nil {
 		return "", err
 	}
+	seq := 0
 	for _, o := range objects {
 		absent := sql.NullString{}
 		if o.Absent != nil {
@@ -342,12 +378,22 @@ func (s *Store) ApplyCommit(collection, scope string, gen uint64, batch, bootID 
 		if o.Names != nil {
 			names = sql.NullString{String: string(o.Names), Valid: true}
 		}
+		objectType := sql.NullString{}
+		if o.Type != "" {
+			objectType = sql.NullString{String: o.Type, Valid: true}
+		}
+		// seq is the batch's own emission order, stamped so a read can
+		// serve it back: the applied order IS the collection for a
+		// hierarchical one (units' systemctl-status walk), and the store
+		// discarding it was found on 2026-08-21 after two implementations
+		// had each carefully produced an order nothing kept.
 		if _, err := tx.Exec(`
-			INSERT INTO objects (collection, scope, id, name, facts, names, absent, at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			collection, scope, o.ID, o.Name, string(o.Facts), names, absent, o.At); err != nil {
+			INSERT INTO objects (collection, scope, id, name, type, facts, names, absent, at, seq)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			collection, scope, o.ID, o.Name, objectType, string(o.Facts), names, absent, o.At, seq); err != nil {
 			return "", fmt.Errorf("apply object %s: %w", o.ID, err)
 		}
+		seq++
 	}
 	if _, err := tx.Exec(`
 		UPDATE collections
@@ -544,6 +590,7 @@ func (s *Store) Collections() ([]CollectionState, error) {
 type ObjectRow struct {
 	ID    string
 	Name  string
+	Type  string // "" when the object carries none
 	Facts json.RawMessage
 	At    float64
 	// Scope is the instance the object was published under, HostNative
@@ -554,12 +601,16 @@ type ObjectRow struct {
 	Scope string
 }
 
-// Objects lists a collection's applied objects, every scope, ordered by
-// scope then id for a stable read.
+// Objects lists a collection's applied objects, every scope, in APPLIED
+// order — the batch's own emission sequence, which for a hierarchical
+// collection is the collection (units' systemctl-status walk, hardware's
+// attachment tree). Sorting is a consumer's choice to make and undo; the
+// producer's order is not recoverable once discarded, which this store
+// did until 2026-08-21.
 func (s *Store) Objects(collection string) ([]ObjectRow, error) {
 	rows, err := s.db.Query(`
-		SELECT id, name, facts, at, scope FROM objects
-		WHERE collection = ? ORDER BY scope, id`, collection)
+		SELECT id, name, type, facts, at, scope FROM objects
+		WHERE collection = ? ORDER BY scope, seq, id`, collection)
 	if err != nil {
 		return nil, err
 	}
@@ -568,8 +619,12 @@ func (s *Store) Objects(collection string) ([]ObjectRow, error) {
 	for rows.Next() {
 		var o ObjectRow
 		var facts string
-		if err := rows.Scan(&o.ID, &o.Name, &facts, &o.At, &o.Scope); err != nil {
+		var objectType sql.NullString
+		if err := rows.Scan(&o.ID, &o.Name, &objectType, &facts, &o.At, &o.Scope); err != nil {
 			return nil, err
+		}
+		if objectType.Valid {
+			o.Type = objectType.String
 		}
 		o.Facts = json.RawMessage(facts)
 		out = append(out, o)

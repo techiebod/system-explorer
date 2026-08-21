@@ -204,6 +204,7 @@ func collectInstance(out *emitter, stderr io.Writer, src source, collection stri
 
 	out.emit(objectRecord{
 		Record:     "object",
+		Type:       "bazarr-instance",
 		Collection: collection,
 		Name:       instanceName,
 		Facts:      instanceRow(got).encode(),

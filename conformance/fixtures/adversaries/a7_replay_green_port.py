@@ -187,6 +187,7 @@ def nft_chains(doc: dict) -> list[dict]:
         elif not base:
             facts["Unreferenced"] = True
         items.append({
+            "type": "chain",
             "native_id": f"{family} {table} {name}", "facts": facts,
             # The chain's table edge. This subject's declared defects are
             # about family enums and caller sets, not about relations, so it
@@ -416,7 +417,7 @@ def pools(status: dict, listing, links):
         # was looking at.
         facts = {k: v for k, v in facts.items() if v is not None}
 
-        item = {"native_id": name, "facts": facts}
+        item = {"type": "pool", "native_id": name, "facts": facts}
         leaves = [v for v in vdevs if v.get("Type") == "disk"]
         stable = {}
         if pool.get("pool_guid") is not None:
@@ -559,6 +560,10 @@ def main() -> None:
             record = {
                 "record": "object",
                 "collection": collection,
+                # Carried as the seam carries it: this subject's defects
+                # are the numbered ones, and shape members are not among
+                # them.
+                **({"type": item["type"]} if item.get("type") else {}),
                 "name": item["native_id"],
                 "facts": item["facts"],
                 "at": AT,  # DEFECT 5

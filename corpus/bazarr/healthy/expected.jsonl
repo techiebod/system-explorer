@@ -1,4 +1,4 @@
 {"record":"begin","request":"replay","batch":"replay","declaration":"sha256:6dc703c5d35df2177fde293c66f74bd4d3ac48d199855a6b9aea15055007e526","boot_id":"5e000000-0000-4000-8000-000000000001","timens":0,"instance":null,"generations":{"instance":85635}}
-{"record":"object","collection":"instance","name":"bazarr","facts":{"Version":"1.6.0","HealthIssues":["Missing languages profile: You must create at least one languages profile and assign it to your content."]},"at":1}
+{"record":"object","collection":"instance","name":"bazarr","type":"bazarr-instance","facts":{"Version":"1.6.0","HealthIssues":["Missing languages profile: You must create at least one languages profile and assign it to your content."]},"at":1}
 {"record":"commit","collection":"instance","generation":85635,"objects":1,"assertions":0,"unobservable":0}
 {"record":"end","request":"replay","batch":"replay","cpu_ms":0.5,"wall_ms":1}

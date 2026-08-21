@@ -210,7 +210,7 @@ def main() -> None:
         items = chains(json.loads(payload.read_text()))
         edges = 0
         for name, facts in items:
-            emit({"record": "object", "collection": collection, "name": name,
+            emit({"record": "object", "collection": collection, "type": "chain", "name": name,
                   "facts": facts, "at": round(1.0 + 0.001 * emitted, 3)})
             emitted += 1
             # The chain's table edge, which every chains vantage asserts

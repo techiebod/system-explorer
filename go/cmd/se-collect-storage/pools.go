@@ -298,6 +298,7 @@ func buildPool(name string, pool *value, listing *value, links *aliasTree, now, 
 
 	return objectRecord{
 		Record: "object",
+		Type:   "pool",
 		Name:   name,
 		Facts:  factValues.encode(),
 		Names:  poolNames(pool, rows),

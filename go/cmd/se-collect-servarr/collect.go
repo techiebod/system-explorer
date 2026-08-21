@@ -38,6 +38,7 @@ type objectRecord struct {
 	Record     string          `json:"record"`
 	Collection string          `json:"collection"`
 	Name       string          `json:"name"`
+	Type       string          `json:"type,omitempty"`
 	Facts      json.RawMessage `json:"facts"`
 	At         float64         `json:"at"`
 }
@@ -77,6 +78,17 @@ type endRecord struct {
 type emitter struct {
 	encoder *json.Encoder
 	err     error
+}
+
+// collectionTypes is each collection's structural kind, on the wire
+// since the 2026-08-21 ruling. Constant per collection here because
+// these collections are homogeneous; the heterogeneous collectors
+// (units, hardware, resources) carry it per row instead.
+var collectionTypes = map[string]string{
+	"apps":    "servarr-app",
+	"health":  "servarr-health-item",
+	"history": "servarr-history-event",
+	"queue":   "servarr-queue-item",
 }
 
 func newEmitter(w io.Writer) *emitter {
@@ -218,6 +230,7 @@ func collect(stdout, stderr io.Writer, src source, order []string, generations m
 		for _, one := range built {
 			out.emit(objectRecord{
 				Record:     "object",
+				Type:       collectionTypes[collection],
 				Collection: collection,
 				Name:       one.name,
 				Facts:      one.facts.encode(),

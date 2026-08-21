@@ -41,11 +41,17 @@ type beginRecord struct {
 // inventing one here would key the collator on a name no other implementation
 // publishes.
 type objectRecord struct {
-	Record     string          `json:"record"`
-	Collection string          `json:"collection"`
-	Name       string          `json:"name"`
-	Facts      json.RawMessage `json:"facts"`
-	At         float64         `json:"at"`
+	Record     string `json:"record"`
+	Collection string `json:"collection"`
+	Name       string `json:"name"`
+	// The unit's kind — service, slice, device, mount — which this
+	// collector has always computed for its ordering and never emitted.
+	// On the wire since the 2026-08-21 ruling: it is what a facet bar
+	// offers and what a hide rule may match, and half a busy host's rows
+	// are the device wall that rule exists for.
+	Type  string          `json:"type,omitempty"`
+	Facts json.RawMessage `json:"facts"`
+	At    float64         `json:"at"`
 }
 
 // unobservableRecord is DESIGN 19's could-not-read channel: a fact this
@@ -220,6 +226,7 @@ func collectUnits(out *emitter, stderr io.Writer, src source, collection string,
 			Record:     "object",
 			Collection: collection,
 			Name:       item.name,
+			Type:       item.kind,
 			Facts:      item.facts.encode(),
 			At:         src.stamp(*objects),
 		})

@@ -122,6 +122,12 @@ class Emitter:
                 "at": self._stamp(self._emitted),
             }
             self._emitted += 1
+            # The adapter's own structural kind, on the wire since the
+            # 2026-08-21 ruling. Carried exactly as the adapter set it,
+            # because inventing or normalising it here would be the seam
+            # deciding what an object is.
+            if item.get("type"):
+                record["type"] = item["type"]
             if item.get("names"):
                 record["names"] = item["names"]
             if item.get("absent"):

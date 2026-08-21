@@ -65,7 +65,7 @@ func TestAListEndpointIsFollowedToItsLastPage(t *testing.T) {
 // The two exits the reference takes, and neither is "the header is missing".
 func TestThePageWalkStopsWhereTheReferenceStops(t *testing.T) {
 	cases := map[string]string{
-		"the last page answers 1":       "1",
+		"the last page answers 1":        "1",
 		"a header that does not advance": "0",
 		"a header this side cannot read": "soon",
 		"no header at all":               "",

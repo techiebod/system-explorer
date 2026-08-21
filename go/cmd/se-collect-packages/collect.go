@@ -30,6 +30,7 @@ type objectRecord struct {
 	Record     string            `json:"record"`
 	Collection string            `json:"collection"`
 	Name       string            `json:"name"`
+	Type       string            `json:"type,omitempty"`
 	Facts      map[string]string `json:"facts"`
 	// Present only when a declared fact genuinely is not: we looked, and
 	// the document has no such property — distinct from unobservable,
@@ -176,6 +177,7 @@ func collectPackages(out *emitter, stderr io.Writer, src source, collection stri
 	for _, row := range inventory(got) {
 		out.emit(objectRecord{
 			Record:     "object",
+			Type:       "package",
 			Collection: collection,
 			Name:       row.native,
 			Facts:      row.facts,

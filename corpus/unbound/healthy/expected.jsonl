@@ -1,4 +1,4 @@
 {"record":"begin","request":"replay","batch":"replay","declaration":"sha256:5876ae3ad0a71529ed6b65e42d89be88de579d7df4b865d71fb35a7452b9ae0a","boot_id":"5e000000-0000-4000-8000-000000000001","timens":0,"instance":null,"generations":{"daemon":47329}}
-{"record":"object","collection":"daemon","name":"unbound","facts":{"Version":"1.24.2","Uptime":3648,"NumQueries":21,"CacheHits":13,"CacheMiss":8,"Prefetches":0,"RequestListCurrent":0,"RecursionTimeAvgSeconds":0.120223},"at":1}
+{"record":"object","collection":"daemon","name":"unbound","type":"unbound-daemon","facts":{"Version":"1.24.2","Uptime":3648,"NumQueries":21,"CacheHits":13,"CacheMiss":8,"Prefetches":0,"RequestListCurrent":0,"RecursionTimeAvgSeconds":0.120223},"at":1}
 {"record":"commit","collection":"daemon","generation":47329,"objects":1,"assertions":0,"unobservable":0}
 {"record":"end","request":"replay","batch":"replay","cpu_ms":0.5,"wall_ms":1}

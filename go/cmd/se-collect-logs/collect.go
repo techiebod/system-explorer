@@ -38,6 +38,7 @@ type objectRecord struct {
 	Record     string          `json:"record"`
 	Collection string          `json:"collection"`
 	Name       string          `json:"name"`
+	Type       string          `json:"type,omitempty"`
 	Facts      json.RawMessage `json:"facts"`
 	At         float64         `json:"at"`
 }
@@ -187,6 +188,7 @@ func collectJournal(out *emitter, stderr io.Writer, src source, collection strin
 	for _, entry := range rows {
 		out.emit(objectRecord{
 			Record:     "object",
+			Type:       "entry",
 			Collection: collection,
 			Name:       entry.name,
 			Facts:      entry.facts.encode(),

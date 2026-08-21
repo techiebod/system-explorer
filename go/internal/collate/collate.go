@@ -222,6 +222,7 @@ func applyCollection(st *store.Store, name, scope string, batch *wire.Batch) err
 		objects = append(objects, store.Object{
 			ID:     store.MintID(name, o.Name),
 			Name:   o.Name,
+			Type:   o.Type,
 			Facts:  o.Facts,
 			Names:  o.Names,
 			Absent: o.Absent,

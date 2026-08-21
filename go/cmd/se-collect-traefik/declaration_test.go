@@ -201,17 +201,17 @@ func TestTheDeclarationCarriesThePinnedContract(t *testing.T) {
 	// application is reached, a backend URL is where the request goes, and the
 	// two error lists quote the operator's own configuration back at them.
 	pinned := map[string]string{
-		"routers/Rule":            "location",
-		"routers/Error":           "content",
-		"routers/Middlewares":     "content",
-		"services/Servers":        "location",
-		"services/DownServers":    "location",
-		"services/Error":          "content",
-		"overview/EntryPoints":    "content",
-		"overview/Version":        "nothing",
-		"overview/RoutersErrors":  "nothing",
-		"services/ServersUp":      "nothing",
-		"services/ServersDown":    "nothing",
+		"routers/Rule":           "location",
+		"routers/Error":          "content",
+		"routers/Middlewares":    "content",
+		"services/Servers":       "location",
+		"services/DownServers":   "location",
+		"services/Error":         "content",
+		"overview/EntryPoints":   "content",
+		"overview/Version":       "nothing",
+		"overview/RoutersErrors": "nothing",
+		"services/ServersUp":     "nothing",
+		"services/ServersDown":   "nothing",
 	}
 	classes := map[string]bool{"nothing": true, "identity": true, "location": true,
 		"content": true, "secret": true}

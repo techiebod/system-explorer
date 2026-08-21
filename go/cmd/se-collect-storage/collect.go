@@ -29,6 +29,7 @@ type objectRecord struct {
 	Record     string          `json:"record"`
 	Collection string          `json:"collection"`
 	Name       string          `json:"name"`
+	Type       string          `json:"type,omitempty"`
 	Facts      json.RawMessage `json:"facts"`
 	Names      json.RawMessage `json:"names,omitempty"`
 	// Present only when a declared fact genuinely is not: we looked, and

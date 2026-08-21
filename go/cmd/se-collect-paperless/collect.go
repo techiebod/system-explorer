@@ -38,6 +38,7 @@ type objectRecord struct {
 	Record     string          `json:"record"`
 	Collection string          `json:"collection"`
 	Name       string          `json:"name"`
+	Type       string          `json:"type,omitempty"`
 	Facts      json.RawMessage `json:"facts"`
 	At         float64         `json:"at"`
 }

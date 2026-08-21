@@ -261,6 +261,7 @@ func collectDomains(out *emitter, stderr io.Writer, src source, collection strin
 		}
 		record := objectRecord{
 			Record:     "object",
+			Type:       "domain",
 			Collection: collection,
 			Name:       row.name,
 			Facts:      row.facts.encode(),

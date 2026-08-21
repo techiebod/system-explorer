@@ -30,6 +30,7 @@ type objectRecord struct {
 	Record     string         `json:"record"`
 	Collection string         `json:"collection"`
 	Name       string         `json:"name"`
+	Type       string         `json:"type,omitempty"`
 	Facts      map[string]any `json:"facts"`
 	At         float64        `json:"at"`
 }
@@ -176,6 +177,7 @@ func collect(stdout, stderr io.Writer, src source, order []string, generations m
 		for _, row := range items {
 			out.emit(objectRecord{
 				Record:     "object",
+				Type:       row.kind,
 				Collection: collection,
 				Name:       row.name,
 				Facts:      row.facts,

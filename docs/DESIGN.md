@@ -1139,7 +1139,7 @@ NDJSON, one object per line, discriminated by `record`. A run is a **batch**, an
  "declaration":"sha256:9ab3…","boot_id":"4f2a1c8e-7b3d-4a91-9e2f-6c5d8a0b1e37","timens":0,"instance":null,
  "generations":{"pools":8814,"arrays":77}}
 
-{"record":"object","collection":"pools","name":"tank",
+{"record":"object","collection":"pools","name":"tank","type":"pool",
  "names":{"stable":   {"guid":"11550964…","devices":["by-id/wwn-0x5000c50…"]},
           "ephemeral":{"kernel":["/dev/sdc"]}},
  "facts":{"Health":"ONLINE","SizeBytes":32985348833280,

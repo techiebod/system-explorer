@@ -40,6 +40,7 @@ type objectRecord struct {
 	Record     string          `json:"record"`
 	Collection string          `json:"collection"`
 	Name       string          `json:"name"`
+	Type       string          `json:"type,omitempty"`
 	Facts      json.RawMessage `json:"facts"`
 	At         float64         `json:"at"`
 }
@@ -206,6 +207,7 @@ func collectWorkloads(out *emitter, stderr io.Writer, src source, collection str
 		out.emit(objectRecord{
 			Record:     "object",
 			Collection: collection,
+			Type:       unitKind(row.name),
 			Name:       row.name,
 			Facts:      row.facts.encode(),
 			At:         src.stamp(*objects),

@@ -96,7 +96,7 @@ def main():
                 facts["JumpedFrom"] = callers
             elif not base:
                 facts["Unreferenced"] = True
-            emit({"record": "object", "collection": collection,
+            emit({"record": "object", "collection": collection, "type": "chain",
                   "name": f"{family} {table} {name}", "facts": facts,
                   "at": 0})          # <- struct zero value, never stamped
             count += 1

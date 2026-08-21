@@ -204,6 +204,11 @@ def pools(payloads):
     return items
 
 
+# The third member of each COLLECTORS row and the object type below are
+# what a correct subject carries; this fixture's defects are the S/N list
+# in the header and nothing else, so shape members ride along verbatim.
+OBJECT_TYPES = {"pools": "pool", "nft-chains": "chain"}
+
 COLLECTORS = {
     "storage": ("pools", pools, "zpool"),
     "network": ("nft-chains", nft_chains, "nft"),
@@ -235,8 +240,14 @@ def main():
             continue
         items = build(payloads)
         for name, facts in items:
-            emit({"record": "object", "collection": c, "name": name,
-                  "facts": facts, "at": 0.0})
+            record = {"record": "object", "collection": c, "name": name,
+                      "facts": facts, "at": 0.0}
+            # .get, because `wanted` is the request line's token list and a
+            # collection this table does not know is served untyped rather
+            # than crashing a fixture whose defects are the declared ones.
+            if OBJECT_TYPES.get(c):
+                record["type"] = OBJECT_TYPES[c]
+            emit(record)
         emit({"record": "commit", "collection": c, "generation": 1,
               "objects": len(items)})
     emit({"record": "end", "request": "replay", "batch": "replay"})

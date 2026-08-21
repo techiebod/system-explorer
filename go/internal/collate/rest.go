@@ -46,8 +46,12 @@ type objectView struct {
 	ID       string          `json:"id"`
 	Instance *string         `json:"instance"`
 	Name     string          `json:"name"`
-	Facts    json.RawMessage `json:"facts"`
-	At       float64         `json:"at"`
+	// Omitted when the object carries none: a homogeneous collection
+	// genuinely has no type, and inventing one would be this tier
+	// deciding something the producer did not say.
+	Type  string          `json:"type,omitempty"`
+	Facts json.RawMessage `json:"facts"`
+	At    float64         `json:"at"`
 }
 
 // NewHandler builds the read API over one store. now is the boot-clock
@@ -149,7 +153,7 @@ func NewHandler(st *store.Store, now func() float64, bootID string) http.Handler
 		}
 		views := make([]objectView, 0, len(rows))
 		for _, o := range rows {
-			v := objectView{ID: o.ID, Name: o.Name, Facts: o.Facts, At: o.At}
+			v := objectView{ID: o.ID, Name: o.Name, Type: o.Type, Facts: o.Facts, At: o.At}
 			if len(secrets) > 0 {
 				v.Facts = withoutSecrets(o.Facts, secrets)
 			}

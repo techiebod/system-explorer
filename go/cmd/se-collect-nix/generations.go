@@ -266,6 +266,7 @@ func collectGenerations(out *emitter, stderr io.Writer, src source, collection s
 		names.set("stable", stable)
 		out.emit(objectRecord{
 			Record:     "object",
+			Type:       "generation",
 			Collection: collection,
 			Name:       strconv.Itoa(gen.number),
 			Facts:      facts.encode(),

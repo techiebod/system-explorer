@@ -633,3 +633,17 @@ func floatToken(value float64) string {
 	}
 	return text
 }
+
+// unitKind is the row's structural kind, read off the unit-name suffix
+// with the same suffix set the walk already recognises — service, scope,
+// slice, mount, socket, swap. On the wire since the 2026-08-21 ruling;
+// a name outside the set (which the walk would not have made a row of)
+// carries none rather than a guess.
+func unitKind(name string) string {
+	for _, suffix := range cgroupUnitSuffixes {
+		if strings.HasSuffix(name, suffix) {
+			return suffix[1:]
+		}
+	}
+	return ""
+}
