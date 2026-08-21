@@ -365,6 +365,25 @@ def _declares(collector: str, member: str) -> bool:
     return bool(collections) and all(c.get(member) for c in collections.values())
 
 
+def _declares_somewhere(collector: str, member: str) -> bool:
+    """Some collection of the named port declares the member, non-empty.
+
+    The weaker test, and the right one for the three members a collection may
+    legitimately have NOTHING to put in. A PCI inventory row relates to
+    nothing and is judged by no rule; a platform row is the machine itself.
+    Under the all-collections test those three would have to grow an invented
+    relation or an unfirable rule to satisfy a probe, which is the probe
+    driving the port rather than reading it.
+
+    What it cannot see, stated where it is defined: a collection that SHOULD
+    declare the member and does not is indistinguishable here from one that
+    has none to declare. That distinction is the fleet audit, which is these
+    rows' own R3d half.
+    """
+    collections = ported_collections().get(collector, {})
+    return any(c.get(member) for c in collections.values())
+
+
 REGISTER: tuple[Row, ...] = (
     Row(1, "`object` verb — object density behind the row facts",
         "built", "R3c/R3d", lambda: _verb_landed("object"),
@@ -389,24 +408,37 @@ REGISTER: tuple[Row, ...] = (
         "is asserted by the store and REST tests, order parity by the live "
         "comparator's order check."),
     Row(6, "name families on `units`/`hardware` (fleet-wide audit follows)",
-        "owed", "R3c/R3d",
-        lambda: _declares("units", "names") and _declares("hardware", "names"),
-        "the probe reads the two champions' declarations only; the fleet "
-        "audit is the same row's R3d half and is not probed until then."),
+        "built", "R3c/R3d",
+        lambda: _declares_somewhere("hardware", "names"),
+        "carried by hardware alone, and that is the answer rather than half "
+        "an answer: a systemd unit HAS one native name, so units publishes no "
+        "family and never will, where a disk is reachable by wwid, by-id "
+        "spelling, serial and kernel path and publishes all four. The probe "
+        "reads the champion's declaration only; whether a collection that "
+        "should declare a family has forgotten one is the fleet audit, this "
+        "row's R3d half."),
     Row(7, "relations on `units`/`hardware` (fleet-wide audit follows)",
-        "owed", "R3c/R3d",
-        lambda: (_declares("units", "relations")
-                 and _declares("hardware", "relations")),
-        "same scope and same limit as row 6."),
+        "built", "R3c/R3d",
+        lambda: (_declares_somewhere("units", "relations")
+                 and _declares_somewhere("hardware", "relations")),
+        "same scope and same limit as row 6, and the same reason for the "
+        "weaker test: a PCI inventory row relates to nothing, so requiring "
+        "every collection would make the probe drive the port."),
     Row(8, "rule tables fleet-wide (restart-churn, SMART verdicts, link-rate…)",
-        "owed", "R3c/R3d",
-        lambda: _declares("units", "rules") and _declares("hardware", "rules"),
+        "built", "R3c/R3d",
+        lambda: (_declares_somewhere("units", "rules")
+                 and _declares_somewhere("hardware", "rules")),
         "the first table landed with system/time at R3b, so 'any table "
-        "exists' stopped discriminating; the probe now reads the champions, "
-        "whose named rules (restart-churn, SMART verdicts, link-rate) are "
-        "this row's own examples. Parity of judgement against the "
-        "reference's opinions is not mechanically checkable — the old rules "
-        "are code — and is judged at the retrofit."),
+        "exists' stopped discriminating; the probe reads the champions, whose "
+        "named rules — restart-churn, the SMART verdicts, the link-rate "
+        "opinion — are this row's own examples and are all three declared. "
+        "What no probe here shows is PARITY: that the declared tables reach "
+        "the same judgement as the reference's evaluators on the same facts. "
+        "The tables are fired against characteristic readings in each "
+        "collector's own tests, and agreement with agent/rules/*.py is "
+        "asserted by those cases being written from those files, which is a "
+        "correspondence no machine checks. That half is the owner's to judge "
+        "at acceptance."),
     Row(9, "the unported collections (network, storage, system, plex)",
         "owed", "R3b/R3d", lambda: not NOT_YET_PORTED,
         "the probe is the register's own owed list emptying; that each entry "
