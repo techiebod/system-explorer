@@ -551,3 +551,15 @@ def test_the_scrubber_and_the_conformance_guard_read_one_vocabulary() -> None:
         "the conformance guard must read the same one"
     )
     assert module is not None  # the loader is unused; the source read is the test
+
+
+def test_the_all_zero_hex32_is_the_wildcard_not_a_machine_id() -> None:
+    """The nil reasoning, both directions: /proc/net spells the IPv6
+    any-address as 32 zeros, which identifies nobody — and one bit set is
+    back to being the machine-id shape, so the carve-out cannot widen."""
+    zero_line = " 0: 00000000000000000000000000000000:0016 ..."
+    assert not [f for f in detectors.scan({"t": zero_line})
+                if f.value_class == "machine-id"]
+    nearly = zero_line.replace("0000:0016", "0001:0016")
+    assert [f for f in detectors.scan({"t": nearly})
+            if f.value_class == "machine-id"]

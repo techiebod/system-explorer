@@ -1,0 +1,80 @@
+{
+  "collector": "network",
+  "collections": [
+    "routes",
+    "listening"
+  ],
+  "variant": "bare-guest",
+  "provenance": "captured-then-planted",
+  "os": "debian",
+  "os_version": "13",
+  "source_version": "iproute2 6.16 (debian 13)",
+  "captured": "2026-08-21T16:20:00Z",
+  "regenerable": true,
+  "canaries": [],
+  "anonymised": true,
+  "note": "The first pair for the two R3b network collections, from a guest with no nftables installed at all \u2014 its absence honestly not staged. Both families' full route dumps include the local and default tables (the table-all lesson that took a site LAN down twice), the rule table carries the three kernel defaults, and the /proc/net transcript stages all four socket tables with the resolver's port-53 stub bound to 127.0.0.53 \u2014 the row whose hex address (3500007F) is the decode-direction trap the parser comment names. Addresses travel verbatim: on a lab guest they are the libvirt default NAT range, the same bytes on every libvirt install on earth, and the scrub manifest states that coverage limit for estate captures. Three plants, each documented because it is the shape a plain guest cannot produce: /proc/net/udp6 is staged null (a table that would not open \u2014 every row must then carry TablesUnreadable); a rule at preference 5270 selects table 52 and a static route for the guest's own connected prefix sits in it via tailscale0 \u2014 the exact double-LAN-outage shape the routes collection exists for, which must come back ShadowsLocalPrefix true and fire route-shadows-local; and the numbered table exercises the number-not-string spelling iproute2 uses for tables it has no name for.",
+  "anchors": [
+    {
+      "collection": "routes",
+      "object": "default dev ens2 via 192.168.122.1",
+      "fact": "Protocol",
+      "value": "dhcp"
+    },
+    {
+      "collection": "routes",
+      "object": "default dev ens2 via 192.168.122.1",
+      "fact": "Family",
+      "value": "ipv4"
+    },
+    {
+      "collection": "routes",
+      "object": "192.168.122.0/24 dev ens2",
+      "fact": "Scope",
+      "value": "link"
+    },
+    {
+      "collection": "routes",
+      "object": "192.168.122.0/24 dev ens2",
+      "fact": "RulePreference",
+      "value": 32766
+    },
+    {
+      "collection": "listening",
+      "object": "tcp 127.0.0.53:53",
+      "fact": "Scope",
+      "value": "loopback"
+    },
+    {
+      "collection": "listening",
+      "object": "tcp 127.0.0.53:53",
+      "fact": "LocalAddress",
+      "value": "127.0.0.53"
+    },
+    {
+      "collection": "listening",
+      "object": "tcp 0.0.0.0:22",
+      "fact": "Scope",
+      "value": "all-interfaces"
+    },
+    {
+      "collection": "routes",
+      "object": "192.168.122.0/24 dev tailscale0 table 52",
+      "fact": "ShadowsLocalPrefix",
+      "value": true
+    },
+    {
+      "collection": "routes",
+      "object": "192.168.122.0/24 dev tailscale0 table 52",
+      "fact": "RulePreference",
+      "value": 5270
+    },
+    {
+      "collection": "listening",
+      "object": "tcp 127.0.0.53:53",
+      "fact": "TablesUnreadable",
+      "value": "/proc/net/udp6 could not be read"
+    }
+  ],
+  "anchors_note": "Staged truth transcribed by hand: the default route's protocol and its family read off the destination; the connected prefix's link scope and main's rule preference from the staged rule table; and the two listening shapes that matter \u2014 the resolver stub whose 3500007F must decode word-wise to 127.0.0.53 \u2014 the whole-string-reversal trap produces a plausible wrong address and classify loopback, and sshd's wildcard classifying all-interfaces. Object counts are pinned by the expected stream."
+}

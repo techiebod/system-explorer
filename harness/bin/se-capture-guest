@@ -590,6 +590,20 @@ if os.path.isdir(tree):
         print(json.dumps(out))
 '
 
+# The four /proc/net socket tables as one transcript, in the tree seam's
+# shape — one object per directory, null where a table would not open,
+# because "could not read" is a reading of the captured machine.
+procnet_py='
+import json
+out = {}
+for name in ("tcp", "tcp6", "udp", "udp6"):
+    try:
+        out[name] = open("/proc/net/" + name).read()
+    except OSError:
+        out[name] = None
+print(json.dumps({"/proc/net": out}))
+'
+
 hostname_py='
 import socket
 print(socket.gethostname().split(".")[0])
@@ -781,7 +795,15 @@ case "$collector" in
         )
         ;;
     network)
-        acquisitions=("nft.json|nft -j list ruleset")
+        # nft optional since R3b: a minimal guest may not ship nftables,
+        # and its absence is the reading the nft collections decline on.
+        acquisitions=(
+            "nft.json?|nft -j list ruleset 2>/dev/null || true"
+            "ip-route4.json|ip -j -4 route show table all"
+            "ip-route6.json|ip -j -6 route show table all"
+            "ip-rule.json|ip -j rule show"
+            "procnet.json|python3 -c '$procnet_py'"
+        )
         ;;
     vms)
         # The adapter's own acquisition, run on the guest. _domains_raw is one

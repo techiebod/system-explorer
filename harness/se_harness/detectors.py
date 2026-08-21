@@ -551,6 +551,12 @@ def _scan_text(
         # allowlist is on the VALUE and could not be on the field.
         if m.group(0).lower() in SYSTEMD_CATALOGUE_IDS:
             continue
+        # All zeros identifies nobody — the nil-UUID reasoning, met again in
+        # /proc/net's hex encoding, where the IPv6 any-address `::` is
+        # spelled as exactly this. Only the one value: 31 zeros and a 1 is
+        # back to being a finding.
+        if m.group(0) == "0" * 32:
+            continue
         findings.append(Finding(
             path, "machine-id",
             f"32-hex {m.group(0)} is the machine-id shape and carries no "

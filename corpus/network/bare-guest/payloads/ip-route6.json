@@ -1,0 +1,40 @@
+[
+  {
+    "dst": "fe80::/64",
+    "dev": "ens2",
+    "protocol": "kernel",
+    "metric": 256,
+    "flags": [],
+    "pref": "medium"
+  },
+  {
+    "type": "local",
+    "dst": "::1",
+    "dev": "lo",
+    "table": "local",
+    "protocol": "kernel",
+    "metric": 0,
+    "flags": [],
+    "pref": "medium"
+  },
+  {
+    "type": "local",
+    "dst": "fe80::5054:ff:fe48:38e5",
+    "dev": "ens2",
+    "table": "local",
+    "protocol": "kernel",
+    "metric": 0,
+    "flags": [],
+    "pref": "medium"
+  },
+  {
+    "type": "multicast",
+    "dst": "ff00::/8",
+    "dev": "ens2",
+    "table": "local",
+    "protocol": "kernel",
+    "metric": 256,
+    "flags": [],
+    "pref": "medium"
+  }
+]

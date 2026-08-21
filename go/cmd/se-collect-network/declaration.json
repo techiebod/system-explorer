@@ -4,10 +4,14 @@
   "version": "0.7.0",
   "authority": {
     "commands": [
+      "ip",
       "nft"
     ],
     "capabilities": [
       "CAP_NET_ADMIN"
+    ],
+    "read_paths": [
+      "/proc/net"
     ]
   },
   "probe": "nft runs and `nft -j list ruleset` parses; an empty ruleset is a successful read and an authoritative-empty commit, never a probe failure",
@@ -383,6 +387,276 @@
           "argv": [
             "iptables-nft",
             "-S"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "routes",
+      "question": "where does this host send traffic, in every table the kernel consults \u2014 and does anything outrank its own connected routes?",
+      "prefix": "route",
+      "freshness": "60s",
+      "perishability": "sampled",
+      "answer": [
+        "Gateway",
+        "Device",
+        "Protocol",
+        "Scope",
+        "Family"
+      ],
+      "ceiling": {
+        "records": 5000,
+        "bytes": 4194304
+      },
+      "facts": {
+        "Destination": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "location",
+          "sentence": "The prefix this route matches, or `default`. An address by construction, which is why this whole collection's address facts are classed as location."
+        },
+        "Gateway": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "location",
+          "sentence": "The next hop, where the route has one \u2014 a directly connected route does not, and says so by this fact's absence."
+        },
+        "Device": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The interface traffic leaves through."
+        },
+        "Protocol": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Who installed the route, in iproute2's word \u2014 kernel, dhcp, static, bird."
+        },
+        "Scope": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The route's scope; `link` in main is the definition of being directly attached to a segment."
+        },
+        "PrefSrc": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "location",
+          "sentence": "The source address the kernel prefers for traffic using this route."
+        },
+        "Metric": {
+          "type": "integer",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The route's metric, deciding between same-prefix routes within one table."
+        },
+        "Family": {
+          "type": "enum",
+          "temperament": "state",
+          "kind": "derived",
+          "discloses": "nothing",
+          "sentence": "Which stack the route belongs to, read off the destination itself so the label cannot contradict the address beside it; only `default` carries no address and keeps its dump's family.",
+          "derived_from": [
+            "Destination"
+          ],
+          "values": [
+            "ipv4",
+            "ipv6"
+          ]
+        },
+        "Table": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The routing table holding this route. iproute2 omits it for main; naming it beats an absence a reader has to know the default of."
+        },
+        "RulePreference": {
+          "type": "integer",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The lowest rule preference selecting this table \u2014 what decides whether it outranks main, which sits at 32766 unless something moves it. Absent when no rule names the table."
+        },
+        "ShadowsLocalPrefix": {
+          "type": "boolean",
+          "temperament": "state",
+          "kind": "derived",
+          "discloses": "nothing",
+          "sentence": "An exact structural comparison, not a judgement: this route is in a table the kernel consults before main, and main holds a kernel-scope link route for the same destination \u2014 the shape that took a site LAN down twice while every screen showed a healthy main table. Present only when true.",
+          "derived_from": [
+            "Table",
+            "RulePreference",
+            "Destination"
+          ]
+        }
+      },
+      "rules": [
+        {
+          "key": "route-shadows-local",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "fact": "ShadowsLocalPrefix",
+            "equals": true
+          },
+          "sentence": "A policy table consulted ahead of main carries a route for a segment this host is directly attached to: replies to LAN neighbours go into the tunnel while ARP keeps answering, and the host looks half-alive. Warn, not critical \u2014 on a deliberate split tunnel this is exactly what was intended.",
+          "cites": [
+            "ShadowsLocalPrefix",
+            "Table",
+            "RulePreference",
+            "Destination"
+          ]
+        }
+      ],
+      "redaction_exemption": "every address fact is declared location and handled by disclosure policy; the rest are kernel routing metadata with no credential surface",
+      "reference_commands": [
+        {
+          "purpose": "both families, every table",
+          "argv": [
+            "ip",
+            "-4",
+            "route",
+            "show",
+            "table",
+            "all"
+          ]
+        },
+        {
+          "purpose": "and the v6 half",
+          "argv": [
+            "ip",
+            "-6",
+            "route",
+            "show",
+            "table",
+            "all"
+          ]
+        },
+        {
+          "purpose": "the rule preferences that decide which table wins",
+          "argv": [
+            "ip",
+            "rule",
+            "show"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "listening",
+      "question": "what is this host accepting traffic on, and from how far away can it be reached?",
+      "prefix": "socket",
+      "freshness": "60s",
+      "perishability": "sampled",
+      "answer": [
+        "Protocol",
+        "LocalAddress",
+        "LocalPort",
+        "Scope",
+        "Uid"
+      ],
+      "ceiling": {
+        "records": 5000,
+        "bytes": 4194304
+      },
+      "facts": {
+        "Protocol": {
+          "type": "enum",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Which socket table the row came from.",
+          "values": [
+            "tcp",
+            "tcp6",
+            "udp",
+            "udp6"
+          ]
+        },
+        "LocalAddress": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "location",
+          "sentence": "The address the socket is bound to, decoded word-wise from /proc/net's host-order hex \u2014 the encoding that read backwards produces plausible wrong addresses."
+        },
+        "LocalPort": {
+          "type": "integer",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The bound port \u2014 the number an operator scans for, and this collection's applied order leads with it."
+        },
+        "Uid": {
+          "type": "integer",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The owning uid, from /proc/net itself \u2014 what can be said about the process without the privilege to name it."
+        },
+        "SocketInode": {
+          "type": "integer",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The socket's inode, the join key a privileged reader would use to name the process."
+        },
+        "Scope": {
+          "type": "enum",
+          "temperament": "state",
+          "kind": "derived",
+          "discloses": "nothing",
+          "sentence": "What the binding says about reach: a wildcard socket is reachable from wherever the ruleset allows, a loopback one from nowhere off the host whatever the ruleset says.",
+          "derived_from": [
+            "LocalAddress"
+          ],
+          "values": [
+            "all-interfaces",
+            "loopback",
+            "specific-address"
+          ]
+        },
+        "ProcessUnobservable": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Why the listening process is not named on this row \u2014 stated on every row rather than once on the collection, so a consumer reading one object does not need the source block to know."
+        },
+        "TablesUnreadable": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Which /proc/net tables would not open, when any would not: a table that cannot be read is not a table with nothing in it, and without this a host whose udp6 was unreadable would publish a complete-looking list of TCP sockets."
+        }
+      },
+      "redaction_exemption": "bound addresses are declared location and handled by disclosure policy; ports, uids and inodes are kernel socket metadata with no credential surface",
+      "reference_commands": [
+        {
+          "purpose": "the same tables, by hand",
+          "argv": [
+            "cat",
+            "/proc/net/tcp",
+            "/proc/net/tcp6",
+            "/proc/net/udp",
+            "/proc/net/udp6"
+          ]
+        },
+        {
+          "purpose": "the friendly rendering most operators know",
+          "argv": [
+            "ss",
+            "-tulnp"
           ]
         }
       ]

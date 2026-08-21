@@ -135,7 +135,11 @@ def test_every_row_says_why_no_process_is_named(monkeypatch, tmp_path):
              tcp=line("00000000:0016", "0A", uid=101, inode=27577),
              tcp6="", udp="", udp6="")
     facts = rows(monkeypatch, tmp_path)["tcp 0.0.0.0:22"]["facts"]
-    assert "DynamicUser" in facts["ProcessUnobservable"]
+    # The one shared spelling both implementations carry since R3b: the
+    # guard pins the MECHANISM half of the sentence, the part a reader
+    # acts on.
+    assert "/proc/<pid>/fd" in facts["ProcessUnobservable"]
+    assert "owning user" in facts["ProcessUnobservable"]
     assert facts["Uid"] == 101, "what CAN be said about ownership is said"
     assert "Process" not in facts and "Command" not in facts
 

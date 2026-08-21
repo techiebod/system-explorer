@@ -61,15 +61,16 @@ func parseDeclaration(t *testing.T) map[string]declaredCollection {
 	if declaration.Schema != "se.declaration/1" || declaration.Collector != "network" {
 		t.Fatalf("collector %q under schema %q", declaration.Collector, declaration.Schema)
 	}
-	// This collector reads no file: its interface is a subprocess talking
-	// netlink, so the load-bearing authority is the command and the
-	// capability, and a read_paths grant here would be a sandbox opening
-	// nothing needs.
-	if len(declaration.Authority.ReadPaths) != 0 {
-		t.Errorf("this collector reads no file; read_paths is %v", declaration.Authority.ReadPaths)
+	// The nft half reads no file — its interface is a subprocess talking
+	// netlink — and since R3b the listening collection reads exactly one
+	// tree: /proc/net's socket tables. Anything beyond that pair would be
+	// a sandbox opening nothing needs.
+	if len(declaration.Authority.ReadPaths) != 1 || declaration.Authority.ReadPaths[0] != "/proc/net" {
+		t.Errorf("read_paths is %v, want exactly /proc/net", declaration.Authority.ReadPaths)
 	}
-	if len(declaration.Authority.Commands) != 1 || declaration.Authority.Commands[0] != "nft" {
-		t.Errorf("authority.commands is %v", declaration.Authority.Commands)
+	if len(declaration.Authority.Commands) != 2 || declaration.Authority.Commands[0] != "ip" ||
+		declaration.Authority.Commands[1] != "nft" {
+		t.Errorf("authority.commands is %v, want [ip nft]", declaration.Authority.Commands)
 	}
 	if len(declaration.Authority.Capabilities) != 1 || declaration.Authority.Capabilities[0] != "CAP_NET_ADMIN" {
 		t.Errorf("authority.capabilities is %v", declaration.Authority.Capabilities)
@@ -78,8 +79,8 @@ func parseDeclaration(t *testing.T) map[string]declaredCollection {
 	for _, collection := range declaration.Collections {
 		out[collection.Name] = collection
 	}
-	if len(out) != 2 {
-		t.Fatalf("two collections, both from one document; got %d", len(out))
+	if len(out) != 4 {
+		t.Fatalf("four collections — the nft pair, routes, listening; got %d", len(out))
 	}
 	return out
 }

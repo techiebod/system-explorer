@@ -42,6 +42,16 @@ type source interface {
 	// nftRuleset is the parsed `nft -j list ruleset` document. Its errors
 	// carry the decline shape: see the four sentinels below.
 	nftRuleset() (jsonValue, error)
+	// The three iproute2 documents behind the routes collection. An error
+	// wrapping errIPSilent declines the collection unavailable; under
+	// replay a payload nobody staged is errUncaptured and fatal.
+	ipRoute4() (jsonValue, error)
+	ipRoute6() (jsonValue, error)
+	ipRule() (jsonValue, error)
+	// procNet is one /proc/net table's text, and whether it opened: an
+	// unreadable table is a statement the rows must carry, never an empty
+	// table — a host whose udp6 will not open has not stopped listening.
+	procNet(table string) (string, bool)
 	// stamp is `at` for the i-th emitted object. Every row of a batch comes
 	// from ONE document, read once, so the live reading is taken before that
 	// read and shared: an acquisition stamped at completion would report
@@ -58,6 +68,11 @@ type source interface {
 // other three are this side's reading of the adapter's own capability
 // branches (`nft not on PATH`, `nft cannot read the ruleset (CAP_NET_ADMIN
 // not granted?)`, everything else) and no variant exercises them yet.
+var (
+	errIPSilent   = errors.New("ip did not answer")
+	errUncaptured = errors.New("not captured in this replay directory")
+)
+
 var (
 	errNftAbsent     = errors.New("nft is not on this host")
 	errNftRefused    = errors.New("nft ran and refused to read the ruleset")
@@ -158,6 +173,63 @@ func (s *liveSource) nftRuleset() (jsonValue, error) {
 
 func (s *liveSource) stamp(int) float64 { return s.at }
 
+// ipJSON runs one iproute2 read. Literal tokens only, `-j` always, the
+// same patience as nft, and empty output is the empty document — a host
+// with no rules prints nothing and has none.
+func (s *liveSource) ipJSON(args ...string) (jsonValue, error) {
+	at, err := bootClock()
+	if err != nil {
+		return jsonValue{}, err
+	}
+	s.at = at
+	if _, err := exec.LookPath("ip"); err != nil {
+		return jsonValue{}, fmt.Errorf("%w: %v", errIPSilent, err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), nftTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "ip", append([]string{"-j"}, args...)...)
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = nil
+	if err := cmd.Run(); err != nil {
+		return jsonValue{}, fmt.Errorf("%w: %v", errIPSilent, err)
+	}
+	raw := bytes.TrimSpace(stdout.Bytes())
+	if len(raw) == 0 {
+		return jsonValue{kind: jsonArray}, nil
+	}
+	doc, err := decodeDocument(bytes.NewReader(raw))
+	if err != nil {
+		return jsonValue{}, fmt.Errorf("%w: %v", errIPSilent, err)
+	}
+	return doc, nil
+}
+
+func (s *liveSource) ipRoute4() (jsonValue, error) {
+	return s.ipJSON("-4", "route", "show", "table", "all")
+}
+
+func (s *liveSource) ipRoute6() (jsonValue, error) {
+	return s.ipJSON("-6", "route", "show", "table", "all")
+}
+
+func (s *liveSource) ipRule() (jsonValue, error) {
+	return s.ipJSON("rule", "show")
+}
+
+func (s *liveSource) procNet(table string) (string, bool) {
+	at, err := bootClock()
+	if err != nil {
+		return "", false
+	}
+	s.at = at
+	raw, err := os.ReadFile("/proc/net/" + table)
+	if err != nil {
+		return "", false
+	}
+	return string(raw), true
+}
+
 func (s *liveSource) costs() (float64, float64) {
 	cpu := 0.0
 	var usage syscall.Rusage
@@ -228,6 +300,48 @@ func (r replaySource) nftRuleset() (jsonValue, error) {
 		return jsonValue{}, fmt.Errorf("the staged nft.json is not a document: %v", err)
 	}
 	return doc, nil
+}
+
+// ipPayload resolves one staged iproute2 document; absence is a capture
+// this variant never took, refused rather than read off the replaying
+// machine.
+func (r replaySource) ipPayload(stem string) (jsonValue, error) {
+	file, err := os.Open(filepath.Join(r.dir, stem+".json"))
+	if err != nil {
+		return jsonValue{}, fmt.Errorf("%s %w: %v", stem, errUncaptured, err)
+	}
+	defer file.Close()
+	doc, err := decodeDocument(file)
+	if err != nil {
+		return jsonValue{}, fmt.Errorf("the staged %s.json is not a document: %v", stem, err)
+	}
+	return doc, nil
+}
+
+func (r replaySource) ipRoute4() (jsonValue, error) { return r.ipPayload("ip-route4") }
+func (r replaySource) ipRoute6() (jsonValue, error) { return r.ipPayload("ip-route6") }
+func (r replaySource) ipRule() (jsonValue, error)   { return r.ipPayload("ip-rule") }
+
+// procNet under replay reads the staged transcript — the reference's tree
+// seam shape, one object per directory: {"/proc/net": {"tcp": text|null}}.
+// A null is a table that would not open on the captured machine; a table
+// the variant never staged reads the same way, because both are "this
+// capture holds no such reading" and neither may touch the replaying
+// machine's /proc.
+func (r replaySource) procNet(table string) (string, bool) {
+	raw, err := os.ReadFile(filepath.Join(r.dir, "procnet.json"))
+	if err != nil {
+		return "", false
+	}
+	var staged map[string]map[string]*string
+	if json.Unmarshal(raw, &staged) != nil {
+		return "", false
+	}
+	entry, ok := staged["/proc/net"][table]
+	if !ok || entry == nil {
+		return "", false
+	}
+	return *entry, true
 }
 
 func (replaySource) stamp(i int) float64 {

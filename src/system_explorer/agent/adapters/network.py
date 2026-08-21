@@ -681,11 +681,16 @@ LISTENING_NOTES = [
     " the uid on each row is what /proc/net itself carries.",
 ]
 
+# One spelling on both implementations (the nix interface-string lesson):
+# this exact sentence is the ported collector's constant too, and a fact
+# value that differed by wording would read as a defect on every live
+# comparison.
 PROCESS_UNOBSERVABLE = (
-    "the listening process cannot be named from this agent: the socket-inode to"
-    " process join reads /proc/<pid>/fd, which only the owning user may open,"
-    " and the agent runs as a DynamicUser. The uid beside this fact is from"
-    " /proc/net itself and is what can be said without that privilege."
+    "the listening process cannot be named from this reading: the"
+    " socket-inode to process join reads /proc/<pid>/fd, which only the"
+    " owning user may open, and this observer runs without that privilege."
+    " The uid beside this fact is from /proc/net itself and is what can be"
+    " said without it."
 )
 
 
@@ -732,6 +737,22 @@ def _family_of(destination: str) -> str | None:
         return f"ipv{ipaddress.ip_network(destination, strict=False).version}"
     except ValueError:
         return None
+
+
+# Zero-argument wrappers over _ip_json for the three route documents, so
+# the replay seam can redirect each by name (the storage pattern): a
+# parameterised acquisition has no stable payload stem, and the seam's
+# deny-by-default stubbing keys on module attributes.
+def _ip_route4() -> list:
+    return _ip_json(["-4", "route", "show", "table", "all"])
+
+
+def _ip_route6() -> list:
+    return _ip_json(["-6", "route", "show", "table", "all"])
+
+
+def _ip_rule() -> list:
+    return _ip_json(["rule", "show"])
 
 
 def _proc_net_readable() -> bool:
@@ -1718,9 +1739,8 @@ class Adapter:
         # four live hosts (2026-08-14): on one of them 32 of 54 "ipv4"
         # rows were IPv6, and the two default routes collapsed onto a
         # single object id.
-        for family, args in (("ipv4", ["-4", "route", "show", "table", "all"]),
-                             ("ipv6", ["-6", "route", "show", "table", "all"])):
-            raw_by_family[family] = await anyio.to_thread.run_sync(_ip_json, args)
+        for family, reader in (("ipv4", _ip_route4), ("ipv6", _ip_route6)):
+            raw_by_family[family] = await anyio.to_thread.run_sync(reader)
 
         # Which destinations this host is DIRECTLY attached to, per family: a
         # kernel-scope link route in main is the definition of "on this
@@ -1787,7 +1807,7 @@ class Adapter:
         """
         prefs: dict[str, int] = {}
         try:
-            raw = await anyio.to_thread.run_sync(_ip_json, ["rule", "show"])
+            raw = await anyio.to_thread.run_sync(_ip_rule)
         except Exception:  # noqa: BLE001 - no ip rule support is not a failure
             return prefs
         for rule in raw:

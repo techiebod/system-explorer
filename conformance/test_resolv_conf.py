@@ -96,7 +96,10 @@ def test_the_ipv4_dump_states_its_family_to_the_tool():
     administrator running the cited command must see what was measured."""
     import inspect
     from system_explorer.agent.adapters import network
-    source = inspect.getsource(network.Adapter._route_items)
+    # The argv moved into the zero-arg seam wrappers at R3b; the claim this
+    # guard holds — the family is stated, because `table all` unsets the
+    # AF_INET default — now lives there.
+    source = inspect.getsource(network._ip_route4)
     assert '"-4", "route", "show", "table", "all"' in source, (
         "the ipv4 route dump no longer states its family; `table all` widens "
         "it to AF_UNSPEC and every IPv6 route comes back labelled ipv4"

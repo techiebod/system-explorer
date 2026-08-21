@@ -167,6 +167,35 @@ func collect(stdout, stderr io.Writer, src source, order []string, generations m
 	objects := 0
 	for _, collection := range order {
 		switch collection {
+		case "routes":
+			rows, err := collectRoutes(out, src, collection, generations[collection], &objects)
+			switch {
+			case err == nil:
+				out.emit(commitRecord{
+					Record:     "commit",
+					Collection: collection,
+					Generation: generations[collection],
+					Objects:    rows,
+				})
+			case isReplayGap(err):
+				fmt.Fprintln(stderr, "routes:", err)
+				return exitRuntime
+			default:
+				// Present but not answering: a host without iproute2 still
+				// HAS routes, so nothing is retired — no commit, prior
+				// state stands, marked stale by the collator.
+				out.emit(declineRecord{
+					Record:     "decline",
+					Collection: collection,
+					Reason:     "unavailable",
+					Detail:     "iproute2 did not answer on this host",
+				})
+				fmt.Fprintln(stderr, "routes:", err)
+			}
+		case "listening":
+			if code := collectListening(out, stderr, src, collection, generations[collection], &objects); code != exitOK {
+				return code
+			}
 		case collectionChains, collectionRules:
 			if acqErr != nil {
 				declineAcquisition(out, collection, generations[collection], acqErr)
@@ -195,7 +224,7 @@ func collect(stdout, stderr io.Writer, src source, order []string, generations m
 				Record:     "decline",
 				Collection: collection,
 				Reason:     "unsupported",
-				Detail:     "this collector serves nft-chains and nft-rules only",
+				Detail:     "this collector does not serve this collection",
 			})
 		}
 	}
