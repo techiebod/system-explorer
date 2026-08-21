@@ -6,14 +6,18 @@ package main
 // every request token is data: never a path fragment, never an option, never
 // part of a command string.
 //
-// hardware's density is not a second bus call the row could not afford, as
-// units' is. It is the WHOLE sysfs directory: the row publishes the dozen
-// attributes a page needs, and the object verb publishes every readable file
-// in the device's own directory, which is where a question nobody anticipated
-// gets answered. That makes object and evidence unusually close here, and the
-// difference is the one that matters everywhere — object serves FACTS this
-// collector stands behind, evidence serves the DOCUMENT they were read from,
-// with the syspath, the udev reply and udisks2's own objects beside it.
+// hardware has no density behind its rows, and that is the honest answer
+// rather than a gap: units' row cannot afford NRestarts because fetching it
+// per unit turns one bus call into hundreds, where hardware's walk already
+// reads every attribute this collection declares. So an object response here
+// is one object addressed by NAME — its facts, its name families, its type
+// and its edges — which is what the request asks for and all a collector may
+// publish: a value under a name no declaration declares has no sentence, no
+// kind and no temperament anywhere in the estate.
+//
+// What a question nobody anticipated is answered from is the raw sysfs
+// directory, and that is the EVIDENCE document's: every readable attribute as
+// the kernel wrote it, the syspath, the udev reply and udisks2's own objects.
 
 import (
 	"crypto/sha256"
@@ -22,7 +26,6 @@ import (
 	"fmt"
 	"io"
 	"path"
-	"sort"
 	"strings"
 	"unicode/utf8"
 )
@@ -169,35 +172,25 @@ func serveObject(stdout, stderr io.Writer, src source, collection, name string) 
 		return verbExit(out, stderr)
 	}
 
+	// The row, and ONLY the row's declared facts. hardware's density is not a
+	// second bus call the row could not afford, as units' is — the walk
+	// already reads everything this collection declares — so an object
+	// response here is one object addressed by name rather than a denser
+	// version of a row. The raw sysfs directory, which is what a question
+	// nobody anticipated is answered from, is the EVIDENCE document's, and
+	// putting it here as `sysfs:<attribute>` facts (as this verb did when it
+	// first landed) publishes values under names no declaration declares:
+	// they would have no sentence, no kind and no temperament anywhere in
+	// the estate, and the collator refuses a batch carrying one.
 	facts := map[string]any{}
 	for fact, value := range row.facts {
 		facts[fact] = value
-	}
-	// The density: every readable attribute of the device's own directory,
-	// under the name sysfs gives it, so a reader can see what the row chose
-	// from. Only for a collection whose objects ARE devices — the platform
-	// row is the machine and its directory is the DMI tree, which the
-	// evidence document carries whole.
-	var absent []string
-	if base, ok := deviceDirectory(src, collection, name); ok {
-		for attribute, value := range attributes(src, base) {
-			// Never a fact this collection declares: the row's reading of an
-			// attribute is the declared one, and a raw second spelling beside
-			// it would be two answers to one question. The raw file is in the
-			// evidence document, where it belongs.
-			if _, declared := facts[attribute]; !declared {
-				facts["sysfs:"+attribute] = value
-			}
-		}
-	} else if collection != collectionPlatform {
-		absent = append(absent, "sysfs")
 	}
 	if err := src.failure(); err != nil {
 		fmt.Fprintf(stderr, "%s: %v\n", collection, err)
 		return exitRuntime
 	}
 
-	sort.Strings(absent)
 	out.emit(objectRecord{
 		Record:     "object",
 		Collection: collection,

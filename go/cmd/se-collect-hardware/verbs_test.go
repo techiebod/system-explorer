@@ -18,6 +18,31 @@ import (
 	"testing"
 )
 
+func declaredFacts(t *testing.T, collection string) map[string]bool {
+	t.Helper()
+	var declaration struct {
+		Collections []struct {
+			Name  string         `json:"name"`
+			Facts map[string]any `json:"facts"`
+		} `json:"collections"`
+	}
+	if err := json.Unmarshal(declarationBytes, &declaration); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range declaration.Collections {
+		if c.Name != collection {
+			continue
+		}
+		out := map[string]bool{}
+		for name := range c.Facts {
+			out[name] = true
+		}
+		return out
+	}
+	t.Fatalf("%s is not declared", collection)
+	return nil
+}
+
 func stagedDisks(t *testing.T) string {
 	t.Helper()
 	source := filepath.Join("..", "..", "..", "corpus", "hardware",
@@ -46,7 +71,7 @@ func runVerb(t *testing.T, request string) (int, string, string) {
 		map[string]string{"SE_REPLAY_DIR": stagedDisks(t)})
 }
 
-func TestObjectServesTheWholeDeviceDirectory(t *testing.T) {
+func TestObjectServesOneObjectAndOnlyItsDeclaredFacts(t *testing.T) {
 	code, stdout, stderr := runVerb(t, "object scsi 0:0:0:0")
 	if code != exitOK {
 		t.Fatalf("exit %d: %s", code, stderr)
@@ -67,20 +92,16 @@ func TestObjectServesTheWholeDeviceDirectory(t *testing.T) {
 	if facts["DeviceType"] != "disk" || facts["State"] != "running" {
 		t.Fatalf("%+v", facts)
 	}
-	// The density: attributes the row does not publish, under sysfs's own
-	// names. `queue_depth` is one no fact declares and no page shows, which
-	// is exactly the kind of question this verb exists to answer.
-	if _, present := facts["sysfs:queue_depth"]; !present {
-		t.Fatalf("the device directory did not reach the response: %+v", facts)
-	}
-	// A declared fact is never respelled beside itself: the row's reading of
-	// an attribute is the declared one, and a raw second spelling would be
-	// two answers to one question.
+	// EVERY fact is one the declaration declares. The verb published the raw
+	// sysfs attributes here when it first landed — `sysfs:queue_depth` and
+	// thirty more — which are values under names no declaration carries: no
+	// sentence, no kind, no temperament anywhere in the estate, and a batch
+	// carrying one is refused by the collator. The raw directory is the
+	// evidence document's, and the test below reads it there.
+	declared := declaredFacts(t, "scsi")
 	for name := range facts {
-		if strings.HasPrefix(name, "sysfs:") {
-			if _, clash := facts[strings.TrimPrefix(name, "sysfs:")]; clash {
-				t.Errorf("%s duplicates a declared fact", name)
-			}
+		if !declared[name] {
+			t.Errorf("%s is served as a fact and declared by nothing", name)
 		}
 	}
 	// The names families and the edges ride the same response, so one request
