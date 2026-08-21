@@ -509,3 +509,45 @@ func TestNoCanaryReachesTheCollatorsChannels(t *testing.T) {
 		t.Fatal("only the credential is withheld; the rest of the row must survive")
 	}
 }
+
+// Gate R1's clause, at the surface a consumer reads: rows come back in
+// the batch's own emission order, each carrying its type. The store test
+// proves the columns; this proves nothing between store and wire quietly
+// re-sorts or drops them.
+func TestRowsServeTypedInAppliedOrder(t *testing.T) {
+	st := openStore(t)
+	if _, err := st.IssueGenerations([]string{"units"}, "sha256:units"); err != nil {
+		t.Fatal(err)
+	}
+	emitted := []store.Object{
+		{ID: "units:-.slice", Name: "-.slice", Type: "slice",
+			Facts: json.RawMessage(`{}`), At: 10},
+		{ID: "units:zfs.target", Name: "zfs.target", Type: "target",
+			Facts: json.RawMessage(`{}`), At: 10},
+		{ID: "units:apparmor.service", Name: "apparmor.service", Type: "service",
+			Facts: json.RawMessage(`{}`), At: 10},
+	}
+	if _, err := st.ApplyCommit("units", store.HostNative, 1, "b1", fakeBootID,
+		emitted); err != nil {
+		t.Fatal(err)
+	}
+	rr := get(t, NewHandler(st, func() float64 { return 26.0 }, fakeBootID),
+		"/v1/collections/units/objects")
+	var rows []struct {
+		ID   string `json:"id"`
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &rows); err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("%d rows", len(rows))
+	}
+	for i, want := range emitted {
+		if rows[i].ID != want.ID || rows[i].Type != want.Type {
+			t.Fatalf("row %d: got (%s, %s), applied (%s, %s) — the wire must "+
+				"serve the producer's order and kind, not its own",
+				i, rows[i].ID, rows[i].Type, want.ID, want.Type)
+		}
+	}
+}

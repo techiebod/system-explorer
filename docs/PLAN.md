@@ -509,9 +509,11 @@ Every known miss, each owned or ruled. A row neither built, owned nor ruled is a
 | 26 | `answer`-list divergences vs the argued column presets (3 same / 14 differ / 14 absent) | unruled accidents | R2 turns each into an explicit ruling |
 | 27 | `system/identity` never compared (gate 3's "no second implementation" claim was false) | recorded | R2/R3b |
 
-#### R1 — structure on the wire (small)
+#### R1 — structure on the wire (small) — **GATE R1 OPEN, 2026-08-21**
 
-`se.stream/1`'s object record and the checkpoint's object shape gain an optional `type`; the store preserves applied order through REST and checkpoint; DESIGN §19's example and the harness follow. Trees are **not** a `depth` member — they derive from relations at the collator, the tier that holds every row. **Gate R1 (mechanical):** a units capture replays through the collator and serves rows typed, in systemctl-status order; contract suites green.
+`se.stream/1`'s object record and the checkpoint's object shape gained an optional `type`; the store preserves applied order through REST and checkpoint; DESIGN §19's example and the harness followed. Trees are **not** a `depth` member — they derive from relations at the collator, the tier that holds every row (the relations themselves are R3c's).
+
+Done in one commit across every implementation, because the half-states were both measured first: a member the reference emits and the ports do not was ninety-two red tests, and a member the ports emit and the corpus lacks is a parity report nobody can read. All twenty collectors emit their kind, the reference seam emits the adapter's own verbatim, thirty corpus variants regenerated with every diff a pure type addition, and the adversaries were re-trued to stay wrong in exactly one way. Rows serve typed, in applied order, asserted at the store (with its reversion drill) and again at the REST surface, because nothing between the two may quietly re-sort.
 
 #### R2 — the guards inverted (small, load-bearing)
 
