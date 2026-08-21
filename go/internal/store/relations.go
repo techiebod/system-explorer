@@ -391,3 +391,63 @@ func PrefixIndex(prefixes map[string]string) (map[string]string, error) {
 	}
 	return out, nil
 }
+
+// UpgradeUnresolved re-tests every unresolved edge against the host as it is
+// NOW, and upgrades in place the ones whose far end has since arrived.
+//
+// The hub does exactly this for the estate — "every asserted relation is
+// re-tested against the intent declaration's objects and the names other
+// hosts publish, and its resolution is upgraded where a match exists" — and
+// the collator owes the same to the collectors under it. Without it an edge
+// resolved only when its OWN collection was collected again, so a host that
+// dialled hardware before storage carried `backs block-device:sda` as an edge
+// into open space until hardware's next round, with the far end sitting in
+// the same store the whole time. That is unobservable-and-healthy rendering
+// as absent, one tier down from where this estate first met it.
+//
+// AN UPGRADE NEVER CHANGES THE KEY. The key is derived from the source, the
+// type, the declared discriminator and the target's name AS PUBLISHED, never
+// from the resolved id — resolution is a property that changes, and a key
+// that changed with it would reset the relation's lifecycle every time the
+// host learned something. So this writes `resolved` and `target_id` and
+// touches nothing else.
+//
+// Downgrades are NOT this function's business: an edge whose target went away
+// is retired by the authority of the commit that no longer publishes it, and
+// re-testing here could only race that.
+func (s *Store) UpgradeUnresolved(resolve func(kind, name string) (string, bool)) (int, error) {
+	rows, err := s.db.Query(
+		`SELECT key, target_kind, target_name FROM relations WHERE resolved = 0`)
+	if err != nil {
+		return 0, err
+	}
+	type pending struct{ key, kind, name string }
+	var waiting []pending
+	for rows.Next() {
+		var p pending
+		if err := rows.Scan(&p.key, &p.kind, &p.name); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		waiting = append(waiting, p)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	upgraded := 0
+	for _, p := range waiting {
+		id, ok := resolve(p.kind, p.name)
+		if !ok {
+			continue
+		}
+		if _, err := s.db.Exec(
+			`UPDATE relations SET resolved = 1, target_id = ? WHERE key = ?`,
+			id, p.key); err != nil {
+			return upgraded, err
+		}
+		upgraded++
+	}
+	return upgraded, nil
+}

@@ -110,6 +110,18 @@ func AcquireOnce(ctx context.Context, st *store.Store, client *wire.Client) erro
 	// walks the producer's own declaration rather than guessing that
 	// "block-device" probably means a collection called "block-devices"
 	// (law 3 — minted from names a collector published, never correlated).
+	//
+	// The RELATION TYPES come from this batch's declaration, because a type's
+	// discriminator and inverse are properties of the collection asserting
+	// the edge. The PREFIX index does not: resolution asks "does anything on
+	// this HOST publish this name" (DESIGN 16), and a host runs several
+	// collectors. Narrowed to one batch's own declaration — as it was until
+	// 2026-08-21 — a hardware disk asserting `backs block-device:sda` could
+	// never resolve, because `block-device` is storage's prefix and hardware
+	// declares nothing of that kind. That is R3c's third acceptance item
+	// exactly, and it failed in the direction that looks like success: the
+	// edge was minted, carried its name, and read as an edge into open space
+	// on a host where the far end was sitting in the same store.
 	prefixes := map[string]string{}
 	types := map[string]map[string]store.RelationType{}
 	for _, c := range decl.Collections {
@@ -123,6 +135,13 @@ func AcquireOnce(ctx context.Context, st *store.Store, client *wire.Client) erro
 			}
 		}
 		types[c.Name] = table
+	}
+	if err := hostPrefixes(st, prefixes); err != nil {
+		// A declaration the store cannot read is not a reason to resolve
+		// against a narrower host than the one that exists: refusing keeps
+		// "I could not tell" from rendering as "nothing claims that name".
+		recordFailure(st, "", "unreadable-declaration", err)
+		return err
 	}
 	byKind, err := store.PrefixIndex(prefixes)
 	if err != nil {
@@ -174,6 +193,17 @@ func AcquireOnce(ctx context.Context, st *store.Store, client *wire.Client) erro
 	}
 	if firstErr != nil {
 		return firstErr
+	}
+
+	// The edges some EARLIER batch left in open space, re-tested now that
+	// this one has landed. Without it an edge resolved only when its own
+	// collection was collected again, so a host that dialled hardware before
+	// storage carried `backs block-device:sda` unresolved until hardware's
+	// next round — with the far end sitting in the same store the whole
+	// time. The hub does this for the estate; this is the same duty one tier
+	// down, and it never re-keys (see UpgradeUnresolved).
+	if _, err := st.UpgradeUnresolved(st.ResolverFor(byKind, scope)); err != nil {
+		return err
 	}
 
 	// harness/crash/boundaries.json post-apply-pre-ack — "applied and
@@ -371,4 +401,31 @@ func checkDeclaredFacts(decl *wire.Declaration, batch *wire.Batch) error {
 // in the store, so it is spelled once and never formatted into.
 func violation(reason, format string, args ...any) *wire.Violation {
 	return &wire.Violation{Reason: reason, Detail: fmt.Sprintf(format, args...)}
+}
+
+// hostPrefixes folds every OTHER declaration this host has learned into the
+// prefix index, so a relation target resolves against the host rather than
+// against the collector that happened to assert it.
+//
+// This batch's own entries win where the two disagree, which is not a merge
+// rule so much as an ordering: the collection being applied right now is
+// being applied under the declaration it arrived with, and a stale document
+// for the same collection must not re-point its prefix underneath it.
+func hostPrefixes(st *store.Store, prefixes map[string]string) error {
+	documents, err := st.DeclarationDocuments()
+	if err != nil {
+		return err
+	}
+	for _, document := range documents {
+		other, _, err := wire.ParseDeclaration([]byte(document))
+		if err != nil {
+			return err
+		}
+		for _, c := range other.Collections {
+			if _, mine := prefixes[c.Name]; !mine {
+				prefixes[c.Name] = c.Prefix
+			}
+		}
+	}
+	return nil
 }

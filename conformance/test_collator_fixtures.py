@@ -81,6 +81,15 @@ REQUIRED = {
     # message that named the very scenario it was refusing. The opinion,
     # roll-up and answer halves of item 7 are gates 5, 4 and 5 — none of
     # those surfaces exists to be judged here.
+    # item 3 — a target one collector asserts, whose far end another
+    # collector publishes, resolves. Every fixture before it ran ONE
+    # collector, so the cross-subsystem join a host actually makes was
+    # checkable nowhere: the driver grew per-stream declarations and a
+    # multi-collector round for this, and the run found the collator
+    # resolving against the batch's own declaration rather than the host —
+    # so `backs block-device:sda` read as an edge into open space with the
+    # far end in the same store.
+    "cross-subsystem-pool-reaches-its-disk": 3,
     # item 1's gate-3 half — two instances with identical native names never
     # merge in one collator's store. The hub half is gate 4's. This scenario
     # was the README's own worked example of the fixture format and had never

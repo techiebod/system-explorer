@@ -1,0 +1,232 @@
+{
+ "name": "cross-subsystem-pool-reaches-its-disk",
+ "acceptance_item": 3,
+ "note": "R3c's third acceptance item, at the tier that can answer it: a zpool member links through to the hardware disk it is. Two collectors, two declarations, one store — storage publishes the pool and the block device, hardware publishes the SCSI disk — and NEITHER names the other. The pool says it is backed-by a block device; the disk says it backs one; both targets resolve to the same row, so the chain pool → block-device → disk exists in the store without either collector knowing the other runs. That is the whole design: a collector states what it observed from where it stands, and the tier holding every row is the one that joins them. The disk's name families ride the same object, so an operator arriving from `zpool status` with a by-id spelling and one arriving from `lsblk` with a kernel name land on one page.",
+ "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"storage\",\"collections\":[{\"name\":\"pools\",\"freshness\":\"60s\",\"prefix\":\"pool\",\"relations\":[{\"type\":\"backed-by\",\"carries_facts\":false,\"inverse_observable\":false}],\"facts\":{\"State\":{\"type\":\"string\",\"temperament\":\"state\"}}},{\"name\":\"block-devices\",\"freshness\":\"60s\",\"prefix\":\"block-device\",\"facts\":{\"SizeBytes\":{\"type\":\"integer\",\"temperament\":\"configuration\"}}}]}",
+ "streams": [
+  {
+   "records": [
+    {
+     "record": "begin",
+     "request": "batch-storage",
+     "batch": "batch-storage",
+     "declaration": "sha256:1f395a526ff5bff2fd1b77366e8424e17f7353c4249c1554c4a5dbd3d371779e",
+     "boot_id": "5e000000-0000-4000-8000-000000000001",
+     "timens": 0,
+     "instance": null,
+     "generations": {
+      "pools": 1,
+      "block-devices": 1
+     }
+    },
+    {
+     "record": "object",
+     "collection": "block-devices",
+     "name": "sda",
+     "facts": {
+      "SizeBytes": 1073741824
+     },
+     "at": 10.1
+    },
+    {
+     "record": "commit",
+     "collection": "block-devices",
+     "generation": 1,
+     "objects": 1,
+     "assertions": 0,
+     "unobservable": 0,
+     "cpu_ms": 0.5
+    },
+    {
+     "record": "object",
+     "collection": "pools",
+     "name": "tank",
+     "facts": {
+      "State": "ONLINE"
+     },
+     "at": 10.2
+    },
+    {
+     "record": "relation_assertion",
+     "collection": "pools",
+     "name": "tank",
+     "type": "backed-by",
+     "vantage": "pools",
+     "target": {
+      "kind": "block-device",
+      "name": "sda"
+     }
+    },
+    {
+     "record": "commit",
+     "collection": "pools",
+     "generation": 1,
+     "objects": 1,
+     "assertions": 1,
+     "unobservable": 0,
+     "cpu_ms": 0.5
+    },
+    {
+     "record": "end",
+     "request": "batch-storage",
+     "batch": "batch-storage",
+     "cpu_ms": 0.5,
+     "wall_ms": 1.0
+    }
+   ],
+   "collector": "storage"
+  },
+  {
+   "records": [
+    {
+     "record": "begin",
+     "request": "batch-hardware",
+     "batch": "batch-hardware",
+     "declaration": "sha256:dbf630451ba0728d508a2f9ed695d6999b86c7eb59c69b103d14e07a0e451d56",
+     "boot_id": "5e000000-0000-4000-8000-000000000001",
+     "timens": 0,
+     "instance": null,
+     "generations": {
+      "scsi": 1
+     }
+    },
+    {
+     "record": "object",
+     "collection": "scsi",
+     "name": "0:0:0:0",
+     "type": "disk",
+     "names": {
+      "stable": {
+       "wwn": [
+        "naa.30493d187fe67bfc",
+        "wwn-0x30493d187fe67bfc"
+       ],
+       "devid": [
+        "scsi-330493d187fe67bfc"
+       ]
+      },
+      "ephemeral": {
+       "kernel": [
+        "/dev/sda"
+       ]
+      }
+     },
+     "facts": {
+      "DeviceType": "disk",
+      "WWN": "naa.30493d187fe67bfc"
+     },
+     "at": 10.3
+    },
+    {
+     "record": "relation_assertion",
+     "collection": "scsi",
+     "name": "0:0:0:0",
+     "type": "backs",
+     "vantage": "scsi",
+     "target": {
+      "kind": "block-device",
+      "name": "sda"
+     }
+    },
+    {
+     "record": "commit",
+     "collection": "scsi",
+     "generation": 1,
+     "objects": 1,
+     "assertions": 1,
+     "unobservable": 0,
+     "cpu_ms": 0.5
+    },
+    {
+     "record": "end",
+     "request": "batch-hardware",
+     "batch": "batch-hardware",
+     "cpu_ms": 0.5,
+     "wall_ms": 1.0
+    }
+   ],
+   "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"hardware\",\"collections\":[{\"name\":\"scsi\",\"freshness\":\"300s\",\"prefix\":\"scsi\",\"relations\":[{\"type\":\"backs\",\"carries_facts\":false,\"inverse_observable\":false},{\"type\":\"attached-to\",\"carries_facts\":false,\"inverse_observable\":false}],\"facts\":{\"DeviceType\":{\"type\":\"string\",\"temperament\":\"configuration\"},\"WWN\":{\"type\":\"string\",\"temperament\":\"configuration\"}}}]}",
+   "collector": "hardware"
+  }
+ ],
+ "expect": {
+  "collections": [
+   {
+    "name": "block-devices",
+    "generation": 1,
+    "stale": false
+   },
+   {
+    "name": "pools",
+    "generation": 1,
+    "stale": false
+   },
+   {
+    "name": "scsi",
+    "generation": 1,
+    "stale": false
+   }
+  ],
+  "objects": [
+   {
+    "collection": "block-devices",
+    "id": "block-devices:sda",
+    "name": "sda",
+    "facts": {
+     "SizeBytes": 1073741824
+    },
+    "at": 10.1
+   },
+   {
+    "collection": "pools",
+    "id": "pools:tank",
+    "name": "tank",
+    "facts": {
+     "State": "ONLINE"
+    },
+    "at": 10.2
+   },
+   {
+    "collection": "scsi",
+    "id": "scsi:0:0:0:0",
+    "name": "0:0:0:0",
+    "facts": {
+     "DeviceType": "disk",
+     "WWN": "naa.30493d187fe67bfc"
+    },
+    "at": 10.3
+   }
+  ],
+  "relations": [
+   {
+    "collection": "pools",
+    "source_name": "tank",
+    "type": "backed-by",
+    "vantage": "pools",
+    "target_kind": "block-device",
+    "target_name": "sda",
+    "target_id": "block-devices:sda",
+    "resolved": true,
+    "facts": null,
+    "observability": "asserted"
+   },
+   {
+    "collection": "scsi",
+    "source_name": "0:0:0:0",
+    "type": "backs",
+    "vantage": "scsi",
+    "target_kind": "block-device",
+    "target_name": "sda",
+    "target_id": "block-devices:sda",
+    "resolved": true,
+    "facts": null,
+    "observability": "asserted"
+   }
+  ],
+  "acked": [
+   "batch-storage",
+   "batch-hardware"
+  ],
+  "rejected": []
+ }
+}

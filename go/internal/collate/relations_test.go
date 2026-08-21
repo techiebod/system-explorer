@@ -520,3 +520,68 @@ func TestTheDiscriminatorKeepsItsType(t *testing.T) {
 		t.Fatal("an absent discriminator and an empty one are different statements")
 	}
 }
+
+// A host runs SEVERAL collectors, and the test resolution applies is "does
+// anything on this HOST claim the name" (DESIGN 16) — not "does this batch's
+// own declaration claim it". A hardware disk asserts `backs` a block device
+// that only the storage collector publishes, and neither declaration names
+// the other's collection.
+//
+// The reversion this proves, and it is the shape that looks like success:
+// building the prefix index from the batch's own declaration alone leaves the
+// edge minted, carrying its name, and UNRESOLVED — an edge into open space on
+// a host where the far end is sitting in the same store. Nothing errors,
+// nothing is dropped, and a reader is told the disk backs something nobody
+// here publishes. This is R3c's third acceptance item, and it failed in that
+// direction until 2026-08-21.
+func TestATargetResolvesAgainstTheHostNotTheBatch(t *testing.T) {
+	storageDecl := []byte(`{"schema":"se.declaration/1","collector":"storage","collections":[
+		{"name":"block-devices","freshness":"1h","prefix":"block-device"}]}`)
+	hardwareDecl := []byte(`{"schema":"se.declaration/1","collector":"hardware","collections":[
+		{"name":"scsi","freshness":"1h","prefix":"scsi",
+		 "relations":[{"type":"backs","carries_facts":false,"inverse_observable":false}]}]}`)
+
+	st := openStore(t)
+
+	storage := newScriptedFake(t, storageDecl, func(issued map[string]uint64) []string {
+		return []string{
+			fmt.Sprintf(`{"record":"begin","request":"s1","batch":"s1","declaration":%q,`+
+				`"boot_id":%q,"timens":0,"instance":null,"generations":{"block-devices":%d}}`,
+				wire.DeclarationHash(storageDecl), fakeBootID, issued["block-devices"]),
+			`{"record":"object","collection":"block-devices","name":"sda","facts":{},"at":10.1}`,
+			commitLine("block-devices", issued["block-devices"], 1, 0),
+			`{"record":"end","request":"s1","batch":"s1","cpu_ms":0.5,"wall_ms":1.0}`,
+		}
+	})
+	if err := AcquireOnce(context.Background(), st, &wire.Client{Socket: storage.Socket}); err != nil {
+		t.Fatal(err)
+	}
+
+	// The hardware batch lands AFTER storage's, so the edge must resolve as
+	// it is asserted — the later-upgrade path cannot be what does it here,
+	// which is what makes this test isolate the host-wide index.
+	hardware := newScriptedFake(t, hardwareDecl, func(issued map[string]uint64) []string {
+		return []string{
+			fmt.Sprintf(`{"record":"begin","request":"h1","batch":"h1","declaration":%q,`+
+				`"boot_id":%q,"timens":0,"instance":null,"generations":{"scsi":%d}}`,
+				wire.DeclarationHash(hardwareDecl), fakeBootID, issued["scsi"]),
+			`{"record":"object","collection":"scsi","name":"0:0:0:0","type":"disk","facts":{},"at":10.2}`,
+			`{"record":"relation_assertion","collection":"scsi","name":"0:0:0:0","type":"backs",` +
+				`"vantage":"scsi","target":{"kind":"block-device","name":"sda"}}`,
+			commitLine("scsi", issued["scsi"], 1, 1),
+			`{"record":"end","request":"h1","batch":"h1","cpu_ms":0.5,"wall_ms":1.0}`,
+		}
+	})
+	if err := AcquireOnce(context.Background(), st, &wire.Client{Socket: hardware.Socket}); err != nil {
+		t.Fatal(err)
+	}
+
+	edge := relationsByTarget(t, st, "scsi")["sda"]
+	if edge.Key == "" {
+		t.Fatal("the edge was not minted at all")
+	}
+	if !edge.Resolved || edge.TargetID != store.MintID("block-devices", "sda") {
+		t.Fatalf("a target another collector publishes must resolve against the "+
+			"host: %+v", edge)
+	}
+}

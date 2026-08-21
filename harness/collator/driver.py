@@ -157,6 +157,17 @@ def _stream_validator() -> Draft202012Validator:
 @dataclass
 class Stream:
     records: list[dict]
+    # The declaration THIS collector serves. Defaults to the fixture's, and
+    # differs where the scenario needs it to: two collectors on one host are
+    # two declarations, which is how the cross-subsystem join actually
+    # happens — a pool and the disk backing it are published by different
+    # binaries, neither of which knows the other runs.
+    declaration: bytes | None = None
+    # The collector this stream comes FROM. Naming it makes the fixture a
+    # multi-collector one: every stream is served by its own fake, all
+    # registered at once, and the collator runs a single round against the
+    # set — which is a host, not a sequence of rounds against one binary.
+    collector: str | None = None
     instance: str | None = None
     wind_issued: dict[str, int] = field(default_factory=dict)
     # This round's begin commits to a hash the fixture's declaration does not
@@ -181,6 +192,12 @@ class Fixture:
     expect: dict
     concurrent: bool
     must_fail: str | None
+
+
+def _stream_collections(own: bytes | None, fallback: list[str]) -> list[str]:
+    if own is None:
+        return fallback
+    return [c["name"] for c in json.loads(own)["collections"]]
 
 
 def _refuse_unknown(members: dict, allowed: set[str], where: str) -> None:
@@ -226,6 +243,20 @@ def load_fixture(path: Path) -> Fixture:
         raise FixtureError(f"{path.name}: concurrent must be a boolean")
 
     streams = _load_streams(doc, declaration, collections, concurrent, path.name)
+    named = [s.collector for s in streams if s.collector]
+    if named and len(named) != len(streams):
+        raise FixtureError(
+            f"{path.name}: some streams name a collector and some do not — a "
+            "fixture is either several collectors on one host or several rounds "
+            "against one, and the two are judged differently")
+    if named and len(set(named)) != len(named):
+        raise FixtureError(
+            f"{path.name}: two streams name the same collector; use one stream "
+            "per collector, or drop the names to run them as rounds")
+    if named and concurrent:
+        raise FixtureError(
+            f"{path.name}: a multi-collector fixture is not the concurrent one "
+            "— concurrency here is about generations issued to ONE collector")
     if concurrent and len(streams) < 2:
         raise FixtureError(f"{path.name}: a concurrent fixture interleaves at least two streams")
 
@@ -297,7 +328,7 @@ def _load_streams(
             raise FixtureError(f"{label}: a stream is an object")
         _refuse_unknown(
             raw,
-            {"records", "instance", "collector", "wind_issued",
+            {"records", "declaration", "instance", "collector", "wind_issued",
              "declaration_unknown"},
             label,
         )
@@ -317,15 +348,31 @@ def _load_streams(
                 "a severed stream is the crash harness's subject, not a fixture's"
             )
         begin = records[0]
+        own_declaration = raw.get("declaration")
+        if own_declaration is not None:
+            if not isinstance(own_declaration, str) or not own_declaration.strip():
+                raise FixtureError(
+                    f"{label}: declaration must be the exact bytes this "
+                    "collector serves")
+            try:
+                json.loads(own_declaration)
+            except json.JSONDecodeError as err:
+                raise FixtureError(f"{label}: declaration is not JSON: {err}") from err
+            own_declaration = own_declaration.encode()
+        stream_hash = (
+            "sha256:" + hashlib.sha256(own_declaration).hexdigest()
+            if own_declaration is not None else decl_hash
+        )
         unknown_declaration = bool(raw.get("declaration_unknown"))
-        if begin["declaration"] != decl_hash and not unknown_declaration:
+        if begin["declaration"] != stream_hash and not unknown_declaration:
             raise FixtureError(
-                f"{label}: begin declares {begin['declaration']} but the fixture's "
-                f"declaration bytes hash to {decl_hash} — the collator would hold "
+                f"{label}: begin declares {begin['declaration']} but this "
+                f"stream's declaration bytes hash to {stream_hash} — the "
+                "collator would hold "
                 "this batch as unknown, which is a different scenario. Set "
                 "declaration_unknown on this stream to make that scenario the point"
             )
-        if begin["declaration"] == decl_hash and unknown_declaration:
+        if begin["declaration"] == stream_hash and unknown_declaration:
             raise FixtureError(
                 f"{label}: declaration_unknown is set but begin's hash is the "
                 "fixture's own — the fixture argues with itself, and the "
@@ -352,12 +399,16 @@ def _load_streams(
             if not isinstance(wind, dict):
                 raise FixtureError(f"{label}: wind_issued must map collection to integer")
             for name, value in wind.items():
-                if name not in collections:
+                if name not in _stream_collections(own_declaration, collections):
                     raise FixtureError(f"{label}: wind_issued names undeclared collection {name!r}")
                 if not isinstance(value, int) or value < 0:
                     raise FixtureError(f"{label}: wind_issued.{name} must be a non-negative integer")
+        collector = raw.get("collector")
+        if collector is not None and (not isinstance(collector, str) or not collector.strip()):
+            raise FixtureError(f"{label}: collector names the collector this stream comes from")
         streams.append(Stream(
-            records=records, instance=instance, wind_issued=dict(wind),
+            records=records, declaration=own_declaration, collector=collector,
+            instance=instance, wind_issued=dict(wind),
             declaration_unknown=unknown_declaration,
         ))
     return streams
@@ -1030,7 +1081,9 @@ def run_fixture(fixture: Fixture, binary: Path | None = None) -> None:
     binary = binary or collate_binary()
     state_dir = tempfile.mkdtemp(prefix="se-fx-state")
     try:
-        if fixture.concurrent:
+        if any(s.collector for s in fixture.streams):
+            _run_multi_collector(fixture, binary, state_dir)
+        elif fixture.concurrent:
             _run_concurrent(fixture, binary, state_dir)
         else:
             _assert_never_re_keyed(
@@ -1042,6 +1095,35 @@ def run_fixture(fixture: Fixture, binary: Path | None = None) -> None:
             _assert_cross_boot(fixture, state_dir, binary)
     finally:
         shutil.rmtree(state_dir, ignore_errors=True)
+
+
+def _run_multi_collector(fixture: Fixture, binary: Path, state_dir: str) -> None:
+    """Several collectors on one host, one round, one store.
+
+    The shape every real deployment has and no fixture could express: the
+    collator dials a set of collectors, each serving its own declaration, and
+    the join between what they publish is the collator's alone to make. A
+    relation asserted by one whose target only the other publishes is exactly
+    the cross-subsystem case DESIGN 16 exists for, and it was reachable by no
+    fixture until 2026-08-21 — every one of them ran one collector, so a
+    target resolving across two was checkable nowhere.
+    """
+    fakes = [FakeCollector(stream.declaration or fixture.declaration)
+             for stream in fixture.streams]
+    try:
+        for fake, stream in zip(fakes, fixture.streams):
+            fake.queue(render(stream.records))
+        collectors = {stream.collector: fake.socket_path
+                      for fake, stream in zip(fakes, fixture.streams)}
+        proc = run_oneshot(binary, state_dir, collectors)
+        assert proc.returncode == 0, (
+            f"{fixture.name}: the round exited {proc.returncode}:\n{proc.stderr}"
+        )
+        for fake in fakes:
+            fake.check()
+    finally:
+        for fake in fakes:
+            fake.close()
 
 
 def _run_sequential(fixture: Fixture, binary: Path, state_dir: str) -> list[dict[tuple, str]]:
@@ -1085,7 +1167,7 @@ def _run_concurrent(fixture: Fixture, binary: Path, state_dir: str) -> None:
     try:
         last = len(fixture.streams) - 1
         for i, stream in enumerate(fixture.streams):
-            fake = FakeCollector(fixture.declaration)
+            fake = FakeCollector(stream.declaration or fixture.declaration)
             if i > 0:
                 # Held until the previous stream's collect request has
                 # arrived, which proves its generations were issued first.
