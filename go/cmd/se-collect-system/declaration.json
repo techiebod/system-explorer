@@ -7,7 +7,16 @@
       "/etc/os-release",
       "/usr/lib/os-release",
       "/proc/sys/kernel/random/boot_id",
-      "/proc/self/timens_offsets"
+      "/proc/self/timens_offsets",
+      "/proc/uptime",
+      "/proc/loadavg",
+      "/proc/stat",
+      "/proc/meminfo",
+      "/proc/pressure",
+      "/proc/net/dev",
+      "/proc/diskstats",
+      "/proc/spl/kstat/zfs/arcstats",
+      "/sys/block"
     ],
     "commands": [
       "busctl"
@@ -229,6 +238,492 @@
         }
       ],
       "redaction_exemption": "every served fact is a declared scalar or server-name list from the two GetAll replies; the location-classed members (timezone, server names) are declared as such and handled by disclosure policy, and no free-form document is served as evidence"
+    },
+    {
+      "name": "overview",
+      "question": "how loaded is this host right now, and is anything actually stalling?",
+      "prefix": "overview",
+      "freshness": "60s",
+      "perishability": "sampled",
+      "answer": [
+        "LoadAvg1",
+        "LoadPerCpu1",
+        "MemUsedPercent",
+        "MemAvailableBytes",
+        "SwapUsedPercent",
+        "UptimeSeconds"
+      ],
+      "ceiling": {
+        "records": 4,
+        "bytes": 262144
+      },
+      "facts": {
+        "UptimeSeconds": {
+          "type": "integer",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Seconds since boot, whole. A counter: it only advances, and two correct readings differ by the time between them.",
+          "from": "/"
+        },
+        "BootedAt": {
+          "type": "timestamp",
+          "temperament": "gauge",
+          "kind": "derived",
+          "discloses": "nothing",
+          "sentence": "The boot moment, derived as now minus uptime \u2014 a constant of the boot computed against a moving clock, so two correct readings jitter by a second and it is declared as the gauge that makes that honest.",
+          "derived_from": [
+            "UptimeSeconds"
+          ]
+        },
+        "LoadAvg1": {
+          "type": "number",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The kernel's one-minute load average: runnable plus uninterruptible tasks, decaying."
+        },
+        "LoadAvg5": {
+          "type": "number",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The five-minute load average."
+        },
+        "LoadAvg15": {
+          "type": "number",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The fifteen-minute load average."
+        },
+        "CpuCount": {
+          "type": "integer",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Logical CPUs available to this host, the denominator LoadPerCpu1 is judged against."
+        },
+        "LoadPerCpu1": {
+          "type": "number",
+          "temperament": "gauge",
+          "kind": "derived",
+          "discloses": "nothing",
+          "sentence": "LoadAvg1 divided by CpuCount, two decimals: the number that makes load comparable across hosts of different widths.",
+          "derived_from": [
+            "LoadAvg1",
+            "CpuCount"
+          ]
+        },
+        "MemTotalBytes": {
+          "type": "integer",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Physical memory, bytes."
+        },
+        "MemAvailableBytes": {
+          "type": "integer",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "What the kernel estimates it could reclaim without swapping \u2014 the honest headroom figure, not free."
+        },
+        "MemUsedBytes": {
+          "type": "integer",
+          "temperament": "gauge",
+          "kind": "derived",
+          "discloses": "nothing",
+          "sentence": "MemTotal minus MemAvailable, bytes.",
+          "derived_from": [
+            "MemTotalBytes",
+            "MemAvailableBytes"
+          ]
+        },
+        "MemUsedPercent": {
+          "type": "integer",
+          "temperament": "gauge",
+          "kind": "derived",
+          "discloses": "nothing",
+          "sentence": "MemUsedBytes over MemTotalBytes, rounded. On a ZFS host this counts the ARC as used; the adjusted figure beside it is what the memory rules judge.",
+          "derived_from": [
+            "MemUsedBytes",
+            "MemTotalBytes"
+          ],
+          "denominator": "MemTotalBytes"
+        },
+        "MemUsedPercentAdjusted": {
+          "type": "integer",
+          "temperament": "gauge",
+          "kind": "derived",
+          "discloses": "nothing",
+          "sentence": "Memory used OUTSIDE the ZFS ARC, as a share of total: the ARC counts as used yet shrinks under demand, so a cache-warm ZFS host reads nearly full while under no pressure at all. Equal to MemUsedPercent where there is no ARC. This is the number the memory rules fire on \u2014 derived here so the judgement can be data rather than arithmetic (DESIGN 17).",
+          "derived_from": [
+            "MemUsedBytes",
+            "ArcSizeBytes",
+            "MemTotalBytes"
+          ],
+          "denominator": "MemTotalBytes"
+        },
+        "SwapTotalBytes": {
+          "type": "integer",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Swap capacity, bytes."
+        },
+        "SwapUsedBytes": {
+          "type": "integer",
+          "temperament": "gauge",
+          "kind": "derived",
+          "discloses": "nothing",
+          "sentence": "Swap in use, bytes.",
+          "derived_from": [
+            "SwapTotalBytes"
+          ]
+        },
+        "SwapUsedPercent": {
+          "type": "integer",
+          "temperament": "gauge",
+          "kind": "derived",
+          "discloses": "nothing",
+          "sentence": "Swap used over swap total, rounded. Absent on a swapless host: no swap means no swap pressure to be innocent of, and 0% would claim otherwise.",
+          "derived_from": [
+            "SwapUsedBytes",
+            "SwapTotalBytes"
+          ],
+          "denominator": "SwapTotalBytes"
+        },
+        "ArcSizeBytes": {
+          "type": "integer",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The ZFS ARC's current size. Absent without the zfs module \u2014 absence is the fact; zero would read as an empty cache."
+        },
+        "ArcTargetBytes": {
+          "type": "integer",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The size the ARC is currently aiming for (arcstats c)."
+        },
+        "CpuTimes": {
+          "type": "object",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Cumulative CPU time per state since boot, USER_HZ ticks, in the kernel's own field names. Counters, not a percentage: this collector holds no previous sample, so a client derives utilisation across the window it actually observed. Iowait is the member worth reading alone \u2014 a host can be 90% busy doing nothing but waiting for a disk."
+        },
+        "NetCounters": {
+          "type": "object",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Per-interface cumulative RX/TX bytes since boot. Counters, never rates, for the same no-previous-sample reason."
+        },
+        "DiskCounters": {
+          "type": "object",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Per-whole-device cumulative read/write bytes plus IoTicksMs and WeightedIoMs \u2014 the pair that separates a saturated device from a merely busy one, which bytes per second cannot."
+        },
+        "PsiCpuSomeAvg10": {
+          "type": "number",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The kernel's decaying 10-second share of wall time in which at least one task was waiting on cpu. Absent without CONFIG_PSI, never zero."
+        },
+        "PsiCpuSomeAvg60": {
+          "type": "number",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The kernel's decaying 60-second share of wall time in which at least one task was waiting on cpu. Absent without CONFIG_PSI, never zero."
+        },
+        "PsiCpuSomeAvg300": {
+          "type": "number",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The kernel's decaying 300-second share of wall time in which at least one task was waiting on cpu. Absent without CONFIG_PSI, never zero."
+        },
+        "PsiMemorySomeAvg10": {
+          "type": "number",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The kernel's decaying 10-second share of wall time in which at least one task was waiting on memory. Absent without CONFIG_PSI, never zero."
+        },
+        "PsiMemorySomeAvg60": {
+          "type": "number",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The kernel's decaying 60-second share of wall time in which at least one task was waiting on memory. Absent without CONFIG_PSI, never zero."
+        },
+        "PsiMemorySomeAvg300": {
+          "type": "number",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The kernel's decaying 300-second share of wall time in which at least one task was waiting on memory. Absent without CONFIG_PSI, never zero."
+        },
+        "PsiMemoryFullAvg10": {
+          "type": "number",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The kernel's decaying 10-second share of wall time in which every task with work to do was stalled on memory. Absent without CONFIG_PSI, never zero."
+        },
+        "PsiMemoryFullAvg60": {
+          "type": "number",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The kernel's decaying 60-second share of wall time in which every task with work to do was stalled on memory. Absent without CONFIG_PSI, never zero."
+        },
+        "PsiMemoryFullAvg300": {
+          "type": "number",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The kernel's decaying 300-second share of wall time in which every task with work to do was stalled on memory. Absent without CONFIG_PSI, never zero."
+        },
+        "PsiIoSomeAvg10": {
+          "type": "number",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The kernel's decaying 10-second share of wall time in which at least one task was waiting on io. Absent without CONFIG_PSI, never zero."
+        },
+        "PsiIoSomeAvg60": {
+          "type": "number",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The kernel's decaying 60-second share of wall time in which at least one task was waiting on io. Absent without CONFIG_PSI, never zero."
+        },
+        "PsiIoSomeAvg300": {
+          "type": "number",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The kernel's decaying 300-second share of wall time in which at least one task was waiting on io. Absent without CONFIG_PSI, never zero."
+        },
+        "PsiIoFullAvg10": {
+          "type": "number",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The kernel's decaying 10-second share of wall time in which every task with work to do was stalled on io. Absent without CONFIG_PSI, never zero."
+        },
+        "PsiIoFullAvg60": {
+          "type": "number",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The kernel's decaying 60-second share of wall time in which every task with work to do was stalled on io. Absent without CONFIG_PSI, never zero."
+        },
+        "PsiIoFullAvg300": {
+          "type": "number",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The kernel's decaying 300-second share of wall time in which every task with work to do was stalled on io. Absent without CONFIG_PSI, never zero."
+        }
+      },
+      "rules": [
+        {
+          "key": "memory-critical",
+          "level": "critical",
+          "grounds": "threshold",
+          "when": {
+            "fact": "MemUsedPercentAdjusted",
+            "at_least": 95
+          },
+          "sentence": "Memory outside the ZFS ARC is nearly exhausted; MemAvailable (what the kernel could reclaim without swapping) is almost gone.",
+          "cites": [
+            "MemUsedPercentAdjusted",
+            "MemAvailableBytes",
+            "MemTotalBytes"
+          ]
+        },
+        {
+          "key": "memory-available",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "all": [
+              {
+                "fact": "MemUsedPercentAdjusted",
+                "at_least": 90
+              },
+              {
+                "not": {
+                  "fact": "MemUsedPercentAdjusted",
+                  "at_least": 95
+                }
+              }
+            ]
+          },
+          "sentence": "Memory outside the ZFS ARC is running low.",
+          "cites": [
+            "MemUsedPercentAdjusted",
+            "MemAvailableBytes",
+            "MemTotalBytes"
+          ]
+        },
+        {
+          "key": "memory-occupancy",
+          "level": "info",
+          "grounds": "threshold",
+          "when": {
+            "all": [
+              {
+                "fact": "MemUsedPercent",
+                "at_least": 90
+              },
+              {
+                "not": {
+                  "fact": "MemUsedPercentAdjusted",
+                  "at_least": 90
+                }
+              },
+              {
+                "fact": "ArcSizeBytes",
+                "present": true
+              }
+            ]
+          },
+          "sentence": "Memory reads nearly full, but most of it is the ZFS ARC \u2014 the cache yields under demand, so this is occupancy, not pressure.",
+          "cites": [
+            "MemUsedPercent",
+            "MemUsedPercentAdjusted",
+            "ArcSizeBytes"
+          ]
+        },
+        {
+          "key": "swap-used",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "fact": "SwapUsedPercent",
+            "at_least": 50
+          },
+          "sentence": "Swap is heavily used; memory demand has exceeded RAM.",
+          "cites": [
+            "SwapUsedPercent",
+            "SwapUsedBytes",
+            "SwapTotalBytes"
+          ]
+        },
+        {
+          "key": "psi-memory-critical",
+          "level": "critical",
+          "grounds": "threshold",
+          "when": {
+            "fact": "PsiMemoryFullAvg60",
+            "at_least": 20.0
+          },
+          "sentence": "This host made no progress for a fifth of the last minute: every task that had work to do was waiting on memory reclaim (thrashing).",
+          "cites": [
+            "PsiMemoryFullAvg60"
+          ]
+        },
+        {
+          "key": "psi-memory",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "all": [
+              {
+                "fact": "PsiMemoryFullAvg60",
+                "at_least": 5.0
+              },
+              {
+                "not": {
+                  "fact": "PsiMemoryFullAvg60",
+                  "at_least": 20.0
+                }
+              }
+            ]
+          },
+          "sentence": "Every task that had work to do was waiting on memory reclaim for part of the last minute. Tasks with nothing to do are not counted.",
+          "cites": [
+            "PsiMemoryFullAvg60"
+          ]
+        },
+        {
+          "key": "psi-cpu",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "fact": "PsiCpuSomeAvg60",
+            "at_least": 60.0
+          },
+          "sentence": "At least one task was waiting for CPU for most of the last minute \u2014 some, not full: a weaker claim than the memory and I/O stalls, worded so identical-looking percentages cannot be read as one thing.",
+          "cites": [
+            "PsiCpuSomeAvg60"
+          ]
+        },
+        {
+          "key": "psi-io",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "fact": "PsiIoFullAvg60",
+            "at_least": 20.0
+          },
+          "sentence": "This host made no progress for a fifth of the last minute: every task that had work to do was waiting on I/O. Tasks with nothing to do are not counted.",
+          "cites": [
+            "PsiIoFullAvg60"
+          ]
+        }
+      ],
+      "redaction_exemption": "every fact is a number, a timestamp, or a counter map keyed by interface and device names; on the payloads this collector reads those names are kernel-assigned identifiers, and no free-form document is served as evidence",
+      "reference_commands": [
+        {
+          "purpose": "the load and memory numbers, by hand",
+          "argv": [
+            "uptime"
+          ]
+        },
+        {
+          "purpose": "the same memory figures in bytes",
+          "argv": [
+            "free",
+            "-b"
+          ]
+        },
+        {
+          "purpose": "the stall shares",
+          "argv": [
+            "cat",
+            "/proc/pressure/cpu",
+            "/proc/pressure/memory",
+            "/proc/pressure/io"
+          ]
+        },
+        {
+          "purpose": "the raw counters",
+          "argv": [
+            "cat",
+            "/proc/stat",
+            "/proc/net/dev",
+            "/proc/diskstats"
+          ]
+        },
+        {
+          "purpose": "the ARC, where ZFS runs",
+          "argv": [
+            "cat",
+            "/proc/spl/kstat/zfs/arcstats"
+          ]
+        }
+      ]
     }
   ]
 }

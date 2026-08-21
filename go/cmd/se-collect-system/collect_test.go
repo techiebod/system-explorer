@@ -23,6 +23,10 @@ type fakeSource struct {
 	tderr    error
 	timesync []byte
 	tserr    error
+	procs    map[string]string
+	blocks   map[string]bool
+	ncpu     int
+	now      float64
 }
 
 func (f *fakeSource) note(what string) float64 {
@@ -59,6 +63,18 @@ func (f *fakeSource) timesync1() ([]byte, error) {
 	}
 	return f.timesync, f.tserr
 }
+func (f *fakeSource) proc(name string) string {
+	f.note("proc:" + name)
+	return f.procs[name]
+}
+func (f *fakeSource) sysBlock() map[string]bool {
+	if f.blocks == nil {
+		return map[string]bool{}
+	}
+	return f.blocks
+}
+func (f *fakeSource) cpus() int        { return f.ncpu }
+func (f *fakeSource) wallNow() float64 { return f.now }
 func (f *fakeSource) hostname() (string, error) {
 	f.note("hostname")
 	if f.hosterr != nil {

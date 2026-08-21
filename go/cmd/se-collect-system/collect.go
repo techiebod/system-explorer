@@ -130,6 +130,7 @@ func collect(stdout, stderr io.Writer, src source, order []string, generations m
 	served := map[string]func(*emitter, io.Writer, source, string, uint64, *int) int{
 		"identity": collectIdentity,
 		"time":     collectTime,
+		"overview": collectOverview,
 	}
 	objects := 0
 	for _, collection := range order {

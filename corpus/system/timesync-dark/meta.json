@@ -1,25 +1,63 @@
 {
   "collector": "system",
-  "collections": ["identity", "time"],
+  "collections": [
+    "identity",
+    "time",
+    "overview"
+  ],
   "variant": "timesync-dark",
   "provenance": "captured-then-scrubbed",
   "os": "ubuntu",
   "os_version": "26.04",
   "source_version": "systemd 258 (ubuntu 26.04)",
-  "captured": "2026-08-21T14:48:00Z",
+  "captured": "2026-08-21T15:20:00Z",
   "regenerable": true,
   "canaries": [],
   "anonymised": true,
-  "note": "The chrony shape, captured from life rather than staged: this guest's kernel reports the clock synchronised (NTPSynchronized true) while systemd-timesyncd is not running, so timesync1's GetAll genuinely failed at capture and is staged as `false` — the request-observed-to-fail marker, distinct from a request nobody staged, which the replay seam refuses as uncaptured. The four timesync facts must come back as unobservable records with the one shared spelling, the collection must still commit its object, and the time-sync rule must NOT fire: the clock IS synchronised, whoever synchronised it.",
+  "note": "The chrony shape, captured from life rather than staged: this guest's kernel reports the clock synchronised (NTPSynchronized true) while systemd-timesyncd is not running, so timesync1's GetAll genuinely failed at capture and is staged as `false` \u2014 the request-observed-to-fail marker, distinct from a request nobody staged, which the replay seam refuses as uncaptured. The four timesync facts must come back as unobservable records with the one shared spelling, the collection must still commit its object, and the time-sync rule must NOT fire: the clock IS synchronised, whoever synchronised it. Re-captured 2026-08-21T15:20Z to add the overview collection: ten proc documents plus the /sys/block listing, arcstats honestly not staged because neither guest runs ZFS \u2014 the ARC facts must come back absent, and MemUsedPercentAdjusted must equal MemUsedPercent.",
   "anchors": [
-    {"collection": "identity", "object": "host-77df07",
-     "fact": "OsId", "value": "ubuntu"},
-    {"collection": "time", "object": "host-77df07",
-     "fact": "NTPSynchronized", "value": true},
-    {"collection": "time", "object": "host-77df07",
-     "fact": "CurrentTime", "value": "2026-08-21T14:48:50Z"},
-    {"collection": "identity", "commit_objects": 1},
-    {"collection": "time", "commit_objects": 1}
+    {
+      "collection": "identity",
+      "object": "host-77df07",
+      "fact": "OsId",
+      "value": "ubuntu"
+    },
+    {
+      "collection": "time",
+      "object": "host-77df07",
+      "fact": "NTPSynchronized",
+      "value": true
+    },
+    {
+      "collection": "time",
+      "object": "host-77df07",
+      "fact": "CurrentTime",
+      "value": "2026-08-21T15:04:44Z"
+    },
+    {
+      "collection": "overview",
+      "object": "host",
+      "fact": "MemTotalBytes",
+      "value": 2053214208
+    },
+    {
+      "collection": "overview",
+      "object": "host",
+      "fact": "MemUsedPercent",
+      "value": 18
+    },
+    {
+      "collection": "identity",
+      "commit_objects": 1
+    },
+    {
+      "collection": "time",
+      "commit_objects": 1
+    },
+    {
+      "collection": "overview",
+      "commit_objects": 1
+    }
   ],
-  "anchors_note": "Staged truth transcribed by hand: TimeUSec 1787323730222360 rendered at seconds precision UTC. The unobservable set (CurrentNTPServer, SystemNTPServers, FallbackNTPServers, PollIntervalSeconds — reason unavailable, one constant detail) and the commit's unobservable count of 4 are pinned by the expected stream."
+  "anchors_note": "Staged truth transcribed by hand: TimeUSec 1787323730222360 rendered at seconds precision UTC. The unobservable set (CurrentNTPServer, SystemNTPServers, FallbackNTPServers, PollIntervalSeconds \u2014 reason unavailable, one constant detail) and the commit's unobservable count of 4 are pinned by the expected stream. Overview anchors transcribed from proc-meminfo (kB times 1024; the percentage under Python's half-even round, both implementations' rule); the overview object's name is the reference's own constant 'host'."
 }

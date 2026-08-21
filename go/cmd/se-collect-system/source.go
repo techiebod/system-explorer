@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -47,6 +48,20 @@ type source interface {
 	// reading; anything else is "I could not run".
 	timedate1() ([]byte, error)
 	timesync1() ([]byte, error)
+	// proc returns one overview document collapsed to "" when unreadable —
+	// the reference's own nx.read semantics, absence and permission alike,
+	// so the two implementations lose the same facts to the same darkness.
+	// Under replay a payload nobody staged reads as a file the captured
+	// machine lacked; the meta anchors are what catch a thin capture.
+	proc(name string) string
+	// sysBlock is the whole-device membership /proc/diskstats rows are
+	// filtered against (partition rows double-count their parent).
+	sysBlock() map[string]bool
+	cpus() int
+	// wallNow is epoch seconds for the one derived-against-wall fact
+	// (BootedAt); replay pins it via SE_REPLAY_NOW, and 0 means no pin —
+	// the fact goes absent rather than moving with the replaying machine.
+	wallNow() float64
 	// costs are end's advisory self-report (DESIGN 19): bounded by the
 	// judge, authenticated only by the collator's own slice accounting.
 	costs() (cpuMS, wallMS float64)
@@ -54,11 +69,16 @@ type source interface {
 
 func newSource(getenv func(string) string) source {
 	if dir := getenv("SE_REPLAY_DIR"); dir != "" {
-		// SE_REPLAY_NOW is deliberately not consulted: this collector
-		// derives nothing from wall time, so the pin has nothing here to
-		// freeze — reading it anyway would invent a dependency the
-		// declaration does not admit to.
-		return replaySource{dir: dir}
+		// SE_REPLAY_NOW pins the one wall reading overview derives
+		// BootedAt against; unset leaves 0 and the fact goes absent
+		// rather than moving with the replaying machine.
+		pin := 0.0
+		if raw := getenv("SE_REPLAY_NOW"); raw != "" {
+			if moment, err := time.Parse(time.RFC3339, raw); err == nil {
+				pin = float64(moment.UnixNano()) / 1e9
+			}
+		}
+		return replaySource{dir: dir, nowPin: pin}
 	}
 	return liveSource{started: time.Now()}
 }
@@ -157,6 +177,46 @@ func (liveSource) timesync1() ([]byte, error) {
 	return busCall(os.Stderr, timesync1Dest, timesync1Request)
 }
 
+// The live homes of the overview documents, payload name to path — one
+// table, because the capture recipe and the replay directory are keyed on
+// the same stems and a second spelling would drift.
+var procPaths = map[string]string{
+	"proc-uptime":          "/proc/uptime",
+	"proc-loadavg":         "/proc/loadavg",
+	"proc-stat":            "/proc/stat",
+	"proc-meminfo":         "/proc/meminfo",
+	"proc-pressure-cpu":    "/proc/pressure/cpu",
+	"proc-pressure-memory": "/proc/pressure/memory",
+	"proc-pressure-io":     "/proc/pressure/io",
+	"proc-net-dev":         "/proc/net/dev",
+	"proc-diskstats":       "/proc/diskstats",
+	"proc-arcstats":        "/proc/spl/kstat/zfs/arcstats",
+}
+
+func (liveSource) proc(name string) string {
+	raw, err := os.ReadFile(procPaths[name])
+	if err != nil {
+		return ""
+	}
+	return string(raw)
+}
+
+func (liveSource) sysBlock() map[string]bool {
+	entries, err := os.ReadDir("/sys/block")
+	if err != nil {
+		return map[string]bool{}
+	}
+	out := map[string]bool{}
+	for _, entry := range entries {
+		out[entry.Name()] = true
+	}
+	return out
+}
+
+func (liveSource) cpus() int { return runtime.NumCPU() }
+
+func (liveSource) wallNow() float64 { return float64(time.Now().UnixNano()) / 1e9 }
+
 func (s liveSource) costs() (float64, float64) {
 	cpu := 0.0
 	var usage syscall.Rusage
@@ -184,7 +244,13 @@ const replayBootID = "5e000000-0000-4000-8000-000000000001"
 // state something about a machine nobody observed.
 var errUncaptured = errors.New("not captured in this replay directory")
 
-type replaySource struct{ dir string }
+type replaySource struct {
+	dir string
+	// The pinned wall reading (SE_REPLAY_NOW, the variant's captured
+	// stamp): the one clock BootedAt is derived against, frozen so the
+	// derivation is the same number on every machine that replays.
+	nowPin float64
+}
 
 func (r replaySource) bootID() (string, error) {
 	raw, err := os.ReadFile(filepath.Join(r.dir, "boot_id"))
@@ -254,6 +320,42 @@ func (r replaySource) bus(request string) ([]byte, error) {
 
 func (r replaySource) timedate1() ([]byte, error) { return r.bus(timedate1Request) }
 func (r replaySource) timesync1() ([]byte, error) { return r.bus(timesync1Request) }
+
+func (r replaySource) proc(name string) string {
+	raw, err := os.ReadFile(filepath.Join(r.dir, name))
+	if err != nil {
+		return ""
+	}
+	return string(raw)
+}
+
+func (r replaySource) sysBlock() map[string]bool {
+	raw, err := os.ReadFile(filepath.Join(r.dir, "sys-block"))
+	if err != nil {
+		return map[string]bool{}
+	}
+	out := map[string]bool{}
+	for _, name := range strings.Fields(string(raw)) {
+		out[name] = true
+	}
+	return out
+}
+
+// cpus under replay is the captured machine's own online count, read off
+// its staged /proc/stat cpuN lines: deterministic on every machine that
+// replays, and the same number its loadavg was living with.
+func (r replaySource) cpus() int {
+	count := 0
+	for _, line := range strings.Split(r.proc("proc-stat"), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) > 0 && len(fields[0]) > 3 && strings.HasPrefix(fields[0], "cpu") {
+			count++
+		}
+	}
+	return count
+}
+
+func (r replaySource) wallNow() float64 { return r.nowPin }
 
 func (replaySource) costs() (float64, float64) { return 0.5, 1.0 }
 

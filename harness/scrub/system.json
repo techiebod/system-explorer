@@ -45,5 +45,72 @@
   },
   "bus:*.data.0.*.data.*.*": {
     "discloses": "nothing"
+  },
+  "#overview": "the overview documents are kernel counter and gauge text: numbers, kernel-assigned interface and device names (enp1s0, vda), field labels. Nothing identifies the machine beyond what the hostname and boot id passes already substitute. COVERAGE, stated: an estate host's interface names can carry meaning (a tailnet device, a bridge named for its tenant) \u2014 reclassify proc-net-dev before capturing from one.",
+  "proc-uptime": {
+    "payload": "proc-uptime",
+    "whole": {
+      "discloses": "nothing"
+    }
+  },
+  "proc-loadavg": {
+    "payload": "proc-loadavg",
+    "whole": {
+      "discloses": "nothing"
+    }
+  },
+  "proc-stat": {
+    "payload": "proc-stat",
+    "whole": {
+      "discloses": "nothing"
+    }
+  },
+  "proc-meminfo": {
+    "payload": "proc-meminfo",
+    "whole": {
+      "discloses": "nothing"
+    }
+  },
+  "proc-pressure-cpu": {
+    "payload": "proc-pressure-cpu",
+    "whole": {
+      "discloses": "nothing"
+    }
+  },
+  "proc-pressure-memory": {
+    "payload": "proc-pressure-memory",
+    "whole": {
+      "discloses": "nothing"
+    }
+  },
+  "proc-pressure-io": {
+    "payload": "proc-pressure-io",
+    "whole": {
+      "discloses": "nothing"
+    }
+  },
+  "proc-net-dev": {
+    "payload": "proc-net-dev",
+    "whole": {
+      "discloses": "nothing"
+    }
+  },
+  "proc-diskstats": {
+    "payload": "proc-diskstats",
+    "whole": {
+      "discloses": "nothing"
+    }
+  },
+  "proc-arcstats": {
+    "payload": "proc-arcstats",
+    "whole": {
+      "discloses": "nothing"
+    }
+  },
+  "sys-block": {
+    "payload": "sys-block",
+    "whole": {
+      "discloses": "nothing"
+    }
   }
 }

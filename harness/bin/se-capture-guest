@@ -886,11 +886,26 @@ case "$collector" in
         )
         ;;
     system)
+        # The overview documents are read with cat and || true, because a
+        # guest without ZFS has no arcstats and a kernel without CONFIG_PSI
+        # has no pressure files: an absent document is a reading of the
+        # machine, and the replay seam serves it as exactly that.
         acquisitions=(
             "os-release|cat /etc/os-release"
             "hostname|python3 -c '$hostname_py'"
             "boot_id|cat /proc/sys/kernel/random/boot_id"
             "bus.json|python3 -c '$system_bus_py'"
+            "proc-uptime|cat /proc/uptime"
+            "proc-loadavg|cat /proc/loadavg"
+            "proc-stat|cat /proc/stat"
+            "proc-meminfo|cat /proc/meminfo"
+            "proc-pressure-cpu?|cat /proc/pressure/cpu 2>/dev/null || true"
+            "proc-pressure-memory?|cat /proc/pressure/memory 2>/dev/null || true"
+            "proc-pressure-io?|cat /proc/pressure/io 2>/dev/null || true"
+            "proc-net-dev|cat /proc/net/dev"
+            "proc-diskstats|cat /proc/diskstats"
+            "proc-arcstats?|cat /proc/spl/kstat/zfs/arcstats 2>/dev/null || true"
+            "sys-block|ls /sys/block"
         )
         ;;
     *)
@@ -1037,11 +1052,26 @@ for entry in "${acquisitions[@]}"; do
         fi
         continue
     fi
-    if ! ssh "${ssh_opts[@]}" -- "$target" "$remote_env$command" > "$payload_dir/$file"; then
+    # A trailing '?' on the payload name marks a document whose ABSENCE is
+    # a reading of the guest — arcstats without ZFS, pressure without
+    # CONFIG_PSI. Absent means not staged, which is exactly how the replay
+    # seam serves "the captured machine lacked this file"; a required
+    # document coming back empty stays the failure it always was.
+    optional=""
+    if [[ $file == *'?' ]]; then
+        optional=1
+        file=${file%\?}
+    fi
+    if ! ssh "${ssh_opts[@]}" -- "$target" "$remote_env$command" > "$payload_dir/$file" \
+       || [[ -n $optional && ! -s $payload_dir/$file ]]; then
+        rm -f "$payload_dir/$file"
+        if [[ -n $optional ]]; then
+            echo "  skipped: $file — absent on this guest, which is the reading" >&2
+            continue
+        fi
         echo "  FAILED: $command" >&2
         echo "  A collector that cannot read its interface on this guest is a" >&2
         echo "  finding about the guest, not a payload to commit." >&2
-        rm -f "$payload_dir/$file"
         exit 1
     fi
     if [[ $file == *.json ]]; then

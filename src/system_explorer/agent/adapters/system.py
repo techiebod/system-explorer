@@ -198,50 +198,100 @@ def _arc_facts() -> dict:
     return facts
 
 
-def _overview_facts() -> dict:
+# The fifteen stall facts, closed, so the absent tracking below cannot
+# quietly thin as the parse changes. The declaration in the ported
+# collector is the authoritative home of this list; this copy exists only
+# to say which facts went missing TOGETHER when /proc/pressure is dark.
+_PSI_FACTS = tuple(
+    f"Psi{resource}{share}Avg{window}"
+    for resource, shares in (("Cpu", ("Some",)),
+                             ("Memory", ("Some", "Full")),
+                             ("Io", ("Some", "Full")))
+    for share in shares
+    for window in ("10", "60", "300"))
+
+
+def _overview_facts() -> tuple[dict, list[str]]:
+    """The facts, and the declared facts that could not be produced —
+    grouped by source, because that is the granularity at which they go
+    missing together (R3b: the two implementations must make the same
+    absent statements, not just the same value statements)."""
     facts: dict = {}
+    absent: list[str] = []
     uptime = _read("/proc/uptime").split()
     if uptime:
         seconds = float(uptime[0])
         facts["UptimeSeconds"] = int(seconds)
         facts["BootedAt"] = _epoch_to_iso(
             datetime.now(timezone.utc).timestamp() - seconds)
+    else:
+        absent += ["UptimeSeconds", "BootedAt"]
     loadavg = _read("/proc/loadavg").split()
     cpus = os.cpu_count()
     if len(loadavg) >= 3:
         facts.update({"LoadAvg1": float(loadavg[0]),
                       "LoadAvg5": float(loadavg[1]),
-                      "LoadAvg15": float(loadavg[2]),
-                      "CpuCount": cpus})
+                      "LoadAvg15": float(loadavg[2])})
         if cpus:
+            facts["CpuCount"] = cpus
             facts["LoadPerCpu1"] = round(facts["LoadAvg1"] / cpus, 2)
+        else:
+            absent += ["CpuCount", "LoadPerCpu1"]
+    else:
+        absent += ["LoadAvg1", "LoadAvg5", "LoadAvg15", "CpuCount", "LoadPerCpu1"]
     mem = _meminfo_bytes()
+    arc = _arc_facts()
     if "MemTotal" in mem and "MemAvailable" in mem and mem["MemTotal"]:
         used = mem["MemTotal"] - mem["MemAvailable"]
         facts.update({"MemTotalBytes": mem["MemTotal"],
                       "MemAvailableBytes": mem["MemAvailable"],
                       "MemUsedBytes": used,
-                      "MemUsedPercent": round(used * 100 / mem["MemTotal"])})
+                      "MemUsedPercent": round(used * 100 / mem["MemTotal"]),
+                      # Used OUTSIDE the ZFS ARC: the cache counts as used
+                      # yet yields under demand, so this is the number the
+                      # ported rule table judges — derived here too, so the
+                      # two implementations argue about one fact.
+                      "MemUsedPercentAdjusted": round(
+                          max(0, used - arc.get("ArcSizeBytes", 0))
+                          * 100 / mem["MemTotal"])})
+    else:
+        absent += ["MemTotalBytes", "MemAvailableBytes", "MemUsedBytes",
+                   "MemUsedPercent", "MemUsedPercentAdjusted"]
     if "SwapTotal" in mem and "SwapFree" in mem:
         swap_used = mem["SwapTotal"] - mem["SwapFree"]
         facts.update({"SwapTotalBytes": mem["SwapTotal"],
-                      "SwapUsedBytes": swap_used,
-                      # null, not 0%: a swapless host has no swap pressure
-                      # to be innocent of.
-                      "SwapUsedPercent": round(swap_used * 100 / mem["SwapTotal"])
-                                         if mem["SwapTotal"] else None})
+                      "SwapUsedBytes": swap_used})
+        if mem["SwapTotal"]:
+            facts["SwapUsedPercent"] = round(swap_used * 100 / mem["SwapTotal"])
+        else:
+            # Absent, not 0%: a swapless host has no swap pressure to be
+            # innocent of.
+            absent.append("SwapUsedPercent")
+    else:
+        absent += ["SwapTotalBytes", "SwapUsedBytes", "SwapUsedPercent"]
     cpu_times = _cpu_times()
     if cpu_times:
         facts["CpuTimes"] = cpu_times
-    facts.update(_psi_facts())
-    facts.update(_arc_facts())
+    else:
+        absent.append("CpuTimes")
+    psi = _psi_facts()
+    facts.update(psi)
+    absent += [name for name in _PSI_FACTS if name not in psi]
+    if arc:
+        facts.update(arc)
+    else:
+        absent += ["ArcSizeBytes", "ArcTargetBytes"]
     net = _net_counters()
     if net:
         facts["NetCounters"] = net
+    else:
+        absent.append("NetCounters")
     disk = _disk_counters()
     if disk:
         facts["DiskCounters"] = disk
-    return facts
+    else:
+        absent.append("DiskCounters")
+    return facts, sorted(absent)
 
 
 # ── UEFI NVRAM (efivarfs, world-readable — no tool, no capability) ────
@@ -601,7 +651,8 @@ class Adapter:
         )
 
     async def _overview(self) -> dict:
-        facts = _overview_facts()
+        facts, absent = _overview_facts()
+        self._channels["overview"] = {"absent": absent}
         obj = env.obj_ref("overview:host", "overview", "host")
         return env.observation(
             self.subsystem, obj,
