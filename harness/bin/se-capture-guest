@@ -768,10 +768,16 @@ print("protection-manifest-schema",
 declare -a acquisitions
 case "$collector" in
     storage)
+        # The zpool documents are optional since R3b: a guest with no ZFS
+        # still has block devices and mounts, and its capture stages the
+        # util-linux documents alone — the variant's collections say which
+        # halves it carries.
         acquisitions=(
-            "status.json|zpool status -j --json-int"
-            "list.json|zpool list -j -p -v -o name,size,alloc,free,cap,frag,health"
+            "status.json?|zpool status -j --json-int 2>/dev/null || true"
+            "list.json?|zpool list -j -p -v -o name,size,alloc,free,cap,frag,health 2>/dev/null || true"
             "devlinks.json|python3 -c '$devlinks_py'"
+            "lsblk.json|lsblk -J -o NAME,KNAME,TYPE,SIZE,FSTYPE,MOUNTPOINTS,MODEL,SERIAL,ROTA,RM,TRAN"
+            "findmnt.json|findmnt -J --real -b --task 1 -o TARGET,SOURCE,FSTYPE,OPTIONS,SIZE,USED,AVAIL,USE%"
         )
         ;;
     network)

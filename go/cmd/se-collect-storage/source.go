@@ -50,6 +50,15 @@ type source interface {
 	// enrichment that may be missing, and the alias trees that may be
 	// unreadable — three states this collector must tell apart.
 	zpool() (zpoolReading, error)
+	// lsblk is the block-device tree, every transport at once — the one
+	// honest answer to "what disks does this host have".
+	lsblk() (*value, error)
+	// findmnt is PID 1's mount table — the host's truth, not this
+	// process's sandbox view. fellBack reports the older-util-linux
+	// fallback to our own namespace, printed to stderr rather than
+	// invented into the stream; under replay it is always false, because
+	// the capture staged the truth it staged.
+	findmnt() (*value, bool, error)
 	// costs are end's advisory self-report (DESIGN 19): bounded by the
 	// judge, authenticated only by the collator's own slice accounting.
 	costs() (cpuMS, wallMS float64)
@@ -210,6 +219,28 @@ func (liveSource) zpool() (zpoolReading, error) {
 	// only the fact source can refuse the reading.
 	list, _ := runJSON(zpoolListVerbose)
 	return zpoolReading{status: status, list: list, links: devlinks()}, nil
+}
+
+var lsblkArgv = []string{"lsblk", "-J", "-o",
+	"NAME,KNAME,TYPE,SIZE,FSTYPE,MOUNTPOINTS,MODEL,SERIAL,ROTA,RM,TRAN"}
+
+// --task 1 reads PID 1's mount namespace: the agent's own view is a
+// sandbox artifact (ProtectSystem remounts / read-only), and the audit
+// that found every host reporting / as ro is why the reference reads
+// PID 1 first and says so when it cannot.
+var findmntTask1 = []string{"findmnt", "-J", "--real", "-b", "--task", "1",
+	"-o", "TARGET,SOURCE,FSTYPE,OPTIONS,SIZE,USED,AVAIL,USE%"}
+var findmntOwn = []string{"findmnt", "-J", "--real", "-b",
+	"-o", "TARGET,SOURCE,FSTYPE,OPTIONS,SIZE,USED,AVAIL,USE%"}
+
+func (liveSource) lsblk() (*value, error) { return runJSON(lsblkArgv) }
+
+func (liveSource) findmnt() (*value, bool, error) {
+	if doc, err := runJSON(findmntTask1); err == nil {
+		return doc, false, nil
+	}
+	doc, err := runJSON(findmntOwn)
+	return doc, true, err
 }
 
 func runJSON(argv []string) (*value, error) {
@@ -385,6 +416,22 @@ func (r replaySource) payload(stem string) (*value, error) {
 		return nil, err
 	}
 	return decodeDocument(raw)
+}
+
+func (r replaySource) lsblk() (*value, error) {
+	doc, err := r.payload("lsblk")
+	if err != nil {
+		return nil, fmt.Errorf("lsblk %w: %v", errUncaptured, err)
+	}
+	return doc, nil
+}
+
+func (r replaySource) findmnt() (*value, bool, error) {
+	doc, err := r.payload("findmnt")
+	if err != nil {
+		return nil, false, fmt.Errorf("findmnt %w: %v", errUncaptured, err)
+	}
+	return doc, false, nil
 }
 
 func (replaySource) costs() (float64, float64) { return 0.5, 1.0 }

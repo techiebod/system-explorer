@@ -1,0 +1,27 @@
+{
+  "collector": "storage",
+  "collections": ["block-devices", "mounts"],
+  "variant": "bare-guest",
+  "provenance": "captured-then-scrubbed",
+  "os": "debian",
+  "os_version": "13",
+  "source_version": "util-linux 2.41 (debian 13)",
+  "captured": "2026-08-21T15:55:00Z",
+  "regenerable": true,
+  "canaries": [],
+  "anonymised": true,
+  "note": "The first pair for the two R3b storage collections, from a guest with no ZFS at all: lsblk's tree carries a scsi disk with a serial (substituted shape-preserved), a virtio disk whose model, serial and transport members show lsblk's null-means-absent contract, an nvme namespace, and a partitioned disk whose children exercise the flatten; findmnt is PID 1's real mount table with its nested pseudo-filesystems, whose null sizes are the absent statement. devlinks is deliberately NOT staged: it belongs to the pools collection this variant does not carry, and its by-id keys would demand serial substitutions this payload set has no second home for.",
+  "anchors": [
+    {"collection": "block-devices", "object": "vda",
+     "fact": "Transport", "value": "virtio"},
+    {"collection": "block-devices", "object": "vda",
+     "fact": "Type", "value": "disk"},
+    {"collection": "block-devices", "object": "sda",
+     "fact": "Model", "value": "QEMU HARDDISK"},
+    {"collection": "mounts", "object": "/",
+     "fact": "FsType", "value": "ext4"},
+    {"collection": "mounts", "object": "/",
+     "fact": "UsePercent", "value": 4}
+  ],
+  "anchors_note": "Staged truth transcribed by hand from the scrubbed payloads: vda's transport and kind from its lsblk node, sda's model verbatim, the root mount's filesystem and findmnt's own use% stripped of its sign. Object counts are pinned by the expected stream — the flatten must publish each DEVICE once however many parents list it, though this guest stages no multi-parent device; that shape is the Go unit tests' synthetic md case."
+}

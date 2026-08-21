@@ -152,8 +152,14 @@ func collect(stdout, stderr io.Writer, src source, order []string, generations m
 	})
 
 	objects := 0
+	served := map[string]func(*emitter, io.Writer, source, string, uint64, *int) int{
+		"pools":         collectPools,
+		"block-devices": collectBlockDevices,
+		"mounts":        collectMounts,
+	}
 	for _, collection := range order {
-		if collection != "pools" {
+		serve, known := served[collection]
+		if !known {
 			// A name this collector never published is declined, not
 			// sanitised and not crashed on (DESIGN 18). unsupported —
 			// the reason that reaches whoever maintains the request —
@@ -162,11 +168,11 @@ func collect(stdout, stderr io.Writer, src source, order []string, generations m
 				Record:     "decline",
 				Collection: collection,
 				Reason:     "unsupported",
-				Detail:     "this collector serves pools only",
+				Detail:     "this collector does not serve this collection",
 			})
 			continue
 		}
-		if code := collectPools(out, stderr, src, collection, generations[collection], &objects); code != exitOK {
+		if code := serve(out, stderr, src, collection, generations[collection], &objects); code != exitOK {
 			return code
 		}
 	}

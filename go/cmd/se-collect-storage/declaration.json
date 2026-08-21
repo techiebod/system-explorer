@@ -7,10 +7,13 @@
       "/dev/disk/by-id",
       "/dev/disk/by-partuuid",
       "/dev/mapper",
-      "/dev/zfs"
+      "/dev/zfs",
+      "/proc/1/mountinfo"
     ],
     "commands": [
-      "zpool"
+      "zpool",
+      "lsblk",
+      "findmnt"
     ]
   },
   "probe": "zpool is installed and `zpool status -j` answers; a host carrying zpool with no imported pool still answers, and that is a reading of zero pools rather than a probe failure",
@@ -267,6 +270,237 @@
             "/dev/disk/by-id",
             "/dev/disk/by-partuuid",
             "/dev/mapper"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "block-devices",
+      "question": "what disks does this host actually have, and what is carved out of or assembled from them?",
+      "prefix": "block-device",
+      "freshness": "5m",
+      "perishability": "sampled",
+      "answer": [
+        "Type",
+        "Transport",
+        "Size",
+        "FsType",
+        "Mountpoints",
+        "Model"
+      ],
+      "ceiling": {
+        "records": 2000,
+        "bytes": 2097152
+      },
+      "facts": {
+        "Type": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "What kind of block device this is, in lsblk's own word \u2014 disk, part, lvm, crypt, rom. Also the row's structural kind."
+        },
+        "Size": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The device's size as lsblk renders it, human-readable. Carried as the source spells it; the byte-exact figure belongs to the transport-specific hardware collections."
+        },
+        "FsType": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The filesystem signature on this device, absent where there is none."
+        },
+        "Mountpoints": {
+          "type": "list",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Everywhere this device is mounted right now \u2014 empty for an unmounted filesystem, and the null members lsblk pads with are dropped, not carried."
+        },
+        "Parents": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Every device this one is assembled from or carved out of. A list because containment is not a tree: an md array has every member as a parent, and the applied order can only state the first path to it."
+        },
+        "Model": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The device's model string, absent on partitions and virtual devices \u2014 the source says null and the absent list is what that means."
+        },
+        "Serial": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "identity",
+          "sentence": "The device serial, the stable name a join survives a reboot on \u2014 declared as the identity it is."
+        },
+        "Rotational": {
+          "type": "boolean",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Whether the kernel believes this device has spinning media."
+        },
+        "Removable": {
+          "type": "boolean",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Whether the kernel flags this device removable."
+        },
+        "Transport": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "How the device is attached \u2014 sata, nvme, virtio, usb. Only lsblk reports this for every transport, which makes this collection the one honest answer to 'what disks does this host have': the hardware collections are transport-specific by construction and a virtio disk belongs to neither."
+        }
+      },
+      "redaction_exemption": "every fact is an lsblk column over kernel-published device metadata; the serial is declared as the identity it is and handled by disclosure policy",
+      "reference_commands": [
+        {
+          "purpose": "the same tree, by hand",
+          "argv": [
+            "lsblk",
+            "-J",
+            "-o",
+            "NAME,KNAME,TYPE,SIZE,FSTYPE,MOUNTPOINTS,MODEL,SERIAL,ROTA,RM,TRAN"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "mounts",
+      "question": "what is mounted where, and is any filesystem running out of space?",
+      "prefix": "mount",
+      "freshness": "60s",
+      "perishability": "sampled",
+      "answer": [
+        "Source",
+        "FsType",
+        "UsePercent",
+        "SizeBytes",
+        "AvailBytes"
+      ],
+      "ceiling": {
+        "records": 2000,
+        "bytes": 2097152
+      },
+      "facts": {
+        "Source": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "location",
+          "sentence": "What is mounted here \u2014 a device path, or for a network filesystem the remote host and export, which is why the whole fact is classed as location."
+        },
+        "FsType": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The filesystem type."
+        },
+        "Options": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "location",
+          "sentence": "The mount options verbatim; on network mounts they can carry addresses, so they share Source's class."
+        },
+        "SizeBytes": {
+          "type": "integer",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The filesystem's capacity in bytes. Absent on pseudo-filesystems: findmnt says null, and null is no channel at all."
+        },
+        "UsedBytes": {
+          "type": "integer",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Bytes in use."
+        },
+        "AvailBytes": {
+          "type": "integer",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Bytes still available to unprivileged writes."
+        },
+        "UsePercent": {
+          "type": "integer",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Used over size, as findmnt computes it \u2014 the number the capacity rules judge.",
+          "denominator": "SizeBytes"
+        }
+      },
+      "rules": [
+        {
+          "key": "mount-capacity-critical",
+          "level": "critical",
+          "grounds": "threshold",
+          "when": {
+            "fact": "UsePercent",
+            "at_least": 95
+          },
+          "sentence": "Filesystem is nearly full.",
+          "cites": [
+            "UsePercent",
+            "AvailBytes",
+            "SizeBytes"
+          ]
+        },
+        {
+          "key": "mount-capacity",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "all": [
+              {
+                "fact": "UsePercent",
+                "at_least": 90
+              },
+              {
+                "not": {
+                  "fact": "UsePercent",
+                  "at_least": 95
+                }
+              }
+            ]
+          },
+          "sentence": "Filesystem is running out of space.",
+          "cites": [
+            "UsePercent",
+            "AvailBytes",
+            "SizeBytes"
+          ]
+        }
+      ],
+      "redaction_exemption": "every fact is a findmnt column over the mount table; the two that can carry a remote host (Source, Options) are declared location and handled by disclosure policy",
+      "reference_commands": [
+        {
+          "purpose": "the same table, by hand \u2014 PID 1's namespace, the host's truth",
+          "argv": [
+            "findmnt",
+            "-J",
+            "--real",
+            "-b",
+            "--task",
+            "1",
+            "-o",
+            "TARGET,SOURCE,FSTYPE,OPTIONS,SIZE,USED,AVAIL,USE%"
           ]
         }
       ]

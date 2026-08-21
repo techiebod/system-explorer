@@ -95,7 +95,11 @@ def main() -> None:
         if not raw.strip():
             continue
         record = json.loads(raw)
-        if record.get("record") == "object":
+        # pools records only: the reference seam serves the R3b collections
+        # too now, and this subject's declared wrongness is about pool
+        # health — touching any other collection would make it wrong in a
+        # second, undeclared way.
+        if record.get("record") == "object" and record.get("collection") == "pools":
             record = hardcode(record)
         print(json.dumps(record, sort_keys=True, separators=(",", ":")))
 

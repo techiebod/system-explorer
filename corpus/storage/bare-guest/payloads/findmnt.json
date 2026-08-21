@@ -1,0 +1,26 @@
+{
+  "filesystems": [
+    {
+      "target": "/",
+      "source": "/dev/vda1",
+      "fstype": "ext4",
+      "options": "rw,relatime,discard,errors=remount-ro",
+      "size": 16694517760,
+      "used": 733343744,
+      "avail": 15231770624,
+      "use%": "4%",
+      "children": [
+        {
+          "target": "/boot/efi",
+          "source": "/dev/vda15",
+          "fstype": "vfat",
+          "options": "rw,relatime,fmask=0077,dmask=0077,codepage=437,iocharset=ascii,shortname=mixed,utf8,errors=remount-ro",
+          "size": 129718272,
+          "used": 9322496,
+          "avail": 120395776,
+          "use%": "7%"
+        }
+      ]
+    }
+  ]
+}

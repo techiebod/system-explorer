@@ -71,6 +71,12 @@ VALID_VARIANTS = frozenset(
         "empty-ruleset",
         "time-synced",
         "timesync-dark",
+        # bare-guest, added with storage's R3b collections: a machine with
+        # no ZFS at all, whose capture stages the util-linux documents
+        # alone. The shape a plain host actually is, and the one the old
+        # UI opened on — block devices and mounts with no pool anywhere,
+        # which the pools-bearing variants can never show.
+        "bare-guest",
         "canary",
         "goto",
         "asymmetric",

@@ -846,5 +846,286 @@
   "pools.*.vdevs.spares.~key": {
     "discloses": "identity",
     "format": "name"
+  },
+  "#lsblk-findmnt": "the R3b payloads: lsblk's device tree and PID 1's mount table. Device serials are substituted shape-preserved \u2014 they are the identity they are on any machine. Everything else is kernel-published metadata whose values on a LAB GUEST disclose nothing; an ESTATE capture's mount sources and options can carry NFS hosts and addresses \u2014 reclassify findmnt's source and options before capturing from one.",
+  "lsblk:blockdevices.*.name": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.kname": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.type": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.size": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.fstype": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.model": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.rota": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.rm": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.tran": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.serial": {
+    "discloses": "identity",
+    "format": "serial"
+  },
+  "lsblk:blockdevices.*.mountpoints.*": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.name": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.kname": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.type": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.size": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.fstype": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.model": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.rota": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.rm": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.tran": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.serial": {
+    "discloses": "identity",
+    "format": "serial"
+  },
+  "lsblk:blockdevices.*.children.*.mountpoints.*": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.children.*.name": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.children.*.kname": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.children.*.type": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.children.*.size": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.children.*.fstype": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.children.*.model": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.children.*.rota": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.children.*.rm": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.children.*.tran": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.children.*.serial": {
+    "discloses": "identity",
+    "format": "serial"
+  },
+  "lsblk:blockdevices.*.children.*.children.*.mountpoints.*": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.children.*.children.*.name": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.children.*.children.*.kname": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.children.*.children.*.type": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.children.*.children.*.size": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.children.*.children.*.fstype": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.children.*.children.*.model": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.children.*.children.*.rota": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.children.*.children.*.rm": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.children.*.children.*.tran": {
+    "discloses": "nothing"
+  },
+  "lsblk:blockdevices.*.children.*.children.*.children.*.serial": {
+    "discloses": "identity",
+    "format": "serial"
+  },
+  "lsblk:blockdevices.*.children.*.children.*.children.*.mountpoints.*": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.target": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.source": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.fstype": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.options": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.size": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.used": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.avail": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.use%": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.target": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.source": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.fstype": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.options": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.size": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.used": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.avail": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.use%": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.target": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.source": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.fstype": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.options": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.size": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.used": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.avail": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.use%": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.children.*.target": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.children.*.source": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.children.*.fstype": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.children.*.options": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.children.*.size": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.children.*.used": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.children.*.avail": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.children.*.use%": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.target": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.source": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.fstype": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.options": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.size": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.used": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.avail": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.use%": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.children.*.target": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.children.*.source": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.children.*.fstype": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.children.*.options": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.children.*.size": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.children.*.used": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.children.*.avail": {
+    "discloses": "nothing"
+  },
+  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.children.*.use%": {
+    "discloses": "nothing"
   }
 }

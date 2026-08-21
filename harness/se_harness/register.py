@@ -71,8 +71,6 @@ NOT_YET_PORTED: dict[str, str] = {
     "network/nft-tables": "the table-grained view above nft-chains.",
     "network/port-exposure": "the joined answer nft + listening produce together.",
     "network/tailscale": "a discovery source membership depends on (DESIGN 23).",
-    "storage/block-devices": "block devices on every host.",
-    "storage/mounts": "mount points on every host.",
     "storage/arrays": "md arrays.",
     "storage/datasets": "ZFS datasets — the level protection joins against.",
     "plex/requests": "seerr requests.",

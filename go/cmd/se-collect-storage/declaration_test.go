@@ -64,8 +64,11 @@ func TestTheDeclarationNamesExactlyTheFactsThisCollectorEmits(t *testing.T) {
 	if declaration.Schema != "se.declaration/1" || declaration.Collector != "storage" {
 		t.Fatalf("collector %q under schema %q", declaration.Collector, declaration.Schema)
 	}
-	if len(declaration.Collections) != 1 || declaration.Collections[0].Name != "pools" {
-		t.Fatalf("one collection, pools; got %v", declaration.Collections)
+	if len(declaration.Collections) != 3 || declaration.Collections[0].Name != "pools" ||
+		declaration.Collections[1].Name != "block-devices" ||
+		declaration.Collections[2].Name != "mounts" {
+		t.Fatalf("three collections — pools, block-devices, mounts; got %v",
+			declaration.Collections)
 	}
 	collection := declaration.Collections[0]
 
@@ -139,7 +142,15 @@ func TestTheDeclarationNamesExactlyTheFactsThisCollectorEmits(t *testing.T) {
 			t.Errorf("read_paths omits %s, which this process opens directly", tree)
 		}
 	}
-	if len(declaration.Authority.Commands) != 1 || declaration.Authority.Commands[0] != "zpool" {
-		t.Errorf("commands %v: this collection needs zpool and not zfs", declaration.Authority.Commands)
+	want := []string{"zpool", "lsblk", "findmnt"}
+	if len(declaration.Authority.Commands) != len(want) {
+		t.Errorf("commands %v, want %v — zpool for pools (and not zfs), the "+
+			"two util-linux readers for the R3b collections", declaration.Authority.Commands, want)
+	} else {
+		for i, command := range want {
+			if declaration.Authority.Commands[i] != command {
+				t.Errorf("commands[%d] = %q, want %q", i, declaration.Authority.Commands[i], command)
+			}
+		}
 	}
 }

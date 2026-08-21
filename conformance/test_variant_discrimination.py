@@ -115,7 +115,12 @@ CASES = (
         unique="the only pool whose members carry errors ZFS repaired — a "
         "non-zero checksum counter beside Errors 0 — so it is the only "
         "capture that separates a repaired fault from a lost one",
-        serves=frozenset({"pools"}),
+        # The whole storage surface since R3b: the subject wraps the
+        # reference, so it serves what the seam serves, and its declared
+        # wrongness touches pools records alone — on the util-linux
+        # collections it must be byte-faithful, which the before half now
+        # proves over the bare-guest pair.
+        serves=frozenset({"pools", "block-devices", "mounts"}),
         shared_with=frozenset({"storage/spare-engaged"}),
     ),
 )

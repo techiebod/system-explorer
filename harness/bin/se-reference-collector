@@ -117,8 +117,9 @@ SEAM = {
         "module": storage,
         "adapter": storage.Adapter,
         "interface": "zpool",
-        "collections": ["pools"],
-        "acquisitions": {"_zpool_status": "status", "_zpool_list": "list"},
+        "collections": ["pools", "block-devices", "mounts"],
+        "acquisitions": {"_zpool_status": "status", "_zpool_list": "list",
+                         "_lsblk": "lsblk", "_findmnt": "findmnt"},
         "auxiliary": {"_devlinks": ("devlinks", None)},
         # The capability probe asks the host whether zpool exists. Under
         # replay the payload is the evidence that it did, on the machine the
