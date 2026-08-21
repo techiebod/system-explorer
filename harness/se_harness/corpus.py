@@ -137,6 +137,23 @@ _ANCHOR_FORMS = (
 # beside a real degraded pool, so the entries below now say what is true of a
 # tool that exists. An entry whose venue is still unbuilt keeps saying so.
 NAMED_RESIDUALS = {
+    # R3c: the object verb's density facts — LoadError, UnitFileState,
+    # FragmentPath, ActiveEnterTimestamp, MainPID, NRestarts, Result,
+    # TasksCurrent, ExecMainStartTimestamp, NextElapse, LastTrigger — ride a
+    # channel this harness does not run: collect never emits them, and replay
+    # here replays collect. Not unstageable in principle, and therefore owned
+    # rather than owed: the collector's own verb tests
+    # (go/cmd/se-collect-units/verbs_test.go) serve them from staged lab
+    # captures and pin the values. When the collator's on-demand path gives
+    # this harness a verb channel, these facts move from named to observed and
+    # this entry is deleted.
+    "units/object-density": (
+        "the eleven density facts (LoadError, UnitFileState, FragmentPath, "
+        "ActiveEnterTimestamp, MainPID, NRestarts, Result, TasksCurrent, "
+        "ExecMainStartTimestamp, NextElapse, LastTrigger) are served by the "
+        "object verb only, which no replayed stream exercises. Venue: "
+        "go/cmd/se-collect-units/verbs_test.go, staged from lab captures."
+    ),
     # Kept, and narrowed, rather than deleted. The comparator now exercises
     # this join on every run — a five-wide raidz1 on virtio disks resolved
     # every by-id member to its kernel name, and the REMOVED member resolved

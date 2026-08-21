@@ -185,11 +185,16 @@ func TestReplayPinsEveryRunVaryingMember(t *testing.T) {
 	if len(commits) != 1 || commits[0]["objects"] != 6.0 || commits[0]["generation"] != 824.0 {
 		t.Fatalf("one commit, six objects, the issued generation; got %v", commits)
 	}
-	// The two channels this acquisition does not publish, counted as zero
-	// rather than omitted: an omitted count is a truncation check switched off
-	// (DESIGN 19).
-	if commits[0]["assertions"] != 0.0 || commits[0]["unobservable"] != 0.0 {
-		t.Fatalf("the acquisition path emits no assertion and no unobservable: %v", commits)
+	// Assertions ARE published since R3c — the slice hierarchy as
+	// member-of edges, one per row the tree walk parented — and the count
+	// must reconcile with the emitted records exactly as objects does.
+	asserted := float64(len(ofKind(records, "relation_assertion")))
+	if commits[0]["assertions"] != asserted || asserted == 0.0 {
+		t.Fatalf("the member-of edges must be counted and present: %v of %v",
+			commits[0]["assertions"], asserted)
+	}
+	if commits[0]["unobservable"] != 0.0 {
+		t.Fatalf("this fixture stages no unreadable slice: %v", commits)
 	}
 }
 

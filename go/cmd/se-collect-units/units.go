@@ -374,6 +374,11 @@ type row struct {
 	name  string
 	kind  string
 	facts *factRow
+	// The tree parent the walk placed this row under, "" for roots and
+	// orphans: the member-of assertion's target, set exactly where the
+	// children map is built so the edge set and the applied order cannot
+	// come to disagree.
+	parent string
 	// Facts this row could not READ, as opposed to facts it does not have.
 	// DESIGN 19 gives those two separate channels and this collector used to
 	// spell both as a missing fact — which for Slice means "accounts to no
@@ -522,6 +527,7 @@ func buildRows(src source, stderr writer) ([]row, error) {
 		}
 		if _, known := items[parent]; known {
 			children[parent] = append(children[parent], name)
+			items[name].parent = parent
 		} else if name != "-.slice" {
 			orphans = append(orphans, name)
 		}

@@ -42,9 +42,21 @@ type declaredCollection struct {
 	Freshness  string                  `json:"freshness"`
 	Answer     []string                `json:"answer"`
 	Facts      map[string]declaredFact `json:"facts"`
-	Redactions []any                   `json:"redactions"`
-	Exemption  string                  `json:"redaction_exemption"`
-	Commands   []struct {
+	Redactions []struct {
+		Path      string `json:"path"`
+		Discloses string `json:"discloses"`
+	} `json:"redactions"`
+	Exemption string `json:"redaction_exemption"`
+	Rules     []struct {
+		Key     string `json:"key"`
+		Level   string `json:"level"`
+		Grounds string `json:"grounds"`
+	} `json:"rules"`
+	Verbs map[string]struct {
+		Bytes int `json:"bytes"`
+		Ms    int `json:"ms"`
+	} `json:"verbs"`
+	Commands []struct {
 		Purpose string   `json:"purpose"`
 		Argv    []string `json:"argv"`
 	} `json:"reference_commands"`
@@ -82,6 +94,14 @@ func TestTheDeclaredFactsAreExactlyTheEmittableOnes(t *testing.T) {
 		"MachineName": true, "Slice": true, "ReferencedBy": true,
 		"MissingReferenceUnobservable": true,
 	}
+	// The object verb's density (R3c): one unit's properties, served where
+	// they are already in hand — the row deliberately cannot afford them.
+	for _, fact := range [...]string{"LoadError", "UnitFileState",
+		"FragmentPath", "ActiveEnterTimestamp", "MainPID", "NRestarts",
+		"Result", "TasksCurrent", "ExecMainStartTimestamp", "NextElapse",
+		"LastTrigger"} {
+		emittable[fact] = true
+	}
 	for _, fact := range absentReferenceFacts {
 		emittable[fact] = true
 	}
@@ -113,11 +133,11 @@ func TestTheDeclarationCarriesThePinnedContract(t *testing.T) {
 	}
 
 	// Temperament decides whether a fact churns the snapshot diff (DESIGN 12),
-	// which is why it is pinned rather than left to reading. Every fact here is
-	// either a state systemd reports or a piece of the unit's declaration, and
-	// nothing is a counter or a gauge: this collection carries no measurement
-	// at all, which is the boundary that keeps /v1/changes from reporting every
-	// cgroup-bearing unit as changed on every poll.
+	// which is why it is pinned rather than left to reading. No ROW fact is a
+	// counter or a gauge: the two measurements below (NRestarts, TasksCurrent)
+	// ride the object verb only, which is not snapshot material — so the
+	// boundary that keeps /v1/changes from reporting every cgroup-bearing unit
+	// as changed on every poll still holds, one layer down from where it did.
 	temperament := map[string]string{
 		"LoadState": "state", "ActiveState": "state", "SubState": "state",
 		"Description": "configuration", "RuntimeSynthesised": "configuration",
@@ -125,6 +145,12 @@ func TestTheDeclarationCarriesThePinnedContract(t *testing.T) {
 		"Slice": "configuration", "MissingRequirements": "configuration",
 		"MissingWants": "configuration", "MissingOrdering": "configuration",
 		"ReferencedBy": "configuration", "MissingReferenceUnobservable": "state",
+		// The object verb's density (R3c): one unit, properties in hand.
+		"LoadError": "state", "UnitFileState": "configuration",
+		"FragmentPath": "configuration", "ActiveEnterTimestamp": "state",
+		"MainPID": "state", "NRestarts": "counter", "Result": "state",
+		"TasksCurrent": "gauge", "ExecMainStartTimestamp": "state",
+		"NextElapse": "state", "LastTrigger": "state",
 	}
 	if len(collection.Facts) != len(temperament) {
 		t.Fatalf("declared facts %v", collection.Facts)
@@ -164,8 +190,31 @@ func TestTheDeclarationCarriesThePinnedContract(t *testing.T) {
 		}
 	}
 
-	if len(collection.Redactions) != 0 || collection.Exemption == "" {
-		t.Fatal("an exemption beside a redaction list is two rulings contradicting each other in one document")
+	// R2's exemption said "serves no evidence verb", and R3c made that false:
+	// the evidence document is the service's full property set, so the three
+	// members that carry a process environment are withheld — an Environment=
+	// line is where a credential lives. Pinned path-by-path because a
+	// forgotten redaction publishes, and an exemption beside a redaction list
+	// would be two rulings contradicting each other in one document.
+	if collection.Exemption != "" {
+		t.Fatalf("exemption %q beside a redaction list", collection.Exemption)
+	}
+	withheld := map[string]bool{}
+	for _, redaction := range collection.Redactions {
+		if redaction.Discloses != "secret" {
+			t.Errorf("%s is withheld as %q; an environment member is withheld because it is a secret",
+				redaction.Path, redaction.Discloses)
+		}
+		withheld[redaction.Path] = true
+	}
+	for _, member := range []string{"Environment", "UnsetEnvironment", "PassEnvironment"} {
+		if !withheld["/org.freedesktop.systemd1.Service/data/0/"+member] {
+			t.Errorf("the %s member is not withheld from evidence", member)
+		}
+	}
+	if len(collection.Redactions) != 3 {
+		t.Errorf("%d redactions declared; a fourth means the ruling moved and this pin must move with it",
+			len(collection.Redactions))
 	}
 }
 
@@ -234,6 +283,60 @@ func TestTheReferenceCommandsAreTheCallsThisCollectorMakes(t *testing.T) {
 		}
 		if !strings.Contains(strings.Join(command.Argv, " "), "--json=short") {
 			t.Errorf("reference command %v does not ask for the native rendering", command.Argv)
+		}
+	}
+}
+
+// The bounds the verbs enforce are the bounds the declaration promises: a
+// bound only in the declaration is a promise, one only in verbs.go is
+// undeclared authority. verbs.go names this test beside its const block.
+func TestTheVerbBoundsAreTheDeclaredOnes(t *testing.T) {
+	verbs := decodeDeclaration(t).Verbs
+	if len(verbs) != 2 {
+		t.Fatalf("verbs %v: this collector serves object and evidence", verbs)
+	}
+	if verbs["object"].Bytes != objectVerbBytes {
+		t.Errorf("object declares %d bytes, the verb enforces %d",
+			verbs["object"].Bytes, objectVerbBytes)
+	}
+	if verbs["evidence"].Bytes != evidenceVerbBytes {
+		t.Errorf("evidence declares %d bytes, the verb enforces %d",
+			verbs["evidence"].Bytes, evidenceVerbBytes)
+	}
+	for verb, bounds := range verbs {
+		if bounds.Ms <= 0 {
+			t.Errorf("%s declares no time bound, and an unbounded verb is a hung collator", verb)
+		}
+	}
+}
+
+// The rule table, pinned key by key. unit-health is `interface` — systemd
+// itself declares the fault — where restart-churn is `threshold`, our own
+// judgement about how much churn is too much; the grounds axis is what tells
+// a consumer which kind of claim it is relaying (DESIGN's grounds ruling).
+// restart-churn reads NRestarts, which only the object verb carries, so it
+// fires where the density is in hand — the old detail-only rule, kept.
+func TestTheRuleTableCarriesTheJudgedConditions(t *testing.T) {
+	rules := decodeDeclaration(t).Rules
+	pinned := map[string][2]string{
+		"unit-health":                         {"critical", "interface"},
+		"restart-churn":                       {"warn", "threshold"},
+		"unit-requires-absent-unit":           {"warn", "interface"},
+		"unit-wants-absent-unit":              {"info", "interface"},
+		"unit-absent-references-unobservable": {"info", "interface"},
+	}
+	if len(rules) != len(pinned) {
+		t.Fatalf("%d rules declared, %d pinned", len(rules), len(pinned))
+	}
+	for _, rule := range rules {
+		want, ok := pinned[rule.Key]
+		if !ok {
+			t.Errorf("rule %s is not pinned here", rule.Key)
+			continue
+		}
+		if rule.Level != want[0] || rule.Grounds != want[1] {
+			t.Errorf("%s is %s/%s, pinned %s/%s",
+				rule.Key, rule.Level, rule.Grounds, want[0], want[1])
 		}
 	}
 }

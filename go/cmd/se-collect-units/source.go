@@ -58,6 +58,13 @@ type source interface {
 	// unitSlice is Properties.Get for the Slice property of a service or a
 	// scope — the one type-specific property on the acquisition path.
 	unitSlice(path, iface string) ([]byte, error)
+	// The verb path (DESIGN 18, landed at R3c): LoadUnit resolves a name
+	// to its object path — systemd keeps a Unit object for every name
+	// anything references, which is what lets the verbs answer for a
+	// not-found unit too — and typedProperties is the type-specific
+	// GetAll the object verb adds for a unit that loaded.
+	loadUnit(name string) (string, error)
+	typedProperties(path, iface string) ([]byte, error)
 	// stamp is `at` for the i-th emitted object. One acquisition pass feeds
 	// every row, so the live reading is taken once, before the first native
 	// read, and the index is ignored — a stamp taken at completion would
@@ -176,6 +183,24 @@ func propertiesRequest(path string) string {
 
 func sliceRequest(path, iface string) string {
 	return busRequest(path, propertiesIface, "Get", "ss", iface, sliceProperty)
+}
+
+func loadUnitRequest(name string) string {
+	return busRequest(managerPath, managerIface, "LoadUnit", "s", name)
+}
+
+// objectPathReply reads the one "o" argument a LoadUnit reply carries,
+// through the same single-argument gate every other reply takes.
+func objectPathReply(raw []byte) (string, error) {
+	argument, err := singleArgument(raw, "o")
+	if err != nil {
+		return "", err
+	}
+	var path string
+	if err := json.Unmarshal(argument, &path); err != nil || path == "" {
+		return "", fmt.Errorf("the object path does not decode: %v", err)
+	}
+	return path, nil
 }
 
 // ── live ────────────────────────────────────────────────────────────────
@@ -314,6 +339,18 @@ func (s *liveSource) unitProperties(path string) ([]byte, error) {
 
 func (s *liveSource) unitSlice(path, iface string) ([]byte, error) {
 	return s.call(path, propertiesIface, "Get", "ss", iface, sliceProperty)
+}
+
+func (s *liveSource) loadUnit(name string) (string, error) {
+	raw, err := s.call(managerPath, managerIface, "LoadUnit", "s", name)
+	if err != nil {
+		return "", err
+	}
+	return objectPathReply(raw)
+}
+
+func (s *liveSource) typedProperties(path, iface string) ([]byte, error) {
+	return s.call(path, propertiesIface, "GetAll", "s", iface)
 }
 
 // limitedWriter caps what a subprocess can put in this process's memory. The
@@ -477,6 +514,18 @@ func (r *replaySource) unitProperties(path string) ([]byte, error) {
 
 func (r *replaySource) unitSlice(path, iface string) ([]byte, error) {
 	return r.reply(sliceRequest(path, iface))
+}
+
+func (r *replaySource) loadUnit(name string) (string, error) {
+	raw, err := r.reply(loadUnitRequest(name))
+	if err != nil {
+		return "", err
+	}
+	return objectPathReply(raw)
+}
+
+func (r *replaySource) typedProperties(path, iface string) ([]byte, error) {
+	return r.reply(busRequest(path, propertiesIface, "GetAll", "s", iface))
 }
 
 // ── shared ──────────────────────────────────────────────────────────────

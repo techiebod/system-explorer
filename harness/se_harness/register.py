@@ -349,10 +349,13 @@ def _in_file(relative: str, needle: str) -> bool:
 
 
 def _verb_landed(verb: str) -> bool:
-    """Whether any collector's request dispatch answers the verb. Today the
-    grammar is declare/probe/collect; the verbs land per collector at R3c/d,
-    and the first landing flips this."""
-    return any(f'case "{verb}":' in path.read_text()
+    """Whether any collector's request dispatch answers the verb; the first
+    landing flips this. The probe matches the verb inside any `case` clause,
+    not `case "<verb>":` literally — units dispatches `case "object",
+    "evidence":` as one clause, and the literal spelling sat blind to it for
+    exactly as long as it took the first verb to land (found 2026-08-21)."""
+    clause = re.compile(r'case [^:\n]*"' + re.escape(verb) + '"')
+    return any(clause.search(path.read_text())
                for path in GO_CMD.glob("se-collect-*/main.go"))
 
 
@@ -364,12 +367,14 @@ def _declares(collector: str, member: str) -> bool:
 
 REGISTER: tuple[Row, ...] = (
     Row(1, "`object` verb — object density behind the row facts",
-        "owed", "R3c/R3d", lambda: _verb_landed("object"),
-        "the probe reads the request dispatch of every collector main; it "
-        "sees the verb exist, not that its answer is dense."),
+        "built", "R3c/R3d", lambda: _verb_landed("object"),
+        "the probe reads the request dispatch of every collector main and "
+        "flips on the FIRST landing (units, R3c); it sees the verb exist "
+        "somewhere, not everywhere, and not that its answer is dense — the "
+        "per-collector rollout is R3d's."),
     Row(2, "`evidence` verb — capture-fresh raw document and digest",
-        "owed", "R3c/R3d", lambda: _verb_landed("evidence"),
-        "same probe shape and same limit as row 1."),
+        "built", "R3c/R3d", lambda: _verb_landed("evidence"),
+        "same probe shape and same limits as row 1."),
     Row(3, "`lookup` verb — parametrised queries, the lookup palette",
         "owed", "R3d", lambda: _verb_landed("lookup"),
         "same probe shape and same limit as row 1."),

@@ -40,6 +40,20 @@ type beginRecord struct {
 // publishes no name family, because the reference's summary carries none and
 // inventing one here would key the collator on a name no other implementation
 // publishes.
+type relationAssertionRecord struct {
+	Record     string          `json:"record"`
+	Collection string          `json:"collection"`
+	Name       string          `json:"name"`
+	Type       string          `json:"type"`
+	Vantage    string          `json:"vantage"`
+	Target     assertionTarget `json:"target"`
+}
+
+type assertionTarget struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
+}
+
 type objectRecord struct {
 	Record     string `json:"record"`
 	Collection string `json:"collection"`
@@ -51,7 +65,11 @@ type objectRecord struct {
 	// are the device wall that rule exists for.
 	Type  string          `json:"type,omitempty"`
 	Facts json.RawMessage `json:"facts"`
-	At    float64         `json:"at"`
+	// Declared facts this object genuinely lacks — the verb responses'
+	// channel; the collect path states its gaps per fact instead, on the
+	// unobservable records the listing can attribute.
+	Absent []string `json:"absent,omitempty"`
+	At     float64  `json:"at"`
 }
 
 // unobservableRecord is DESIGN 19's could-not-read channel: a fact this
@@ -220,7 +238,7 @@ func collectUnits(out *emitter, stderr io.Writer, src source, collection string,
 		return exitRuntime
 	}
 
-	unobservables := 0
+	unobservables, assertions := 0, 0
 	for _, item := range rows {
 		out.emit(objectRecord{
 			Record:     "object",
@@ -231,6 +249,20 @@ func collectUnits(out *emitter, stderr io.Writer, src source, collection string,
 			At:         src.stamp(*objects),
 		})
 		*objects++
+		// The slice hierarchy as edges (the R1 ruling): the collator
+		// derives the tree from these, and the set is exactly the children
+		// map the applied order walked.
+		if item.parent != "" {
+			out.emit(relationAssertionRecord{
+				Record:     "relation_assertion",
+				Collection: collection,
+				Name:       item.name,
+				Vantage:    collection,
+				Type:       "member-of",
+				Target:     assertionTarget{Kind: "unit", Name: item.parent},
+			})
+			assertions++
+		}
 		// After the object, because a record about a fact must follow the row
 		// that fact belongs to.
 		for _, missing := range item.unobservable {
@@ -245,16 +277,16 @@ func collectUnits(out *emitter, stderr io.Writer, src source, collection string,
 			unobservables++
 		}
 	}
-	// No relation assertion: the dependency edges this subsystem CAN draw need
-	// the per-unit forward properties, which cost one round trip per unit and
-	// belong to the opened object rather than to the listing. Unobservable
-	// records ARE published now — a Slice the bus would not answer for — and
-	// the count is the reading rather than a placeholder.
+	// The member-of edges above are the listing's own knowledge; the
+	// dependency edges (requires, wants, after) still need the per-unit
+	// forward properties and ride the object verb, where the properties
+	// are already in hand.
 	out.emit(commitRecord{
 		Record:       "commit",
 		Collection:   collection,
 		Generation:   generation,
 		Objects:      len(rows),
+		Assertions:   assertions,
 		Unobservable: unobservables,
 	})
 	return exitOK

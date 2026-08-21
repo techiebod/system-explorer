@@ -644,6 +644,14 @@ class Adapter:
                 continue
             if parent in items_by_name:
                 children.setdefault(parent, []).append(name)
+                # The tree as an EDGE (the R1 ruling), asserted exactly
+                # where the tree is built so the two cannot disagree: the
+                # collator derives the slice hierarchy from these, and the
+                # ported collector asserts the identical set.
+                items_by_name[name].setdefault("assertions", []).append({
+                    "type": "member-of",
+                    "target": {"kind": "unit", "name": parent},
+                })
             elif name != "-.slice":
                 orphans.append(name)
 
