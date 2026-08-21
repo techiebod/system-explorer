@@ -444,6 +444,64 @@
           "description": "Bounded like cpu_ms; positivity when objects were emitted is the stream rule, checked where the whole batch is visible."
         }
       }
+    },
+    "verb_end": {
+      "type": "object",
+      "required": [
+        "record",
+        "verb",
+        "truncated"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "record": {
+          "const": "verb_end"
+        },
+        "verb": {
+          "enum": [
+            "object",
+            "evidence",
+            "lookup"
+          ]
+        },
+        "truncated": {
+          "type": "boolean",
+          "description": "Whether the declared byte or time bound cut this response short. Stated on the payload because an unmarked truncation is a lie about the system (DESIGN 19)."
+        }
+      },
+      "description": "Closes a verb response (DESIGN 18, the request-shaped verbs, landed at R3c). An object response is NDJSON: one full-density object record, its unobservable records, its relation_assertion records, then this terminator. A name the collector never published is a decline record (reason absent) then this terminator \u2014 a decline is data, exactly as it is under collect."
+    },
+    "evidence_document": {
+      "type": "object",
+      "required": [
+        "record",
+        "media_type",
+        "digest"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "record": {
+          "const": "evidence_document"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "digest": {
+          "type": "string",
+          "description": "Over the redacted payload as served \u2014 the same regime as the object record's evidence member (DESIGN 19): JSON under the named canon, any other media type over exact post-redaction bytes."
+        },
+        "canon": {
+          "type": "string"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "description": "The evidence verb's one header line, followed by exactly `bytes` raw payload bytes and then a verb_end line. The raw document is the only thing in this product that is not our interpretation; redaction is declared, truncation is stated, and nothing between the header and the terminator is parsed as a record."
     }
   }
 }

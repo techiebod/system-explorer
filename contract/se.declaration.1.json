@@ -345,6 +345,22 @@
               }
             }
           }
+        },
+        "verbs": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The request-shaped verbs this collection serves, each with its own byte and time bounds (DESIGN 18/19): they run single-flight per collector, and a response that hits its bound says so on the payload \u2014 a truncated document marked truncated is still evidence; an unmarked one is a lie about the system. A collection without this member serves collect alone, and the verbs are refused unsupported.",
+          "properties": {
+            "object": {
+              "$ref": "#/$defs/verb_bounds"
+            },
+            "evidence": {
+              "$ref": "#/$defs/verb_bounds"
+            },
+            "lookup": {
+              "$ref": "#/$defs/verb_bounds"
+            }
+          }
         }
       },
       "oneOf": [
@@ -730,6 +746,24 @@
             "type": "string"
           },
           "description": "The declared facts a reader can go and look at. At least one, always: an opinion citing nothing is an assertion, and every name here must be declared by this collection \u2014 which is acceptance item 7 at the rule table."
+        }
+      }
+    },
+    "verb_bounds": {
+      "type": "object",
+      "required": [
+        "bytes",
+        "ms"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "ms": {
+          "type": "integer",
+          "minimum": 1
         }
       }
     }
