@@ -76,6 +76,8 @@ func NewHandler(st *store.Store, now func() float64, bootID string) http.Handler
 		writeJSON(w, map[string]bool{"ok": true})
 	})
 
+	registerStatus(mux, st)
+
 	mux.HandleFunc("GET /v1/collections", func(w http.ResponseWriter, r *http.Request) {
 		states, err := st.Collections()
 		if err != nil {
@@ -258,6 +260,13 @@ func writeJSON(w http.ResponseWriter, v any) {
 var publishedRoutes = []map[string]any{
 	{"path": "/v1/health", "tool": "host_health",
 		"summary": "Whether this collator is answering at all.",
+		"params": []string{}},
+	{"path": "/v1/status", "tool": "host_status",
+		"summary": "The attention surface: per collection, the worst level " +
+			"the declared rules fired and how many objects need attention — " +
+			"and, separately, which collections carry no rule table at all. " +
+			"An unjudged collection is its own state, never a quiet null: " +
+			"absence of judgement must not read as health.",
 		"params": []string{}},
 	{"path": "/v1/collections", "tool": "list_collections",
 		"summary": "Every collection this host holds, with its generation, its " +

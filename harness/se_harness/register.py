@@ -417,9 +417,11 @@ REGISTER: tuple[Row, ...] = (
         "the probe is the register's own owed list emptying; that each entry "
         "matches reality is the completeness tests' both-directions check."),
     Row(10, "`/v1/status` roll-up (worst per collection, attention counts)",
-        "owed", "R3a",
+        "built", "R3a",
         lambda: _in_file("go/internal/collate/rest.go", "/v1/status"),
-        "the probe sees the route string in the collator's REST surface."),
+        "the probe sees the route string in the collator's REST surface; "
+        "the judged/unjudged split and the roll-up arithmetic are asserted "
+        "by go/internal/collate/status_test.go."),
     Row(11, "fact filters with the 422 near-miss refusal",
         "owed", "R3a",
         lambda: _in_file("go/internal/collate/rest.go", "422"),
