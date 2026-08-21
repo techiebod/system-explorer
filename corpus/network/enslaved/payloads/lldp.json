@@ -1,0 +1,14 @@
+{
+ "Neighbors": [
+  {
+   "InterfaceName": "ens2",
+   "Neighbors": [
+    {
+     "SystemName": "lab-switch",
+     "PortDescription": "ge-0/0/7",
+     "ChassisID": "02:60:8c:11:22:33"
+    }
+   ]
+  }
+ ]
+}

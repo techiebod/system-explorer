@@ -71,7 +71,7 @@ func parseDeclaration(t *testing.T) map[string]declaredCollection {
 		declaration.Authority.ReadPaths[1] != wantPaths[1] {
 		t.Errorf("read_paths is %v, want %v", declaration.Authority.ReadPaths, wantPaths)
 	}
-	wantCommands := []string{"busctl", "ip", "nft"}
+	wantCommands := []string{"bridge", "busctl", "ip", "networkctl", "nft"}
 	if len(declaration.Authority.Commands) != len(wantCommands) {
 		t.Errorf("authority.commands is %v, want %v", declaration.Authority.Commands, wantCommands)
 	}
@@ -82,8 +82,8 @@ func parseDeclaration(t *testing.T) map[string]declaredCollection {
 	for _, collection := range declaration.Collections {
 		out[collection.Name] = collection
 	}
-	if len(out) != 5 {
-		t.Fatalf("five collections — the nft pair, routes, listening, resolver; got %d", len(out))
+	if len(out) != 6 {
+		t.Fatalf("six collections — the nft pair, routes, listening, resolver, links; got %d", len(out))
 	}
 	return out
 }

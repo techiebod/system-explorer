@@ -489,7 +489,7 @@ Every known miss, each owned or ruled. A row neither built, owned nor ruled is a
 | 6 | name families on `units`/`hardware` (and fleet-wide audit) | storage/vms only | R3c/R3d |
 | 7 | relations on `units`/`hardware` (and fleet-wide audit) | declared by neither | R3c/R3d |
 | 8 | rule tables fleet-wide (restart-churn, SMART verdicts, link-rate…) | mechanism built, no first-party collector declares any | R3c/R3d |
-| 9 | eighteen unported collections (network 8, storage 5, system 4, plex 1) | encoded in the shared register (`harness/se_harness/register.py`) | R3b/R3d |
+| 9 | eighteen unported collections (network 8, storage 5, system 4, plex 1) | the bare-guest nine built at R3b; six remain owed in the register (nft-tables, port-exposure, tailscale, arrays, datasets, plex/requests) | R3b done / R3d |
 | 10 | `/v1/status` roll-up (worst per collection, attention counts) | built at R3a | R3a |
 | 11 | fact filters with the 422 near-miss refusal | built at R3a | R3a |
 | 12 | pagination — limit/cursor, declared ceilings honoured on reads | built at R3a | R3a |
@@ -526,7 +526,7 @@ The 27-row register above is encoded with a probe wherever the tree can attest a
 #### R3 — the port, finished (large, in waves)
 
 - **R3a — the read API reaches parity** (register 10–16) — **done 2026-08-21**: /v1/status with judgement its own axis, filters with the near-miss refusal and the secret-fact non-oracle, pagination bounded by declared ceilings, the prefix map and the fact dictionary from the declarations, advisory cost labelled as such, and the host-header allowlist on both listeners.
-- **R3b — the bare-guest nine**: network links/routes/listening/resolver, storage block-devices/mounts, system time/boot/overview. This is what made a plain guest look empty.
+- **R3b — the bare-guest nine** — **done 2026-08-21**: system time/boot/overview, storage block-devices/mounts, network routes/listening/resolver/links, each with facts to reference parity, its type, its applied order, and its judgement as declared rule tables — eighteen rules across five collections, including three derived facts minted on BOTH implementations where a closed condition vocabulary could not express the old evaluator's arithmetic. links additionally asserts the enslaved-to edges the tree derives from, on both sides. Every collection landed with a captured corpus pair from the lab guests — staged kernel topology where a plain guest could not produce the shape, documented plants where nothing could — and the register forced each bookkeeping step in the same commit as its code.
 - **R3c — structure retrofit on the champions**: `units` and `hardware` gain all six layers plus the three verbs, carrying the recorded lessons (the backwards-arrow probe bound, SMART's no-reading-is-a-fact discipline, the link-rate opinion). The three acceptance items above are judged here, on the lab.
 - **R3d — the rest of the fleet**: remaining collections, verbs, names/relations/rules across all twenty collectors.
 - **R3e — the features**: change tracking (after the §36 ruling), findings persistence, acknowledgement (after the posture ruling), views route, sibling reads.

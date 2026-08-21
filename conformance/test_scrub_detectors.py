@@ -119,7 +119,14 @@ def test_long_decimal_strings(value: str, leaks: bool) -> None:
 
 
 def test_an_invalid_cidr_base_fires_as_string_and_as_pair() -> None:
-    assert "cidr" in classes(scan({"rule": "matched 192.0.2.135/10 here"}))
+    # The free-text half was re-anchored with the links corpus: addr/len
+    # with host bits set is how `ip addr` spells every interface address,
+    # so the ADDRESS rules judge it there — a global base is an address
+    # leak, a documentation-space one passes. The structured {addr, len}
+    # pair keeps the strict network-base rule: that shape comes from rule
+    # matchers, where host bits set really is a malformed claim.
+    assert "address" in classes(scan({"rule": "matched 8.8.4.4/10 here"}))
+    assert not classes(scan({"rule": "matched 192.0.2.135/10 here"}))
     assert "cidr" in classes(scan({"prefix": {"addr": "100.89.226.124", "len": 23}}))
 
 
@@ -563,3 +570,18 @@ def test_the_all_zero_hex32_is_the_wildcard_not_a_machine_id() -> None:
     nearly = zero_line.replace("0000:0016", "0001:0016")
     assert [f for f in detectors.scan({"t": nearly})
             if f.value_class == "machine-id"]
+
+
+def test_an_interface_address_with_prefix_is_judged_as_an_address() -> None:
+    """`ip addr` renders every interface address as addr/len with host
+    bits set — not a malformed network. Permitted spaces pass; a global
+    address stays the leak it always was, whatever the suffix."""
+    for ok in ("192.168.122.46/24", "127.0.0.1/8", "fe80::5054:ff:fe48:38e5/64",
+               "198.51.100.7/24"):
+        assert not [f for f in detectors.scan({"t": ok},
+                                              declares_address_fields=True)
+                    if f.value_class in ("cidr", "address")], ok
+    findings = [f for f in detectors.scan({"t": "8.8.4.4/24"},
+                                          declares_address_fields=True)
+                if f.value_class == "address"]
+    assert findings, "a global address must not hide behind a prefix length"

@@ -63,6 +63,16 @@ type source interface {
 	resolve1Call(request string) ([]byte, error)
 	ifNameIndex() []ifEntry
 	resolvConf() (text string, target string, exists bool)
+	// The links documents. ipAddr is the fact source and errors decline;
+	// lldp and fdb are ENRICHMENTS whose failure must not cost the
+	// collection — the reference reads them under a broad except and an
+	// interface list that works is worth more than one that is complete
+	// or nothing — so they degrade to empty, and under replay an unstaged
+	// enrichment reads the same way: for an enrichment, "the capture
+	// holds none" and "the machine had none" are one reading.
+	ipAddr() (jsonValue, error)
+	lldp() jsonValue
+	fdb() jsonValue
 	// hostname names the resolver object; under replay it is the CAPTURED
 	// machine's, staged, and its absence is fatal — an object named after
 	// whichever machine replays is a different object per reader.
@@ -318,6 +328,38 @@ func (s *liveSource) resolvConf() (string, string, bool) {
 
 func (s *liveSource) hostname() (string, error) { return os.Hostname() }
 
+func (s *liveSource) ipAddr() (jsonValue, error) {
+	return s.ipJSON("-d", "addr", "show")
+}
+
+// enrichmentJSON runs one optional reader: any failure is the empty
+// document, the reference's own tolerance for lldp and fdb.
+func enrichmentJSON(argv ...string) jsonValue {
+	ctx, cancel := context.WithTimeout(context.Background(), nftTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, argv[0], argv[1:]...).Output()
+	if err != nil {
+		return jsonValue{}
+	}
+	raw := bytes.TrimSpace(out)
+	if len(raw) == 0 {
+		return jsonValue{}
+	}
+	doc, err := decodeDocument(bytes.NewReader(raw))
+	if err != nil {
+		return jsonValue{}
+	}
+	return doc
+}
+
+func (s *liveSource) lldp() jsonValue {
+	return enrichmentJSON("networkctl", "lldp", "--json=short")
+}
+
+func (s *liveSource) fdb() jsonValue {
+	return enrichmentJSON("bridge", "-j", "fdb", "show")
+}
+
 func (s *liveSource) procNet(table string) (string, bool) {
 	at, err := bootClock()
 	if err != nil {
@@ -486,6 +528,26 @@ func (r replaySource) ifNameIndex() []ifEntry {
 	}
 	return out
 }
+
+func (r replaySource) ipAddr() (jsonValue, error) { return r.ipPayload("ip-addr") }
+
+// The enrichments under replay: an unstaged payload is the empty reading,
+// deliberately — see the interface comment.
+func (r replaySource) enrichment(stem string) jsonValue {
+	file, err := os.Open(filepath.Join(r.dir, stem+".json"))
+	if err != nil {
+		return jsonValue{}
+	}
+	defer file.Close()
+	doc, err := decodeDocument(file)
+	if err != nil {
+		return jsonValue{}
+	}
+	return doc
+}
+
+func (r replaySource) lldp() jsonValue { return r.enrichment("lldp") }
+func (r replaySource) fdb() jsonValue  { return r.enrichment("fdb") }
 
 func (r replaySource) hostname() (string, error) {
 	raw, err := os.ReadFile(filepath.Join(r.dir, "hostname"))

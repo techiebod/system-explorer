@@ -363,5 +363,414 @@
   },
   "bus:*.*.*.*.*.*.*.*.~key": {
     "discloses": "nothing"
+  },
+  "#links": "the links payloads. MAC-bearing members are substituted shape-preserved and corpus-consistently \u2014 the fdb's learned MAC IS a veth's own address, and the join must survive the scrub. Every other member is enumerated from the committed capture under deny-by-default: a kernel that grows a field forces a classification here rather than passing silently. Addresses stay verbatim under the lab-guest coverage limit stated for the route dumps.",
+  "ip-addr:*.addr_info.*.broadcast": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.addr_info.*.dynamic": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.addr_info.*.family": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.addr_info.*.label": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.addr_info.*.local": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.addr_info.*.metric": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.addr_info.*.noprefixroute": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.addr_info.*.preferred_life_time": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.addr_info.*.prefixlen": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.addr_info.*.protocol": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.addr_info.*.scope": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.addr_info.*.valid_life_time": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.address": {
+    "discloses": "identity",
+    "format": "mac"
+  },
+  "ip-addr:*.allmulti": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.altnames.*": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.broadcast": {
+    "discloses": "identity",
+    "format": "mac"
+  },
+  "ip-addr:*.flags.*": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.gro_ipv4_max_size": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.gro_max_size": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.group": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.gso_ipv4_max_size": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.gso_max_segs": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.gso_max_size": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.ifindex": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.ifname": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.link": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.link_type": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.ageing_time": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.bridge_id": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.fdb_max_learned": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.fdb_n_learned": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.forward_delay": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.gc_timer": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.group_addr": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.group_fwd_mask": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.hello_time": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.hello_timer": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.max_age": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.mcast_hash_elasticity": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.mcast_hash_max": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.mcast_igmp_version": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.mcast_last_member_cnt": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.mcast_last_member_intvl": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.mcast_membership_intvl": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.mcast_mld_version": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.mcast_querier": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.mcast_querier_intvl": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.mcast_query_intvl": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.mcast_query_response_intvl": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.mcast_query_use_ifaddr": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.mcast_router": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.mcast_snooping": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.mcast_startup_query_cnt": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.mcast_startup_query_intvl": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.mcast_stats_enabled": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.mcast_vlan_snooping": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.mst_enabled": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.nf_call_arptables": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.nf_call_ip6tables": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.nf_call_iptables": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.no_linklocal_learn": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.priority": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.root_id": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.root_path_cost": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.root_port": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.stp_state": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.tcn_timer": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.topology_change": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.topology_change_detected": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.topology_change_timer": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.vlan_default_pvid": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.vlan_filtering": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.vlan_protocol": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.vlan_stats_enabled": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_data.vlan_stats_per_port": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_kind": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.bcast_flood": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.bridge_id": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.config_pending": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.cost": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.designated_cost": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.designated_port": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.fastleave": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.flood": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.forward_delay_timer": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.group_fwd_mask": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.group_fwd_mask_str": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.guard": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.hairpin": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.hold_timer": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.id": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.isolated": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.learning": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.locked": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.mab": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.mcast_flood": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.mcast_to_unicast": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.message_age_timer": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.multicast_router": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.neigh_suppress": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.neigh_vlan_suppress": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.no": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.priority": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.proxy_arp": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.proxy_arp_wifi": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.root_block": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.root_id": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.state": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.topology_change_ack": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_data.vlan_tunnel": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.linkinfo.info_slave_kind": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.master": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.max_mtu": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.min_mtu": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.mtu": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.num_rx_queues": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.num_tx_queues": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.operstate": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.parentbus": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.parentdev": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.promiscuity": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.qdisc": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.tso_max_segs": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.tso_max_size": {
+    "discloses": "nothing"
+  },
+  "ip-addr:*.txqlen": {
+    "discloses": "nothing"
+  },
+  "fdb:*.flags.*": {
+    "discloses": "nothing"
+  },
+  "fdb:*.ifname": {
+    "discloses": "nothing"
+  },
+  "fdb:*.mac": {
+    "discloses": "identity",
+    "format": "mac"
+  },
+  "fdb:*.master": {
+    "discloses": "nothing"
+  },
+  "fdb:*.state": {
+    "discloses": "nothing"
+  },
+  "fdb:*.vlan": {
+    "discloses": "nothing"
+  },
+  "lldp:~key": {
+    "discloses": "nothing"
+  },
+  "lldp:*": {
+    "discloses": "nothing"
+  },
+  "lldp:*.*": {
+    "discloses": "nothing"
+  },
+  "lldp:*.*.*": {
+    "discloses": "nothing"
   }
 }

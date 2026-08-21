@@ -616,16 +616,24 @@ def _scan_text(
     for m in CIDR.finditer(text):
         base, length = m.group(1), int(m.group(2))
         try:
-            ipaddress.ip_address(base)
+            address = ipaddress.ip_address(base)
         except ValueError:
             continue  # not an address at all — a version string, a ratio
         try:
             ipaddress.ip_network((base, length), strict=True)
         except ValueError:
-            findings.append(Finding(
-                path, "cidr",
-                f"{base}/{length} is not a valid base for its length",
-            ))
+            # Host bits set: this is not a malformed network, it is the
+            # address/prefix spelling `ip addr` renders every interface
+            # address in — so the ADDRESS rules judge it. A permitted-space
+            # address passes exactly as it would bare; a global one is the
+            # leak it always was, whatever the suffix.
+            if getattr(address, "is_global", False):
+                findings.append(Finding(
+                    path, "address",
+                    f"{base}/{length} carries a globally routable address — "
+                    "scrubbed globals land in documentation space, so this "
+                    "one is real",
+                ))
 
     # A private address is legitimate exactly where the manifest declares
     # address fields (in-space substitution keeps a replacement private). A

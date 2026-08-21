@@ -4,8 +4,10 @@
   "version": "0.7.0",
   "authority": {
     "commands": [
+      "bridge",
       "busctl",
       "ip",
+      "networkctl",
       "nft"
     ],
     "capabilities": [
@@ -913,6 +915,316 @@
             "s",
             "org.freedesktop.resolve1.Manager",
             "--json=short"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "links",
+      "question": "what interfaces does this host have, what is each one really, and is anything that should carry traffic down?",
+      "prefix": "link",
+      "freshness": "60s",
+      "perishability": "sampled",
+      "answer": [
+        "OperState",
+        "Kind",
+        "LinkType",
+        "ParentBus",
+        "MTU",
+        "MACAddress",
+        "Addresses"
+      ],
+      "ceiling": {
+        "records": 2000,
+        "bytes": 4194304
+      },
+      "facts": {
+        "OperState": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The kernel's operational state, lowered \u2014 up is the only positively healthy word; lo, wireguard and tun report unknown because they have no carrier to detect, which is why the quiet states are not judged."
+        },
+        "Kind": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The kernel's most specific name for what this SOFTWARE device is \u2014 bridge, veth, tun, tap, with tun/tap split one level down in linkinfo because one driver creates both. Absent on every physical interface and loopback: that absence is the statement 'not a software device', and LinkType is what names those."
+        },
+        "LinkType": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The kernel's hardware type (ARPHRD), present on everything: ether, loopback, or none for a layer-3 tunnel with no link-layer header at all \u2014 which is also why such a device has no MAC. Not a physical/virtual discriminator: a bridge is ether too."
+        },
+        "MTU": {
+          "type": "integer",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The link's MTU."
+        },
+        "MACAddress": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "identity",
+          "sentence": "The address in use \u2014 the join key the bridge fdb and a container runtime both speak, declared as the identity it is."
+        },
+        "PermanentMACAddress": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "identity",
+          "sentence": "The address burned into the hardware, carried only when it differs from the one in use \u2014 the tell that a MAC has been overridden, which otherwise takes a reader to the machine to discover."
+        },
+        "Master": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The bridge or bond this link is enslaved to. The same statement travels as the enslaved-to relation, which is what the tree derives from."
+        },
+        "Addresses": {
+          "type": "list",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "location",
+          "sentence": "Every address configured on the link, with its prefix length \u2014 and the fact the down-but-configured judgement reads: a down link carrying addresses is something that should be working."
+        },
+        "ParentBus": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The bus behind the device, present only where there is hardware \u2014 pci on a real NIC, virtio on a VM's, exactly the distinction a synthesised physical flag would have destroyed."
+        },
+        "ParentDev": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "The bus address, kept exactly as the kernel spells it: the join key to the hardware collections."
+        },
+        "BridgeMembers": {
+          "type": "integer",
+          "temperament": "state",
+          "kind": "derived",
+          "discloses": "nothing",
+          "sentence": "How many links are enslaved to this bridge, carried on bridges only: zero is the empty-bridge rule's whole condition, because the kernel only raises a bridge when a member is up.",
+          "derived_from": [
+            "Master"
+          ]
+        },
+        "PeerMACAddresses": {
+          "type": "list",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "identity",
+          "sentence": "The MACs the bridge has learned behind this port \u2014 what makes a veth attributable to its container, since the port's own MAC identifies nothing. Learned and aging: absence is silence, never evidence that nothing is attached."
+        },
+        "LLDPNeighbors": {
+          "type": "list",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "location",
+          "sentence": "What the far end of the wire says it is, where anything on the segment emits LLDP: system name, port, chassis id \u2014 the facts a neighbour resolution joins on."
+        }
+      },
+      "relations": [
+        {
+          "type": "enslaved-to",
+          "carries_facts": false,
+          "discriminator": [],
+          "inverse_observable": false,
+          "confirmed_by": ""
+        }
+      ],
+      "rules": [
+        {
+          "key": "link-empty-bridge",
+          "level": "info",
+          "grounds": "threshold",
+          "when": {
+            "all": [
+              {
+                "all": [
+                  {
+                    "fact": "OperState",
+                    "present": true
+                  },
+                  {
+                    "not": {
+                      "fact": "OperState",
+                      "in": [
+                        "up",
+                        "unknown",
+                        ""
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "fact": "Kind",
+                "equals": "bridge"
+              },
+              {
+                "fact": "BridgeMembers",
+                "equals": 0
+              }
+            ]
+          },
+          "sentence": "Bridge is down with no member ports \u2014 an empty bridge is down by design; its address is daemon-assigned, not intent.",
+          "cites": [
+            "OperState",
+            "Kind",
+            "BridgeMembers"
+          ]
+        },
+        {
+          "key": "link-down-configured",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "all": [
+              {
+                "all": [
+                  {
+                    "fact": "OperState",
+                    "present": true
+                  },
+                  {
+                    "not": {
+                      "fact": "OperState",
+                      "in": [
+                        "up",
+                        "unknown",
+                        ""
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "not": {
+                  "fact": "Kind",
+                  "equals": "veth"
+                }
+              },
+              {
+                "not": {
+                  "all": [
+                    {
+                      "fact": "Kind",
+                      "equals": "bridge"
+                    },
+                    {
+                      "fact": "BridgeMembers",
+                      "equals": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "fact": "Addresses",
+                "non_empty": true
+              }
+            ]
+          },
+          "sentence": "Link is administratively present but not up, and it carries configured addresses \u2014 something that should be working is not.",
+          "cites": [
+            "OperState",
+            "Addresses"
+          ]
+        },
+        {
+          "key": "link-down-unconfigured",
+          "level": "info",
+          "grounds": "threshold",
+          "when": {
+            "all": [
+              {
+                "all": [
+                  {
+                    "fact": "OperState",
+                    "present": true
+                  },
+                  {
+                    "not": {
+                      "fact": "OperState",
+                      "in": [
+                        "up",
+                        "unknown",
+                        ""
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "not": {
+                  "fact": "Kind",
+                  "equals": "veth"
+                }
+              },
+              {
+                "not": {
+                  "all": [
+                    {
+                      "fact": "Kind",
+                      "equals": "bridge"
+                    },
+                    {
+                      "fact": "BridgeMembers",
+                      "equals": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "not": {
+                  "fact": "Addresses",
+                  "non_empty": true
+                }
+              }
+            ]
+          },
+          "sentence": "Link is administratively present but not up, with nothing configured on it \u2014 inventory, not trouble: an unwired spare NIC or an unused radio.",
+          "cites": [
+            "OperState",
+            "Addresses"
+          ]
+        }
+      ],
+      "redaction_exemption": "addresses and LLDP neighbour facts are declared location, the MAC family identity, each handled by disclosure policy; the rest is kernel link metadata",
+      "reference_commands": [
+        {
+          "purpose": "the same tree, by hand",
+          "argv": [
+            "ip",
+            "-d",
+            "addr",
+            "show"
+          ]
+        },
+        {
+          "purpose": "the learned MACs behind each bridge port",
+          "argv": [
+            "bridge",
+            "-j",
+            "fdb",
+            "show"
+          ]
+        },
+        {
+          "purpose": "the far ends of the wires, where LLDP speaks",
+          "argv": [
+            "networkctl",
+            "lldp"
           ]
         }
       ]

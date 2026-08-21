@@ -1,0 +1,286 @@
+[
+  {
+    "mac": "33:33:00:00:00:01",
+    "ifname": "ens2",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "01:00:5e:00:00:01",
+    "ifname": "ens2",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "33:33:ff:48:38:e5",
+    "ifname": "ens2",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "01:80:c2:00:00:00",
+    "ifname": "ens2",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "01:80:c2:00:00:03",
+    "ifname": "ens2",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "01:80:c2:00:00:0e",
+    "ifname": "ens2",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "33:33:00:01:00:03",
+    "ifname": "ens2",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "01:00:5e:00:00:fc",
+    "ifname": "ens2",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "33:33:00:00:00:01",
+    "ifname": "br-lab",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "01:00:5e:00:00:6a",
+    "ifname": "br-lab",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "33:33:00:00:00:6a",
+    "ifname": "br-lab",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "01:00:5e:00:00:01",
+    "ifname": "br-lab",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "33:33:ff:b2:c8:49",
+    "ifname": "br-lab",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "01:00:5e:00:00:fc",
+    "ifname": "br-lab",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "33:33:00:01:00:03",
+    "ifname": "br-lab",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "02:68:50:1f:ad:81",
+    "ifname": "br-lab",
+    "vlan": 1,
+    "flags": [],
+    "master": "br-lab",
+    "state": "permanent"
+  },
+  {
+    "mac": "02:68:50:1f:ad:81",
+    "ifname": "br-lab",
+    "flags": [],
+    "master": "br-lab",
+    "state": "permanent"
+  },
+  {
+    "mac": "33:33:00:00:00:01",
+    "ifname": "br-empty",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "01:00:5e:00:00:6a",
+    "ifname": "br-empty",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "33:33:00:00:00:6a",
+    "ifname": "br-empty",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "01:00:5e:00:00:01",
+    "ifname": "br-empty",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "02:0e:0b:09:85:61",
+    "ifname": "br-empty",
+    "vlan": 1,
+    "flags": [],
+    "master": "br-empty",
+    "state": "permanent"
+  },
+  {
+    "mac": "02:0e:0b:09:85:61",
+    "ifname": "br-empty",
+    "flags": [],
+    "master": "br-empty",
+    "state": "permanent"
+  },
+  {
+    "mac": "33:33:00:00:00:01",
+    "ifname": "veth-b",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "01:00:5e:00:00:01",
+    "ifname": "veth-b",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "33:33:ff:50:73:fa",
+    "ifname": "veth-b",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "01:00:5e:00:00:fc",
+    "ifname": "veth-b",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "33:33:00:01:00:03",
+    "ifname": "veth-b",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "02:18:dc:65:b2:fd",
+    "ifname": "veth-a",
+    "flags": [],
+    "master": "br-lab",
+    "state": ""
+  },
+  {
+    "mac": "02:4c:a1:0b:66:9b",
+    "ifname": "veth-a",
+    "vlan": 1,
+    "flags": [],
+    "master": "br-lab",
+    "state": "permanent"
+  },
+  {
+    "mac": "02:4c:a1:0b:66:9b",
+    "ifname": "veth-a",
+    "flags": [],
+    "master": "br-lab",
+    "state": "permanent"
+  },
+  {
+    "mac": "33:33:00:00:00:01",
+    "ifname": "veth-a",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "01:00:5e:00:00:01",
+    "ifname": "veth-a",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "33:33:ff:49:cb:ae",
+    "ifname": "veth-a",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "33:33:00:01:00:03",
+    "ifname": "veth-a",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "33:33:00:00:00:01",
+    "ifname": "dm-down",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  }
+]

@@ -105,8 +105,8 @@ def test_a_stale_owed_entry_refuses_the_run() -> None:
     the register is updated."""
     ported = {k: dict(v) for k, v in NEW.items()}
     ported["network"] = dict(ported["network"])
-    ported["network"]["links"] = {"name": "links", "answer": []}
-    with pytest.raises(RegisterViolation, match="network/links"):
+    ported["network"]["nft-tables"] = {"name": "nft-tables", "answer": []}
+    with pytest.raises(RegisterViolation, match="network/nft-tables"):
         register.comparator_work(ported=ported)
 
 

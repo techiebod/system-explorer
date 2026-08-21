@@ -603,10 +603,10 @@ SEAM = {
         # pair, which is what closed the named residual that stood here while
         # the round-a5 chains-only fixtures were the only subjects.
         "collections": ["nft-chains", "nft-rules", "routes", "listening",
-                        "resolver"],
+                        "resolver", "links"],
         "acquisitions": {"_nft_json": "nft",
                          "_ip_route4": "ip-route4", "_ip_route6": "ip-route6",
-                         "_ip_rule": "ip-rule"},
+                         "_ip_rule": "ip-rule", "_ip_addr": "ip-addr"},
         # The listening tables are filesystem reads by path, one staged
         # transcript for all four /proc/net files — the tree seam, because
         # _read_text is called with the path that decides the document.
@@ -617,7 +617,12 @@ SEAM = {
         # than a broken capture: no staged resolv-conf is no file, and no
         # staged interface table walks nothing.
         "auxiliary": {"_read_resolv_conf": ("resolv-conf", None),
-                      "_if_nameindex": ("ifindex", [])},
+                      "_if_nameindex": ("ifindex", []),
+                      # The links enrichments degrade to empty exactly as
+                      # they do live: for an enrichment, "the capture holds
+                      # none" and "the machine had none" are one reading.
+                      "_lldp_json": ("lldp", {}),
+                      "_fdb_json": ("fdb", [])},
         # The resolve1 half IS the bus: the Manager GetAll doubles as the
         # availability probe, GetLink and the per-link GetAll answer from
         # the same staged map, and an unstaged request raises rather than

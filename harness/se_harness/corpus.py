@@ -83,6 +83,13 @@ VALID_VARIANTS = frozenset(
         # resolved and the dhcpcd host the founding correction names cannot
         # be captured from them.
         "resolved",
+        # enslaved, added with links — the last of the bare-guest nine: a
+        # topology staged on the guest's real kernel (bridge + enslaved
+        # veth + empty bridge + down-but-addressed dummy), because the
+        # shapes the link rules judge and the tree derives from do not
+        # occur on a plain guest, and the fdb's learned-MAC join is only
+        # honest when a real bridge actually learned it.
+        "enslaved",
         "canary",
         "goto",
         "asymmetric",

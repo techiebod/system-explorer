@@ -1,0 +1,95 @@
+{
+  "collector": "network",
+  "collections": [
+    "links"
+  ],
+  "variant": "enslaved",
+  "provenance": "captured-then-planted",
+  "os": "debian",
+  "os_version": "13",
+  "source_version": "iproute2 6.16 (debian 13)",
+  "captured": "2026-08-21T17:30:00Z",
+  "regenerable": true,
+  "canaries": [],
+  "anonymised": true,
+  "note": "The links collection's pair, captured from a topology STAGED on the guest's real kernel rather than fabricated: a bridge with an address and one enslaved veth, an empty bridge (down by design \u2014 the info rule's whole condition), the veth pair showing Kind on both ends, a down dummy CARRYING an address (the down-but-configured warn), the virtio NIC with its ParentBus join key, and loopback's quiet unknown. Traffic was pushed across the bridge before capture so the fdb genuinely LEARNED the far veth's MAC on the enslaved port \u2014 and the scrub substituted every MAC shape-preserved and corpus-consistently, so the attribution join survives: the learned MAC in fdb.json is byte-identical to veth-b's own address in ip-addr.json. LLDP is honestly empty; nothing on a NAT segment speaks it. Two plants, each for a shape no NAT-segment guest can produce: an LLDP neighbour on the NIC (a switch announcing its port \u2014 the fact the neighbour-resolution acceptance item joins on) and a permaddr differing from the address in use (the overridden-MAC tell). Both wear the 02: locally-administered convention the scrub's own substitutions wear.",
+  "anchors": [
+    {
+      "collection": "links",
+      "object": "veth-a",
+      "fact": "Master",
+      "value": "br-lab"
+    },
+    {
+      "collection": "links",
+      "object": "veth-a",
+      "relation": "enslaved-to",
+      "target": {
+        "kind": "link",
+        "name": "br-lab"
+      },
+      "assertion_facts": {}
+    },
+    {
+      "collection": "links",
+      "object": "br-lab",
+      "fact": "BridgeMembers",
+      "value": 1
+    },
+    {
+      "collection": "links",
+      "object": "br-empty",
+      "fact": "BridgeMembers",
+      "value": 0
+    },
+    {
+      "collection": "links",
+      "object": "veth-a",
+      "fact": "PeerMACAddresses",
+      "value": [
+        "02:18:dc:65:b2:fd"
+      ]
+    },
+    {
+      "collection": "links",
+      "object": "dm-down",
+      "fact": "OperState",
+      "value": "down"
+    },
+    {
+      "collection": "links",
+      "object": "ens2",
+      "fact": "ParentBus",
+      "value": "virtio"
+    },
+    {
+      "collection": "links",
+      "object": "lo",
+      "fact": "OperState",
+      "value": "unknown"
+    },
+    {
+      "collection": "links",
+      "commit_objects": 7
+    },
+    {
+      "collection": "links",
+      "object": "ens2",
+      "fact": "LLDPNeighbors",
+      "value": [
+        {
+          "SystemName": "lab-switch",
+          "PortDescription": "ge-0/0/7",
+          "ChassisID": "02:60:8c:11:22:33"
+        }
+      ]
+    },
+    {
+      "collection": "links",
+      "object": "ens2",
+      "fact": "PermanentMACAddress",
+      "value": "02:60:8c:aa:bb:01"
+    }
+  ],
+  "anchors_note": "Staged truth transcribed by hand: the enslavement as BOTH a fact and the relation the tree derives from (assertion_facts {} because enslaved-to carries none); the two bridges' member counts, one each side of the empty-bridge rule; the learned MAC on the enslaved port equal to veth-b's own address \u2014 the attribution join, asserted across two payload files; and the down-with-address dummy the warn rule exists for. Seven objects: every link the capture holds, once."
+}

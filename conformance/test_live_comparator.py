@@ -277,7 +277,9 @@ def test_the_comparator_derives_its_work_from_the_register() -> None:
         "register row 27: the derived work list is what finally drives "
         "system/identity"
     )
-    assert "owed: " in work["network"]["excluded"]["links"]
+    # Re-anchored twice as R3b landed collections: the pin is "an owed
+    # exclusion appears, named", not any one collection staying owed.
+    assert "owed: " in work["network"]["excluded"]["nft-tables"]
     assert work["plex"]["excluded"] == {
         "requests": "owed: " + register.NOT_YET_PORTED["plex/requests"]}
 

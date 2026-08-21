@@ -764,6 +764,10 @@ def _if_nameindex() -> list:
 # the replay seam can redirect each by name (the storage pattern): a
 # parameterised acquisition has no stable payload stem, and the seam's
 # deny-by-default stubbing keys on module attributes.
+def _ip_addr() -> list:
+    return _ip_json(["-d", "addr", "show"])
+
+
 def _ip_route4() -> list:
     return _ip_json(["-4", "route", "show", "table", "all"])
 
@@ -1624,7 +1628,7 @@ class Adapter:
         return by_link
 
     async def _link_items(self) -> list[dict]:
-        raw = await anyio.to_thread.run_sync(_ip_json, ["-d", "addr", "show"])
+        raw = await anyio.to_thread.run_sync(_ip_addr)
         lldp = await self._lldp_by_link()
         # Learned MACs per bridge port. A failure here must not cost the whole
         # links collection: attribution is an enrichment, and an interface list
@@ -1705,9 +1709,19 @@ class Adapter:
             state = facts["OperState"]
             healthy = "ok" if state == "up" else (
                 None if state in LINK_QUIET_STATES else "info")
-            items.append(env.item_summary(f"link:{name}", "link", name, facts,
-                                          opinions=link_opinions(facts),
-                                          healthy=healthy))
+            item = env.item_summary(f"link:{name}", "link", name, facts,
+                                    opinions=link_opinions(facts),
+                                    healthy=healthy)
+            # The hierarchy as an EDGE (the R1 ruling), asserted whenever a
+            # master exists — resolvable or not, because the collator's
+            # resolution is the honest half and an edge into open space is
+            # a different statement from no edge at all.
+            if facts.get("Master"):
+                item["assertions"] = [{
+                    "type": "enslaved-to",
+                    "target": {"kind": "link", "name": facts["Master"]},
+                }]
+            items.append(item)
 
         # Enslaved links sit under their master (bridge, bond) the way
         # partitions sit under disks — membership readable from the shape of
