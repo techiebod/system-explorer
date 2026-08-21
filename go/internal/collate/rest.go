@@ -54,6 +54,18 @@ type objectView struct {
 	At    float64         `json:"at"`
 }
 
+// objectsPage is the objects route's envelope. Total counts the FILTERED
+// set before pagination, and next_cursor is explicit — present or null,
+// never omitted — so a client never has to infer truncation. applied_limit
+// says what bound actually governed the page: the requested limit, the
+// default, or the collection's own declared ceiling, whichever bit.
+type objectsPage struct {
+	Objects      []objectView `json:"objects"`
+	Total        int          `json:"total"`
+	AppliedLimit int          `json:"applied_limit"`
+	NextCursor   *string      `json:"next_cursor"`
+}
+
 // NewHandler builds the read API over one store. now is the boot-clock
 // reading used for ages and bootID the domain that clock belongs to;
 // tests inject both, the daemon passes BootNow and OwnBootID's answer.
@@ -133,6 +145,11 @@ func NewHandler(st *store.Store, now func() float64, bootID string) http.Handler
 			http.Error(w, "unknown collection", http.StatusNotFound)
 			return
 		}
+		filters, limit, cursor, refused := parsePage(r.URL.Query())
+		if refused != nil {
+			http.Error(w, refused.detail, refused.status)
+			return
+		}
 		rows, err := st.Objects(name)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -142,7 +159,8 @@ func NewHandler(st *store.Store, now func() float64, bootID string) http.Handler
 		// sweep, which had been written against the page and the
 		// checkpoint and not against this route — which is the whole
 		// reason item 11 is worded "no output channel" rather than as a
-		// list somebody maintains.
+		// list somebody maintains. Withheld BEFORE filtering, so a filter
+		// can never probe a value this route refuses to print.
 		document, err := st.DeclarationFor(name)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -153,18 +171,64 @@ func NewHandler(st *store.Store, now func() float64, bootID string) http.Handler
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		views := make([]objectView, 0, len(rows))
-		for _, o := range rows {
-			v := objectView{ID: o.ID, Name: o.Name, Type: o.Type, Facts: o.Facts, At: o.At}
+		served := make([]json.RawMessage, len(rows))
+		facts := make([]map[string]json.RawMessage, len(rows))
+		carried := map[string]bool{}
+		for i, o := range rows {
+			served[i] = o.Facts
 			if len(secrets) > 0 {
-				v.Facts = withoutSecrets(o.Facts, secrets)
+				served[i] = withoutSecrets(o.Facts, secrets)
 			}
+			if json.Unmarshal(served[i], &facts[i]) != nil {
+				facts[i] = map[string]json.RawMessage{}
+			}
+			for key := range facts[i] {
+				carried[key] = true
+			}
+		}
+		if len(rows) > 0 {
+			carried["type"] = true
+			if refused := checkNearMiss(filters, carried); refused != nil {
+				http.Error(w, refused.detail, refused.status)
+				return
+			}
+		}
+		kept := make([]int, 0, len(rows))
+		for i, o := range rows {
+			matches := true
+			for key, wanted := range filters {
+				var text string
+				var present bool
+				if key == "type" {
+					text, present = o.Type, o.Type != ""
+				} else if raw, ok := facts[i][key]; ok {
+					text, present = factText(raw), true
+				}
+				if !matchValue(text, present, wanted) {
+					matches = false
+					break
+				}
+			}
+			if matches {
+				kept = append(kept, i)
+			}
+		}
+		offset, applied, next := paginate(len(kept), limit, cursor, ceilingFor(document, name))
+		page := objectsPage{
+			Objects:      make([]objectView, 0, applied),
+			Total:        len(kept),
+			AppliedLimit: applied,
+			NextCursor:   next,
+		}
+		for _, i := range kept[offset:min(offset+applied, len(kept))] {
+			o := rows[i]
+			v := objectView{ID: o.ID, Name: o.Name, Type: o.Type, Facts: served[i], At: o.At}
 			if o.Scope != store.HostNative {
 				v.Instance = &o.Scope
 			}
-			views = append(views, v)
+			page.Objects = append(page.Objects, v)
 		}
-		writeJSON(w, views)
+		writeJSON(w, page)
 	})
 
 	// Relations are served on their own route rather than nested inside the
@@ -275,10 +339,17 @@ var publishedRoutes = []map[string]any{
 			"domain is stated rather than subtracted through.",
 		"params": []string{}},
 	{"path": "/v1/collections/{name}/objects", "tool": "get_collection",
-		"summary": "One collection's applied objects. Reaches a plugin's " +
-			"collection the day it exists, because nothing here names a " +
-			"first-party one.",
-		"params": []string{"name"}},
+		"summary": "One collection's applied objects, in applied order. Any " +
+			"other query parameter is a fact filter matched against the " +
+			"fact's JSON spelling ('type' matches the object's kind; a " +
+			"leading ! negates, a trailing * prefix-matches); a near-miss " +
+			"of a carried fact name is refused with the real name, and an " +
+			"unknown one gets the honest empty page. limit and cursor page " +
+			"the filtered set, bounded by the collection's declared " +
+			"ceiling; next_cursor is explicit, so truncation is never " +
+			"inferred. Reaches a plugin's collection the day it exists, " +
+			"because nothing here names a first-party one.",
+		"params": []string{"name", "limit", "cursor"}},
 	{"path": "/v1/collections/{name}/relations", "tool": "get_relations",
 		"summary": "One collection's assembled relations, each carrying its " +
 			"observability — asserted is NOT a degraded confirmed, and an " +

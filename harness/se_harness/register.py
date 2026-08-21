@@ -423,14 +423,17 @@ REGISTER: tuple[Row, ...] = (
         "the judged/unjudged split and the roll-up arithmetic are asserted "
         "by go/internal/collate/status_test.go."),
     Row(11, "fact filters with the 422 near-miss refusal",
-        "owed", "R3a",
-        lambda: _in_file("go/internal/collate/rest.go", "422"),
-        "the probe sees the status code appear in the REST source, nothing "
-        "about the refusal's quality; the near-miss behaviour is R3a's tests'."),
+        "built", "R3a",
+        lambda: _in_file("go/internal/collate/query.go", "checkNearMiss"),
+        "the probe sees the refusal exist; its behaviour — the fold rule, "
+        "the open-vocabulary empty page, the secret-fact non-oracle — is "
+        "asserted by go/internal/collate/query_test.go."),
     Row(12, "pagination — limit/cursor, declared ceilings honoured on reads",
-        "owed", "R3a",
+        "built", "R3a",
         lambda: _in_file("go/internal/collate/rest.go", "cursor"),
-        "the probe sees the parameter name in the REST source."),
+        "the probe sees the parameter reach the route; the ceiling clamp "
+        "and the explicit cursor are asserted by "
+        "go/internal/collate/query_test.go."),
     Row(13, "`/v1/capabilities` serving `object_prefixes` (id→route)",
         "owed", "R3a",
         lambda: _in_file("go/internal/collate/rest.go", "object_prefixes"),

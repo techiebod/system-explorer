@@ -55,6 +55,11 @@ type declaredCollection struct {
 	Name  string                     `json:"name"`
 	Facts map[string]json.RawMessage `json:"facts"`
 	Rules []Rule                     `json:"rules"`
+	// The declared record ceiling, honoured by the read side too: a page
+	// may never serve more than the collection is allowed to hold.
+	Ceiling struct {
+		Records int `json:"records"`
+	} `json:"ceiling"`
 }
 
 type declaredDocument struct {

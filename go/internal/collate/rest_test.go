@@ -82,16 +82,30 @@ func TestCollectionsRow(t *testing.T) {
 
 func TestObjectsRoute(t *testing.T) {
 	rr := get(t, seededHandler(t), "/v1/collections/identity/objects")
-	var rows []map[string]any
-	if err := json.Unmarshal(rr.Body.Bytes(), &rows); err != nil {
+	var page struct {
+		Objects []map[string]any `json:"objects"`
+		Total   int              `json:"total"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &page); err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 2 || rows[0]["id"] != "identity:host1" || rows[0]["at"] != 10.0 {
-		t.Fatalf("%+v", rows)
+	rows := page.Objects
+	if page.Total != 2 || len(rows) != 2 ||
+		rows[0]["id"] != "identity:host1" || rows[0]["at"] != 10.0 {
+		t.Fatalf("%+v", page)
 	}
 	facts := rows[0]["facts"].(map[string]any)
 	if facts["OsId"] != "nixos" {
 		t.Fatalf("%+v", facts)
+	}
+	// The envelope's paging members are explicit, present even when the
+	// whole collection fits one page: a client never infers truncation.
+	var envelope map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if next, ok := envelope["next_cursor"]; !ok || next != nil {
+		t.Fatalf("next_cursor must be an explicit null: %+v", envelope)
 	}
 }
 
@@ -300,10 +314,13 @@ func TestTwoInstancesAreDistinguishableOnTheWire(t *testing.T) {
 
 	h := NewHandler(st, func() float64 { return 26.0 }, fakeBootID)
 	rr := get(t, h, "/v1/collections/identity/objects")
-	var rows []map[string]any
-	if err := json.Unmarshal(rr.Body.Bytes(), &rows); err != nil {
+	var page struct {
+		Objects []map[string]any `json:"objects"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &page); err != nil {
 		t.Fatal(err)
 	}
+	rows := page.Objects
 	if len(rows) != 2 {
 		t.Fatalf("two instances, two rows: %s", rr.Body.String())
 	}
@@ -533,13 +550,16 @@ func TestRowsServeTypedInAppliedOrder(t *testing.T) {
 	}
 	rr := get(t, NewHandler(st, func() float64 { return 26.0 }, fakeBootID),
 		"/v1/collections/units/objects")
-	var rows []struct {
-		ID   string `json:"id"`
-		Type string `json:"type"`
+	var page struct {
+		Objects []struct {
+			ID   string `json:"id"`
+			Type string `json:"type"`
+		} `json:"objects"`
 	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &rows); err != nil {
+	if err := json.Unmarshal(rr.Body.Bytes(), &page); err != nil {
 		t.Fatal(err)
 	}
+	rows := page.Objects
 	if len(rows) != 3 {
 		t.Fatalf("%d rows", len(rows))
 	}
