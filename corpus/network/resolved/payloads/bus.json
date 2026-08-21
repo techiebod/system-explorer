@@ -1,0 +1,237 @@
+{
+ "/org/freedesktop/resolve1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.resolve1.Manager": {
+  "type": "a{sv}",
+  "data": [
+   {
+    "LLMNRHostname": {
+     "type": "s",
+     "data": "se-test-ubuntu2604"
+    },
+    "LLMNR": {
+     "type": "s",
+     "data": "no"
+    },
+    "MulticastDNS": {
+     "type": "s",
+     "data": "no"
+    },
+    "DNSOverTLS": {
+     "type": "s",
+     "data": "no"
+    },
+    "DNS": {
+     "type": "a(iiay)",
+     "data": [
+      [
+       2,
+       2,
+       [
+        192,
+        168,
+        122,
+        1
+       ]
+      ]
+     ]
+    },
+    "DNSEx": {
+     "type": "a(iiayqs)",
+     "data": [
+      [
+       2,
+       2,
+       [
+        192,
+        168,
+        122,
+        1
+       ],
+       0,
+       ""
+      ]
+     ]
+    },
+    "FallbackDNS": {
+     "type": "a(iiay)",
+     "data": []
+    },
+    "FallbackDNSEx": {
+     "type": "a(iiayqs)",
+     "data": []
+    },
+    "CurrentDNSServer": {
+     "type": "(iiay)",
+     "data": [
+      2,
+      2,
+      [
+       192,
+       168,
+       122,
+       1
+      ]
+     ]
+    },
+    "CurrentDNSServerEx": {
+     "type": "(iiayqs)",
+     "data": [
+      0,
+      0,
+      [],
+      0,
+      ""
+     ]
+    },
+    "Domains": {
+     "type": "a(isb)",
+     "data": []
+    },
+    "TransactionStatistics": {
+     "type": "(tt)",
+     "data": [
+      0,
+      27
+     ]
+    },
+    "CacheStatistics": {
+     "type": "(ttt)",
+     "data": [
+      3,
+      11,
+      16
+     ]
+    },
+    "DNSSEC": {
+     "type": "s",
+     "data": "no"
+    },
+    "DNSSECStatistics": {
+     "type": "(tttt)",
+     "data": [
+      0,
+      0,
+      0,
+      0
+     ]
+    },
+    "DNSSECSupported": {
+     "type": "b",
+     "data": false
+    },
+    "DNSStubListener": {
+     "type": "s",
+     "data": "yes"
+    },
+    "ResolvConfMode": {
+     "type": "s",
+     "data": "stub"
+    }
+   }
+  ]
+ },
+ "/org/freedesktop/resolve1 org.freedesktop.resolve1.Manager GetLink i 2": {
+  "type": "o",
+  "data": [
+   "/org/freedesktop/resolve1/link/_32"
+  ]
+ },
+ "/org/freedesktop/resolve1/link/_32 org.freedesktop.DBus.Properties GetAll s org.freedesktop.resolve1.Link": {
+  "type": "a{sv}",
+  "data": [
+   {
+    "ScopesMask": {
+     "type": "t",
+     "data": 1
+    },
+    "DNS": {
+     "type": "a(iay)",
+     "data": [
+      [
+       2,
+       [
+        192,
+        168,
+        122,
+        1
+       ]
+      ]
+     ]
+    },
+    "DNSEx": {
+     "type": "a(iayqs)",
+     "data": [
+      [
+       2,
+       [
+        192,
+        168,
+        122,
+        1
+       ],
+       0,
+       ""
+      ]
+     ]
+    },
+    "CurrentDNSServer": {
+     "type": "(iay)",
+     "data": [
+      2,
+      [
+       192,
+       168,
+       122,
+       1
+      ]
+     ]
+    },
+    "CurrentDNSServerEx": {
+     "type": "(iayqs)",
+     "data": [
+      2,
+      [
+       192,
+       168,
+       122,
+       1
+      ],
+      0,
+      ""
+     ]
+    },
+    "Domains": {
+     "type": "a(sb)",
+     "data": []
+    },
+    "DefaultRoute": {
+     "type": "b",
+     "data": true
+    },
+    "LLMNR": {
+     "type": "s",
+     "data": "no"
+    },
+    "MulticastDNS": {
+     "type": "s",
+     "data": "no"
+    },
+    "DNSOverTLS": {
+     "type": "s",
+     "data": "no"
+    },
+    "DNSSEC": {
+     "type": "s",
+     "data": "no"
+    },
+    "DNSSECNegativeTrustAnchors": {
+     "type": "as",
+     "data": []
+    },
+    "DNSSECSupported": {
+     "type": "b",
+     "data": false
+    }
+   }
+  ]
+ }
+}

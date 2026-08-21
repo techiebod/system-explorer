@@ -1,0 +1,4 @@
+{"record":"begin","request":"replay","batch":"replay","declaration":"sha256:264a12c8f24b435537b46752dc2addfb20caffa66b46dded0997c7ca78a3f1c0","boot_id":"5e000000-0000-4000-8000-000000000001","timens":0,"instance":null,"generations":{"resolver":15164}}
+{"record":"object","collection":"resolver","name":"host-77df07","type":"resolver","facts":{"CurrentDNSServer":"192.168.122.1","DNSOverTLS":"no","DNSSEC":"no","DNSServersInUse":["192.168.122.1"],"FallbackDNSServers":[],"GlobalDNSServers":[],"LLMNR":"no","MulticastDNS":"no","NoLinkTakesDNSDefaultRoute":false,"PerLinkDNS":{"ens2":{"CurrentDNSServer":"192.168.122.1","DNSServers":["192.168.122.1"],"DefaultRoute":true}},"ResolvConfMode":"stub","ResolverService":"systemd-resolved","SearchDomains":[]},"at":1}
+{"record":"commit","collection":"resolver","generation":15164,"objects":1,"assertions":0,"unobservable":0}
+{"record":"end","request":"replay","batch":"replay","cpu_ms":0.5,"wall_ms":1}

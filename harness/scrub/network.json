@@ -295,5 +295,73 @@
   },
   "procnet:*.*": {
     "discloses": "nothing"
+  },
+  "#resolver": "the resolver payloads: the resolve1 bus map (or its staged false for a file-mode host), the resolv.conf reading, the interface table and the hostname. Bus documents and resolv.conf carry the lab NAT range verbatim under the same coverage limit as the route dumps; the hostname is substituted via the names mechanism, exactly as the system collector's is.",
+  "bus:~key": {
+    "discloses": "nothing"
+  },
+  "bus:*": {
+    "discloses": "nothing"
+  },
+  "bus:*.*": {
+    "discloses": "nothing"
+  },
+  "bus:*.*.*": {
+    "discloses": "nothing"
+  },
+  "bus:*.*.*.*": {
+    "discloses": "nothing"
+  },
+  "bus:*.*.*.*.*": {
+    "discloses": "nothing"
+  },
+  "bus:*.*.*.*.*.*": {
+    "discloses": "nothing"
+  },
+  "resolv-conf:~key": {
+    "discloses": "nothing"
+  },
+  "resolv-conf:*": {
+    "discloses": "nothing"
+  },
+  "ifindex:*.*": {
+    "discloses": "nothing"
+  },
+  "hostname": {
+    "payload": "hostname",
+    "whole": {
+      "discloses": "location",
+      "format": "hostname"
+    }
+  },
+  "bus:*.~key": {
+    "discloses": "nothing"
+  },
+  "bus:*.*.~key": {
+    "discloses": "nothing"
+  },
+  "bus:*.*.*.~key": {
+    "discloses": "nothing"
+  },
+  "bus:*.*.*.*.~key": {
+    "discloses": "nothing"
+  },
+  "bus:*.*.*.*.*.~key": {
+    "discloses": "nothing"
+  },
+  "bus:*.*.*.*.*.*.~key": {
+    "discloses": "nothing"
+  },
+  "bus:*.*.*.*.*.*.*": {
+    "discloses": "nothing"
+  },
+  "bus:*.*.*.*.*.*.*.~key": {
+    "discloses": "nothing"
+  },
+  "bus:*.*.*.*.*.*.*.*": {
+    "discloses": "nothing"
+  },
+  "bus:*.*.*.*.*.*.*.*.~key": {
+    "discloses": "nothing"
   }
 }

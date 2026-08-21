@@ -4,6 +4,7 @@
   "version": "0.7.0",
   "authority": {
     "commands": [
+      "busctl",
       "ip",
       "nft"
     ],
@@ -11,6 +12,7 @@
       "CAP_NET_ADMIN"
     ],
     "read_paths": [
+      "/etc/resolv.conf",
       "/proc/net"
     ]
   },
@@ -657,6 +659,260 @@
           "argv": [
             "ss",
             "-tulnp"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "resolver",
+      "question": "which mechanism answers this host's lookups, and where do they actually go?",
+      "prefix": "resolver",
+      "freshness": "5m",
+      "perishability": "sampled",
+      "answer": [
+        "CurrentDNSServer",
+        "DNSServersInUse",
+        "SearchDomains",
+        "DNSSEC"
+      ],
+      "ceiling": {
+        "records": 4,
+        "bytes": 262144
+      },
+      "facts": {
+        "ResolverService": {
+          "type": "enum",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Which mechanism is speaking: systemd-resolved over the bus, or the file glibc reads. The question is universal and only the answer is not \u2014 a dhcpcd-written resolv.conf is still a resolver.",
+          "values": [
+            "systemd-resolved",
+            "libc-resolv.conf"
+          ]
+        },
+        "Nameservers": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "location",
+          "sentence": "File mode: every nameserver line, in file order \u2014 all of them, though glibc uses only the first three."
+        },
+        "SearchDomains": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "location",
+          "sentence": "The search list. In file mode a later search or domain line REPLACES an earlier one, glibc's own surprising rule, kept faithfully; in resolve1 mode the configured domains, route-only ones marked."
+        },
+        "Options": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "File mode: resolver options, accumulated across lines as glibc accumulates them."
+        },
+        "ResolvConfTarget": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "Where /etc/resolv.conf points when it is a symlink \u2014 usually the name of whoever manages the file."
+        },
+        "CurrentDNSServer": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "location",
+          "sentence": "resolve1's manager-level current server. Sticky across the boot window; the per-link map is where ordinary queries actually go, which is what this collection exists to make readable."
+        },
+        "DNSServersInUse": {
+          "type": "list",
+          "temperament": "state",
+          "kind": "derived",
+          "discloses": "location",
+          "sentence": "The union of everything configured, globally or on any link \u2014 the answer to 'who does this host ask'.",
+          "derived_from": [
+            "GlobalDNSServers",
+            "PerLinkDNS"
+          ]
+        },
+        "GlobalDNSServers": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "location",
+          "sentence": "System-scope servers: classic global scope, plus servers homed on loopback \u2014 a deliberate local recursive resolver is system-scope by construction, the measured systemd-261 behaviour that once fired a false warn."
+        },
+        "PerLinkDNS": {
+          "type": "object",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "location",
+          "sentence": "Per-link resolver state, where DHCP-provided DNS actually lives: each link's servers, its current pick, its domains, and whether it takes the DNS default route \u2014 the member that decides where ordinary queries go."
+        },
+        "FallbackDNSServers": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "location",
+          "sentence": "The compiled-in fallbacks resolved would use with nothing configured \u2014 public resolvers the operator never chose, which is exactly why the fallback rule exists."
+        },
+        "DNSSEC": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "resolved's DNSSEC mode, verbatim."
+        },
+        "DNSOverTLS": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "resolved's DNS-over-TLS mode, verbatim."
+        },
+        "LLMNR": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "resolved's LLMNR mode, verbatim."
+        },
+        "MulticastDNS": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "resolved's multicast-DNS mode, verbatim."
+        },
+        "ResolvConfMode": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "sentence": "How resolved is managing /etc/resolv.conf, in its own word \u2014 stub, static, foreign."
+        },
+        "NoLinkTakesDNSDefaultRoute": {
+          "type": "boolean",
+          "temperament": "state",
+          "kind": "derived",
+          "discloses": "nothing",
+          "sentence": "Derived so the fallback judgement can be rule-table data: true when the per-link walk observed DefaultRoute on every link that has servers and none carries it. Absent where any link could not say \u2014 cannot-see is not 'no'.",
+          "derived_from": [
+            "PerLinkDNS"
+          ]
+        }
+      },
+      "rules": [
+        {
+          "key": "resolver-servers",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "any": [
+              {
+                "all": [
+                  {
+                    "fact": "Nameservers",
+                    "present": true
+                  },
+                  {
+                    "not": {
+                      "fact": "Nameservers",
+                      "non_empty": true
+                    }
+                  }
+                ]
+              },
+              {
+                "all": [
+                  {
+                    "fact": "DNSServersInUse",
+                    "present": true
+                  },
+                  {
+                    "not": {
+                      "fact": "DNSServersInUse",
+                      "non_empty": true
+                    }
+                  },
+                  {
+                    "not": {
+                      "fact": "CurrentDNSServer",
+                      "present": true
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "sentence": "No DNS server is configured anywhere this host's resolver looks; lookups fall to whatever answers on localhost, which on most hosts is nothing.",
+          "cites": [
+            "ResolverService",
+            "Nameservers",
+            "DNSServersInUse"
+          ]
+        },
+        {
+          "key": "resolver-fallback-carries-default",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "all": [
+              {
+                "fact": "PerLinkDNS",
+                "non_empty": true
+              },
+              {
+                "not": {
+                  "fact": "GlobalDNSServers",
+                  "non_empty": true
+                }
+              },
+              {
+                "fact": "NoLinkTakesDNSDefaultRoute",
+                "equals": true
+              }
+            ]
+          },
+          "sentence": "No link takes the DNS default route and no global servers are configured, so every query outside the configured domains goes to the compiled-in public fallback servers \u2014 resolvers the operator never chose.",
+          "cites": [
+            "PerLinkDNS",
+            "GlobalDNSServers",
+            "FallbackDNSServers",
+            "NoLinkTakesDNSDefaultRoute"
+          ]
+        }
+      ],
+      "redaction_exemption": "every server and domain fact is declared location and handled by disclosure policy; the mode strings are resolved's own closed vocabulary",
+      "reference_commands": [
+        {
+          "purpose": "the resolve1 view, where resolved runs",
+          "argv": [
+            "resolvectl",
+            "status"
+          ]
+        },
+        {
+          "purpose": "the file glibc reads, everywhere",
+          "argv": [
+            "cat",
+            "/etc/resolv.conf"
+          ]
+        },
+        {
+          "purpose": "the exact manager document this collector parses",
+          "argv": [
+            "busctl",
+            "call",
+            "org.freedesktop.resolve1",
+            "/org/freedesktop/resolve1",
+            "org.freedesktop.DBus.Properties",
+            "GetAll",
+            "s",
+            "org.freedesktop.resolve1.Manager",
+            "--json=short"
           ]
         }
       ]

@@ -739,6 +739,27 @@ def _family_of(destination: str) -> str | None:
         return None
 
 
+def _read_resolv_conf() -> dict | None:
+    """/etc/resolv.conf as one reading — the text and, where the file is a
+    symlink, its target — or None where there is no file. A wrapper so the
+    replay seam can stage it whole (the ip-wrapper pattern): the mode
+    probe's existence check and the observation's read are one acquisition,
+    because two reads could straddle a resolvconf rewrite."""
+    path = Path(RESOLV_CONF)
+    try:
+        target = str(path.resolve()) if path.is_symlink() else None
+        return {"text": path.read_text(), "target": target}
+    except OSError:
+        return None
+
+
+def _if_nameindex() -> list:
+    """The interface table the per-link resolver walk enumerates, as
+    [ifindex, name] pairs — a wrapper so a replay walks the CAPTURED
+    machine's interfaces, never the replaying one's."""
+    return [[index, name] for index, name in socket.if_nameindex()]
+
+
 # Zero-argument wrappers over _ip_json for the three route documents, so
 # the replay seam can redirect each by name (the storage pattern): a
 # parameterised acquisition has no stable payload stem, and the seam's
@@ -1529,7 +1550,7 @@ class Adapter:
         res_ok, res_reason = await self._resolver_available()
         if res_ok:
             return "resolve1", ""
-        if await anyio.to_thread.run_sync(lambda: Path(RESOLV_CONF).is_file()):
+        if await anyio.to_thread.run_sync(_read_resolv_conf) is not None:
             return "file", ""
         return None, env.reason(
             f"{res_reason}; and no {RESOLV_CONF} to read instead")
@@ -1825,7 +1846,7 @@ class Adapter:
         DNS actually lives; the Manager's global properties only carry
         statically configured servers."""
         per_link: dict[str, dict] = {}
-        for ifindex, ifname in socket.if_nameindex():
+        for ifindex, ifname in await anyio.to_thread.run_sync(_if_nameindex):
             if ifname == "lo":
                 continue
             try:
@@ -1867,17 +1888,15 @@ class Adapter:
         packages Manager pattern, now a rule (SPEC rule 16) — and
         ResolvConfTarget carries where the symlink points when it is one,
         which is usually the name of whoever manages the file."""
-        def read() -> tuple[str, str | None]:
-            path = Path(RESOLV_CONF)
-            target = None
-            if path.is_symlink():
-                target = str(path.resolve())
-            return path.read_text(), target
-        text, target = await anyio.to_thread.run_sync(read)
+        reading = await anyio.to_thread.run_sync(_read_resolv_conf)
+        if reading is None:
+            # The mode probe said the file existed; it vanished between the
+            # two coalesced calls. Nothing to observe.
+            raise FileNotFoundError(RESOLV_CONF)
         facts: dict = {"ResolverService": "libc-resolv.conf",
-                       **parse_resolv_conf(text)}
-        if target:
-            facts["ResolvConfTarget"] = target
+                       **parse_resolv_conf(reading["text"])}
+        if reading["target"]:
+            facts["ResolvConfTarget"] = reading["target"]
         obj = env.obj_ref(f"resolver:{env.HOST['hostname']}", "resolver",
                           env.HOST["hostname"])
         return env.observation(
@@ -1906,6 +1925,17 @@ class Adapter:
             "DNSServersInUse": in_use,
             "GlobalDNSServers": servers,
             "PerLinkDNS": per_link,
+            # Derived here so the ported rule table can be data (DESIGN 17):
+            # the fallback-carries-default judgement iterates the per-link
+            # map, which a closed condition vocabulary cannot, so the
+            # iteration's answer becomes a fact both implementations emit.
+            # Present only when the walk observed DefaultRoute on every link
+            # that has servers — cannot-see is not "no".
+            "NoLinkTakesDNSDefaultRoute": (
+                (not any(entry["DefaultRoute"] for entry in per_link.values()))
+                if per_link and all("DefaultRoute" in entry
+                                    for entry in per_link.values())
+                else None),
             "FallbackDNSServers": fallback,
             "SearchDomains": domains,
             "DNSSEC": props.get("DNSSEC"),

@@ -585,6 +585,10 @@ SEAM = {
         # reader can paste a key after `busctl call org.freedesktop.systemd1 `,
         # add `--json=short`, and compare against the value beside it.
         "bus": "BUS",
+        # The resolver object is named for the captured host; the nft-era
+        # variants never staged a hostname and never needed one.
+        "host": {"hostname": "hostname"},
+        "host_for": ["resolver"],
         "instance": {},
     },
     "network": {
@@ -598,7 +602,8 @@ SEAM = {
         # to its own issued generation. corpus/network/rules is the committed
         # pair, which is what closed the named residual that stood here while
         # the round-a5 chains-only fixtures were the only subjects.
-        "collections": ["nft-chains", "nft-rules", "routes", "listening"],
+        "collections": ["nft-chains", "nft-rules", "routes", "listening",
+                        "resolver"],
         "acquisitions": {"_nft_json": "nft",
                          "_ip_route4": "ip-route4", "_ip_route6": "ip-route6",
                          "_ip_rule": "ip-rule"},
@@ -606,7 +611,24 @@ SEAM = {
         # transcript for all four /proc/net files — the tree seam, because
         # _read_text is called with the path that decides the document.
         "path_acquisitions": {"_read_text": "procnet"},
-        "instance": {},
+        # The resolver's two mode probes ride as auxiliaries with honest
+        # defaults, because the nft-only variants stage neither and their
+        # capability sweep must read "no resolver observable here" rather
+        # than a broken capture: no staged resolv-conf is no file, and no
+        # staged interface table walks nothing.
+        "auxiliary": {"_read_resolv_conf": ("resolv-conf", None),
+                      "_if_nameindex": ("ifindex", [])},
+        # The resolve1 half IS the bus: the Manager GetAll doubles as the
+        # availability probe, GetLink and the per-link GetAll answer from
+        # the same staged map, and an unstaged request raises rather than
+        # dialling the replaying machine's bus — which the mode probe
+        # catches, making file-vs-resolve1 a property of what the variant
+        # staged, exactly as it is a property of the captured host.
+        "bus": "BUS",
+        # The resolver object is named for the captured host; the nft-era
+        # variants never staged a hostname and never needed one.
+        "host": {"hostname": "hostname"},
+        "host_for": ["resolver"],
     },
 }
 
@@ -1230,13 +1252,24 @@ def run(collector: str, generations: dict[str, int], payload_dir: Path) -> None:
     # let it stand would name the object after the machine REPLAYING and one
     # capture would produce a different object on every host that read it —
     # silently, because a hostname is a plausible value wherever it came from.
+    #
+    # `host_for` scopes the requirement to the collections that actually name
+    # an object after the host: network grew a host-named collection
+    # (resolver) years of variants after its first capture, and demanding the
+    # pin of every committed nftables ruleset would fail captures that never
+    # needed it. Unscoped (no host_for) keeps the original all-collections
+    # requirement.
+    scope = spec.get("host_for")
+    pin_needed = scope is None or any(name in generations for name in scope)
     for key, payload_name in spec.get("host", {}).items():
         if payload_name not in payloads:
-            fail(
-                f"{collector}: payload {payload_name!r} pins env.HOST[{key!r}] "
-                "and this variant did not capture it; without it the objects "
-                "would be named after the machine replaying the corpus"
-            )
+            if pin_needed:
+                fail(
+                    f"{collector}: payload {payload_name!r} pins env.HOST[{key!r}] "
+                    "and this variant did not capture it; without it the objects "
+                    "would be named after the machine replaying the corpus"
+                )
+            continue
         env.HOST[key] = str(payloads[payload_name]).strip()
 
     adapter = spec["adapter"]()

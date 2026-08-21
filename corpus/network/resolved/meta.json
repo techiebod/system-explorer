@@ -1,0 +1,67 @@
+{
+  "collector": "network",
+  "collections": [
+    "resolver"
+  ],
+  "variant": "resolved",
+  "provenance": "captured-then-scrubbed",
+  "os": "ubuntu",
+  "os_version": "26.04",
+  "source_version": "systemd-resolved 258 (ubuntu 26.04)",
+  "captured": "2026-08-21T16:50:00Z",
+  "regenerable": true,
+  "canaries": [],
+  "anonymised": true,
+  "note": "The resolve1 shape, captured whole from the guest that runs resolved: the manager GetAll that doubles as the mode probe, GetLink for the one real interface, and the link's own GetAll \u2014 where the DHCP-provided server actually lives. The manager-level CurrentDNSServer is the empty struct (0,0,[]) and must be OMITTED, not rendered as an empty address; the server is homed on ifindex 2, so GlobalDNSServers is honestly empty while DNSServersInUse carries it from the link; and the link takes the DNS default route, so NoLinkTakesDNSDefaultRoute is false and the fallback rule must NOT fire. Two curations, each stated: only the resolver's own payloads are staged, because this variant serves nothing else; and the manager document is staged minus DNSSECNegativeTrustAnchors \u2014 a compiled-in constant list identical on every install, read by neither implementation, whose reversed-octet in-addr.arpa spellings read as public addresses to any detector honest about address shapes. One plant: the manager-level CurrentDNSServer is staged as the link's server \u2014 the state every resolved host reaches after its first query, which a freshly booted capture happened to predate; the empty-struct-must-be-omitted shape stays covered by the per-link walk's own empty members.",
+  "anchors": [
+    {
+      "collection": "resolver",
+      "object": "host-77df07",
+      "fact": "ResolverService",
+      "value": "systemd-resolved"
+    },
+    {
+      "collection": "resolver",
+      "object": "host-77df07",
+      "fact": "DNSServersInUse",
+      "value": [
+        "192.168.122.1"
+      ]
+    },
+    {
+      "collection": "resolver",
+      "object": "host-77df07",
+      "fact": "GlobalDNSServers",
+      "value": []
+    },
+    {
+      "collection": "resolver",
+      "object": "host-77df07",
+      "fact": "NoLinkTakesDNSDefaultRoute",
+      "value": false
+    },
+    {
+      "collection": "resolver",
+      "object": "host-77df07",
+      "fact": "DNSSEC",
+      "value": "no"
+    },
+    {
+      "collection": "resolver",
+      "object": "host-77df07",
+      "fact": "ResolvConfMode",
+      "value": "stub"
+    },
+    {
+      "collection": "resolver",
+      "object": "host-77df07",
+      "fact": "CurrentDNSServer",
+      "value": "192.168.122.1"
+    },
+    {
+      "collection": "resolver",
+      "commit_objects": 1
+    }
+  ],
+  "anchors_note": "Staged truth transcribed by hand from the bus documents: the in-use list unions to exactly the link-homed server, the global list is empty because ifindex 2 is neither the classic global scope nor loopback, and the derived default-route fact is false because the walked link carries DefaultRoute true. The object is named for the captured host."
+}

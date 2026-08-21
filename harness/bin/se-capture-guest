@@ -590,6 +590,50 @@ if os.path.isdir(tree):
         print(json.dumps(out))
 '
 
+# The resolver's bus map: the manager GetAll (which doubles as the mode
+# probe — false stages a host where resolve1 is not on the bus), and where
+# it answers, GetLink plus the link GetAll per non-loopback interface.
+resolver_bus_py='
+import json, socket, subprocess
+def call(req):
+    argv = ["busctl", "call", "org.freedesktop.resolve1"] + req.split() + ["--json=short"]
+    try:
+        done = subprocess.run(argv, capture_output=True, text=True, timeout=30)
+    except Exception:
+        return False
+    if done.returncode != 0:
+        return False
+    return json.loads(done.stdout)
+P = "org.freedesktop.DBus.Properties"
+manager_req = "/org/freedesktop/resolve1 " + P + " GetAll s org.freedesktop.resolve1.Manager"
+out = {manager_req: call(manager_req)}
+if out[manager_req]:
+    for ifindex, name in socket.if_nameindex():
+        if name == "lo":
+            continue
+        link_req = "/org/freedesktop/resolve1 org.freedesktop.resolve1.Manager GetLink i %d" % ifindex
+        reply = call(link_req)
+        out[link_req] = reply
+        if reply:
+            path = reply["data"][0]
+            props_req = path + " " + P + " GetAll s org.freedesktop.resolve1.Link"
+            out[props_req] = call(props_req)
+print(json.dumps(out))
+'
+
+resolv_conf_py='
+import json, os
+path = "/etc/resolv.conf"
+if os.path.exists(path):
+    target = os.path.realpath(path) if os.path.islink(path) else None
+    print(json.dumps({"text": open(path).read(), "target": target}))
+'
+
+ifindex_py='
+import json, socket
+print(json.dumps([[i, n] for i, n in socket.if_nameindex()]))
+'
+
 # The four /proc/net socket tables as one transcript, in the tree seam's
 # shape — one object per directory, null where a table would not open,
 # because "could not read" is a reading of the captured machine.
@@ -803,6 +847,10 @@ case "$collector" in
             "ip-route6.json|ip -j -6 route show table all"
             "ip-rule.json|ip -j rule show"
             "procnet.json|python3 -c '$procnet_py'"
+            "bus.json|python3 -c '$resolver_bus_py'"
+            "resolv-conf.json?|python3 -c '$resolv_conf_py'"
+            "ifindex.json|python3 -c '$ifindex_py'"
+            "hostname|python3 -c '$hostname_py'"
         )
         ;;
     vms)

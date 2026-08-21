@@ -65,7 +65,6 @@ DELIBERATELY_DROPPED: dict[str, str] = {
 #: reachable while they are open.
 NOT_YET_PORTED: dict[str, str] = {
     "network/links": "interfaces on every Linux host; the largest single hole.",
-    "network/resolver": "resolver configuration.",
     "network/nft-tables": "the table-grained view above nft-chains.",
     "network/port-exposure": "the joined answer nft + listening produce together.",
     "network/tailscale": "a discovery source membership depends on (DESIGN 23).",

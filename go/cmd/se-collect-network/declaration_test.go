@@ -65,12 +65,15 @@ func parseDeclaration(t *testing.T) map[string]declaredCollection {
 	// netlink — and since R3b the listening collection reads exactly one
 	// tree: /proc/net's socket tables. Anything beyond that pair would be
 	// a sandbox opening nothing needs.
-	if len(declaration.Authority.ReadPaths) != 1 || declaration.Authority.ReadPaths[0] != "/proc/net" {
-		t.Errorf("read_paths is %v, want exactly /proc/net", declaration.Authority.ReadPaths)
+	wantPaths := []string{"/etc/resolv.conf", "/proc/net"}
+	if len(declaration.Authority.ReadPaths) != len(wantPaths) ||
+		declaration.Authority.ReadPaths[0] != wantPaths[0] ||
+		declaration.Authority.ReadPaths[1] != wantPaths[1] {
+		t.Errorf("read_paths is %v, want %v", declaration.Authority.ReadPaths, wantPaths)
 	}
-	if len(declaration.Authority.Commands) != 2 || declaration.Authority.Commands[0] != "ip" ||
-		declaration.Authority.Commands[1] != "nft" {
-		t.Errorf("authority.commands is %v, want [ip nft]", declaration.Authority.Commands)
+	wantCommands := []string{"busctl", "ip", "nft"}
+	if len(declaration.Authority.Commands) != len(wantCommands) {
+		t.Errorf("authority.commands is %v, want %v", declaration.Authority.Commands, wantCommands)
 	}
 	if len(declaration.Authority.Capabilities) != 1 || declaration.Authority.Capabilities[0] != "CAP_NET_ADMIN" {
 		t.Errorf("authority.capabilities is %v", declaration.Authority.Capabilities)
@@ -79,8 +82,8 @@ func parseDeclaration(t *testing.T) map[string]declaredCollection {
 	for _, collection := range declaration.Collections {
 		out[collection.Name] = collection
 	}
-	if len(out) != 4 {
-		t.Fatalf("four collections — the nft pair, routes, listening; got %d", len(out))
+	if len(out) != 5 {
+		t.Fatalf("five collections — the nft pair, routes, listening, resolver; got %d", len(out))
 	}
 	return out
 }

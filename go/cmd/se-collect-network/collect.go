@@ -196,6 +196,10 @@ func collect(stdout, stderr io.Writer, src source, order []string, generations m
 			if code := collectListening(out, stderr, src, collection, generations[collection], &objects); code != exitOK {
 				return code
 			}
+		case "resolver":
+			if code := collectResolver(out, stderr, src, collection, generations[collection], &objects); code != exitOK {
+				return code
+			}
 		case collectionChains, collectionRules:
 			if acqErr != nil {
 				declineAcquisition(out, collection, generations[collection], acqErr)

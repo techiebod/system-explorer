@@ -9,9 +9,11 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -52,6 +54,19 @@ type source interface {
 	// unreadable table is a statement the rows must carry, never an empty
 	// table — a host whose udp6 will not open has not stopped listening.
 	procNet(table string) (string, bool)
+	// The resolver's two modes. resolve1 answers busctl documents keyed by
+	// the shared request convention; errCallFailed means the interface is
+	// not there (the file mode's cue), errUncaptured stays fatal. The
+	// resolv.conf reading is text plus symlink target, exists=false where
+	// there is no file — one acquisition, because two reads could straddle
+	// a resolvconf rewrite.
+	resolve1Call(request string) ([]byte, error)
+	ifNameIndex() []ifEntry
+	resolvConf() (text string, target string, exists bool)
+	// hostname names the resolver object; under replay it is the CAPTURED
+	// machine's, staged, and its absence is fatal — an object named after
+	// whichever machine replays is a different object per reader.
+	hostname() (string, error)
 	// stamp is `at` for the i-th emitted object. Every row of a batch comes
 	// from ONE document, read once, so the live reading is taken before that
 	// read and shared: an acquisition stamped at completion would report
@@ -70,8 +85,37 @@ type source interface {
 // not granted?)`, everything else) and no variant exercises them yet.
 var (
 	errIPSilent   = errors.New("ip did not answer")
+	errCallFailed = errors.New("the interface did not answer")
 	errUncaptured = errors.New("not captured in this replay directory")
 )
+
+type ifEntry struct {
+	Index int
+	Name  string
+}
+
+// The resolve1 request lines, spelled once in the shared busctl-argument
+// convention the corpus is keyed on (the units collector's rule).
+const (
+	resolve1Dest    = "org.freedesktop.resolve1"
+	resolve1Path    = "/org/freedesktop/resolve1"
+	resolve1Manager = "org.freedesktop.resolve1.Manager"
+	resolve1Link    = "org.freedesktop.resolve1.Link"
+	propertiesIface = "org.freedesktop.DBus.Properties"
+)
+
+func resolve1ManagerRequest() string {
+	return resolve1Path + " " + propertiesIface + " GetAll s " + resolve1Manager
+}
+
+func getLinkRequest(ifindex int) string {
+	return resolve1Path + " " + resolve1Manager + " GetLink i " +
+		strconv.Itoa(ifindex)
+}
+
+func linkPropertiesRequest(path string) string {
+	return path + " " + propertiesIface + " GetAll s " + resolve1Link
+}
 
 var (
 	errNftAbsent     = errors.New("nft is not on this host")
@@ -217,6 +261,63 @@ func (s *liveSource) ipRule() (jsonValue, error) {
 	return s.ipJSON("rule", "show")
 }
 
+// resolve1Call shells one busctl invocation, the system collector's
+// discipline: literal tokens, the reply buffered, failures to stderr's
+// journal channel only.
+func (s *liveSource) resolve1Call(request string) ([]byte, error) {
+	at, err := bootClock()
+	if err != nil {
+		return nil, err
+	}
+	s.at = at
+	tool, err := exec.LookPath("busctl")
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", errCallFailed, err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), nftTimeout)
+	defer cancel()
+	args := append([]string{"call", resolve1Dest}, strings.Fields(request)...)
+	args = append(args, "--json=short")
+	out, err := exec.CommandContext(ctx, tool, args...).Output()
+	if err != nil {
+		return nil, fmt.Errorf("busctl %s: %w", resolve1Dest, errCallFailed)
+	}
+	return out, nil
+}
+
+func (s *liveSource) ifNameIndex() []ifEntry {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+	out := make([]ifEntry, 0, len(interfaces))
+	for _, entry := range interfaces {
+		out = append(out, ifEntry{Index: entry.Index, Name: entry.Name})
+	}
+	return out
+}
+
+func (s *liveSource) resolvConf() (string, string, bool) {
+	const path = "/etc/resolv.conf"
+	info, err := os.Lstat(path)
+	if err != nil {
+		return "", "", false
+	}
+	target := ""
+	if info.Mode()&os.ModeSymlink != 0 {
+		if resolved, err := filepath.EvalSymlinks(path); err == nil {
+			target = resolved
+		}
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", "", false
+	}
+	return string(raw), target, true
+}
+
+func (s *liveSource) hostname() (string, error) { return os.Hostname() }
+
 func (s *liveSource) procNet(table string) (string, bool) {
 	at, err := bootClock()
 	if err != nil {
@@ -342,6 +443,79 @@ func (r replaySource) procNet(table string) (string, bool) {
 		return "", false
 	}
 	return *entry, true
+}
+
+// resolve1Call under replay reads the staged bus.json request map; the
+// value false stages "the call failed at capture" — a file-mode host's
+// resolve1 probe — distinct from a request nobody staged, which refuses.
+func (r replaySource) resolve1Call(request string) ([]byte, error) {
+	raw, err := os.ReadFile(filepath.Join(r.dir, "bus.json"))
+	if err != nil {
+		return nil, fmt.Errorf("bus.json: %w", errCallFailed)
+	}
+	var staged map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &staged); err != nil {
+		return nil, fmt.Errorf("bus.json is not a request/response map: %v", err)
+	}
+	document, ok := staged[request]
+	if !ok {
+		return nil, fmt.Errorf("%q %w", request, errUncaptured)
+	}
+	if string(document) == "false" {
+		return nil, fmt.Errorf("%q: %w (staged at capture)", request, errCallFailed)
+	}
+	return document, nil
+}
+
+func (r replaySource) ifNameIndex() []ifEntry {
+	raw, err := os.ReadFile(filepath.Join(r.dir, "ifindex.json"))
+	if err != nil {
+		return nil
+	}
+	var staged [][2]any
+	if json.Unmarshal(raw, &staged) != nil {
+		return nil
+	}
+	out := make([]ifEntry, 0, len(staged))
+	for _, pair := range staged {
+		index, ok := pair[0].(float64)
+		name, ok2 := pair[1].(string)
+		if ok && ok2 {
+			out = append(out, ifEntry{Index: int(index), Name: name})
+		}
+	}
+	return out
+}
+
+func (r replaySource) hostname() (string, error) {
+	raw, err := os.ReadFile(filepath.Join(r.dir, "hostname"))
+	if err != nil {
+		return "", fmt.Errorf("hostname %w: %v", errUncaptured, err)
+	}
+	name := strings.TrimSpace(string(raw))
+	if name == "" {
+		return "", fmt.Errorf("hostname %w: the staged file is empty", errUncaptured)
+	}
+	return name, nil
+}
+
+func (r replaySource) resolvConf() (string, string, bool) {
+	raw, err := os.ReadFile(filepath.Join(r.dir, "resolv-conf.json"))
+	if err != nil {
+		return "", "", false
+	}
+	var staged struct {
+		Text   string  `json:"text"`
+		Target *string `json:"target"`
+	}
+	if json.Unmarshal(raw, &staged) != nil {
+		return "", "", false
+	}
+	target := ""
+	if staged.Target != nil {
+		target = *staged.Target
+	}
+	return staged.Text, target, true
 }
 
 func (replaySource) stamp(i int) float64 {

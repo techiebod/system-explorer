@@ -77,6 +77,12 @@ VALID_VARIANTS = frozenset(
         # UI opened on — block devices and mounts with no pool anywhere,
         # which the pools-bearing variants can never show.
         "bare-guest",
+        # resolved, added with the resolver's R3b port: the resolve1 shape
+        # — the walkable bus resolver — where bare-guest carries the file
+        # shape as a documented plant, because both lab guests bus-activate
+        # resolved and the dhcpcd host the founding correction names cannot
+        # be captured from them.
+        "resolved",
         "canary",
         "goto",
         "asymmetric",
