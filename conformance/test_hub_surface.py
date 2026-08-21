@@ -36,8 +36,7 @@ DECLARATION = {
 }
 
 
-@pytest.fixture(scope="module")
-def hub():
+def _hub_base(allowed_hosts=None):
     estate = Estate(declared=("storage-1",))
     declarations = Declarations()
     declarations.add("storage-1", DECLARATION, "sha256:x")
@@ -57,12 +56,23 @@ def hub():
         "reviewed": "2026-08-20", "membership": {"hosts": {"storage-1": {}}},
         "plugins": {"widgets": {"targets": []}}})
     server = serve(("127.0.0.1", 0),
-                   lambda: reading(estate, intent, declarations))
+                   lambda: reading(estate, intent, declarations),
+                   allowed_hosts=allowed_hosts)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     base = f"http://127.0.0.1:{server.server_port}"
     yield base
     server.shutdown()
+
+
+@pytest.fixture(scope="module")
+def hub():
+    yield from _hub_base()
+
+
+@pytest.fixture(scope="module")
+def hub_named():
+    yield from _hub_base(allowed_hosts="hub.example")
 
 
 def fetch(url: str) -> bytes:
@@ -158,3 +168,25 @@ def test_the_route_table_is_the_only_place_routes_are_named() -> None:
     paths = [r.path for r in routes]
     assert len(paths) == len(set(paths))
     assert all(r.tool and r.summary for r in routes)
+
+
+def test_an_unclaimed_host_name_is_refused_as_misdirected(hub) -> None:
+    """Register row 15 at the hub's listener: DNS rebinding carries the
+    attacker's NAME in the Host header, so a name this deployment never
+    claimed is refused 421 — while the IP-literal spelling every legitimate
+    tunnel uses (this fixture's own base URL) keeps answering, which every
+    other test in this file is implicitly proving."""
+    request = urllib.request.Request(
+        hub + "/v1/routes", headers={"Host": "attacker.example"})
+    try:
+        urllib.request.urlopen(request, timeout=10)
+        raise AssertionError("an unclaimed name must be refused")
+    except urllib.error.HTTPError as refused:
+        assert refused.code == 421
+        assert "SE_ALLOWED_HOSTS" in refused.read().decode()
+
+
+def test_a_claimed_host_name_answers(hub_named) -> None:
+    request = urllib.request.Request(
+        hub_named + "/v1/routes", headers={"Host": "Hub.Example:8080"})
+    assert urllib.request.urlopen(request, timeout=10).status == 200

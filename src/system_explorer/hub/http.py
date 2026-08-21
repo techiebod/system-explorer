@@ -17,7 +17,9 @@ would be last-known-good in the one place the design says it must not be.
 
 from __future__ import annotations
 
+import ipaddress
 import json
+import os
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Callable
@@ -53,8 +55,38 @@ def reading(estate: Estate, intent: Intent, declarations: Declarations) -> State
     )
 
 
-def handler_class(view_of: Callable[[], State]) -> type[BaseHTTPRequestHandler]:
+def _host_allowed(host_header: str, claimed: frozenset[str]) -> bool:
+    """The DNS-rebinding defence, same policy as the collator's listener:
+    an IP literal, localhost or an absent Host always answers — a rebound
+    request always carries the attacker's NAME — and any other name must
+    be one this deployment claimed. Deny-by-default over names."""
+    if not host_header:
+        return True
+    host = host_header
+    if host.startswith("[") and "]" in host:
+        host = host[1:host.index("]")]
+    elif host.count(":") == 1:
+        host = host.rsplit(":", 1)[0]
+    host = host.lower()
+    if host == "localhost":
+        return True
+    try:
+        ipaddress.ip_address(host)
+        return True
+    except ValueError:
+        return host in claimed
+
+
+def handler_class(view_of: Callable[[], State],
+                  allowed_hosts: str | None = None) -> type[BaseHTTPRequestHandler]:
     routes: tuple[Route, ...] = table(view_of)
+    # Injected for tests, environmental for the daemon — the same reason
+    # the collator's clock is injected: the refusal must be assertable.
+    claimed = frozenset(
+        name.strip().lower()
+        for name in (allowed_hosts if allowed_hosts is not None
+                     else os.environ.get("SE_ALLOWED_HOSTS", "")).split(",")
+        if name.strip())
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "se-hub"
@@ -78,6 +110,13 @@ def handler_class(view_of: Callable[[], State]) -> type[BaseHTTPRequestHandler]:
             self.wfile.write(body)
 
         def do_GET(self) -> None:  # noqa: N802
+            if not _host_allowed(self.headers.get("Host", ""), claimed):
+                self._send(421, json.dumps(
+                    {"error": "this listener does not answer to that name; "
+                              "a deployment claims its names in "
+                              "SE_ALLOWED_HOSTS"}).encode(),
+                    "application/json")
+                return
             path = self.path.split("?", 1)[0]
             if path == "/":
                 state = view_of()
@@ -132,5 +171,6 @@ def handler_class(view_of: Callable[[], State]) -> type[BaseHTTPRequestHandler]:
     return Handler
 
 
-def serve(bind: tuple[str, int], view_of: Callable[[], State]) -> ThreadingHTTPServer:
-    return ThreadingHTTPServer(bind, handler_class(view_of))
+def serve(bind: tuple[str, int], view_of: Callable[[], State],
+          allowed_hosts: str | None = None) -> ThreadingHTTPServer:
+    return ThreadingHTTPServer(bind, handler_class(view_of, allowed_hosts))

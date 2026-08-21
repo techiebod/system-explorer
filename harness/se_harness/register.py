@@ -447,10 +447,13 @@ REGISTER: tuple[Row, ...] = (
         "published route table (tools are per route), and verbatim serving "
         "is asserted by go/internal/collate/dictionary_test.go."),
     Row(15, "host-header allowlist on the read listeners",
-        "owed", "R3a",
-        lambda: _in_file("go/internal/collate/rest.go", "r.Host"),
-        "the probe reads the collator listener only; the hub listener joins "
-        "this row when it is built."),
+        "built", "R3a",
+        lambda: (_in_file("go/internal/collate/hostguard.go", "HostGuard")
+                 and _in_file("src/system_explorer/hub/http.py", "_host_allowed")),
+        "the probe sees the guard exist at BOTH listeners; the refusal and "
+        "the always-safe forms are asserted by hostguard_test.go and "
+        "test_hub_surface.py. It cannot see whether a deployment sets "
+        "SE_ALLOWED_HOSTS — that is the R5 module's to wire."),
     Row(16, "cost served on the read surface (the cost chip's data)",
         "built", "R3a",
         lambda: _in_file("go/internal/collate/rest.go", "advisory_cost_cpu_ms"),

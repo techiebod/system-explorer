@@ -490,13 +490,13 @@ Every known miss, each owned or ruled. A row neither built, owned nor ruled is a
 | 7 | relations on `units`/`hardware` (and fleet-wide audit) | declared by neither | R3c/R3d |
 | 8 | rule tables fleet-wide (restart-churn, SMART verdicts, link-rate…) | mechanism built, no first-party collector declares any | R3c/R3d |
 | 9 | eighteen unported collections (network 8, storage 5, system 4, plex 1) | encoded in the shared register (`harness/se_harness/register.py`) | R3b/R3d |
-| 10 | `/v1/status` roll-up (worst per collection, attention counts) | nowhere | R3a |
-| 11 | fact filters with the 422 near-miss refusal | nowhere | R3a |
-| 12 | pagination — limit/cursor, declared ceilings honoured on reads | nowhere | R3a |
-| 13 | `/v1/capabilities` serving `object_prefixes` (id→route) | prefixes declared, unserved | R3a |
-| 14 | fact dictionary route + MCP tool | axes held, unserved | R3a |
-| 15 | host-header allowlist on the read listeners | nowhere | R3a |
-| 16 | cost served on the read surface (the cost chip's data) | on the wire only | R3a |
+| 10 | `/v1/status` roll-up (worst per collection, attention counts) | built at R3a | R3a |
+| 11 | fact filters with the 422 near-miss refusal | built at R3a | R3a |
+| 12 | pagination — limit/cursor, declared ceilings honoured on reads | built at R3a | R3a |
+| 13 | `/v1/capabilities` serving `object_prefixes` (id→route) | built at R3a | R3a |
+| 14 | fact dictionary route + MCP tool | built at R3a | R3a |
+| 15 | host-header allowlist on the read listeners | built at R3a, both listeners | R3a |
+| 16 | cost served on the read surface (the cost chip's data) | built at R3a, labelled advisory | R3a |
 | 17 | change tracking — history, `/v1/changes`, `what_changed` | designed (§36), migration question unruled, no port | R3e, **owner ruling owed on §36** |
 | 18 | findings persistence (a registry that survives restart) | in-memory only | R3e |
 | 19 | acknowledgement — appended/attributed/reversible, write posture | no route; posture undecided | R3e, **owner ruling owed** |
@@ -525,7 +525,7 @@ The 27-row register above is encoded with a probe wherever the tree can attest a
 
 #### R3 — the port, finished (large, in waves)
 
-- **R3a — the read API reaches parity** (register 10–16). Small, and a prerequisite for R4.
+- **R3a — the read API reaches parity** (register 10–16) — **done 2026-08-21**: /v1/status with judgement its own axis, filters with the near-miss refusal and the secret-fact non-oracle, pagination bounded by declared ceilings, the prefix map and the fact dictionary from the declarations, advisory cost labelled as such, and the host-header allowlist on both listeners.
 - **R3b — the bare-guest nine**: network links/routes/listening/resolver, storage block-devices/mounts, system time/boot/overview. This is what made a plain guest look empty.
 - **R3c — structure retrofit on the champions**: `units` and `hardware` gain all six layers plus the three verbs, carrying the recorded lessons (the backwards-arrow probe bound, SMART's no-reading-is-a-fact discipline, the link-rate opinion). The three acceptance items above are judged here, on the lab.
 - **R3d — the rest of the fleet**: remaining collections, verbs, names/relations/rules across all twenty collectors.

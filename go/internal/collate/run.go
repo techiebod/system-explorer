@@ -5,6 +5,11 @@
 //	SE_COLLECTORS  name=/path/to.sock[,name=/path/to.sock…]
 //	SE_STATE_DIR   directory for the durable store (required)
 //	SE_LISTEN      read API bind address (default 127.0.0.1:8095)
+//	SE_ALLOWED_HOSTS  names this listener answers to, comma-separated.
+//	               IP literals and localhost always answer; any other
+//	               Host name must be claimed here or the request is
+//	               refused 421 — the DNS-rebinding defence on an
+//	               unauthenticated read surface (register row 15).
 //	SE_ONESHOT     run one acquisition round and exit — the crash
 //	               harness's vehicle, and a person's smoke test
 //	SE_HUB_ADDR    host:port of this site's hub. ABSENT IS A COMPLETE
@@ -109,7 +114,8 @@ func Main() int {
 	}
 	go func() {
 		// The daemon's own boot clock serves ages; see boottime_linux.go.
-		if err := http.Serve(ln, NewHandler(st, BootNow, bootID)); err != nil {
+		if err := http.Serve(ln, HostGuard(NewHandler(st, BootNow, bootID),
+			os.Getenv("SE_ALLOWED_HOSTS"))); err != nil {
 			fmt.Fprintf(os.Stderr, "se-collate: serve: %v\n", err)
 		}
 	}()
