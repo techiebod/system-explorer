@@ -81,6 +81,12 @@ REQUIRED = {
     # message that named the very scenario it was refusing. The opinion,
     # roll-up and answer halves of item 7 are gates 5, 4 and 5 — none of
     # those surfaces exists to be judged here.
+    # item 2's data half — the slice tree DERIVES from member-of edges and is
+    # not a depth coordinate on a row (the R1 ruling), so a consumer can build
+    # it without the collector having flattened a shape that would be wrong the
+    # moment a row was sorted. The rendering half is a page, and the page is
+    # R4's.
+    "units-slice-tree-derives-from-relations": 2,
     # item 3 — a target one collector asserts, whose far end another
     # collector publishes, resolves. Every fixture before it ran ONE
     # collector, so the cross-subsystem join a host actually makes was

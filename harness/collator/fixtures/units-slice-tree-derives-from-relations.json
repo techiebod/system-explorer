@@ -1,0 +1,279 @@
+{
+ "name": "units-slice-tree-derives-from-relations",
+ "acceptance_item": 2,
+ "note": "R3c's second acceptance item, at the tier that owns the data half: the slice tree is DERIVED from member-of edges and is not a `depth` member on a row (the R1 ruling). Two levels resolve — services to system.slice, system.slice and machine.slice to the root — so a consumer holding these relations can build the tree without the collector having flattened it into a coordinate that would be wrong the moment a row was sorted or filtered. The fifth edge names a slice this host does not publish and stays unresolved, carrying its name: a unit whose slice is not here is a real reading, and dropping the edge would render identically to a unit with no slice at all. The RENDERING half of this item — indentation disabled under sort or filter — is a page, and the page is R4's; what is judged here is that the data a page needs exists and is derived rather than declared.",
+ "declaration": "{\"schema\":\"se.declaration/1\",\"collector\":\"units\",\"collections\":[{\"name\":\"units\",\"freshness\":\"60s\",\"prefix\":\"unit\",\"relations\":[{\"type\":\"member-of\",\"carries_facts\":false,\"inverse_observable\":false}],\"facts\":{\"ActiveState\":{\"type\":\"string\",\"temperament\":\"state\"}}}]}",
+ "streams": [
+  {
+   "records": [
+    {
+     "record": "begin",
+     "request": "b1",
+     "batch": "b1",
+     "declaration": "sha256:d19d96f72081801c3b60410bdf56b6a533a101438a87b520e9c972b408505ded",
+     "boot_id": "5e000000-0000-4000-8000-000000000001",
+     "timens": 0,
+     "instance": null,
+     "generations": {
+      "units": 1
+     }
+    },
+    {
+     "record": "object",
+     "collection": "units",
+     "name": "-.slice",
+     "facts": {
+      "ActiveState": "active"
+     },
+     "at": 10.1
+    },
+    {
+     "record": "object",
+     "collection": "units",
+     "name": "system.slice",
+     "facts": {
+      "ActiveState": "active"
+     },
+     "at": 10.2
+    },
+    {
+     "record": "relation_assertion",
+     "collection": "units",
+     "name": "system.slice",
+     "type": "member-of",
+     "vantage": "units",
+     "target": {
+      "kind": "unit",
+      "name": "-.slice"
+     }
+    },
+    {
+     "record": "object",
+     "collection": "units",
+     "name": "machine.slice",
+     "facts": {
+      "ActiveState": "active"
+     },
+     "at": 10.3
+    },
+    {
+     "record": "relation_assertion",
+     "collection": "units",
+     "name": "machine.slice",
+     "type": "member-of",
+     "vantage": "units",
+     "target": {
+      "kind": "unit",
+      "name": "-.slice"
+     }
+    },
+    {
+     "record": "object",
+     "collection": "units",
+     "name": "ssh.service",
+     "facts": {
+      "ActiveState": "active"
+     },
+     "at": 10.4
+    },
+    {
+     "record": "relation_assertion",
+     "collection": "units",
+     "name": "ssh.service",
+     "type": "member-of",
+     "vantage": "units",
+     "target": {
+      "kind": "unit",
+      "name": "system.slice"
+     }
+    },
+    {
+     "record": "object",
+     "collection": "units",
+     "name": "cron.service",
+     "facts": {
+      "ActiveState": "active"
+     },
+     "at": 10.5
+    },
+    {
+     "record": "relation_assertion",
+     "collection": "units",
+     "name": "cron.service",
+     "type": "member-of",
+     "vantage": "units",
+     "target": {
+      "kind": "unit",
+      "name": "system.slice"
+     }
+    },
+    {
+     "record": "object",
+     "collection": "units",
+     "name": "stray.service",
+     "facts": {
+      "ActiveState": "active"
+     },
+     "at": 10.6
+    },
+    {
+     "record": "relation_assertion",
+     "collection": "units",
+     "name": "stray.service",
+     "type": "member-of",
+     "vantage": "units",
+     "target": {
+      "kind": "unit",
+      "name": "user-1000.slice"
+     }
+    },
+    {
+     "record": "commit",
+     "collection": "units",
+     "generation": 1,
+     "objects": 6,
+     "assertions": 5,
+     "unobservable": 0,
+     "cpu_ms": 0.5
+    },
+    {
+     "record": "end",
+     "request": "b1",
+     "batch": "b1",
+     "cpu_ms": 0.5,
+     "wall_ms": 1.0
+    }
+   ]
+  }
+ ],
+ "expect": {
+  "collections": [
+   {
+    "name": "units",
+    "generation": 1,
+    "stale": false
+   }
+  ],
+  "objects": [
+   {
+    "collection": "units",
+    "id": "units:-.slice",
+    "name": "-.slice",
+    "facts": {
+     "ActiveState": "active"
+    },
+    "at": 10.1
+   },
+   {
+    "collection": "units",
+    "id": "units:system.slice",
+    "name": "system.slice",
+    "facts": {
+     "ActiveState": "active"
+    },
+    "at": 10.2
+   },
+   {
+    "collection": "units",
+    "id": "units:machine.slice",
+    "name": "machine.slice",
+    "facts": {
+     "ActiveState": "active"
+    },
+    "at": 10.3
+   },
+   {
+    "collection": "units",
+    "id": "units:ssh.service",
+    "name": "ssh.service",
+    "facts": {
+     "ActiveState": "active"
+    },
+    "at": 10.4
+   },
+   {
+    "collection": "units",
+    "id": "units:cron.service",
+    "name": "cron.service",
+    "facts": {
+     "ActiveState": "active"
+    },
+    "at": 10.5
+   },
+   {
+    "collection": "units",
+    "id": "units:stray.service",
+    "name": "stray.service",
+    "facts": {
+     "ActiveState": "active"
+    },
+    "at": 10.6
+   }
+  ],
+  "relations": [
+   {
+    "collection": "units",
+    "source_name": "system.slice",
+    "type": "member-of",
+    "vantage": "units",
+    "target_kind": "unit",
+    "target_name": "-.slice",
+    "resolved": true,
+    "facts": null,
+    "observability": "asserted",
+    "target_id": "units:-.slice"
+   },
+   {
+    "collection": "units",
+    "source_name": "machine.slice",
+    "type": "member-of",
+    "vantage": "units",
+    "target_kind": "unit",
+    "target_name": "-.slice",
+    "resolved": true,
+    "facts": null,
+    "observability": "asserted",
+    "target_id": "units:-.slice"
+   },
+   {
+    "collection": "units",
+    "source_name": "ssh.service",
+    "type": "member-of",
+    "vantage": "units",
+    "target_kind": "unit",
+    "target_name": "system.slice",
+    "resolved": true,
+    "facts": null,
+    "observability": "asserted",
+    "target_id": "units:system.slice"
+   },
+   {
+    "collection": "units",
+    "source_name": "cron.service",
+    "type": "member-of",
+    "vantage": "units",
+    "target_kind": "unit",
+    "target_name": "system.slice",
+    "resolved": true,
+    "facts": null,
+    "observability": "asserted",
+    "target_id": "units:system.slice"
+   },
+   {
+    "collection": "units",
+    "source_name": "stray.service",
+    "type": "member-of",
+    "vantage": "units",
+    "target_kind": "unit",
+    "target_name": "user-1000.slice",
+    "resolved": false,
+    "facts": null,
+    "observability": "asserted"
+   }
+  ],
+  "rejected": [],
+  "acked": [
+   "b1"
+  ]
+ }
+}
