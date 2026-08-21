@@ -30,6 +30,12 @@ This plan executes [The Observation Model](DESIGN.md) and its Appendix C. The mo
 >
 > Not a test the fixed code passes — a demonstration that the unfixed code fails, executed. Round two found the round-one repair pinned by tests that stayed green with their fixes reverted: a check written to catch a known defect catches that defect and generalises to nothing. So every guard lands with its reversion run and shown red, an adversary's passing-wrong subject joins the suite as a permanent fixture, and a challenger-vs-reference mismatch is an adjudication, never a verdict — the reference has to be able to lose.
 
+> **7 · Two rules added 2026-08-21, each paid for**
+>
+> **A completeness guard derives its work list from the reference, never from the port.** Rule 4 named the old agent the reference and the guards did not obey it: the comparator's `SERVES` table, the replay seam and gate 3's census were all shaped by what the port implemented, so three lists agreed with each other and eighteen collections, three verbs and six API routes sat behind green reports. Deny-by-default over the reference side, with explicit ruled exclusions, is the only shape that cannot do this.
+>
+> **A gate with a judgement clause is opened by the owner.** Twice a gate was declared open by the executing agent on checks that could not see what the clause was about — "UI smoke" satisfied by property assertions, "ported" satisfied by binary counts. Mechanical gates (tests pass, comparator clean) the agent may open; any clause of the form *someone looks at it and it is right* is the owner's to judge, on the lab, and the agent's job is to stage the evidence.
+
 ## 02 · The development loop
 
 ![diagram](assets/plan-figure-1.svg)
@@ -449,6 +455,87 @@ Server-rendered HTML/CSS UI at both scales from one token system; MCP on collato
 > **Gate 5 opens when**
 >
 > item 11 across every channel including UI, MCP and MQTT · **item 7's last half** — an undeclared fact reaches no opinion and no answer, judgeable only once opinions and the answer surfaces exist · MCP-parity check · UI smoke on both scales · **the plugin's two remaining facets** — an opinion declared by a collector this repository does not ship reaches a finding, and a plugin either speaks the product's severity and state vocabulary by stated rule or those enums are published and `app.js` stops keeping a copy no endpoint serves.
+
+### The re-baseline — phases R1–R5, adopted 2026-08-21
+
+**Why this section exists.** The objective was to replicate the shipping product's success on a better-specified contract, with collectors in Go to cut resource usage. What was measured instead was the rewrite against itself: gate 3 counted binaries, the comparator compared what the port chose to implement, and gate 5 tested properties of a page rather than the page. The wire contract, checkpoint/federation and the opinion mechanism — the parts measured against the contract — are sound and stay. Everything below re-anchors the rest on the reference, and **freezes new capability until parity is real**: no new estate features land while any register row below is unowned.
+
+**The definition of "ported", corrected.** A collection is ported when SIX layers survive, not when a binary answers `collect`:
+
+1. **facts** — the row facts *and* the object-density facts behind the `object` verb;
+2. **type** — the object's kind, which drives severity dispatch, the Kind column, facets and every hide rule;
+3. **order** — the applied sequence preserved end to end, with trees derived from relations, because the systemctl-status order *is* the collection;
+4. **names** — the stable identity families (`wwn`, `serial`, `by-id`, `uuid`) a join survives a reboot on;
+5. **relations** — the asserted edges, resolved by published name at the collator and re-tested at the hub;
+6. **rules** — the collection's declared opinions, so a page can say what is wrong.
+
+**Three acceptance items, stated by the owner and judged as written:**
+
+- **identity chain** — one disk reachable from its `/dev/disk/by-id` path, its kernel name and its WWN: one object, one page, every name on it;
+- **trees from relations** — the units page renders its slice tree and the links page its bridge tree, derived from `member-of`/`enslaved-to` relations, indentation disabled under sort or filter;
+- **cross-subsystem matching** — a `zpool status` device links through to its hardware disk; a veth to its container; an LLDP neighbour resolves to a declared host at the hub.
+
+#### The gap register
+
+Every known miss, each owned or ruled. A row neither built, owned nor ruled is a failing test once R2 lands, so "what else was missed" has a mechanical answer.
+
+| # | Item | State today | Owner |
+|---|---|---|---|
+| 1 | `object` verb — object density (`LoadError`, `NRestarts`, `MainPID`, timers' `NextElapse`…) | owed by the phase-3 verb ruling, never delivered | R3c/R3d |
+| 2 | `evidence` verb — capture-fresh raw document + digest; "the only thing that is not our interpretation" | owed by the same ruling | R3c/R3d |
+| 3 | `lookup` verb — parametrised queries, the lookup palette | owed by the same ruling | R3d |
+| 4 | object `type` on the wire | nowhere; ruled 2026-08-21 into the contract | R1 |
+| 5 | applied order preserved; trees derived from relations | store discards it today; ruled 2026-08-21 | R1 |
+| 6 | name families on `units`/`hardware` (and fleet-wide audit) | storage/vms only | R3c/R3d |
+| 7 | relations on `units`/`hardware` (and fleet-wide audit) | declared by neither | R3c/R3d |
+| 8 | rule tables fleet-wide (restart-churn, SMART verdicts, link-rate…) | mechanism built, no first-party collector declares any | R3c/R3d |
+| 9 | eighteen unported collections (network 8, storage 5, system 4, plex 1) | listed in `test_port_completeness` | R3b/R3d |
+| 10 | `/v1/status` roll-up (worst per collection, attention counts) | nowhere | R3a |
+| 11 | fact filters with the 422 near-miss refusal | nowhere | R3a |
+| 12 | pagination — limit/cursor, declared ceilings honoured on reads | nowhere | R3a |
+| 13 | `/v1/capabilities` serving `object_prefixes` (id→route) | prefixes declared, unserved | R3a |
+| 14 | fact dictionary route + MCP tool | axes held, unserved | R3a |
+| 15 | host-header allowlist on the read listeners | nowhere | R3a |
+| 16 | cost served on the read surface (the cost chip's data) | on the wire only | R3a |
+| 17 | change tracking — history, `/v1/changes`, `what_changed` | designed (§36), migration question unruled, no port | R3e, **owner ruling owed on §36** |
+| 18 | findings persistence (a registry that survives restart) | in-memory only | R3e |
+| 19 | acknowledgement — appended/attributed/reversible, write posture | no route; posture undecided | R3e, **owner ruling owed** |
+| 20 | views route (`se.views/1` was ruled "survives unchanged") | ruled, unserved | R3e |
+| 21 | sibling reads wired to the hub surface (one hop, serving) | handshake only | R3e |
+| 22 | NixOS module: sandboxing generated from declared `authority`, socket activation | authority declared, nothing consumes it | R5 |
+| 23 | root SMART snapshot arrangement (grantDiskAccess) | unaddressed | R5 |
+| 24 | resource measurement — the stated objective of the rewrite | never measured | R5, in the gate |
+| 25 | §27/§28 surface + hide-group invariants carried from app.js | reopened gate 5's table | R4 |
+| 26 | `answer`-list divergences vs the argued column presets (3 same / 14 differ / 14 absent) | unruled accidents | R2 turns each into an explicit ruling |
+| 27 | `system/identity` never compared (gate 3's "no second implementation" claim was false) | recorded | R2/R3b |
+
+#### R1 — structure on the wire (small)
+
+`se.stream/1`'s object record and the checkpoint's object shape gain an optional `type`; the store preserves applied order through REST and checkpoint; DESIGN §19's example and the harness follow. Trees are **not** a `depth` member — they derive from relations at the collator, the tier that holds every row. **Gate R1 (mechanical):** a units capture replays through the collator and serves rows typed, in systemctl-status order; contract suites green.
+
+#### R2 — the guards inverted (small, load-bearing)
+
+`se-compare` derives its work list from the reference adapters' own `collections()` — the `SERVES` table dies. It compares all six layers. `test_port_completeness` grows to the register above: every row is built, owned or ruled, checked in both directions. Each `answer`-list divergence becomes an explicit ruling. **Gate R2 (mechanical):** reversion drills show each new check discriminating; the register is fully encoded.
+
+#### R3 — the port, finished (large, in waves)
+
+- **R3a — the read API reaches parity** (register 10–16). Small, and a prerequisite for R4.
+- **R3b — the bare-guest nine**: network links/routes/listening/resolver, storage block-devices/mounts, system time/boot/overview. This is what made a plain guest look empty.
+- **R3c — structure retrofit on the champions**: `units` and `hardware` gain all six layers plus the three verbs, carrying the recorded lessons (the backwards-arrow probe bound, SMART's no-reading-is-a-fact discipline, the link-rate opinion). The three acceptance items above are judged here, on the lab.
+- **R3d — the rest of the fleet**: remaining collections, verbs, names/relations/rules across all twenty collectors.
+- **R3e — the features**: change tracking (after the §36 ruling), findings persistence, acknowledgement (after the posture ruling), views route, sibling reads.
+
+**Gate R3 (owner):** the inverted comparator is clean over the whole reference surface, the register shows no unowned row, and the owner has seen the three acceptance items pass on the lab.
+
+#### R4 — the surface implements its own specification (medium)
+
+§27/§28 as written — columns from `answer`, widgets from declarations, the five render states, trees, facets, evidence one step from any fact, the four empty states, the absent-severity mark — plus the hide-group mechanism carried from `app.js` with its four invariants. One decision taken here with the owner: interactivity (filter, keyboard) on server-rendered pages. **Gate R4 (owner):** side-by-side with the shipping UI on the same guest, and the owner judges it a replacement rather than a summary of one.
+
+#### R5 — judgement, deployment, and the number the rewrite was for (medium)
+
+The NixOS module consumes declared `authority` into per-collector sandboxing with socket activation; the SMART snapshot arrangement lands; and the stack is measured against the Python agent on the same host — RSS and CPU, in the gate, because reducing them was the stated objective and nothing has ever measured it. **Gate R5 (owner):** parity report clean, resource numbers recorded, deployment path exercised on the lab.
+
+Phase 6 — the cut — follows R5, unchanged in shape, and remains unreachable while any owed list is non-empty.
 
 ### Phase 6 — the cut (small, supervised)
 
