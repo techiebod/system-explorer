@@ -22,17 +22,37 @@ type beginRecord struct {
 	Generations map[string]uint64 `json:"generations"`
 }
 
-// There is no `names` member and no `absent` member, and both are absences by
-// construction rather than by omitempty. The reference's row builder attaches
-// neither, and publishing a name family here would key the collator on a name
-// no other implementation of this collection publishes.
+// There is no `absent` member, an absence by construction rather than by
+// omitempty: the reference's row builder attaches none. `names` arrived at
+// R3c, on the rows both implementations now publish families for — a disk,
+// a controller — and stays off every other row the same way.
 type objectRecord struct {
 	Record     string         `json:"record"`
 	Collection string         `json:"collection"`
 	Name       string         `json:"name"`
 	Type       string         `json:"type,omitempty"`
+	Names      map[string]any `json:"names,omitempty"`
 	Facts      map[string]any `json:"facts"`
 	At         float64        `json:"at"`
+}
+
+// relationAssertionRecord is one vantage's directed claim about an edge. Two
+// members the contract refuses are absent by construction: no observability
+// (whether the far end was seen is the collator's fact, never a collector's)
+// and no target id (resolution changes, and a key that changed with it would
+// reset the relation's lifecycle — DESIGN 13).
+type relationAssertionRecord struct {
+	Record     string          `json:"record"`
+	Collection string          `json:"collection"`
+	Name       string          `json:"name"`
+	Type       string          `json:"type"`
+	Vantage    string          `json:"vantage"`
+	Target     assertionTarget `json:"target"`
+}
+
+type assertionTarget struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
 }
 
 type declineRecord struct {
@@ -174,20 +194,27 @@ func collect(stdout, stderr io.Writer, src source, order []string, generations m
 			fmt.Fprintf(stderr, "%s: %v\n", collection, err)
 			return exitRuntime
 		}
+		assertions := 0
 		for _, row := range items {
 			out.emit(objectRecord{
 				Record:     "object",
 				Type:       row.kind,
 				Collection: collection,
 				Name:       row.name,
+				Names:      row.names,
 				Facts:      row.facts,
 				At:         src.stamp(emitted),
 			})
 			emitted++
+			for _, edge := range rowAssertions(collection, row) {
+				out.emit(edge)
+				assertions++
+			}
 		}
 		out.emit(commitRecord{
 			Record: "commit", Collection: collection,
 			Generation: generations[collection], Objects: len(items),
+			Assertions: assertions,
 		})
 	}
 
@@ -219,4 +246,44 @@ func acquire(src source, collection string) []item {
 		return items
 	}
 	return nil
+}
+
+// rowAssertions is the R3c relation layer: the edges the reference's detail
+// view asserted one object at a time, now asserted at collect so the collator
+// can derive the attachment tree and re-test the cross-subsystem joins. The
+// hierarchy travels as an EDGE, not a coordinate (the R1 ruling): the
+// reference publishes `depth`, this stream publishes attached-to, and the
+// collator derives the same tree. Order is pinned per row — the chain edge,
+// the silicon, what it backs, where it is racked — because the comparator
+// holds both implementations to one spelling of one truth.
+func rowAssertions(collection string, row item) []relationAssertionRecord {
+	edge := func(relType, kind, name string) relationAssertionRecord {
+		return relationAssertionRecord{
+			Record:     "relation_assertion",
+			Collection: collection,
+			Name:       row.name,
+			Vantage:    collection,
+			Type:       relType,
+			Target:     assertionTarget{Kind: kind, Name: name},
+		}
+	}
+	out := []relationAssertionRecord{}
+	if collection == collectionSCSI && row.parent != "" {
+		out = append(out, edge("attached-to", "scsi", row.parent))
+	}
+	if address, ok := row.facts["PCIAddress"].(string); ok {
+		out = append(out, edge("attached-to", "pci", address))
+	}
+	if block, ok := row.facts["Block"].(string); ok && block != "" {
+		out = append(out, edge("backs", "block-device", block))
+	}
+	if namespaces, ok := row.facts["Namespaces"].([]string); ok {
+		for _, namespace := range namespaces {
+			out = append(out, edge("backs", "block-device", namespace))
+		}
+	}
+	if enclosure, ok := row.facts["Enclosure"].(string); ok && enclosure != "" {
+		out = append(out, edge("member-of", "scsi", enclosure))
+	}
+	return out
 }

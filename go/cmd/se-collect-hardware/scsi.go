@@ -183,6 +183,70 @@ func blockByPath(src source) map[string]string {
 	return out
 }
 
+// byIDNames is every /dev/disk/by-id name udev minted for one block device —
+// wwn-<naa>, scsi-3<naa>, ata-<model>_<serial>, nvme-<wwid> — read out of the
+// device's own DEVLINKS rather than by listing the by-id directory and
+// resolving each link back. One query instead of a listing plus a realpath per
+// entry, and the listing would have carried every OTHER disk's identity into
+// a payload this row has no business publishing.
+func byIDNames(src source, block string) []string {
+	links := src.udev(path.Join("/sys/block", block))["DEVLINKS"]
+	names := []string{}
+	for _, link := range strings.Fields(links) {
+		if strings.HasPrefix(link, byID+"/") {
+			names = append(names, path.Base(link))
+		}
+	}
+	return names
+}
+
+// diskNames is law 1 on a hardware disk: every native name observed, split by
+// stability class, so the identity chain closes — the wwid the kernel reports,
+// the by-id spellings a pool member is recorded under, the serial, and the
+// kernel path a person searches for. The wwid file and udev's wwn-… link are
+// two spellings of ONE identity and both are published in the wwn family,
+// because the join runs on published values and a spelling nobody publishes
+// is a join that silently fails.
+func diskNames(f map[string]any, links []string, block string) map[string]any {
+	appendNew := func(family []string, value string) []string {
+		for _, held := range family {
+			if held == value {
+				return family
+			}
+		}
+		return append(family, value)
+	}
+	wwn, devid := []string{}, []string{}
+	if value, ok := f["WWN"].(string); ok {
+		wwn = appendNew(wwn, value)
+	}
+	for _, link := range links {
+		if strings.HasPrefix(link, "wwn-") {
+			wwn = appendNew(wwn, link)
+		} else {
+			devid = appendNew(devid, link)
+		}
+	}
+	stable := map[string]any{}
+	if len(wwn) > 0 {
+		stable["wwn"] = wwn
+	}
+	if len(devid) > 0 {
+		stable["devid"] = devid
+	}
+	if serial, ok := f["Serial"].(string); ok {
+		stable["serial"] = []string{serial}
+	}
+	if len(stable) == 0 {
+		return nil
+	}
+	names := map[string]any{"stable": stable}
+	if block != "" {
+		names["ephemeral"] = map[string]any{"kernel": []string{"/dev/" + block}}
+	}
+	return names
+}
+
 type enclosureSlot struct {
 	enclosure string
 	status    string
@@ -359,6 +423,12 @@ func scsiItems(src source) []item {
 				kind = named
 			}
 		}
+		// The wire type again, as a FACT, because a rule condition names
+		// facts and nothing else — the closed vocabulary has no way to say
+		// "disks only", and the device-state rule must not judge a host or
+		// an expander the reference deliberately leaves unjudged. The links
+		// collection's Kind is the precedent.
+		f := map[string]any{"DeviceType": kind}
 		block := ""
 		if blocks := src.listdir(path.Join(base, "block")); len(blocks) > 0 {
 			block = blocks[0]
@@ -393,7 +463,6 @@ func scsiItems(src source) []item {
 			transport, haveTransport = "SAS", true
 		}
 
-		f := map[string]any{}
 		setString(f, "Vendor", vendor, haveVendor)
 		setString(f, "Transport", transport, haveTransport)
 		setString(f, "Model", model, haveModel)
@@ -447,7 +516,11 @@ func scsiItems(src source) []item {
 		if chain := chainOf(src, base); len(chain) > 0 {
 			parent = chain[len(chain)-1]
 		}
-		items[dev] = &item{name: dev, kind: kind, facts: f, parent: parent}
+		row := &item{name: dev, kind: kind, facts: f, parent: parent}
+		if block != "" {
+			row.names = diskNames(f, byIDNames(src, block), block)
+		}
+		items[dev] = row
 		order = append(order, dev)
 	}
 

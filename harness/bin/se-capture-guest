@@ -412,8 +412,19 @@ print(asyncio.run(main()))
 # path on the guest and compare one line — and the granularity the scrub
 # manifest classifies at.
 hardware_py='
-import asyncio, json, sys
+import asyncio, importlib, json, sys, types
 sys.path.insert(0, "/tmp/secmp/src")
+# The stub-package import the logs arm uses, for the reason it exists
+# there: what is loaded is exactly the one adapter being instrumented.
+# The package __init__ imports the whole adapter family, whose HTTP
+# members need httpx, a dependency no lab guest carries and this walk
+# never uses.
+importlib.import_module("system_explorer.agent")
+PKG = "system_explorer.agent.adapters"
+if PKG not in sys.modules:
+    stub = types.ModuleType(PKG)
+    stub.__path__ = ["/tmp/secmp/src/system_explorer/agent/adapters"]
+    sys.modules[PKG] = stub
 from system_explorer.agent.adapters import hardware
 
 want = sys.argv[1]
@@ -427,7 +438,8 @@ def record(name, fn):
         return answer
     return call
 
-for name, attr in (("read", "_read"), ("listdir", "_listdir"),
+for name, attr in (("read", "_read"), ("read-bytes", "_read_bytes"),
+                   ("listdir", "_listdir"),
                    ("realpath", "_realpath"), ("exists", "_exists"),
                    ("udev", "_udev_json"),
                    ("smartctl", "_smartctl_json"),
@@ -921,13 +933,14 @@ case "$collector" in
         acquisitions=("r---n--100.json|sudo python3 -c '$logs_py'")
         ;;
     hardware)
-        # Seven instrumented runs and two commands. Seven because each payload
+        # Nine instrumented runs and two commands. Nine because each payload
         # is one file and the tool's contract is one command per file; the walk
-        # is read-only and deterministic on a quiescent guest, so seven runs
+        # is read-only and deterministic on a quiescent guest, so nine runs
         # record the same calls. lscpu answers with a document already, so it
         # is captured by the command a reader would run themselves.
         acquisitions=(
             "read.json|python3 -c '$hardware_py' read"
+            "read-bytes.json|python3 -c '$hardware_py' read-bytes"
             "listdir.json|python3 -c '$hardware_py' listdir"
             "realpath.json|python3 -c '$hardware_py' realpath"
             "exists.json|python3 -c '$hardware_py' exists"

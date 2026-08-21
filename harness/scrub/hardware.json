@@ -1,108 +1,463 @@
 {
-  "#": "Scrub manifest for the hardware collector. Its interface is a TREE, so its payloads are the filesystem transcribed (DESIGN, adjudication queue, 2026-08-19): read.json is every file the walk opened, listdir.json every directory it enumerated, realpath.json every link it resolved, udev.json every `udevadm info --json=short` reply it asked for, lscpu.json the `lscpu -J` document, and hostname the name the platform object is published under. Each tree payload is keyed the way a filesystem is — the directory, then the name inside it — which is also the granularity a field is classified at here: `*.wwid` is one written claim about a sysfs attribute of this interface, where a flat path map would offer only forty literal entries that one more disk invalidates, or a single '*' that classifies a WWN and a link rate as one thing.",
-
-  "#scoping": "Four payloads share one shape, and a pattern string can appear once in this file — so every payload-specific pattern names its `payload`, and only the two entries whose classification is identical across all four are left unscoped. Without the scoping, realpath's '*.*' would also match read.json's leaves and every one of them would be refused as matched-by-two-entries.",
-
-  "#nothing_is_the_bound_this_guest_bought": "EVERY leaf in this capture is `nothing`, and that is a fact about the guest rather than about the interface. The lab guest runs virtio-blk disks, which appear in neither the scsi nor the nvme walk, so it has no block device under /sys/bus/scsi/devices and no /sys/class/nvme at all. A host that DOES publishes identity at four sysfs attributes this manifest deliberately does not classify — `wwid` (the kernel's world-wide name, on a scsi device and on an nvme namespace alike), `serial` (an nvme controller's), `sas_address` (a SAS end device's and an expander's) and `vpd_pg80` (SCSI VPD page 0x80, the drive's serial) — plus the enclosure `slot`/`status` tree. None of them is here, none of them is classified, and the walk's deny-by-default refusal is what forces this file to grow rather than trusting anyone to remember. That refusal is the gate: a re-stage on a host with disks REFUSES until those four are written down as identity.",
-
-  "#the_serial_fields_are_over-scrubbed_deliberately": "udev's ID_SERIAL, ID_SERIAL_SHORT and their ID_USB_ twins are classified identity, and on THIS capture that substitutes a PCI address: a root hub has no serial, so udev synthesises one out of the kernel version, the driver and the bus address. The specimen is the poorer for it and the classification is still right, because the class is a property of the value and the manifest can only speak per field — a USB stick in the same slot puts a real serial in the same member, and `nothing` there would publish it. Substituting a bus address is a cosmetic loss in a field this collector never reads; publishing a serial is not.",
-
-  "#paths_and_names_disclose_nothing": "The directory keys, the names inside them, and the link targets are bus topology and kernel class names: /sys/bus/pci/devices/0000:00:01.1, /sys/class/scsi_host/host0, /dev/disk/by-path/pci-0000:00:05.0 -> /dev/vda. A PCI address locates a card on a bus and is identical across every machine of that model (DESIGN 21), and a kernel name is reassigned on rescan. THE BOUND: this holds because the adapter's path constants are a closed set of sysfs class trees, /proc and /dev/disk/by-path — not one of which carries an operator-chosen or identifying component. /dev/disk/by-id would, and this collector does not walk it (storage does, and its manifest classifies that tree as identity).",
-
-  "~key": {"discloses": "nothing"},
-  "*.~key": {"discloses": "nothing"},
-
-  "#read": "Every file the walk opened, by directory then attribute. /proc/meminfo is here rather than behind a stubbed _meminfo_total_bytes because the kernel file is the native document and the parse is the port's to reproduce.",
-  "*.meminfo": {"discloses": "nothing", "payload": "read"},
-  "*.sys_vendor": {"discloses": "nothing", "payload": "read"},
-  "*.product_name": {"discloses": "nothing", "payload": "read"},
-  "*.board_name": {"discloses": "nothing", "payload": "read"},
-  "*.bios_version": {"discloses": "nothing", "payload": "read"},
-  "*.bios_date": {"discloses": "nothing", "payload": "read"},
-  "*.bDeviceClass": {"discloses": "nothing", "payload": "read"},
-  "*.bcdDevice": {"discloses": "nothing", "payload": "read"},
-  "*.idVendor": {"discloses": "nothing", "payload": "read"},
-  "*.idProduct": {"discloses": "nothing", "payload": "read"},
-  "*.speed": {"discloses": "nothing", "payload": "read"},
-  "*.version": {"discloses": "nothing", "payload": "read"},
-  "*.proc_name": {"discloses": "nothing", "payload": "read"},
-  "*.state": {"discloses": "nothing", "payload": "read"},
-  "*.version_fw": {"discloses": "nothing", "payload": "read"},
-  "*.fw_version": {"discloses": "nothing", "payload": "read"},
-  "*.fwrev": {"discloses": "nothing", "payload": "read"},
-  "*.version_bios": {"discloses": "nothing", "payload": "read"},
-  "*.model_name": {"discloses": "nothing", "payload": "read"},
-
-  "#listdir": "A directory's entries: PCI functions, kernel host numbers, usb bus names, by-path aliases. Positional all the way down.",
-  "*.*.*": {"discloses": "nothing", "payload": "listdir"},
-
-  "#realpath": "Where each link lands. The scsi_host links resolve into the /sys/devices tree, which is what names the ata port and the PCI function; the by-path aliases resolve to kernel device names.",
-  "*.*": {"discloses": "nothing", "payload": "realpath"},
-
-  "#exists": "Whether one attribute is there at all. host_sas_address exists on a SAS host and nowhere else, so the probe IS the reading and there is no content to classify — a boolean travels verbatim under any class, and `nothing` is the true one.",
-  "*.host_sas_address": {"discloses": "nothing", "payload": "exists"},
-
-  "#udev": "The hwdb reply for one syspath. Only six of these members are read by the collector — the two PCI class names, the vendor and model names, DRIVER and PCI_ID — and the rest travel because the reply IS the native document and trimming it would invent one.",
-  "*.*.ID_SERIAL": {"discloses": "identity", "format": "serial", "payload": "udev"},
-  "*.*.ID_SERIAL_SHORT": {"discloses": "identity", "format": "serial", "payload": "udev"},
-  "*.*.ID_USB_SERIAL": {"discloses": "identity", "format": "serial", "payload": "udev"},
-  "*.*.ID_USB_SERIAL_SHORT": {"discloses": "identity", "format": "serial", "payload": "udev"},
-
-  "*.*.BUSNUM": {"discloses": "nothing", "payload": "udev"},
-  "*.*.CURRENT_TAGS": {"discloses": "nothing", "payload": "udev"},
-  "*.*.DEVICE_ID": {"discloses": "nothing", "payload": "udev"},
-  "*.*.DEVNAME": {"discloses": "nothing", "payload": "udev"},
-  "*.*.DEVNUM": {"discloses": "nothing", "payload": "udev"},
-  "*.*.DEVPATH": {"discloses": "nothing", "payload": "udev"},
-  "*.*.DEVTYPE": {"discloses": "nothing", "payload": "udev"},
-  "*.*.DRIVER": {"discloses": "nothing", "payload": "udev"},
-  "*.*.ID_AUTOSUSPEND": {"discloses": "nothing", "payload": "udev"},
-  "*.*.ID_BUS": {"discloses": "nothing", "payload": "udev"},
-  "*.*.ID_FOR_SEAT": {"discloses": "nothing", "payload": "udev"},
-  "*.*.ID_MODEL": {"discloses": "nothing", "payload": "udev"},
-  "*.*.ID_MODEL_ENC": {"discloses": "nothing", "payload": "udev"},
-  "*.*.ID_MODEL_FROM_DATABASE": {"discloses": "nothing", "payload": "udev"},
-  "*.*.ID_MODEL_ID": {"discloses": "nothing", "payload": "udev"},
-  "*.*.ID_PATH": {"discloses": "nothing", "payload": "udev"},
-  "*.*.ID_PATH_TAG": {"discloses": "nothing", "payload": "udev"},
-  "*.*.ID_PCI_CLASS_FROM_DATABASE": {"discloses": "nothing", "payload": "udev"},
-  "*.*.ID_PCI_INTERFACE_FROM_DATABASE": {"discloses": "nothing", "payload": "udev"},
-  "*.*.ID_PCI_SUBCLASS_FROM_DATABASE": {"discloses": "nothing", "payload": "udev"},
-  "*.*.ID_REVISION": {"discloses": "nothing", "payload": "udev"},
-  "*.*.ID_USB_INTERFACES": {"discloses": "nothing", "payload": "udev"},
-  "*.*.ID_USB_MODEL": {"discloses": "nothing", "payload": "udev"},
-  "*.*.ID_USB_MODEL_ENC": {"discloses": "nothing", "payload": "udev"},
-  "*.*.ID_USB_MODEL_ID": {"discloses": "nothing", "payload": "udev"},
-  "*.*.ID_USB_REVISION": {"discloses": "nothing", "payload": "udev"},
-  "*.*.ID_USB_VENDOR": {"discloses": "nothing", "payload": "udev"},
-  "*.*.ID_USB_VENDOR_ENC": {"discloses": "nothing", "payload": "udev"},
-  "*.*.ID_USB_VENDOR_ID": {"discloses": "nothing", "payload": "udev"},
-  "*.*.ID_VENDOR": {"discloses": "nothing", "payload": "udev"},
-  "*.*.ID_VENDOR_ENC": {"discloses": "nothing", "payload": "udev"},
-  "*.*.ID_VENDOR_FROM_DATABASE": {"discloses": "nothing", "payload": "udev"},
-  "*.*.ID_VENDOR_ID": {"discloses": "nothing", "payload": "udev"},
-  "*.*.MAJOR": {"discloses": "nothing", "payload": "udev"},
-  "*.*.MINOR": {"discloses": "nothing", "payload": "udev"},
-  "*.*.MODALIAS": {"discloses": "nothing", "payload": "udev"},
-  "*.*.PCI_CLASS": {"discloses": "nothing", "payload": "udev"},
-  "*.*.PCI_ID": {"discloses": "nothing", "payload": "udev"},
-  "*.*.PCI_SLOT_NAME": {"discloses": "nothing", "payload": "udev"},
-  "*.*.PCI_SUBSYS_ID": {"discloses": "nothing", "payload": "udev"},
-  "*.*.PRODUCT": {"discloses": "nothing", "payload": "udev"},
-  "*.*.SUBSYSTEM": {"discloses": "nothing", "payload": "udev"},
-  "*.*.SYSNAME": {"discloses": "nothing", "payload": "udev"},
-  "*.*.SYSNUM": {"discloses": "nothing", "payload": "udev"},
-  "*.*.TAGS": {"discloses": "nothing", "payload": "udev"},
-  "*.*.TYPE": {"discloses": "nothing", "payload": "udev"},
-  "*.*.USEC_INITIALIZED": {"discloses": "nothing", "payload": "udev"},
-
-  "#lscpu": "util-linux's own JSON: a list of {field, data} pairs, some carrying children (the cache table, the vulnerability list). Every value is a CPU capability or a topology count — the same strings on every machine with the same silicon.",
-  "lscpu.*.field": {"discloses": "nothing", "payload": "lscpu"},
-  "lscpu.*.data": {"discloses": "nothing", "payload": "lscpu"},
-  "lscpu.*.children.*.field": {"discloses": "nothing", "payload": "lscpu"},
-  "lscpu.*.children.*.data": {"discloses": "nothing", "payload": "lscpu"},
-
-  "#hostname": "The kernel hostname, which is where this machine sits in an estate — and it is the name the platform object is published under, so it is substituted whole and the object travels under the substitution.",
-  "hostname_document": {"payload": "hostname",
-                        "whole": {"discloses": "location", "format": "hostname"}}
+ "#": "Scrub manifest for the hardware collector. Its interface is a TREE, so its payloads are the filesystem transcribed (DESIGN, adjudication queue, 2026-08-19): read.json is every file the walk opened, listdir.json every directory it enumerated, realpath.json every link it resolved, udev.json every `udevadm info --json=short` reply it asked for, lscpu.json the `lscpu -J` document, and hostname the name the platform object is published under. Each tree payload is keyed the way a filesystem is — the directory, then the name inside it — which is also the granularity a field is classified at here: `*.wwid` is one written claim about a sysfs attribute of this interface, where a flat path map would offer only forty literal entries that one more disk invalidates, or a single '*' that classifies a WWN and a link rate as one thing.",
+ "#scoping": "Four payloads share one shape, and a pattern string can appear once in this file — so every payload-specific pattern names its `payload`, and only the two entries whose classification is identical across all four are left unscoped. Without the scoping, realpath's '*.*' would also match read.json's leaves and every one of them would be refused as matched-by-two-entries.",
+ "#nothing_is_the_bound_this_guest_bought": "Written when the only hardware capture came from a guest whose disks were virtio-blk — no block device under /sys/bus/scsi/devices, no /sys/class/nvme at all — so EVERY leaf in it was `nothing`, which was a fact about that guest rather than about the interface. The note promised that a re-stage on a host with disks would REFUSE until four identity attributes were written down, and on 2026-08-21 corpus/hardware/staged-disks did exactly that: the walk refused twenty-one leaves, and `wwid`, `serial` and `vpd_pg80` are classified below as a result. `sas_address` and the enclosure slot/status tree are STILL not here, because no lab guest can present a SAS expander or an SES enclosure — so the refusal is still the gate for those two, and a capture from a host with a shelf will refuse until they are written down too.",
+ "#the_serial_fields_are_over-scrubbed_deliberately": "udev's ID_SERIAL, ID_SERIAL_SHORT and their ID_USB_ twins are classified identity, and on the qemu-guest capture that substitutes a PCI address: a root hub has no serial, so udev synthesises one out of the kernel version, the driver and the bus address. The specimen is the poorer for it and the classification is still right, because the class is a property of the value and the manifest can only speak per field — a USB stick in the same slot puts a real serial in the same member, and `nothing` there would publish it. The FORMAT moved on 2026-08-21, when the walk first met a SCSI disk: udev writes that drive's NAA into ID_SERIAL (`35000c50…`, the WWN with a designator digit in front), so replacing it as an opaque serial published a specimen whose wwid said one drive and whose ID_SERIAL said another. `udev_serial` gives the shape passes first refusal and only replaces wholesale what none of them recognises — which leaves the synthesised root-hub values exactly as they were.",
+ "#paths_and_names_disclose_nothing": "The directory keys, the names inside them, and the link targets are bus topology and kernel class names: /sys/bus/pci/devices/0000:00:01.1, /sys/class/scsi_host/host0, /dev/disk/by-path/pci-0000:00:05.0 -> /dev/vda. A PCI address locates a card on a bus and is identical across every machine of that model (DESIGN 21), and a kernel name is reassigned on rescan. THE BOUND: this holds because the adapter's path constants are a closed set of sysfs class trees, /proc and /dev/disk/by-path — not one of which carries an operator-chosen or identifying component. /dev/disk/by-id would, and this collector does not walk it (storage does, and its manifest classifies that tree as identity).",
+ "~key": {
+  "discloses": "nothing"
+ },
+ "*.~key": {
+  "discloses": "nothing"
+ },
+ "#read": "Every file the walk opened, by directory then attribute. /proc/meminfo is here rather than behind a stubbed _meminfo_total_bytes because the kernel file is the native document and the parse is the port's to reproduce.",
+ "*.meminfo": {
+  "discloses": "nothing",
+  "payload": "read"
+ },
+ "*.sys_vendor": {
+  "discloses": "nothing",
+  "payload": "read"
+ },
+ "*.product_name": {
+  "discloses": "nothing",
+  "payload": "read"
+ },
+ "*.board_name": {
+  "discloses": "nothing",
+  "payload": "read"
+ },
+ "*.bios_version": {
+  "discloses": "nothing",
+  "payload": "read"
+ },
+ "*.bios_date": {
+  "discloses": "nothing",
+  "payload": "read"
+ },
+ "*.bDeviceClass": {
+  "discloses": "nothing",
+  "payload": "read"
+ },
+ "*.bcdDevice": {
+  "discloses": "nothing",
+  "payload": "read"
+ },
+ "*.idVendor": {
+  "discloses": "nothing",
+  "payload": "read"
+ },
+ "*.idProduct": {
+  "discloses": "nothing",
+  "payload": "read"
+ },
+ "*.speed": {
+  "discloses": "nothing",
+  "payload": "read"
+ },
+ "*.version": {
+  "discloses": "nothing",
+  "payload": "read"
+ },
+ "*.proc_name": {
+  "discloses": "nothing",
+  "payload": "read"
+ },
+ "*.state": {
+  "discloses": "nothing",
+  "payload": "read"
+ },
+ "*.version_fw": {
+  "discloses": "nothing",
+  "payload": "read"
+ },
+ "*.fw_version": {
+  "discloses": "nothing",
+  "payload": "read"
+ },
+ "*.fwrev": {
+  "discloses": "nothing",
+  "payload": "read"
+ },
+ "*.version_bios": {
+  "discloses": "nothing",
+  "payload": "read"
+ },
+ "*.model_name": {
+  "discloses": "nothing",
+  "payload": "read"
+ },
+ "#listdir": "A directory's entries: PCI functions, kernel host numbers, usb bus names, by-path aliases. Positional all the way down.",
+ "*.*.*": {
+  "discloses": "nothing",
+  "payload": "listdir"
+ },
+ "#realpath": "Where each link lands. The scsi_host links resolve into the /sys/devices tree, which is what names the ata port and the PCI function; the by-path aliases resolve to kernel device names.",
+ "*.*": {
+  "discloses": "nothing",
+  "payload": "realpath"
+ },
+ "#exists": "Whether one attribute is there at all. host_sas_address exists on a SAS host and nowhere else, so the probe IS the reading and there is no content to classify — a boolean travels verbatim under any class, and `nothing` is the true one.",
+ "*.host_sas_address": {
+  "discloses": "nothing",
+  "payload": "exists"
+ },
+ "#udev": "The hwdb reply for one syspath. Only six of these members are read by the collector — the two PCI class names, the vendor and model names, DRIVER and PCI_ID — and the rest travel because the reply IS the native document and trimming it would invent one.",
+ "*.*.ID_SERIAL": {
+  "discloses": "identity",
+  "format": "udev_serial",
+  "payload": "udev"
+ },
+ "*.*.ID_SERIAL_SHORT": {
+  "discloses": "identity",
+  "format": "udev_serial",
+  "payload": "udev"
+ },
+ "*.*.ID_USB_SERIAL": {
+  "discloses": "identity",
+  "format": "udev_serial",
+  "payload": "udev"
+ },
+ "*.*.ID_USB_SERIAL_SHORT": {
+  "discloses": "identity",
+  "format": "udev_serial",
+  "payload": "udev"
+ },
+ "*.*.BUSNUM": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.CURRENT_TAGS": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.DEVICE_ID": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.DEVNAME": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.DEVNUM": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.DEVPATH": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.DEVTYPE": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.DRIVER": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.ID_AUTOSUSPEND": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.ID_BUS": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.ID_FOR_SEAT": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.ID_MODEL": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.ID_MODEL_ENC": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.ID_MODEL_FROM_DATABASE": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.ID_MODEL_ID": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.ID_PATH": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.ID_PATH_TAG": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.ID_PCI_CLASS_FROM_DATABASE": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.ID_PCI_INTERFACE_FROM_DATABASE": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.ID_PCI_SUBCLASS_FROM_DATABASE": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.ID_REVISION": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.ID_USB_INTERFACES": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.ID_USB_MODEL": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.ID_USB_MODEL_ENC": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.ID_USB_MODEL_ID": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.ID_USB_REVISION": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.ID_USB_VENDOR": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.ID_USB_VENDOR_ENC": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.ID_USB_VENDOR_ID": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.ID_VENDOR": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.ID_VENDOR_ENC": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.ID_VENDOR_FROM_DATABASE": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.ID_VENDOR_ID": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.MAJOR": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.MINOR": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.MODALIAS": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.PCI_CLASS": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.PCI_ID": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.PCI_SLOT_NAME": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.PCI_SUBSYS_ID": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.PRODUCT": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.SUBSYSTEM": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.SYSNAME": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.SYSNUM": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.TAGS": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.TYPE": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "*.*.USEC_INITIALIZED": {
+  "discloses": "nothing",
+  "payload": "udev"
+ },
+ "#lscpu": "util-linux's own JSON: a list of {field, data} pairs, some carrying children (the cache table, the vulnerability list). Every value is a CPU capability or a topology count — the same strings on every machine with the same silicon.",
+ "lscpu.*.field": {
+  "discloses": "nothing",
+  "payload": "lscpu"
+ },
+ "lscpu.*.data": {
+  "discloses": "nothing",
+  "payload": "lscpu"
+ },
+ "lscpu.*.children.*.field": {
+  "discloses": "nothing",
+  "payload": "lscpu"
+ },
+ "lscpu.*.children.*.data": {
+  "discloses": "nothing",
+  "payload": "lscpu"
+ },
+ "#hostname": "The kernel hostname, which is where this machine sits in an estate — and it is the name the platform object is published under, so it is substituted whole and the object travels under the substitution.",
+ "hostname_document": {
+  "payload": "hostname",
+  "whole": {
+   "discloses": "location",
+   "format": "hostname"
+  }
+ },
+ "#a_binary_attribute_is_base64": "vpd_pg80 is SCSI VPD page 0x80 — four header octets then the drive's serial — and the payload carries it base64, because a payload is JSON and those octets are not text. It is classified `vpd_page80`, a format that decodes, substitutes the serial through the same context as every other spelling of it, and re-encodes. The checker learned the same trick in the same landing (se_harness/detectors.py folds a base64 leaf and rescans its printable runs), because a remover that sees through an encoding beside a checker that does not is a manifest claiming a substitution nobody can verify.",
+ "read:*.wwid": {
+  "discloses": "identity",
+  "format": "wwid"
+ },
+ "read:*.serial": {
+  "discloses": "identity",
+  "format": "serial"
+ },
+ "read:*.model": {
+  "discloses": "nothing"
+ },
+ "read:*.vendor": {
+  "discloses": "nothing"
+ },
+ "read:*.rev": {
+  "discloses": "nothing"
+ },
+ "read:*.type": {
+  "discloses": "nothing"
+ },
+ "read:*.firmware_rev": {
+  "discloses": "nothing"
+ },
+ "read:*.transport": {
+  "discloses": "nothing"
+ },
+ "read:*.name": {
+  "discloses": "nothing"
+ },
+ "read:*.temp1_input": {
+  "discloses": "nothing"
+ },
+ "read:*.current_link_speed": {
+  "discloses": "nothing"
+ },
+ "read:*.current_link_width": {
+  "discloses": "nothing"
+ },
+ "read:*.max_link_speed": {
+  "discloses": "nothing"
+ },
+ "read:*.max_link_width": {
+  "discloses": "nothing"
+ },
+ "smart-reason:*.*": {
+  "discloses": "content",
+  "format": "prose"
+ },
+ "read-bytes:*.vpd_pg80": {
+  "discloses": "identity",
+  "format": "vpd_page80"
+ },
+ "smart-snapshot:*.*": {
+  "discloses": "content",
+  "format": "prose"
+ },
+ "#by_id_names_are_identity": "A disk's stable names are what a pool member is recorded under and what a join runs on, so from 2026-08-21 a disk row publishes them — read out of the device's own udev DEVLINKS. udev mints those names FROM the device's identity, so the property carries a WWN, a serial or an NVMe wwid in its own spelling, and it goes through the same substitution context as the attribute each was minted from. Otherwise the corpus stops demonstrating the join it exists to teach: a specimen whose wwid says one drive and whose by-id link says another teaches a reader nothing. Taken per device rather than by listing /dev/disk/by-id, which would have carried every OTHER disk's identity into a payload this row has no business publishing.",
+ "udev:*.*.DEVLINKS": {
+  "discloses": "identity"
+ },
+ "udev:*.*.ID_WWN": {
+  "discloses": "identity",
+  "format": "wwn"
+ },
+ "udev:*.*.ID_WWN_WITH_EXTENSION": {
+  "discloses": "identity",
+  "format": "wwn"
+ },
+ "udev:*.*.SCSI_IDENT_LUN_NAA_REG": {
+  "discloses": "identity",
+  "format": "wwn"
+ },
+ "udev:*.*.ID_SCSI_SERIAL": {
+  "discloses": "identity",
+  "format": "serial"
+ },
+ "udev:*.*.SCSI_IDENT_SERIAL": {
+  "discloses": "identity",
+  "format": "serial"
+ },
+ "udev:*.*.SCSI_IDENT_LUN_VENDOR": {
+  "discloses": "identity",
+  "format": "serial"
+ },
+ "udev:*.*.DISKSEQ": {
+  "discloses": "nothing"
+ },
+ "udev:*.*.DM_MULTIPATH_DEVICE_PATH": {
+  "discloses": "nothing"
+ },
+ "udev:*.*.ID_SCSI": {
+  "discloses": "nothing"
+ },
+ "udev:*.*.ID_SCSI_INQUIRY": {
+  "discloses": "nothing"
+ },
+ "udev:*.*.ID_TYPE": {
+  "discloses": "nothing"
+ },
+ "udev:*.*.SCSI_MODEL": {
+  "discloses": "nothing"
+ },
+ "udev:*.*.SCSI_MODEL_ENC": {
+  "discloses": "nothing"
+ },
+ "udev:*.*.SCSI_REVISION": {
+  "discloses": "nothing"
+ },
+ "udev:*.*.SCSI_TPGS": {
+  "discloses": "nothing"
+ },
+ "udev:*.*.SCSI_TYPE": {
+  "discloses": "nothing"
+ },
+ "udev:*.*.SCSI_VENDOR": {
+  "discloses": "nothing"
+ },
+ "udev:*.*.SCSI_VENDOR_ENC": {
+  "discloses": "nothing"
+ },
+ "read:*.size": {
+  "discloses": "nothing"
+ }
 }

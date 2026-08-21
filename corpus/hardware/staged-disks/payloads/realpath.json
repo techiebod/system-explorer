@@ -1,0 +1,33 @@
+{
+  "/dev/disk/by-path": {
+    "pci-0000:00:05.0": "/dev/vda",
+    "pci-0000:00:05.0-part": "/dev/disk/by-path/pci-0000:00:05.0-part",
+    "pci-0000:00:05.0-part1": "/dev/vda1",
+    "pci-0000:00:05.0-part13": "/dev/vda13",
+    "pci-0000:00:05.0-part14": "/dev/vda14",
+    "pci-0000:00:05.0-part15": "/dev/vda15",
+    "pci-0000:00:06.0": "/dev/vdb",
+    "pci-0000:00:08.0-scsi-0:0:0:0": "/dev/sda",
+    "pci-0000:00:10.0-nvme-1": "/dev/nvme0n1",
+    "virtio-pci-0000:00:05.0": "/dev/vda",
+    "virtio-pci-0000:00:05.0-part1": "/dev/vda1",
+    "virtio-pci-0000:00:05.0-part13": "/dev/vda13",
+    "virtio-pci-0000:00:05.0-part14": "/dev/vda14",
+    "virtio-pci-0000:00:05.0-part15": "/dev/vda15",
+    "virtio-pci-0000:00:06.0": "/dev/vdb"
+  },
+  "/sys/bus/scsi/devices": {
+    "0:0:0:0": "/sys/devices/pci0000:00/0000:00:08.0/virtio5/host0/target0:0:0/0:0:0:0"
+  },
+  "/sys/class/hwmon/hwmon0": {
+    "device": "/sys/devices/pci0000:00/0000:00:10.0/nvme/nvme0"
+  },
+  "/sys/class/nvme/nvme0": {
+    "device": "/sys/devices/pci0000:00/0000:00:10.0"
+  },
+  "/sys/class/scsi_host": {
+    "host0": "/sys/devices/pci0000:00/0000:00:08.0/virtio5/host0/scsi_host/host0",
+    "host1": "/sys/devices/pci0000:00/0000:00:01.1/ata1/host1/scsi_host/host1",
+    "host2": "/sys/devices/pci0000:00/0000:00:01.1/ata2/host2/scsi_host/host2"
+  }
+}

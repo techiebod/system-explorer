@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -205,6 +206,7 @@ const (
 	ataLinks     = "/sys/class/ata_link"
 	enclosures   = "/sys/class/enclosure"
 	byPath       = "/dev/disk/by-path"
+	byID         = "/dev/disk/by-id"
 	dmi          = "/sys/devices/virtual/dmi/id"
 	hwmon        = "/sys/class/hwmon"
 
@@ -438,6 +440,7 @@ const replayBootID = "5e000000-0000-4000-8000-000000000001"
 // reviewer reading a file name is reading which primitive it answers.
 const (
 	payloadRead          = "read.json"
+	payloadReadBytes     = "read-bytes.json"
 	payloadListdir       = "listdir.json"
 	payloadRealpath      = "realpath.json"
 	payloadExists        = "exists.json"
@@ -454,11 +457,15 @@ const (
 type replaySource struct {
 	dir string
 
-	read_     map[string]map[string]*string
-	listdir_  map[string]map[string][]string
-	realpath_ map[string]map[string]string
-	exists_   map[string]map[string]bool
-	udev_     map[string]map[string]map[string]string
+	read_ map[string]map[string]*string
+	// Base64, because a payload is JSON and these octets are not text. The
+	// DECODE stays here rather than in the seam, so the parse the port has to
+	// reproduce is still the port's.
+	readBytes_ map[string]map[string]*string
+	listdir_   map[string]map[string][]string
+	realpath_  map[string]map[string]string
+	exists_    map[string]map[string]bool
+	udev_      map[string]map[string]map[string]string
 
 	// The three smart maps stay raw: a snapshot's document is a JSON object
 	// whose numbers must reach the wire spelled exactly as smartctl wrote
@@ -482,11 +489,13 @@ func newReplaySource(dir, replayNow string) *replaySource {
 	// there — the || would short-circuit if the calls were inline, so each
 	// runs first and the disjunction is taken afterwards.
 	haveRead := loadPayload(r, payloadRead, &r.read_)
+	haveReadBytes := loadPayload(r, payloadReadBytes, &r.readBytes_)
 	haveListdir := loadPayload(r, payloadListdir, &r.listdir_)
 	haveRealpath := loadPayload(r, payloadRealpath, &r.realpath_)
 	haveExists := loadPayload(r, payloadExists, &r.exists_)
 	haveUdev := loadPayload(r, payloadUdev, &r.udev_)
-	r.staged = haveRead || haveListdir || haveRealpath || haveExists || haveUdev
+	r.staged = haveRead || haveReadBytes || haveListdir || haveRealpath ||
+		haveExists || haveUdev
 	loadPayload(r, payloadSmartctl, &r.smartctl_)
 	loadPayload(r, payloadSmartSnapshot, &r.snapshot_)
 	loadPayload(r, payloadSmartReason, &r.reason_)
@@ -641,13 +650,34 @@ func (r *replaySource) listdir(p string) []string {
 	return entries
 }
 
-// No captured document holds a binary attribute, because the reference has no
-// seam point that would record one. Refusing is the honest answer: a variant
-// that reaches this call is one the corpus cannot yet replay, and saying so is
-// better than reading the machine that happens to be replaying.
+// One binary attribute out of the capture, decoded from the base64 the
+// reference's own primitive transcribes it as. Until 2026-08-21 this refused
+// every call, because the reference read VPD page 0x80 through an inline
+// Path.read_bytes with no seam point — so no variant could hold one, and the
+// first capture with a real SCSI disk was unreplayable. A null is a captured
+// answer (the attribute is not there, which is ordinary), a path the document
+// does not hold is uncaptured and refuses.
 func (r *replaySource) readBytes(p string) ([]byte, bool) {
-	r.uncaptured("read-bytes", p)
-	return nil, false
+	container, member := splitArgument(p)
+	inside, ok := r.readBytes_[container]
+	if !ok {
+		r.uncaptured("read-bytes", p)
+		return nil, false
+	}
+	encoded, ok := inside[member]
+	if !ok {
+		r.uncaptured("read-bytes", p)
+		return nil, false
+	}
+	if encoded == nil {
+		return nil, false
+	}
+	raw, err := base64.StdEncoding.DecodeString(*encoded)
+	if err != nil {
+		r.fail(fmt.Errorf("payload %s: %s is not base64: %v", payloadReadBytes, p, err))
+		return nil, false
+	}
+	return raw, true
 }
 
 func (r *replaySource) exists(p string) bool {

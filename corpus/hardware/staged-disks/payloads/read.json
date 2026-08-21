@@ -1,0 +1,109 @@
+{
+  "/proc": {
+    "meminfo": "MemTotal:        2005092 kB\nMemFree:         1000096 kB\nMemAvailable:    1620896 kB\nBuffers:           22152 kB\nCached:           725460 kB\nSwapCached:            0 kB\nActive:           452588 kB\nInactive:         384532 kB\nActive(anon):     101712 kB\nInactive(anon):        0 kB\nActive(file):     350876 kB\nInactive(file):   384532 kB\nUnevictable:        9612 kB\nMlocked:            9612 kB\nSwapTotal:             0 kB\nSwapFree:              0 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:              1068 kB\nWriteback:             0 kB\nAnonPages:         99076 kB\nMapped:            89228 kB\nShmem:              4768 kB\nKReclaimable:      34348 kB\nSlab:              86416 kB\nSReclaimable:      34348 kB\nSUnreclaim:        52068 kB\nKernelStack:        2472 kB\nPageTables:         3184 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:     1002544 kB\nCommitted_AS:     491072 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:       16372 kB\nVmallocChunk:          0 kB\nPercpu:             1208 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:        0 kB\nShmemPmdMapped:        0 kB\nFileHugePages:     57344 kB\nFilePmdMapped:         0 kB\nCmaTotal:              0 kB\nCmaFree:          488556 kB\nUnaccepted:            0 kB\nBalloon:               0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      114316 kB\nDirectMap2M:     1978368 kB\nDirectMap1G:           0 kB"
+  },
+  "/sys/block/nvme0n1": {
+    "wwid": "nvme.1b36-414e4f4e4333384143394145384630-51454d55204e564d65204374726c-00000001"
+  },
+  "/sys/block/sda": {
+    "size": "2097152"
+  },
+  "/sys/bus/scsi/devices/0:0:0:0": {
+    "model": "QEMU HARDDISK",
+    "rev": "2.5+",
+    "state": "running",
+    "type": "0",
+    "vendor": "QEMU",
+    "wwid": "naa.30493d187fe67bfc"
+  },
+  "/sys/bus/usb/devices/usb1": {
+    "bDeviceClass": "09",
+    "bcdDevice": "0700",
+    "idProduct": "0001",
+    "idVendor": "1d6b",
+    "speed": "12",
+    "version": "1.10"
+  },
+  "/sys/bus/usb/devices/usb2": {
+    "bDeviceClass": "09",
+    "bcdDevice": "0700",
+    "idProduct": "0001",
+    "idVendor": "1d6b",
+    "speed": "12",
+    "version": "1.10"
+  },
+  "/sys/bus/usb/devices/usb3": {
+    "bDeviceClass": "09",
+    "bcdDevice": "0700",
+    "idProduct": "0002",
+    "idVendor": "1d6b",
+    "speed": "480",
+    "version": "2.00"
+  },
+  "/sys/bus/usb/devices/usb4": {
+    "bDeviceClass": "09",
+    "bcdDevice": "0700",
+    "idProduct": "0001",
+    "idVendor": "1d6b",
+    "speed": "12",
+    "version": "1.10"
+  },
+  "/sys/class/hwmon/hwmon0": {
+    "name": "nvme",
+    "temp1_input": "49850"
+  },
+  "/sys/class/nvme/nvme0": {
+    "firmware_rev": "10.2.4",
+    "model": "QEMU NVMe Ctrl",
+    "serial": "ANONC38AC9AE8F0",
+    "state": "live",
+    "transport": "pcie"
+  },
+  "/sys/class/nvme/nvme0/device": {
+    "current_link_speed": "2.5 GT/s PCIe",
+    "current_link_width": "1",
+    "max_link_speed": "2.5 GT/s PCIe",
+    "max_link_width": "1"
+  },
+  "/sys/class/scsi_host/host0": {
+    "board_name": null,
+    "fw_version": null,
+    "fwrev": null,
+    "model_name": null,
+    "proc_name": "virtio_scsi",
+    "state": "running",
+    "version_bios": null,
+    "version_fw": null
+  },
+  "/sys/class/scsi_host/host1": {
+    "board_name": null,
+    "fw_version": null,
+    "fwrev": null,
+    "model_name": null,
+    "proc_name": "ata_piix",
+    "state": "running",
+    "version_bios": null,
+    "version_fw": null
+  },
+  "/sys/class/scsi_host/host2": {
+    "board_name": null,
+    "fw_version": null,
+    "fwrev": null,
+    "model_name": null,
+    "proc_name": "ata_piix",
+    "state": "running",
+    "version_bios": null,
+    "version_fw": null
+  },
+  "/sys/devices/pci0000:00": {
+    "max_link_speed": null,
+    "max_link_width": null
+  },
+  "/sys/devices/virtual/dmi/id": {
+    "bios_date": "08/13/2024",
+    "bios_version": "edk2-stable202408-prebuilt.qemu.org",
+    "board_name": null,
+    "product_name": "Standard PC (i440FX + PIIX, 1996)",
+    "sys_vendor": "QEMU"
+  }
+}

@@ -38,6 +38,8 @@ the estate's hostnames if they are willing to name them.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import ipaddress
 import re
 from typing import Iterable, NamedTuple
@@ -499,6 +501,30 @@ def _check_prefix_pair(node: dict, path: str, findings: list[Finding]) -> None:
         ))
 
 
+# Long enough to hold something worth hiding, and a multiple of four so a
+# fragment of ordinary prose does not decode to noise. A serial is at least a
+# few characters, so twelve base64 characters (nine octets) is the floor.
+BASE64_LEAF = re.compile(r"^[A-Za-z0-9+/]{12,}={0,2}$")
+PRINTABLE_RUN = re.compile(r"[ -~]{4,}")
+
+
+def _base64_readings(text: str) -> list[str]:
+    """The printable runs inside a leaf that IS base64, or nothing.
+
+    Whole-leaf only: a base64 blob is a whole field wherever this estate
+    writes one, and scanning every substring that happens to look like base64
+    would decode a hex WWN into noise and report it.
+    """
+    candidate = text.strip()
+    if not BASE64_LEAF.fullmatch(candidate) or len(candidate) % 4:
+        return []
+    try:
+        raw = base64.b64decode(candidate, validate=True)
+    except (binascii.Error, ValueError):
+        return []
+    return PRINTABLE_RUN.findall(raw.decode("latin-1"))
+
+
 def _scan_text(
     text: str,
     path: str,
@@ -681,6 +707,22 @@ def _scan_text(
                 f"{m.group(0)} is a ULA address in a file whose manifest "
                 "declares no address fields",
             ))
+
+    # An identifier written in base64 is invisible to every pattern above,
+    # which is the ENCODED_FORMATS lesson met in a second encoding: SCSI VPD
+    # page 0x80 is binary, so the payload carries it base64, and a real drive
+    # serial inside one would have walked past this whole checker. The
+    # scrubber grew a vpd_page80 format the same day; a remover that sees
+    # through an encoding beside a checker that does not is a manifest
+    # claiming a substitution nobody can verify.
+    #
+    # Only the PRINTABLE run of the decoding is rescanned, and only for a leaf
+    # long enough to hold an identifier: decoded binary is mostly non-text,
+    # and feeding its bytes to the hex and decimal shapes above would mint
+    # findings out of noise.
+    for decoded in _base64_readings(text):
+        _scan_text(decoded, path + " (base64)", key, findings,
+                   declares_addresses, hostnames)
 
     lowered = text.lower()
     for host in hostnames:

@@ -1,0 +1,195 @@
+{
+ "collector": "hardware",
+ "collections": [
+  "platform",
+  "pci",
+  "usb",
+  "scsi",
+  "nvme"
+ ],
+ "variant": "staged-disks",
+ "provenance": "captured-then-scrubbed",
+ "os": "ubuntu",
+ "os_version": "26.04",
+ "source_version": "linux-7.0.0-28-generic udev-259 util-linux-2.41.3",
+ "captured": "2026-08-21T18:30:00Z",
+ "regenerable": true,
+ "regenerable_on": "a lab guest carrying a virtio-scsi disk and a QEMU NVMe controller, each given a serial and a wwn in its domain definition. The default guest has neither — its disks are virtio-blk, which appear in no hardware walk — so a re-stage on a plain guest reproduces the qemu-guest variant instead and this one silently vanishes from a drift diff. test/vm-lab stages the two devices; the values below are the scrubbed ones, not the planted ones.",
+ "anonymised": true,
+ "note": "The first hardware capture with a real disk in it, and the variant R3c's first acceptance item is judged on: one disk reachable from its by-id spelling, its kernel name and its WWN — one object, one page, every name on it. qemu-guest could not teach it, because a virtio-blk disk appears in neither the scsi nor the nvme walk, so that capture held two ata_piix hosts and nothing behind them. It cost four things on the way in, each recorded where it was found: the scrub manifest grew the three identity attributes it had promised would refuse; the binary seam (SCSI VPD page 0x80) got a primitive on both implementations, having been an inline read that would have published the serial of whichever machine replayed; the scrubber and the detectors each learned to fold base64 and ASCII-hex, because an identifier written in an encoding was invisible to both; and the wwn pass was found substituting its own replacement a second time, reachable only through a prefix ending in a non-word character, which `naa.` is and `wwn-0x` is not.",
+ "coverage_note": "What this guest still cannot teach. There is no SAS expander and no SES enclosure, so sas_address, the enclosure slot tree and SlotStatus are reached by nothing here and stay unclassified in the scrub manifest — the walk's deny-by-default refusal is the gate that forces them to be written down when a capture from a host with a shelf arrives. There is no smartctl snapshot and no udisks2 on the bus, so every SMART depth is absent and both drives carry SmartUnobservable rather than a health reading — which is the discipline this collection exists to hold, asserted below rather than assumed. The PCIe link is a QEMU one lane at 2.5 GT/s and the bridge above publishes no maximum, so the link rules are not fired by this variant either.",
+ "canaries": [],
+ "anchors": [
+  {
+   "collection": "scsi",
+   "object": "0:0:0:0",
+   "fact": "DeviceType",
+   "value": "disk"
+  },
+  {
+   "collection": "scsi",
+   "object": "0:0:0:0",
+   "fact": "State",
+   "value": "running"
+  },
+  {
+   "collection": "scsi",
+   "object": "0:0:0:0",
+   "fact": "WWN",
+   "value": "naa.30493d187fe67bfc"
+  },
+  {
+   "collection": "scsi",
+   "object": "0:0:0:0",
+   "fact": "Serial",
+   "value": "ANON33C812E85DD4"
+  },
+  {
+   "collection": "scsi",
+   "object": "0:0:0:0",
+   "fact": "Block",
+   "value": "sda"
+  },
+  {
+   "collection": "scsi",
+   "object": "0:0:0:0",
+   "names": {
+    "stable": {
+     "wwn": [
+      "naa.30493d187fe67bfc",
+      "wwn-0x30493d187fe67bfc"
+     ],
+     "devid": [
+      "scsi-330493d187fe67bfc"
+     ],
+     "serial": [
+      "ANON33C812E85DD4"
+     ]
+    },
+    "ephemeral": {
+     "kernel": [
+      "/dev/sda"
+     ]
+    }
+   }
+  },
+  {
+   "collection": "scsi",
+   "object": "0:0:0:0",
+   "relation": "attached-to",
+   "target": {
+    "kind": "scsi",
+    "name": "host0"
+   },
+   "assertion_facts": {}
+  },
+  {
+   "collection": "scsi",
+   "object": "0:0:0:0",
+   "relation": "backs",
+   "target": {
+    "kind": "block-device",
+    "name": "sda"
+   },
+   "assertion_facts": {}
+  },
+  {
+   "collection": "scsi",
+   "object": "host0",
+   "fact": "Devices",
+   "value": 1
+  },
+  {
+   "collection": "scsi",
+   "object": "host0",
+   "relation": "attached-to",
+   "target": {
+    "kind": "pci",
+    "name": "0000:00:08.0"
+   },
+   "assertion_facts": {}
+  },
+  {
+   "collection": "scsi",
+   "object": "0:0:0:0",
+   "absent_fact": "SmartTemperatureC"
+  },
+  {
+   "collection": "scsi",
+   "commit_objects": 4
+  },
+  {
+   "collection": "nvme",
+   "object": "nvme0",
+   "fact": "State",
+   "value": "live"
+  },
+  {
+   "collection": "nvme",
+   "object": "nvme0",
+   "fact": "Serial",
+   "value": "ANONC38AC9AE8F0"
+  },
+  {
+   "collection": "nvme",
+   "object": "nvme0",
+   "fact": "WWN",
+   "value": "nvme.1b36-414e4f4e4333384143394145384630-51454d55204e564d65204374726c-00000001"
+  },
+  {
+   "collection": "nvme",
+   "object": "nvme0",
+   "fact": "Namespaces",
+   "value": [
+    "nvme0n1"
+   ]
+  },
+  {
+   "collection": "nvme",
+   "object": "nvme0",
+   "fact": "SmartTemperatureC",
+   "value": 49.8
+  },
+  {
+   "collection": "nvme",
+   "object": "nvme0",
+   "names": {
+    "stable": {
+     "serial": [
+      "ANONC38AC9AE8F0"
+     ],
+     "wwn": [
+      "nvme.1b36-414e4f4e4333384143394145384630-51454d55204e564d65204374726c-00000001"
+     ]
+    }
+   }
+  },
+  {
+   "collection": "nvme",
+   "object": "nvme0",
+   "relation": "backs",
+   "target": {
+    "kind": "block-device",
+    "name": "nvme0n1"
+   },
+   "assertion_facts": {}
+  },
+  {
+   "collection": "nvme",
+   "object": "nvme0",
+   "fact": "LinkWidth",
+   "value": 1
+  },
+  {
+   "collection": "nvme",
+   "object": "nvme0",
+   "fact": "LinkBandwidthBytesPerSec",
+   "value": 250000000
+  },
+  {
+   "collection": "nvme",
+   "commit_objects": 1
+  }
+ ],
+ "anchors_note": "Transcribed by hand from the scrubbed payloads, each naming the file and the member it came from. The scsi disk: read.json's /sys/bus/scsi/devices/0:0:0:0 gives type 0 (the kernel's code for a disk, which DeviceType names), state and wwid; the serial is read-bytes.json's vpd_pg80, base64 of SCSI VPD page 0x80, past its four header octets; the by-id spellings are udev.json's DEVLINKS for /sys/block/sda, filtered to that directory, and the wwn family carries the sysfs wwid beside udev's wwn-… link because they are two spellings of one identity. Devices 1 on host0 is the child count of the walk. SmartTemperatureC absent on the disk is the point of the coverage note: hwmon's one sensor is the NVMe controller's, and 49850 millidegrees is 49.85 degrees, which lands on 49.8 rather than 49.9 because both implementations round half to EVEN — Python's rule, reproduced in Go as math.RoundToEven, and the half-way case is exactly the one a hand-transcribed anchor gets wrong. The NVMe controller: serial and state from /sys/class/nvme/nvme0, wwid from the namespace's own block attribute (a wwid belongs to a namespace), and the link facts from /sys/class/nvme/nvme0/device — one lane at 2.5 GT/s, which the PCIe table converts to 250 MB/s each way. commit_objects 4 is host0, host1, host2 and the one disk."
+}

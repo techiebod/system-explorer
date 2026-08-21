@@ -1,0 +1,111 @@
+{
+  "/dev/disk": {
+    "by-path": [
+      "pci-0000:00:05.0",
+      "pci-0000:00:05.0-part",
+      "pci-0000:00:05.0-part1",
+      "pci-0000:00:05.0-part13",
+      "pci-0000:00:05.0-part14",
+      "pci-0000:00:05.0-part15",
+      "pci-0000:00:06.0",
+      "pci-0000:00:08.0-scsi-0:0:0:0",
+      "pci-0000:00:10.0-nvme-1",
+      "virtio-pci-0000:00:05.0",
+      "virtio-pci-0000:00:05.0-part1",
+      "virtio-pci-0000:00:05.0-part13",
+      "virtio-pci-0000:00:05.0-part14",
+      "virtio-pci-0000:00:05.0-part15",
+      "virtio-pci-0000:00:06.0"
+    ]
+  },
+  "/sys/bus/pci": {
+    "devices": [
+      "0000:00:00.0",
+      "0000:00:01.0",
+      "0000:00:01.1",
+      "0000:00:01.3",
+      "0000:00:02.0",
+      "0000:00:03.0",
+      "0000:00:03.1",
+      "0000:00:03.2",
+      "0000:00:03.7",
+      "0000:00:04.0",
+      "0000:00:05.0",
+      "0000:00:06.0",
+      "0000:00:07.0",
+      "0000:00:08.0",
+      "0000:00:10.0"
+    ]
+  },
+  "/sys/bus/scsi": {
+    "devices": [
+      "0:0:0:0",
+      "host0",
+      "host1",
+      "host2",
+      "target0:0:0"
+    ]
+  },
+  "/sys/bus/scsi/devices/0:0:0:0": {
+    "block": [
+      "sda"
+    ]
+  },
+  "/sys/bus/usb": {
+    "devices": [
+      "1-0:1.0",
+      "2-0:1.0",
+      "3-0:1.0",
+      "4-0:1.0",
+      "usb1",
+      "usb2",
+      "usb3",
+      "usb4"
+    ]
+  },
+  "/sys/class": {
+    "enclosure": [],
+    "hwmon": [
+      "hwmon0"
+    ],
+    "nvme": [
+      "nvme0"
+    ],
+    "sas_expander": [],
+    "scsi_host": [
+      "host0",
+      "host1",
+      "host2"
+    ]
+  },
+  "/sys/class/nvme": {
+    "nvme0": [
+      "address",
+      "cntlid",
+      "cntrltype",
+      "dctype",
+      "dev",
+      "device",
+      "firmware_rev",
+      "hwmon0",
+      "kato",
+      "model",
+      "ng0n1",
+      "numa_node",
+      "nvme0n1",
+      "passthru_err_log_enabled",
+      "power",
+      "queue_count",
+      "quirks",
+      "rescan_controller",
+      "reset_controller",
+      "serial",
+      "sqsize",
+      "state",
+      "subsysnqn",
+      "subsystem",
+      "transport",
+      "uevent"
+    ]
+  }
+}

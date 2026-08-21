@@ -11,7 +11,8 @@ collector, as a manifest, and this tool guesses nothing:
 
   harness/scrub/<collector>.json maps payload field paths to
       {"discloses": nothing|identity|location|content|secret,
-       "format": wwn|guid_u64|serial|mac|ipv4|ipv6|hostname|name|path|prose
+       "format": wwn|wwid|udev_serial|guid_u64|serial|vpd_page80|mac|ipv4
+                 |ipv6|hostname|name|path|prose
                  |unit_name|object_path,
        "payload": <payload stem this entry is scoped to, optional>}
 
@@ -143,9 +144,10 @@ tool was installed somewhere else.
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import fnmatch
 import hashlib
-import base64
 import hmac
 import ipaddress
 import json
@@ -159,7 +161,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from se_harness import detectors  # noqa: E402  (after the path insert above)
 
 DISCLOSES = {"nothing", "identity", "location", "content", "secret"}
-FORMATS = {"wwn", "guid_u64", "serial", "mac", "ipv4", "ipv6", "hostname",
+FORMATS = {"wwn", "wwid", "udev_serial", "guid_u64", "serial", "vpd_page80",
+           "mac", "ipv4", "ipv6", "hostname",
            "name", "path", "prose", "unit_name", "object_path"}
 
 # The formats whose whole VALUE is the identifier. Everything here is held to
@@ -430,6 +433,100 @@ def _serial_replacement(ctx: Ctx, serial: str) -> str:
     return ctx.remember("serial", serial, lambda: "ANON" + body[:keep])
 
 
+# SCSI VPD page 0x80: four header octets — page code, reserved, two length
+# bytes — then the drive's serial. A payload is JSON and these octets are not
+# text, so the primitive that reads it transcribes base64; scrubbing therefore
+# has to decode, substitute and re-encode, because a serial inside base64 is
+# invisible to every pattern in this file. That is the ENCODED_FORMATS lesson
+# met in a second encoding, and the checker learned the same trick beside this
+# one (se_harness/detectors.py) — a remover that sees through an encoding and
+# a checker that does not is a manifest claiming a substitution nobody can
+# verify.
+VPD_PAGE80_HEADER = 4
+
+# The kernel writes ONE attribute — a device's `wwid` — in two spellings, and
+# which one depends on the transport. A SCSI disk gets `naa.<16 hex>`, the
+# NAA identifier the wwn pass already knows. An NVMe namespace gets
+# `nvme.<vid>-<serial as ASCII hex>-<model as ASCII hex>-<nsid>`, where the
+# drive's serial is spelled out in hex — invisible to every pattern in this
+# file, and to the checker's, until each learned to fold an encoding. One
+# field, one format, two spellings: scoping them apart is impossible anyway,
+# because a manifest pattern names `*.wwid` and cannot see the value.
+NVME_WWID = re.compile(r"^nvme\.([0-9a-fA-F]{4})-([0-9a-fA-F]+)-([0-9a-fA-F]+)-([0-9a-fA-F]+)$")
+# udev writes a SCSI disk's ID_SERIAL as the designator type digit followed by
+# the NAA — `35000c5006c073a0e` — which no pattern here matches, because the
+# digit sits where a word boundary would have to be. Types 1 to 6 are the ones
+# SPC defines; the tail is the WWN every other spelling of this drive carries.
+UDEV_NAA_SERIAL = re.compile(r"^([1-6])([0-9a-fA-F]{16})$")
+NVME_WWID_IN_TEXT = re.compile(
+    r"\bnvme\.([0-9a-fA-F]{4})-([0-9a-fA-F]+)-([0-9a-fA-F]+)-([0-9a-fA-F]+)\b")
+
+
+def _vpd_page80_replacement(ctx: Ctx, value: str, path: tuple) -> str:
+    try:
+        raw = base64.b64decode(value, validate=True)
+    except (binascii.Error, ValueError):
+        ctx.problems.append(f"{_dot(path)}: declared vpd_page80 but not base64")
+        return value
+    if len(raw) <= VPD_PAGE80_HEADER:
+        ctx.problems.append(
+            f"{_dot(path)}: declared vpd_page80 but holds no serial past the header")
+        return value
+    head, tail = raw[:VPD_PAGE80_HEADER], raw[VPD_PAGE80_HEADER:]
+    stripped = tail.strip()
+    if not stripped:
+        return value  # a page with an empty serial identifies nobody
+    serial = stripped.decode("ascii", errors="ignore")
+    # The SAME ctx key every other spelling of this serial goes through, so a
+    # drive whose serial also appears in a by-id link name is one drive after
+    # the pass rather than two.
+    replaced = _serial_replacement(ctx, serial).encode("ascii")
+    # Length preserved to the octet: the page's own length bytes are in the
+    # header this keeps verbatim, so a substitution of another size would
+    # publish a page that describes itself wrongly.
+    replaced = replaced[:len(stripped)].ljust(len(stripped), b"0")
+    start = tail.find(stripped)
+    return base64.b64encode(
+        head + tail[:start] + replaced + tail[start + len(stripped):]
+    ).decode("ascii")
+
+
+def _nvme_wwid_replacement(ctx: Ctx, value: str, path: tuple) -> str:
+    """The serial chunk substituted, in the hex the kernel spells it in.
+
+    The vendor id, the model chunk and the namespace id stay: a PCI vendor id
+    and a model name are identical on every drive of that model, and the
+    namespace id counts from one. Only the serial identifies the unit, and it
+    goes through the same context as its plain spelling on the controller —
+    so a drive whose serial appears in three places is one drive after the
+    pass.
+    """
+    match = NVME_WWID.fullmatch(value)
+    if not match:
+        ctx.problems.append(f"{_dot(path)}: declared wwid but is neither an NAA nor an NVMe one")
+        return value
+    # Length is kept to the octet inside the shared helper, because the chunk
+    # is a fixed-width field the drive padded: a shorter one would be a wwid
+    # no NVMe controller could produce.
+    replaced = _nvme_wwid_in_text(ctx, match)
+    if replaced == value:
+        ctx.problems.append(f"{_dot(path)}: NVMe wwid serial chunk is not ASCII hex")
+    return replaced
+
+
+def _nvme_wwid_in_text(ctx: Ctx, match: re.Match) -> str:
+    """The same substitution as the leaf format, for a wwid written inside a
+    larger string — the by-id link name is `nvme-` then the wwid entire."""
+    vendor, serial_hex, model_hex, nsid = match.groups()
+    try:
+        serial = bytes.fromhex(serial_hex).decode("ascii")
+    except (ValueError, UnicodeDecodeError):
+        return match.group(0)
+    replaced = _serial_replacement(ctx, serial.strip())[:len(serial)]
+    padded = replaced.ljust(len(serial), "0")
+    return f"nvme.{vendor}-{padded.encode('ascii').hex()}-{model_hex}-{nsid}"
+
+
 def _fingerprint_replacement(ctx: Ctx, fingerprint: str) -> str:
     """An OpenSSH key fingerprint, replaced by one of the same shape.
 
@@ -646,6 +743,14 @@ def scrub_text(text: str, ctx: Ctx) -> str:
     # the shape sshd printed.
     text = SSH_FINGERPRINT.sub(
         lambda m: park(_fingerprint_replacement(ctx, m.group(0))), text)
+
+    # An NVMe wwid, wherever it is written: on the namespace's own attribute
+    # and again inside the by-id link name udev mints from it. Before the hex
+    # patterns below, which would otherwise chew the serial chunk in half —
+    # and it must run on free text at all because the LISTING of /dev/disk/by-id
+    # is where the join a reader follows actually lives.
+    text = NVME_WWID_IN_TEXT.sub(
+        lambda m: park(_nvme_wwid_in_text(ctx, m)), text)
 
     def spelled(match: re.Match) -> str:
         return park(match.group(1) + _hex16_replacement(ctx, match.group(2)))
@@ -1038,19 +1143,61 @@ def _substitute(value, fmt: str | None, path: tuple, ctx: Ctx):
             return value
         return _guid_replacement(ctx, value)
     if fmt == "wwn":
+        # PARKED between the two passes, for the reason scrub_text parks: the
+        # second pattern would otherwise eat the first pattern's replacement.
+        # A spelled WWN becomes sixteen bare hex digits, and where the prefix
+        # ends in a non-word character — `naa.`, which is how the kernel
+        # spells a SCSI disk's wwid — BARE_HEX16's \b then matches the
+        # replacement and substitutes it a second time. The reverse map from
+        # the first capture that met one holds both hops: wwn:5000c5006c073a0e
+        # → 30493d187fe67bfc, then wwn:30493d187fe67bfc → 3fdf8e2802392536, and
+        # the payload published a WWN that agreed with no other spelling of
+        # itself. Unreachable through `wwn-0x` and `scsi-3`, whose prefixes end
+        # in a word character, which is why it survived until 2026-08-21.
+        parked: list[str] = []
+
+        def park(replacement: str) -> str:
+            parked.append(replacement)
+            return f"\x00{len(parked) - 1}\x00"
+
         replaced = WWN_SPELLED.sub(
-            lambda m: m.group(1) + _hex16_replacement(ctx, m.group(2)), value
+            lambda m: park(m.group(1) + _hex16_replacement(ctx, m.group(2))), value
         )
         replaced = BARE_HEX16.sub(
             lambda m: m.group(0) if m.group(0).isdigit()
-            else _hex16_replacement(ctx, m.group(0)),
+            else park(_hex16_replacement(ctx, m.group(0))),
             replaced,
         )
+        replaced = re.sub(r"\x00(\d+)\x00",
+                          lambda m: parked[int(m.group(1))], replaced)
         if replaced == value:
             ctx.problems.append(f"{_dot(path)}: declared wwn but no WWN found in it")
         return replaced
     if fmt == "serial":
         return _serial_replacement(ctx, value)
+    if fmt == "vpd_page80":
+        return _vpd_page80_replacement(ctx, value, path)
+    if fmt == "udev_serial":
+        # udev's ID_SERIAL family holds whatever the BUS put there, and the
+        # manifest names a field rather than seeing a value. On a USB stick it
+        # is the maker's serial, opaque and shapeless. On a SCSI disk it is
+        # the drive's NAA — `35000c50…`, the WWN with udev's designator digit
+        # in front — which the wwn pass already substitutes wherever else it
+        # appears. Treating that one as an opaque serial published a specimen
+        # whose wwid said one drive and whose ID_SERIAL said another, so the
+        # shape passes get first refusal and only a value none of them
+        # recognises is replaced wholesale.
+        designator = UDEV_NAA_SERIAL.fullmatch(value)
+        if designator:
+            return designator.group(1) + _hex16_replacement(ctx, designator.group(2))
+        replaced = scrub_text(value, ctx)
+        return replaced if replaced != value else _serial_replacement(ctx, value)
+    if fmt == "wwid":
+        # NAA first: a SCSI disk's wwid IS a WWN, and the wwn pass owns that
+        # spelling. Only the NVMe form falls through.
+        if value.lower().startswith(("naa.", "eui.", "0x")):
+            return _substitute(value, "wwn", path, ctx)
+        return _nvme_wwid_replacement(ctx, value, path)
     if fmt == "mac":
         if not MAC.fullmatch(value):
             ctx.problems.append(f"{_dot(path)}: declared mac but not a MAC")

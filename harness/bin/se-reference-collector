@@ -541,6 +541,11 @@ SEAM = {
         # the disks of whichever machine is replaying.
         "path_acquisitions": {
             "_read": "read",
+            # The binary attribute, transcribed as base64 by the primitive
+            # itself, so the seam stays JSON and the DECODE stays with the
+            # caller — the parse is the port's to reproduce, not the seam's
+            # to pin.
+            "_read_bytes": "read-bytes",
             "_listdir": "listdir",
             "_realpath": "realpath",
             "_exists": "exists",

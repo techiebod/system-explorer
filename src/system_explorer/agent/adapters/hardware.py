@@ -341,6 +341,26 @@ def _read(path: str) -> str | None:
         return None
 
 
+def _read_bytes(path: str) -> str | None:
+    """A sysfs attribute whose content is BINARY, transcribed as base64.
+
+    SCSI VPD page 0x80 is the only one this collector reads: four header bytes
+    then the drive's serial, which a text read mangles before the slice can
+    drop it. It is a named primitive rather than an inline Path.read_bytes so
+    the replay seam has a stub point — an unstubbed binary read answered out
+    of the tree of whichever machine was replaying, which is how a lab guest
+    with one disk would have published the serial of the developer's laptop.
+
+    Base64 because a payload is JSON and these bytes are not text; the DECODE
+    stays with the caller, so the seam transcribes and the parse is still the
+    port's to reproduce.
+    """
+    try:
+        return base64.b64encode(Path(path).read_bytes()).decode("ascii")
+    except OSError:
+        return None
+
+
 def _listdir(path: str) -> list[str]:
     try:
         return sorted(os.listdir(path))
@@ -394,6 +414,57 @@ _SYSFS_UNKNOWN = {"", "<unknown>", "unknown", "Unknown", "none"}
 def _sysfs_value(raw: str | None) -> str | None:
     value = (raw or "").strip()
     return None if value in _SYSFS_UNKNOWN else value
+
+
+BY_ID = "/dev/disk/by-id"
+
+
+def _hardware_assertions(parent: str | None, facts: dict) -> list[dict]:
+    """The R3c relation layer, in the order the Go collector pins: the chain
+    edge, the silicon, what it backs, where it is racked. One spelling on both
+    implementations, because the comparator holds them to one truth."""
+    edges = []
+    if parent:
+        edges.append({"type": "attached-to",
+                      "target": {"kind": "scsi", "name": parent}})
+    if facts.get("PCIAddress"):
+        edges.append({"type": "attached-to",
+                      "target": {"kind": "pci", "name": facts["PCIAddress"]}})
+    if facts.get("Block"):
+        edges.append({"type": "backs",
+                      "target": {"kind": "block-device", "name": facts["Block"]}})
+    for namespace in facts.get("Namespaces") or []:
+        edges.append({"type": "backs",
+                      "target": {"kind": "block-device", "name": namespace}})
+    if facts.get("Enclosure"):
+        edges.append({"type": "member-of",
+                      "target": {"kind": "scsi", "name": facts["Enclosure"]}})
+    return edges
+
+
+def _disk_names(wwn: str | None, serial: str | None,
+                links: list[str], block: str) -> dict | None:
+    """Law 1 on a hardware disk: every native name observed, split by
+    stability class. The wwid file and udev's wwn-… link are two spellings of
+    one identity and both are published in the wwn family — the join runs on
+    published values, and a spelling nobody publishes is a join that silently
+    fails."""
+    wwn_family: list[str] = [wwn] if wwn else []
+    devid_family: list[str] = []
+    for link in links:
+        family = wwn_family if link.startswith("wwn-") else devid_family
+        if link not in family:
+            family.append(link)
+    stable: dict[str, list[str]] = {}
+    if wwn_family:
+        stable["wwn"] = wwn_family
+    if devid_family:
+        stable["devid"] = devid_family
+    if serial:
+        stable["serial"] = [serial]
+    if not stable:
+        return None
+    return {"stable": stable, "ephemeral": {"kernel": [f"/dev/{block}"]}}
 
 
 def _facts(values: dict) -> dict:
@@ -948,6 +1019,23 @@ class Adapter:
         return out
 
     @staticmethod
+    def _by_id_names(block: str) -> list[str]:
+        """Every /dev/disk/by-id name udev minted for this block device.
+
+        Out of the device's own DEVLINKS rather than by listing the by-id
+        directory and resolving each link back: udev already holds the answer
+        per device, so this is one query instead of a listing plus a realpath
+        per entry — and the listing would have carried every OTHER disk's
+        identity into a payload this row has no business publishing.
+        """
+        try:
+            links = _udev_json(f"/sys/block/{block}").get("DEVLINKS") or ""
+        except Exception:  # noqa: BLE001 - names are enrichment, never the row
+            return []
+        return [link.rpartition("/")[2] for link in links.split()
+                if link.startswith(f"{BY_ID}/")]
+
+    @staticmethod
     def _enclosure_slots() -> tuple[dict[str, dict], dict[str, dict]]:
         """(enclosure id → slot table, scsi device id → its slot facts)."""
         by_enclosure: dict[str, dict] = {}
@@ -1012,6 +1100,8 @@ class Adapter:
                 facts["Model"] = facts.get("BoardName")
             items_by_name[host] = env.item_summary(
                 f"scsi:{host}", "scsi-host", host, _facts(facts))
+            if edges := _hardware_assertions(None, facts):
+                items_by_name[host]["assertions"] = edges
             parents[host] = None
 
         for expander in _listdir(SAS_EXPANDERS):
@@ -1025,10 +1115,12 @@ class Adapter:
                      # expanders publish their address via the sas_device
                      # class, same as end devices (verified on a NetApp shelf)
                      "SASAddress": _read(f"/sys/class/sas_device/{expander}/sas_address")}
-            items_by_name[expander] = env.item_summary(
-                f"scsi:{expander}", "expander", expander, _facts(facts))
             chain = self._chain_of(f"{base}/device")
             parents[expander] = next((s for s in reversed(chain) if s != expander), None)
+            items_by_name[expander] = env.item_summary(
+                f"scsi:{expander}", "expander", expander, _facts(facts))
+            if edges := _hardware_assertions(parents[expander], facts):
+                items_by_name[expander]["assertions"] = edges
 
         for dev in _listdir(SCSI_DEVICES):
             if not SCSI_DEV_RE.match(dev):
@@ -1056,21 +1148,26 @@ class Adapter:
             # Serial and WWN need no daemon: SCSI VPD page 0x80 and the
             # kernel's wwid file are sysfs reads.
             serial = None
-            try:
-                raw_vpd = Path(f"{base}/vpd_pg80").read_bytes()
+            encoded = _read_bytes(f"{base}/vpd_pg80")
+            if encoded:
+                raw_vpd = base64.b64decode(encoded)
                 serial = raw_vpd[4:].decode("ascii", errors="ignore").strip() or None
-            except OSError:
-                pass
             # Capacity from the kernel's sector count — the same read the
             # storage subsystem trusts for md arrays; 512-byte units by
             # sysfs contract regardless of the device's logical block size.
-            sectors = None
-            if block:
-                try:
-                    sectors = int(Path(f"/sys/block/{block}/size").read_text())
-                except (OSError, ValueError):
-                    pass
+            # Through _read, like every other attribute: an inline
+            # Path.read_text has no stub point, so a replay answered it out of
+            # the tree of whichever machine was replaying — and the first
+            # capture with a disk in it refused rather than reading a laptop's
+            # /sys/block (2026-08-21, the same shape as vpd_pg80's).
+            sectors = _int_or_none(_read(f"/sys/block/{block}/size")) if block else None
             facts = {
+                # The wire type again, as a FACT, because a rule condition
+                # names facts and nothing else — the closed vocabulary has no
+                # way to say "disks only", and the device-state rule must not
+                # judge a host or an expander this adapter deliberately leaves
+                # unjudged. The links collection's Kind is the precedent.
+                "DeviceType": dev_type,
                 "Vendor": vendor,
                 "Transport": transport,
                 "Model": model,
@@ -1100,6 +1197,13 @@ class Adapter:
             items_by_name[dev] = env.item_summary(f"scsi:{dev}", dev_type, dev,
                                                   _facts(facts))
             parents[dev] = chain[-1] if chain else None
+            if block:
+                names = _disk_names(facts.get("WWN"), serial,
+                                    self._by_id_names(block), block)
+                if names:
+                    items_by_name[dev]["names"] = names
+            if edges := _hardware_assertions(parents[dev], _facts(facts)):
+                items_by_name[dev]["assertions"] = edges
 
         # Devices behind each host, so the UI can hide childless controllers
         # by default (an empty SATA port is noise, not information).
@@ -1151,8 +1255,22 @@ class Adapter:
                 "Namespaces": namespaces,
                 **_nvme_wwn(namespaces),
             }
-            items.append(env.item_summary(f"nvme:{ctrl}", "nvme-controller",
-                                          ctrl, _facts(facts)))
+            item = env.item_summary(f"nvme:{ctrl}", "nvme-controller",
+                                    ctrl, _facts(facts))
+            # Law 1 on a controller: serial and wwid where they exist. The
+            # by-id links belong to the NAMESPACE block devices — the same
+            # reasoning as _nvme_wwn — so they are published by the storage
+            # subsystem's rows, not manufactured here.
+            stable = {}
+            if facts.get("Serial"):
+                stable["serial"] = [facts["Serial"]]
+            if facts.get("WWN"):
+                stable["wwn"] = [facts["WWN"]]
+            if stable:
+                item["names"] = {"stable": stable}
+            if edges := _hardware_assertions(None, _facts(facts)):
+                item["assertions"] = edges
+            items.append(item)
         return items
 
     async def _nvme_items(self) -> list[dict]:

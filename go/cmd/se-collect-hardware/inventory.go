@@ -7,16 +7,16 @@ import (
 	"strings"
 )
 
-// item is one row: the native name it is published under, the object type the
-// reference gives it, and its facts. The TYPE never reaches the wire — the
-// stream carries name, facts and `at` and nothing else — but it decides which
-// health statement a row is entitled to, so it travels with the row here for
-// the same reason the reference keys on it.
+// item is one row: the native name it is published under, the object type
+// (on the wire since the 2026-08-21 ruling — it decides which health
+// statement a row is entitled to), its facts, and the name families law 1
+// asks for where the thing has more than one native name.
 type item struct {
 	name     string
 	kind     string
 	facts    map[string]any
-	parent   string // scsi only: the topology node this hangs from
+	names    map[string]any // law 1: {"stable": {...}, "ephemeral": {...}}, nil for most rows
+	parent   string         // scsi only: the topology node this hangs from
 	hasChild bool
 }
 

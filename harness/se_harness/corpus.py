@@ -90,6 +90,14 @@ VALID_VARIANTS = frozenset(
         # occur on a plain guest, and the fdb's learned-MAC join is only
         # honest when a real bridge actually learned it.
         "enslaved",
+        # staged-disks, added with hardware's R3c retrofit: a guest given a
+        # virtio-scsi disk and an NVMe controller in its domain definition,
+        # each with a serial and a wwn. The default guest has virtio-blk,
+        # which appears in NEITHER hardware walk — so the only hardware
+        # capture in the corpus held two ata_piix hosts and nothing behind
+        # them, and the identity chain a disk exists to demonstrate (by-id
+        # spelling, kernel name, WWN, one object) was reachable by nothing.
+        "staged-disks",
         "canary",
         "goto",
         "asymmetric",
@@ -116,6 +124,12 @@ _ANCHOR_FORMS = (
     frozenset({"collection", "commit_objects"}),
     frozenset({"collection", "decline_reason"}),
     frozenset({"collection", "object", "relation", "target", "assertion_facts"}),
+    # The identity chain, WHOLE: a disk reachable from its by-id spelling, its
+    # kernel name and its WWN is one object with every name on it, and the
+    # five forms above could pin a fact, an edge or a count but not that. Whole
+    # for assertion_facts' reason — an anchor that named one family and ignored
+    # a wrong value in the next would certify half a join.
+    frozenset({"collection", "object", "names"}),
 )
 
 
@@ -836,6 +850,14 @@ def _anchor_shape_problem(anchor: object) -> str | None:
         for key in ("kind", "name"):
             if not isinstance(target[key], str) or not target[key]:
                 return f"target.{key} must be a non-empty string, not {target[key]!r}"
+    if "names" in anchor:
+        names = anchor["names"]
+        if not isinstance(names, dict) or not names:
+            return (f"names must be a non-empty object of name families, not "
+                    f"{names!r}")
+        if not frozenset(names) <= frozenset({"stable", "ephemeral"}):
+            return (f"names carries {sorted(frozenset(names) - {'stable', 'ephemeral'})}"
+                    " — the classes are exactly stable and ephemeral (DESIGN 16)")
     if "assertion_facts" in anchor and not isinstance(anchor["assertion_facts"], dict):
         return (
             f"assertion_facts must be an object, not {anchor['assertion_facts']!r} "
@@ -1002,7 +1024,14 @@ def validate_anchors(variant: Variant, records: list[dict]) -> list[str]:
                 )
             for record in matches:
                 facts = record.get("facts") or {}
-                if "fact" in anchor:
+                if "names" in anchor:
+                    if not typed_equal(record.get("names"), anchor["names"]):
+                        problems.append(
+                            f"anchor {anchor!r}: stream carries names "
+                            f"{record.get('names')!r}, staging asserted "
+                            f"{anchor['names']!r}"
+                        )
+                elif "fact" in anchor:
                     if anchor["fact"] not in facts:
                         problems.append(
                             f"anchor {anchor!r}: {anchor['fact']!r} is not "

@@ -27,6 +27,7 @@ was given and nothing refused.
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import subprocess
@@ -585,3 +586,60 @@ def test_an_interface_address_with_prefix_is_judged_as_an_address() -> None:
                                           declares_address_fields=True)
                 if f.value_class == "address"]
     assert findings, "a global address must not hide behind a prefix length"
+
+
+def test_regression_an_identifier_inside_base64_is_a_finding() -> None:
+    """SCSI VPD page 0x80 is binary, so the payload carries it base64 — and a
+    real drive's serial written that way was invisible to every pattern here.
+    The ENCODED_FORMATS lesson (a producer's own escaping hides an identifier
+    from the checker) met in a second encoding, closed 2026-08-21 when the
+    first capture with a real disk arrived. The scrubber learned the same
+    trick in the same landing, because a remover that sees through an encoding
+    beside a checker that does not is a manifest claiming a substitution
+    nobody can verify."""
+    page = base64.b64encode(b"\x00\x80\x00\x10" + b"naa.5000c500aabbccdd").decode()
+    assert "identifier" in classes(scan({"vpd_pg80": page}))
+    # And the other direction: the scrubbed page carries the locally-assigned
+    # nibble the convention mints, and is not a finding.
+    scrubbed = base64.b64encode(b"\x00\x80\x00\x10" + b"naa.35d73dfb65d47d90").decode()
+    assert not scan({"vpd_pg80": scrubbed})
+    # A hostname hidden the same way is found the same way.
+    named = base64.b64encode(b"\x00\x80\x00\x10host-of-record   ").decode()
+    assert "hostname" in classes(scan({"vpd_pg80": named},
+                                      hostnames=["host-of-record"]))
+    # Not everything that decodes is an identifier: ordinary base64 whose
+    # plaintext carries nothing must stay silent, or every payload with an
+    # encoded blob in it becomes a refusal.
+    assert not scan({"blob": base64.b64encode(b"the quick brown fox").decode()})
+
+
+def test_regression_the_wwn_pass_does_not_substitute_its_own_replacement(
+        tmp_path: Path) -> None:
+    """A spelled WWN becomes sixteen bare hex digits, and the bare-hex pass ran
+    over the already-substituted text — so where the prefix ends in a non-word
+    character the replacement was substituted a SECOND time. `naa.` is such a
+    prefix and is how the kernel spells a SCSI disk's wwid; `wwn-0x` and
+    `scsi-3` are not, which is why this survived until a capture carried a
+    wwid. The payload then published a WWN agreeing with no other spelling of
+    itself, which is exactly the structural consistency the corpus exists to
+    preserve."""
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({
+        "spelled": {"discloses": "identity", "format": "wwn"},
+        "prefixed": {"discloses": "identity", "format": "wwn"},
+    }))
+    payload = tmp_path / "payload.json"
+    payload.write_text(json.dumps({
+        "spelled": "naa.5000c5006c073a0e",
+        "prefixed": "wwn-0x5000c5006c073a0e",
+    }))
+    state = tmp_path / "map.json"
+    assert run_anonymise(payload, manifest, state) == 0
+    scrubbed = json.loads(payload.read_text())
+    assert scrubbed["spelled"].removeprefix("naa.") == \
+        scrubbed["prefixed"].removeprefix("wwn-0x"), (
+            f"one drive scrubbed as two: {scrubbed}")
+    # One hop in the reverse map, not two: the double substitution left both
+    # the original and its own replacement in there.
+    hops = [key for key in json.loads(state.read_text()) if key.startswith("wwn:")]
+    assert hops == ["wwn:5000c5006c073a0e"], hops

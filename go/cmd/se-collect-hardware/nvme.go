@@ -158,7 +158,23 @@ func nvmeItems(src source) []item {
 		// no namespace is a real and worrying shape.
 		f["Namespaces"] = namespaces
 		nvmeWWN(src, f, namespaces)
-		items = append(items, item{name: controller, kind: "nvme-controller", facts: f})
+		// Law 1 on a controller: serial and wwid where they exist. The by-id
+		// links belong to the NAMESPACE block devices, the same reasoning as
+		// nvmeWWN — a controller with several namespaces has several and no
+		// one of its own — so they are published by the storage subsystem's
+		// rows, not manufactured here.
+		stable := map[string]any{}
+		if serial, ok := f["Serial"].(string); ok {
+			stable["serial"] = []string{serial}
+		}
+		if wwn, ok := f["WWN"].(string); ok {
+			stable["wwn"] = []string{wwn}
+		}
+		row := item{name: controller, kind: "nvme-controller", facts: f}
+		if len(stable) > 0 {
+			row.names = map[string]any{"stable": stable}
+		}
+		items = append(items, row)
 	}
 	return items
 }

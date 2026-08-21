@@ -210,6 +210,13 @@
       "answer": ["Vendor", "Model", "State", "Block", "SizeBytes", "SmartTemperatureC"],
       "ceiling": { "records": 4096, "bytes": 4194304 },
       "facts": {
+        "DeviceType": {
+          "type": "enum",
+          "values": ["disk", "tape", "worm", "cd-dvd", "scanner", "optical", "changer", "raid", "enclosure", "rbc", "device"],
+          "temperament": "configuration", "kind": "observed",
+          "discloses": "nothing", "from": "/sys/bus/scsi/devices/*/type",
+          "sentence": "The kernel's scsi device type, named. It repeats the wire's own type member as a fact deliberately: a rule condition names facts and nothing else, and the device-state rule must not judge a host or an expander. Carried by the rows of the device walk alone — a host or an expander is topology, and `device` is the honest name for a type code this collector's table has not met."
+        },
         "Driver": {
           "type": "string", "temperament": "configuration", "kind": "observed",
           "discloses": "nothing", "from": "/sys/class/scsi_host/*/proc_name",
@@ -398,6 +405,29 @@
           "sentence": "Why this device yielded no health reading at all, so a rule can decline to vouch for it instead of calling it healthy. A row that says only 'the kernel enumerated this and it is running' has measured nothing."
         }
       },
+      "names": {
+        "wwn": {
+          "class": "stable",
+          "sentence": "The drive's world-wide name, in every spelling observed: the kernel's wwid file and, where udev minted one, the /dev/disk/by-id wwn-\u2026 link name. Two spellings of one identity, both published, because the join runs on published values and a pool member is recorded under the link's spelling."
+        },
+        "devid": {
+          "class": "stable",
+          "sentence": "udev's remaining /dev/disk/by-id links for the drive \u2014 ata-<model>_<serial>, scsi-<naa> \u2014 minted from the device's own identity, so they survive a reboot and a re-enumeration."
+        },
+        "serial": {
+          "class": "stable",
+          "sentence": "The manufacturer's serial, from SCSI VPD page 0x80. Identity by the exemption below, and a name family because it is the one mark on the drive's physical label an operator can read without powering it."
+        },
+        "kernel": {
+          "class": "ephemeral",
+          "sentence": "The kernel block path, /dev/sdX. Reassigned on rescan, so a person searches by it today and a join must never run on it."
+        }
+      },
+      "relations": [
+        { "type": "attached-to", "carries_facts": false, "discriminator": [], "inverse_observable": false, "confirmed_by": "" },
+        { "type": "backs", "carries_facts": false, "discriminator": [], "inverse_observable": false, "confirmed_by": "" },
+        { "type": "member-of", "carries_facts": false, "discriminator": [], "inverse_observable": false, "confirmed_by": "" }
+      ],
       "redaction_exemption": "three facts here disclose identity and are declared so — Serial, WWN and SASAddress, each a manufacturer-assigned identifier that correlates one drive across captures — and the rest are model names, kernel states, capacities, link rates, bay numbers and SMART counters, which are the same on every machine that has one. THE BOUND: no fact on this collection is operator-chosen text or a credential, and the interfaces it reads carry none — sysfs attributes, the udev hardware database, udisks2's D-Bus properties and smartctl's JSON, none of which takes an authentication token in this posture. A collection that grew a mount point, a filesystem label or a pool name would be carrying content and would need this rewritten.",
       "reference_commands": [
         { "purpose": "the same inventory, by hand", "argv": ["lsscsi", "-v"] },
@@ -593,6 +623,20 @@
           "sentence": "Why this controller yielded no health reading at all, so a rule can decline to vouch for it instead of calling it healthy."
         }
       },
+      "names": {
+        "serial": {
+          "class": "stable",
+          "sentence": "The controller's serial from sysfs. Identity by the exemption below, and the one name that is the controller's own rather than a namespace's."
+        },
+        "wwn": {
+          "class": "stable",
+          "sentence": "The namespace wwid, published only where exactly one identity exists \u2014 a controller with several namespaces has several wwids and no single one of its own, which WWNUnobservable states in words."
+        }
+      },
+      "relations": [
+        { "type": "attached-to", "carries_facts": false, "discriminator": [], "inverse_observable": false, "confirmed_by": "" },
+        { "type": "backs", "carries_facts": false, "discriminator": [], "inverse_observable": false, "confirmed_by": "" }
+      ],
       "redaction_exemption": "two facts disclose identity and are declared so — Serial and WWN, each assigned at manufacture and correlating one drive across captures. Everything else is a model name, a kernel state, a PCIe rate, a lane count, a derived bandwidth or a SMART counter, identical on every drive of that model. THE BOUND: none of these interfaces takes a credential in this posture, and no fact here is operator-chosen text; the namespace list carries kernel names, which are ephemeral and named as such rather than joined on.",
       "reference_commands": [
         { "purpose": "the same inventory, by hand", "argv": ["nvme", "list"] },
