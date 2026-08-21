@@ -467,6 +467,30 @@ def _disk_names(wwn: str | None, serial: str | None,
     return {"stable": stable, "ephemeral": {"kernel": [f"/dev/{block}"]}}
 
 
+def _link_status(current, device_max, slot_max) -> str | None:
+    """One axis of a link: at the device's own maximum, held below it by the
+    slot, or below what BOTH ends could do.
+
+    The distinction is the whole rule. A drive at x2 of its own x4 in a socket
+    wired for two lanes is an immutable property of the board — worth knowing,
+    because it halves bandwidth, but nothing an operator can act on. The same
+    numbers where the slot ALSO offers four mean the link trained down, which
+    is a fault, and reporting both as a warning was a false positive on a real
+    host. Comparison is equality on the kernel's own labels ("8.0 GT/s PCIe",
+    "6.0 Gbit") and on lane counts; ranking the labels would invent precision.
+
+    None where the device reports no maximum, as a healthy SATA port does: a
+    link with nothing to be below is not judged at all rather than judged well.
+    """
+    if not current or not device_max:
+        return None
+    if current == device_max:
+        return "at-maximum"
+    if slot_max is not None and slot_max == current:
+        return "capped-by-slot"
+    return "degraded"
+
+
 def _facts(values: dict) -> dict:
     """A row's facts, with the readings that were not there left off.
 
@@ -1341,6 +1365,37 @@ class Adapter:
             return scsi_disk_opinions(facts) if obj_type == "disk" else smart_opinions(facts)
         return []
 
+    @staticmethod
+    def _judgement_facts(facts: dict) -> None:
+        """What the declared rule table cannot express itself (DESIGN 17).
+
+        A rule condition names ONE fact and a literal, by design: the
+        vocabulary is closed so a rule table stays reviewable data rather than
+        an expression language that grows into a plugin-supplied evaluator.
+        Two of this collection's judgements compare one fact to ANOTHER and
+        one is a substring test, so each is minted here as the reading it is
+        and cited by the rule that acts on it. rules/hardware.py still forms
+        the same opinions from the same inputs — these are the inputs said
+        out loud, not a second evaluator.
+        """
+        spare = facts.get("SmartAvailableSparePct")
+        threshold = facts.get("SmartSpareThresholdPct")
+        if spare is not None and threshold is not None:
+            facts["SmartSpareBelowThreshold"] = spare <= threshold
+        # A drive the collector deliberately left asleep is normal operation
+        # and must not wear a warning, where an unexplained stale snapshot
+        # really may be a wedged collector. smartctl says which, in its own
+        # words, and "STANDBY" is the word.
+        reason = facts.get("SmartSnapshotReason")
+        if isinstance(reason, str) and reason:
+            facts["SmartSnapshotAsleep"] = "STANDBY" in reason.upper()
+        for axis in ("Speed", "Width"):
+            status = _link_status(facts.get(f"Link{axis}"),
+                                  facts.get(f"Link{axis}Max"),
+                                  facts.get(f"SlotLink{axis}Max"))
+            if status is not None:
+                facts[f"Link{axis}Status"] = status
+
     def _apply_severity(self, collection: str, item: dict) -> None:
         """Row severity, evaluated once every SMART source has merged.
         Hosts and expanders keep their historical shape (no worst field);
@@ -1353,6 +1408,7 @@ class Adapter:
         # A disk or controller that yielded no health reading says so, so the
         # rule can decline to vouch for it. State == running is the kernel
         # having enumerated the device, not a measurement of its health.
+        self._judgement_facts(facts)
         if (collection == "nvme" or item["type"] == "disk") and not has_smart_reading(facts):
             facts.setdefault("SmartUnobservable", _no_reading_reason(facts))
         if collection == "scsi" and item["type"] != "disk":

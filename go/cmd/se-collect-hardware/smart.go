@@ -211,6 +211,103 @@ func mergeHealth(f map[string]any, health map[string]driveHealth, block string) 
 	}
 }
 
+// judgementFacts mints what the declared rule table cannot express itself.
+//
+// A rule condition names ONE fact and a literal, by design — the vocabulary is
+// closed so a rule table stays reviewable data rather than an expression
+// language that grows into a plugin-supplied evaluator (DESIGN 17). Two of
+// this collection's judgements are comparisons BETWEEN facts, and one is a
+// substring test, so each is minted here as the reading it is and cited by
+// the rule that acts on it. Both implementations mint them identically; the
+// comparator holds them to it.
+func judgementFacts(f map[string]any) {
+	// Available spare against the drive's OWN threshold: the number that
+	// decides is the pair, and neither half decides alone.
+	spare, haveSpare := numericFact(f["SmartAvailableSparePct"])
+	threshold, haveThreshold := numericFact(f["SmartSpareThresholdPct"])
+	if haveSpare && haveThreshold {
+		f["SmartSpareBelowThreshold"] = spare <= threshold
+	}
+	// A drive the collector deliberately left asleep is normal operation and
+	// must not wear a warning, where an unexplained stale snapshot really may
+	// be a wedged collector. smartctl says which in its own words, and
+	// "STANDBY" is the word.
+	if reason, ok := f["SmartSnapshotReason"].(string); ok && reason != "" {
+		f["SmartSnapshotAsleep"] = strings.Contains(strings.ToUpper(reason), "STANDBY")
+	}
+	// The link, per axis. Absent where the device reports no maximum — a
+	// healthy SATA port does — because a link with nothing to be below is not
+	// judged at all rather than judged well.
+	f["LinkSpeedStatus"] = linkStatus(f["LinkSpeed"], f["LinkSpeedMax"], f["SlotLinkSpeedMax"])
+	f["LinkWidthStatus"] = linkStatus(f["LinkWidth"], f["LinkWidthMax"], f["SlotLinkWidthMax"])
+	for _, name := range [...]string{"LinkSpeedStatus", "LinkWidthStatus"} {
+		if f[name] == nil {
+			delete(f, name)
+		}
+	}
+}
+
+// linkStatus classifies one axis of a link: at the device's own maximum, held
+// below it by the slot, or below what BOTH ends could do.
+//
+// The distinction is the whole rule. A drive at x2 of its own x4 in a socket
+// wired for two lanes is an immutable property of the board — worth knowing,
+// because it halves bandwidth, but nothing an operator can act on. The same
+// numbers where the slot ALSO offers four mean the link trained down, which is
+// a fault. Reporting both as a warning was a false positive on a real host.
+//
+// Comparison is equality on the kernel's own labels ("8.0 GT/s PCIe",
+// "6.0 Gbit") and on lane counts; ranking the labels would invent precision.
+func linkStatus(current, deviceMax, slotMax any) any {
+	if current == nil || deviceMax == nil {
+		return nil
+	}
+	if sameFactValue(current, deviceMax) {
+		return "at-maximum"
+	}
+	if slotMax != nil && sameFactValue(current, slotMax) {
+		return "capped-by-slot"
+	}
+	return "degraded"
+}
+
+// sameFactValue compares two fact values as the wire would: a string to a
+// string, a number to a number, and never one to the other.
+func sameFactValue(a, b any) bool {
+	left, leftIsNumber := numericFact(a)
+	right, rightIsNumber := numericFact(b)
+	if leftIsNumber && rightIsNumber {
+		return left == right
+	}
+	if leftIsNumber != rightIsNumber {
+		return false
+	}
+	return fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b)
+}
+
+// numericFact reads a fact that may have arrived as any of the numeric shapes
+// this collector publishes — a sysfs integer, a udisks u64, or a pass-through
+// token spelled exactly as smartctl wrote it.
+func numericFact(value any) (float64, bool) {
+	switch typed := value.(type) {
+	case int64:
+		return float64(typed), true
+	case uint64:
+		return float64(typed), true
+	case float64:
+		return typed, true
+	case json.Number:
+		number, err := typed.Float64()
+		return number, err == nil
+	case json.RawMessage:
+		var number float64
+		if err := json.Unmarshal(typed, &number); err == nil {
+			return number, true
+		}
+	}
+	return 0, false
+}
+
 // applyUnobservable is the one severity-adjacent statement that reaches the
 // wire. The rest of _apply_severity — the worst_opinion_level and the carried
 // opinion subset — is a ROW property of the shipping agent's HTTP surface and

@@ -302,59 +302,43 @@ NAMED_RESIDUALS = {
     # that costs, named fact by fact rather than as "some disk facts" — the
     # contract check reads them, so a name missing from the prose is a promise
     # nothing tests and the guard says so.
-    "hardware/no-disk-in-either-walk": (
-        "the lab guest's disks are virtio-blk, which the kernel presents "
-        "through neither the scsi nor the nvme class: /sys/class/nvme does not "
-        "exist there and /sys/bus/scsi/devices holds two ata_piix hosts and no "
-        "device. So the whole nvme collection is exercised by zero committed "
-        "records — Model, FirmwareRev, Serial, State, Transport, PCIAddress, "
-        "Namespaces, WWN, WWNUnobservable, LinkSpeed, LinkSpeedMax, LinkWidth, "
-        "LinkWidthMax, SlotLinkSpeedMax, SlotLinkWidthMax, "
-        "LinkBandwidthBytesPerSec and LinkBandwidthMaxBytesPerSec — and so is "
-        "every scsi fact that belongs to a DISK rather than to a controller: "
-        "Block, SizeBytes, Serial, WWN, ByPath, Revision, and the SATA link "
-        "pair LinkSpeed and LinkSpeedMax. No mutation operator mints them "
-        "either, and that is a ruling rather than an oversight: an operator "
-        "ADDS a shape to the machine its seed captured, and staging a disk "
-        "here would mean inventing a sysfs subtree — the vpd page, the block "
-        "size file, the ata_link class — that nobody observed, which is the "
-        "reference half of the guard answering about a host that does not "
-        "exist. Venue: the live comparator (harness/bin/se-compare) on a host "
-        "with SATA, SAS or NVMe disks. "
-        "VENUE BUILT 2026-08-19, and the SCSI half is now OWNED outside this "
-        "tier. The lab guests had no disk in either walk because vm-lab gave "
-        "them virtio-blk only; they now get a virtio-SCSI disk as well, "
-        "hot-attached after virt-install with an explicit serial and WWN. That "
-        "is the honest fix rather than the one this entry rules out: the "
-        "KERNEL builds the sysfs subtree, so what the collector reads is what "
-        "a kernel wrote, and nothing here invents a vpd page. Reached now, and "
-        "compared clean against the reference: Block, SizeBytes, Serial, WWN "
-        "(naa.…), ByPath and Revision on the disk row, plus a controller row "
-        "whose Devices count is 1 against the ata hosts' 0, which is the first "
-        "time that fact has discriminated anything. smartctl reaches the disk "
-        "too, so SmartOverallPassed and SmartTemperatureC arrive with it. "
-        "Still unreached, and the entry keeps them: the SATA link pair "
-        "LinkSpeed and LinkSpeedMax, because a virtio-scsi disk has no "
-        "ata_link class — those want a guest with an emulated AHCI controller, "
-        "which wants a q35 machine type. "
-        "The NVMe half is BUILT TOO, same day: the guests carry an emulated "
-        "NVMe controller through `--qemu-commandline`, and the collection that "
-        "had only ever committed zero objects now commits one carrying fifteen "
-        "facts — Model, FirmwareRev, Serial, State, Transport, PCIAddress, "
-        "Namespaces, WWN, the four Link* readings, both LinkBandwidth* and a "
-        "SmartTemperatureC the controller reports itself. Three of the "
-        "seventeen stay unreached and each for a stated reason: "
-        "WWNUnobservable, because the WWN read fine and that fact is its "
-        "absence; and SlotLinkSpeedMax and SlotLinkWidthMax, because an "
-        "emulated device sits in no PCI slot that publishes a slot capability. "
-        "Three traps are recorded in vm-lab beside the code, because every one "
-        "of them fails SILENTLY or misleadingly: a <qemu:commandline> whose "
-        "namespace is undeclared is dropped by libvirt without complaint and "
-        "the domain starts with no device; qemu's own -device bypasses "
-        "libvirt's PCI allocation, so an unpinned nvme took the slot virtio-net "
-        "was assigned and the domain would not boot; and virt-install passes "
-        "`--qemu-commandline args=` VERBATIM, so doubling commas the way its "
-        "other options require hands qemu a filename with commas in it."
+    # Closed on 2026-08-21 by corpus/hardware/staged-disks, which is the
+    # capture the lab work of 2026-08-19 was for: the guests were given a
+    # virtio-SCSI disk and an emulated NVMe controller, each with a serial and
+    # a WWN, and until this variant landed the READING lived only in the live
+    # comparator. It now lives in the corpus, so the whole of what this entry
+    # used to hold — the nvme collection committing zero objects, and every
+    # scsi fact belonging to a disk rather than a controller — is exercised by
+    # committed records. What is left is three shapes an emulated device
+    # cannot present, kept here because the honest fix for each is hardware
+    # and not a plant.
+    "hardware/no-emulated-link-or-slot": (
+        "three link shapes no emulated device can present. A virtio-scsi disk "
+        "has no ata_link class, so the SATA link pair LinkSpeed and "
+        "LinkSpeedMax never arrive on a scsi row and LinkSpeedStatus, which is "
+        "derived from them, is never minted there — those want a guest with an "
+        "emulated AHCI controller, which wants a q35 machine type. And an "
+        "emulated NVMe controller sits in no PCI slot that publishes a slot "
+        "capability, so SlotLinkSpeedMax and SlotLinkWidthMax are read back "
+        "empty: the bridge above it publishes no maximum. That absence is the "
+        "reason the link rules split the way they do — a link below the "
+        "device's own maximum is a fault only where the slot could do better — "
+        "so the `capped-by-slot` reading is the one this corpus cannot show, "
+        "and the guard says so rather than a variant implying it never "
+        "happens. Venue: the live comparator on a host with a real "
+        "add-in-card NVMe drive, or a SATA disk on a real AHCI port."
+    ),
+    # WWNUnobservable is the absence of a fact rather than a fact, and the
+    # guest's controller has exactly one namespace.
+    "hardware/one-namespace-per-controller": (
+        "WWNUnobservable is published only where a controller exposes SEVERAL "
+        "namespaces, because a wwid belongs to a namespace and no single one "
+        "then identifies the controller. The lab's emulated controller has "
+        "one, so the fact that states the ambiguity is reached by nothing "
+        "here. No operator mints it either: the shape is a second namespace, "
+        "which is a device the capture never saw rather than a value in a "
+        "document. Venue: the live comparator against a controller carrying "
+        "more than one namespace."
     ),
     "hardware/udisks2-smart": (
         "no committed variant carries a udisks2 document at all, so every fact "
@@ -384,7 +368,7 @@ NAMED_RESIDUALS = {
         "and no block device in either walk to run it against — so "
         "SmartSnapshotAt, SmartSnapshotAgeSeconds, SmartSnapshotReason, "
         "SmartOverallPassed, SmartPercentUsed, SmartAvailableSparePct, "
-        "SmartSpareThresholdPct, SmartMediaErrors, SmartPowerOnHours, "
+        "SmartSpareThresholdPct, SmartSpareBelowThreshold (derived from the pair), SmartSnapshotAsleep (derived from the reason), SmartMediaErrors, SmartPowerOnHours, "
         "SmartTemperatureC and the SmartUnobservable statement that stands in "
         "for all of them are reached by no committed record. The three smart "
         "payloads are captured EMPTY rather than omitted, which is what makes "

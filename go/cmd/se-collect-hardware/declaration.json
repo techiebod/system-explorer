@@ -404,6 +404,30 @@
           "discloses": "nothing",
           "sentence": "Why this device yielded no health reading at all, so a rule can decline to vouch for it instead of calling it healthy. A row that says only 'the kernel enumerated this and it is running' has measured nothing."
         }
+,
+        "SmartSnapshotAsleep": {
+          "derived_from": ["SmartSnapshotReason"],
+          "type": "boolean",
+          "temperament": "state",
+          "kind": "derived",
+          "discloses": "nothing",
+          "from": "SmartSnapshotReason",
+          "sentence": "Whether the newest SMART snapshot produced no reading because the drive is spun down and the collector deliberately does not wake it. smartctl says so in its own words and this is that sentence read: waking a sleeping disk every five minutes to take its temperature would cost more than the reading is worth, so a stale snapshot with this true is normal operation where one without it may be a wedged collector."
+        },
+        "LinkSpeedStatus": {
+          "derived_from": ["LinkSpeed", "LinkSpeedMax"],
+          "type": "enum",
+          "values": [
+            "at-maximum",
+            "capped-by-slot",
+            "degraded"
+          ],
+          "temperament": "state",
+          "kind": "derived",
+          "discloses": "nothing",
+          "from": "LinkSpeed, LinkSpeedMax and SlotLinkSpeedMax",
+          "sentence": "Where the negotiated link rate sits between what the DEVICE can do and what the SLOT offers. A drive running below its own maximum in a socket wired for exactly that rate is `capped-by-slot` — an immutable property of the board, worth knowing because it costs bandwidth, and nothing an operator can act on. The same numbers where the slot also offers more are `degraded`: the link trained down, which is a fault. Reporting both as a warning was a false positive on a real host. Absent where the device publishes no maximum, as a healthy SATA port does, because a link with nothing to be below is not judged at all rather than judged well."
+        }
       },
       "names": {
         "wwn": {
@@ -427,6 +451,213 @@
         { "type": "attached-to", "carries_facts": false, "discriminator": [], "inverse_observable": false, "confirmed_by": "" },
         { "type": "backs", "carries_facts": false, "discriminator": [], "inverse_observable": false, "confirmed_by": "" },
         { "type": "member-of", "carries_facts": false, "discriminator": [], "inverse_observable": false, "confirmed_by": "" }
+      ],
+      "rules": [
+        {
+          "key": "device-state",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "DeviceType",
+                "equals": "disk"
+              },
+              {
+                "fact": "State",
+                "present": true
+              },
+              {
+                "not": {
+                  "fact": "State",
+                  "equals": "running"
+                }
+              }
+            ]
+          },
+          "sentence": "The kernel reports this disk in a state other than running.",
+          "cites": [
+            "State",
+            "DeviceType"
+          ]
+        },
+        {
+          "key": "smart-unmeasured",
+          "level": "info",
+          "grounds": "threshold",
+          "when": {
+            "fact": "SmartUnobservable",
+            "present": true
+          },
+          "sentence": "No drive-health reading is available. This row reports that the device exists and is running, which is not the same as healthy.",
+          "cites": [
+            "SmartUnobservable"
+          ]
+        },
+        {
+          "key": "smart-health",
+          "level": "critical",
+          "grounds": "interface",
+          "when": {
+            "fact": "SmartFailing",
+            "equals": true
+          },
+          "sentence": "SMART reports this drive as failing.",
+          "cites": [
+            "SmartFailing"
+          ]
+        },
+        {
+          "key": "smart-assessment",
+          "level": "critical",
+          "grounds": "interface",
+          "when": {
+            "fact": "SmartOverallPassed",
+            "equals": false
+          },
+          "sentence": "The drive's own overall health assessment is FAILED.",
+          "cites": [
+            "SmartOverallPassed"
+          ]
+        },
+        {
+          "key": "smart-critical-warning",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "SmartCriticalWarning",
+                "non_empty": true
+              },
+              {
+                "not": {
+                  "fact": "SmartFailing",
+                  "equals": true
+                }
+              }
+            ]
+          },
+          "sentence": "The drive raises a critical warning.",
+          "cites": [
+            "SmartCriticalWarning"
+          ]
+        },
+        {
+          "key": "smart-selftest",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "SmartSelftestStatus",
+            "in": [
+              "fatal",
+              "error_unknown",
+              "error_electrical",
+              "error_servo",
+              "error_read",
+              "error_handling",
+              "fatal_error",
+              "known_seg_fail",
+              "unknown_seg_fail"
+            ]
+          },
+          "sentence": "The drive's last SMART self-test failed.",
+          "cites": [
+            "SmartSelftestStatus"
+          ]
+        },
+        {
+          "key": "smart-snapshot-asleep",
+          "level": "info",
+          "grounds": "threshold",
+          "when": {
+            "all": [
+              {
+                "fact": "SmartSnapshotAgeSeconds",
+                "at_least": 901
+              },
+              {
+                "fact": "SmartSnapshotAsleep",
+                "equals": true
+              }
+            ]
+          },
+          "sentence": "These SMART facts are last-known rather than current because the drive is spun down and the collector deliberately does not wake it.",
+          "cites": [
+            "SmartSnapshotAt",
+            "SmartSnapshotAgeSeconds",
+            "SmartSnapshotReason",
+            "SmartSnapshotAsleep"
+          ]
+        },
+        {
+          "key": "smart-snapshot-stale",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "all": [
+              {
+                "fact": "SmartSnapshotAgeSeconds",
+                "at_least": 901
+              },
+              {
+                "not": {
+                  "fact": "SmartSnapshotAsleep",
+                  "equals": true
+                }
+              },
+              {
+                "fact": "SmartSnapshotReason",
+                "present": true
+              }
+            ]
+          },
+          "sentence": "These SMART facts are last-known rather than current: the newest snapshot is stale and the last collector run produced no reading.",
+          "cites": [
+            "SmartSnapshotAt",
+            "SmartSnapshotAgeSeconds",
+            "SmartSnapshotReason"
+          ]
+        },
+        {
+          "key": "smart-snapshot-unexplained",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "all": [
+              {
+                "fact": "SmartSnapshotAgeSeconds",
+                "at_least": 901
+              },
+              {
+                "not": {
+                  "fact": "SmartSnapshotReason",
+                  "present": true
+                }
+              }
+            ]
+          },
+          "sentence": "These SMART facts are last-known rather than current, and nothing recorded why the newest snapshot is stale.",
+          "cites": [
+            "SmartSnapshotAt",
+            "SmartSnapshotAgeSeconds"
+          ]
+        },
+        {
+          "key": "link-degraded",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "fact": "LinkSpeedStatus",
+            "equals": "degraded"
+          },
+          "sentence": "The link trained below the rate both this device and its slot support, so it carries less than either end could.",
+          "cites": [
+            "LinkSpeedStatus",
+            "LinkSpeed",
+            "LinkSpeedMax"
+          ]
+        }
       ],
       "redaction_exemption": "three facts here disclose identity and are declared so — Serial, WWN and SASAddress, each a manufacturer-assigned identifier that correlates one drive across captures — and the rest are model names, kernel states, capacities, link rates, bay numbers and SMART counters, which are the same on every machine that has one. THE BOUND: no fact on this collection is operator-chosen text or a credential, and the interfaces it reads carry none — sysfs attributes, the udev hardware database, udisks2's D-Bus properties and smartctl's JSON, none of which takes an authentication token in this posture. A collection that grew a mount point, a filesystem label or a pool name would be carrying content and would need this rewritten.",
       "reference_commands": [
@@ -622,6 +853,53 @@
           "discloses": "nothing",
           "sentence": "Why this controller yielded no health reading at all, so a rule can decline to vouch for it instead of calling it healthy."
         }
+,
+        "SmartSpareBelowThreshold": {
+          "derived_from": ["SmartAvailableSparePct", "SmartSpareThresholdPct"],
+          "type": "boolean",
+          "temperament": "state",
+          "kind": "derived",
+          "discloses": "nothing",
+          "from": "SmartAvailableSparePct and SmartSpareThresholdPct",
+          "sentence": "Whether the drive's remaining spare capacity has reached the threshold the drive itself publishes. Minted as a fact because the reading that decides is the PAIR, and a rule condition names one fact and a literal — the vocabulary is closed on purpose (DESIGN 17), so a comparison between two facts is said here rather than growing an expression language inside the rule table."
+        },
+        "SmartSnapshotAsleep": {
+          "derived_from": ["SmartSnapshotReason"],
+          "type": "boolean",
+          "temperament": "state",
+          "kind": "derived",
+          "discloses": "nothing",
+          "from": "SmartSnapshotReason",
+          "sentence": "Whether the newest SMART snapshot produced no reading because the drive is spun down and the collector deliberately does not wake it. smartctl says so in its own words and this is that sentence read: waking a sleeping disk every five minutes to take its temperature would cost more than the reading is worth, so a stale snapshot with this true is normal operation where one without it may be a wedged collector."
+        },
+        "LinkSpeedStatus": {
+          "derived_from": ["LinkSpeed", "LinkSpeedMax", "SlotLinkSpeedMax"],
+          "type": "enum",
+          "values": [
+            "at-maximum",
+            "capped-by-slot",
+            "degraded"
+          ],
+          "temperament": "state",
+          "kind": "derived",
+          "discloses": "nothing",
+          "from": "LinkSpeed, LinkSpeedMax and SlotLinkSpeedMax",
+          "sentence": "Where the negotiated link rate sits between what the DEVICE can do and what the SLOT offers. A drive running below its own maximum in a socket wired for exactly that rate is `capped-by-slot` — an immutable property of the board, worth knowing because it costs bandwidth, and nothing an operator can act on. The same numbers where the slot also offers more are `degraded`: the link trained down, which is a fault. Reporting both as a warning was a false positive on a real host. Absent where the device publishes no maximum, as a healthy SATA port does, because a link with nothing to be below is not judged at all rather than judged well."
+        },
+        "LinkWidthStatus": {
+          "derived_from": ["LinkWidth", "LinkWidthMax", "SlotLinkWidthMax"],
+          "type": "enum",
+          "values": [
+            "at-maximum",
+            "capped-by-slot",
+            "degraded"
+          ],
+          "temperament": "state",
+          "kind": "derived",
+          "discloses": "nothing",
+          "from": "LinkWidth, LinkWidthMax and SlotLinkWidthMax",
+          "sentence": "The same classification for LANES rather than rate. Speed is the rate of one lane and width is how many are active, so the two are separate readings and a link may sit at its maximum on one axis and below it on the other — which is why they are two facts and two rules."
+        }
       },
       "names": {
         "serial": {
@@ -636,6 +914,302 @@
       "relations": [
         { "type": "attached-to", "carries_facts": false, "discriminator": [], "inverse_observable": false, "confirmed_by": "" },
         { "type": "backs", "carries_facts": false, "discriminator": [], "inverse_observable": false, "confirmed_by": "" }
+      ],
+      "rules": [
+        {
+          "key": "controller-state",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "State",
+                "present": true
+              },
+              {
+                "not": {
+                  "fact": "State",
+                  "equals": "live"
+                }
+              }
+            ]
+          },
+          "sentence": "The kernel reports this NVMe controller in a state other than live.",
+          "cites": [
+            "State"
+          ]
+        },
+        {
+          "key": "smart-unmeasured",
+          "level": "info",
+          "grounds": "threshold",
+          "when": {
+            "fact": "SmartUnobservable",
+            "present": true
+          },
+          "sentence": "No drive-health reading is available. This row reports that the device exists and is running, which is not the same as healthy.",
+          "cites": [
+            "SmartUnobservable"
+          ]
+        },
+        {
+          "key": "smart-assessment",
+          "level": "critical",
+          "grounds": "interface",
+          "when": {
+            "fact": "SmartOverallPassed",
+            "equals": false
+          },
+          "sentence": "The drive's own overall health assessment is FAILED.",
+          "cites": [
+            "SmartOverallPassed"
+          ]
+        },
+        {
+          "key": "smart-critical-warning",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "SmartCriticalWarning",
+            "non_empty": true
+          },
+          "sentence": "The drive raises a critical warning.",
+          "cites": [
+            "SmartCriticalWarning"
+          ]
+        },
+        {
+          "key": "smart-selftest",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "SmartSelftestStatus",
+            "in": [
+              "fatal",
+              "error_unknown",
+              "error_electrical",
+              "error_servo",
+              "error_read",
+              "error_handling",
+              "fatal_error",
+              "known_seg_fail",
+              "unknown_seg_fail"
+            ]
+          },
+          "sentence": "The drive's last SMART self-test failed.",
+          "cites": [
+            "SmartSelftestStatus"
+          ]
+        },
+        {
+          "key": "smart-endurance-spent",
+          "level": "critical",
+          "grounds": "threshold",
+          "when": {
+            "fact": "SmartPercentUsed",
+            "at_least": 100
+          },
+          "sentence": "The drive is past the write endurance it is rated for.",
+          "cites": [
+            "SmartPercentUsed"
+          ]
+        },
+        {
+          "key": "smart-endurance",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "all": [
+              {
+                "fact": "SmartPercentUsed",
+                "at_least": 90
+              },
+              {
+                "not": {
+                  "fact": "SmartPercentUsed",
+                  "at_least": 100
+                }
+              }
+            ]
+          },
+          "sentence": "The drive has used most of its rated write endurance.",
+          "cites": [
+            "SmartPercentUsed"
+          ]
+        },
+        {
+          "key": "smart-spare",
+          "level": "critical",
+          "grounds": "interface",
+          "when": {
+            "fact": "SmartSpareBelowThreshold",
+            "equals": true
+          },
+          "sentence": "Available spare capacity has reached the threshold the drive itself publishes.",
+          "cites": [
+            "SmartSpareBelowThreshold",
+            "SmartAvailableSparePct",
+            "SmartSpareThresholdPct"
+          ]
+        },
+        {
+          "key": "smart-media-errors",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "SmartMediaErrors",
+            "at_least": 1
+          },
+          "sentence": "The drive's health log records media errors.",
+          "cites": [
+            "SmartMediaErrors"
+          ]
+        },
+        {
+          "key": "smart-snapshot-asleep",
+          "level": "info",
+          "grounds": "threshold",
+          "when": {
+            "all": [
+              {
+                "fact": "SmartSnapshotAgeSeconds",
+                "at_least": 901
+              },
+              {
+                "fact": "SmartSnapshotAsleep",
+                "equals": true
+              }
+            ]
+          },
+          "sentence": "These SMART facts are last-known rather than current because the drive is spun down and the collector deliberately does not wake it.",
+          "cites": [
+            "SmartSnapshotAt",
+            "SmartSnapshotAgeSeconds",
+            "SmartSnapshotReason",
+            "SmartSnapshotAsleep"
+          ]
+        },
+        {
+          "key": "smart-snapshot-stale",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "all": [
+              {
+                "fact": "SmartSnapshotAgeSeconds",
+                "at_least": 901
+              },
+              {
+                "not": {
+                  "fact": "SmartSnapshotAsleep",
+                  "equals": true
+                }
+              },
+              {
+                "fact": "SmartSnapshotReason",
+                "present": true
+              }
+            ]
+          },
+          "sentence": "These SMART facts are last-known rather than current: the newest snapshot is stale and the last collector run produced no reading.",
+          "cites": [
+            "SmartSnapshotAt",
+            "SmartSnapshotAgeSeconds",
+            "SmartSnapshotReason"
+          ]
+        },
+        {
+          "key": "smart-snapshot-unexplained",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "all": [
+              {
+                "fact": "SmartSnapshotAgeSeconds",
+                "at_least": 901
+              },
+              {
+                "not": {
+                  "fact": "SmartSnapshotReason",
+                  "present": true
+                }
+              }
+            ]
+          },
+          "sentence": "These SMART facts are last-known rather than current, and nothing recorded why the newest snapshot is stale.",
+          "cites": [
+            "SmartSnapshotAt",
+            "SmartSnapshotAgeSeconds"
+          ]
+        },
+        {
+          "key": "link-degraded",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "fact": "LinkSpeedStatus",
+            "equals": "degraded"
+          },
+          "sentence": "The link trained below the rate both this device and its slot support, so it carries less than either end could.",
+          "cites": [
+            "LinkSpeedStatus",
+            "LinkSpeed",
+            "LinkSpeedMax",
+            "SlotLinkSpeedMax",
+            "LinkBandwidthBytesPerSec",
+            "LinkBandwidthMaxBytesPerSec"
+          ]
+        },
+        {
+          "key": "link-slot-capped",
+          "level": "info",
+          "grounds": "threshold",
+          "when": {
+            "fact": "LinkSpeedStatus",
+            "equals": "capped-by-slot"
+          },
+          "sentence": "This device runs below the rate it supports because the slot provides no more. That is how the board is wired rather than a fault, and it does cap the bandwidth available to it.",
+          "cites": [
+            "LinkSpeedStatus",
+            "LinkSpeed",
+            "LinkSpeedMax",
+            "SlotLinkSpeedMax",
+            "LinkBandwidthBytesPerSec",
+            "LinkBandwidthMaxBytesPerSec"
+          ]
+        },
+        {
+          "key": "link-width-degraded",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "fact": "LinkWidthStatus",
+            "equals": "degraded"
+          },
+          "sentence": "The link trained to fewer lanes than both this device and its slot support.",
+          "cites": [
+            "LinkWidthStatus",
+            "LinkWidth",
+            "LinkWidthMax",
+            "SlotLinkWidthMax"
+          ]
+        },
+        {
+          "key": "link-width-slot-capped",
+          "level": "info",
+          "grounds": "threshold",
+          "when": {
+            "fact": "LinkWidthStatus",
+            "equals": "capped-by-slot"
+          },
+          "sentence": "This device runs on fewer lanes than it supports because the slot provides no more. That is how the board is wired rather than a fault.",
+          "cites": [
+            "LinkWidthStatus",
+            "LinkWidth",
+            "LinkWidthMax",
+            "SlotLinkWidthMax"
+          ]
+        }
       ],
       "redaction_exemption": "two facts disclose identity and are declared so — Serial and WWN, each assigned at manufacture and correlating one drive across captures. Everything else is a model name, a kernel state, a PCIe rate, a lane count, a derived bandwidth or a SMART counter, identical on every drive of that model. THE BOUND: none of these interfaces takes a credential in this posture, and no fact here is operator-chosen text; the namespace list carries kernel names, which are ephemeral and named as such rather than joined on.",
       "reference_commands": [

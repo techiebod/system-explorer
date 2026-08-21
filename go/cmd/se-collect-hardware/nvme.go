@@ -203,6 +203,7 @@ func mergeNVMeHealth(src source, items []item) {
 		for name, value := range deep[items[i].name] {
 			items[i].facts[name] = value
 		}
+		judgementFacts(items[i].facts)
 		applyUnobservable("nvme", items[i].kind, items[i].facts)
 	}
 }
@@ -237,6 +238,7 @@ func mergeSCSIHealth(src source, items []item) {
 				items[i].facts[name] = value
 			}
 		}
+		judgementFacts(items[i].facts)
 		applyUnobservable("scsi", items[i].kind, items[i].facts)
 	}
 }
