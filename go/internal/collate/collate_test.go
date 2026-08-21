@@ -58,6 +58,11 @@ func TestAcquisitionAppliesTheCommittedCollection(t *testing.T) {
 	if rows[0].ID != "identity:host1" {
 		t.Fatalf("the minted id is <collection>:<native-name>: %s", rows[0].ID)
 	}
+	// The commit's own cost account survives to the state (register row
+	// 16): the fake's commit says 0.5, and "never reported" would be nil.
+	if cs.CostCPUMs == nil || *cs.CostCPUMs != 0.5 {
+		t.Fatalf("the commit's advisory cost must be recorded: %+v", cs.CostCPUMs)
+	}
 	if string(rows[0].Facts) != `{"Gen":1}` {
 		t.Fatalf("facts: %s", rows[0].Facts)
 	}
@@ -334,5 +339,23 @@ func TestCollectorsEnvParsing(t *testing.T) {
 		if _, err := parseCollectors(bad); err == nil {
 			t.Errorf("parseCollectors(%q) accepted; half a fleet list observes half a fleet", bad)
 		}
+	}
+}
+
+func TestTheAdvisoryCostReachesTheReadSurfaceLabelled(t *testing.T) {
+	// End to end (register row 16): the collector's commit says 0.5 ms,
+	// and the read surface serves it under a name that SAYS advisory —
+	// a reader must not take a collector's self-report for the
+	// collator's own accounting (DESIGN 19).
+	f := newFake(t)
+	st := openStore(t)
+	if err := acquire(t, st, f); err != nil {
+		t.Fatal(err)
+	}
+	rr := get(t, NewHandler(st, func() float64 { return 26.0 }, fakeBootID),
+		"/v1/collections")
+	body := rr.Body.String()
+	if !strings.Contains(body, `"advisory_cost_cpu_ms":0.5`) {
+		t.Fatalf("the advisory cost must be served, labelled: %s", body)
 	}
 }

@@ -78,6 +78,12 @@ func TestCollectionsRow(t *testing.T) {
 	if row["stale_reason"] != nil || row["applied_at"] == nil {
 		t.Fatalf("%+v", row)
 	}
+	// Applied directly, no commit record ever reported a cost: the
+	// advisory member must be ABSENT, not zero — "never reported" and
+	// "cost zero" are different readings.
+	if _, present := row["advisory_cost_cpu_ms"]; present {
+		t.Fatalf("no reported cost must serve no cost member: %+v", row)
+	}
 }
 
 func TestObjectsRoute(t *testing.T) {

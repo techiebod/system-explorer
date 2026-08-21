@@ -452,10 +452,12 @@ REGISTER: tuple[Row, ...] = (
         "the probe reads the collator listener only; the hub listener joins "
         "this row when it is built."),
     Row(16, "cost served on the read surface (the cost chip's data)",
-        "owed", "R3a",
-        lambda: _in_file("go/internal/collate/rest.go", "cpu_ms"),
-        "the probe sees the member reach the REST source; cost is already on "
-        "the wire and in the store."),
+        "built", "R3a",
+        lambda: _in_file("go/internal/collate/rest.go", "advisory_cost_cpu_ms"),
+        "the probe sees the labelled member served; that the commit's "
+        "account survives to it end-to-end is asserted by the collate and "
+        "REST tests. The collator's own slice accounting — the authoritative "
+        "figure DESIGN 19 names — is R5's resource measurement, not this."),
     Row(17, "change tracking — history, `/v1/changes`, `what_changed`",
         "owed", "R3e — owner ruling owed on §36",
         lambda: _in_file("src/system_explorer/hub/routes.py", "/v1/changes"),

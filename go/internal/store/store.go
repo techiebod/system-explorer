@@ -185,6 +185,23 @@ func migrate(db *sql.DB) error {
 			return fmt.Errorf("add objects.seq: %w", err)
 		}
 	}
+	// `cost_cpu_ms` was added on 2026-08-21 (register row 16): the
+	// collector's own commit-record account of what the collection cost,
+	// advisory by construction (DESIGN 19). NULL means "never reported",
+	// which is a different reading from a reported zero.
+	crows, err := db.Query(`SELECT name FROM pragma_table_info('collections') WHERE name = 'cost_cpu_ms'`)
+	if err != nil {
+		return fmt.Errorf("inspect collections cost: %w", err)
+	}
+	hasCost := crows.Next()
+	if err := crows.Close(); err != nil {
+		return err
+	}
+	if !hasCost {
+		if _, err := db.Exec(`ALTER TABLE collections ADD COLUMN cost_cpu_ms REAL`); err != nil {
+			return fmt.Errorf("add collections.cost_cpu_ms: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -432,6 +449,16 @@ func (s *Store) MarkStale(collection, reason string) error {
 // RecordRejection notes a batch or collection the authority refused to
 // apply, outside any apply transaction — wire violations, declaration
 // mismatches, uncommitted collections, transport failures.
+// RecordCost keeps the collector's commit-record account of what the
+// last committed acquisition cost. Advisory by construction (DESIGN 19):
+// the wire bounded it, nothing authenticated it, and the read surface
+// says so beside the number.
+func (s *Store) RecordCost(collection string, cpuMs float64) error {
+	_, err := s.db.Exec(
+		`UPDATE collections SET cost_cpu_ms = ? WHERE name = ?`, cpuMs, collection)
+	return err
+}
+
 func (s *Store) RecordRejection(collection, batch, reason, detail string) error {
 	_, err := s.db.Exec(`
 		INSERT INTO rejections (at_wall, collection, batch, reason, detail)
@@ -539,6 +566,11 @@ type CollectionState struct {
 	// learned under, or nil for a store written before the column
 	// existed. Nil is a stated unknown and never a hash to invent.
 	Declaration *string
+	// CostCPUMs is the collector's own account of the last committed
+	// acquisition, from the commit record — advisory by construction
+	// (DESIGN 19), and nil when no commit ever reported one: "never
+	// reported" and "cost zero" are different readings.
+	CostCPUMs *float64
 }
 
 // Collections reports every known collection. OldestAt is MIN(at) over
@@ -549,7 +581,7 @@ func (s *Store) Collections() ([]CollectionState, error) {
 		SELECT c.name, c.applied_gen, c.applied_at, c.boot_id, c.stale, c.stale_reason,
 		       (SELECT COUNT(*) FROM objects o WHERE o.collection = c.name),
 		       (SELECT MIN(o.at) FROM objects o WHERE o.collection = c.name),
-		       c.declaration
+		       c.declaration, c.cost_cpu_ms
 		FROM collections c ORDER BY c.name`)
 	if err != nil {
 		return nil, err
@@ -560,10 +592,13 @@ func (s *Store) Collections() ([]CollectionState, error) {
 		var cs CollectionState
 		var appliedAt, bootID, staleReason, declaration sql.NullString
 		var stale int
-		var oldest sql.NullFloat64
+		var oldest, cost sql.NullFloat64
 		if err := rows.Scan(&cs.Name, &cs.Generation, &appliedAt, &bootID, &stale,
-			&staleReason, &cs.ObjectCount, &oldest, &declaration); err != nil {
+			&staleReason, &cs.ObjectCount, &oldest, &declaration, &cost); err != nil {
 			return nil, err
+		}
+		if cost.Valid {
+			cs.CostCPUMs = &cost.Float64
 		}
 		if declaration.Valid && declaration.String != "" {
 			cs.Declaration = &declaration.String

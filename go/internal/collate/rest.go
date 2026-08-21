@@ -34,6 +34,11 @@ type collectionView struct {
 	ObjectCount         int      `json:"object_count"`
 	Stale               bool     `json:"stale"`
 	StaleReason         *string  `json:"stale_reason"`
+	// The collector's own account of the last committed acquisition,
+	// omitted when none was ever reported. Advisory by construction
+	// (DESIGN 19), and the member name says so — a reader must not take
+	// a collector's self-report for the collator's accounting.
+	AdvisoryCostCPUMs *float64 `json:"advisory_cost_cpu_ms,omitempty"`
 }
 
 // objectView is one applied object as the API serves it. Instance is a
@@ -102,13 +107,14 @@ func NewHandler(st *store.Store, now func() float64, bootID string) http.Handler
 		views := make([]collectionView, 0, len(states))
 		for _, cs := range states {
 			v := collectionView{
-				Name:        cs.Name,
-				Generation:  cs.Generation,
-				AppliedAt:   cs.AppliedAt,
-				OldestAt:    cs.OldestAt,
-				ObjectCount: cs.ObjectCount,
-				Stale:       cs.Stale,
-				StaleReason: cs.StaleReason,
+				Name:              cs.Name,
+				Generation:        cs.Generation,
+				AppliedAt:         cs.AppliedAt,
+				OldestAt:          cs.OldestAt,
+				ObjectCount:       cs.ObjectCount,
+				Stale:             cs.Stale,
+				StaleReason:       cs.StaleReason,
+				AdvisoryCostCPUMs: cs.CostCPUMs,
 			}
 			if cs.OldestAt != nil {
 				switch {
@@ -347,9 +353,10 @@ var publishedRoutes = []map[string]any{
 		"params": []string{}},
 	{"path": "/v1/collections", "tool": "list_collections",
 		"summary": "Every collection this host holds, with its generation, its " +
-			"object count and how fresh the applied state is. An age is served " +
-			"only within the boot that produced it; across a reboot the clock " +
-			"domain is stated rather than subtracted through.",
+			"object count, how fresh the applied state is, and what the last " +
+			"acquisition cost by the collector's own advisory account. An age " +
+			"is served only within the boot that produced it; across a reboot " +
+			"the clock domain is stated rather than subtracted through.",
 		"params": []string{}},
 	{"path": "/v1/collections/{name}/objects", "tool": "get_collection",
 		"summary": "One collection's applied objects, in applied order. Any " +

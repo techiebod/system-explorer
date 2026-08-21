@@ -119,6 +119,13 @@ type Commit struct {
 	Objects      int64
 	Assertions   int64
 	Unobservable int64
+	// The collector's own account of what this collection cost, advisory
+	// by construction (DESIGN 19): bounded here — finite, non-negative —
+	// and never authenticated, because a replayed collector cannot measure
+	// real cost and a live one could misreport it. Negative when the
+	// commit carried none, so "not reported" and "cost zero" stay
+	// distinguishable readings.
+	CPUMs float64
 }
 
 // End closes the batch and the request that begin opened.
@@ -859,6 +866,10 @@ func parseCommit(rec map[string]any, issued map[string]uint64) (*Commit, *Violat
 	if c.Unobservable, verr = count(rec, "commit", "unobservable"); verr != nil {
 		return nil, verr
 	}
+	// Bounded before it is kept (the measured-cost rule): the value is
+	// advisory, the shape is not. -1 when the commit carried none, so
+	// "not reported" and "cost zero" stay distinguishable readings.
+	c.CPUMs = -1
 	if cpu, present := rec["cpu_ms"]; present {
 		num, ok := cpu.(json.Number)
 		if !ok {
@@ -867,6 +878,8 @@ func parseCommit(rec map[string]any, issued map[string]uint64) (*Commit, *Violat
 		if verr := checkMeasured(num, "bad-cpu-ms", "commit "+c.Collection); verr != nil {
 			return nil, verr
 		}
+		f, _ := num.Float64()
+		c.CPUMs = f
 	}
 	return c, nil
 }

@@ -217,6 +217,14 @@ func applyCollection(st *store.Store, name, scope string, batch *wire.Batch) err
 	// Committed — including absent's zero-object commit, which applies
 	// EMPTY: prior objects retired, collection not stale, because "there
 	// are none" is a successful reading of the interface.
+	if cs.Commit != nil && cs.Commit.CPUMs >= 0 {
+		// The commit's own cost account survives to the read surface
+		// (register row 16). Recorded before apply so a failed apply does
+		// not lose the reading — the cost was real either way.
+		if err := st.RecordCost(name, cs.Commit.CPUMs); err != nil {
+			return err
+		}
+	}
 	objects := make([]store.Object, 0, len(cs.Objects))
 	for _, o := range cs.Objects {
 		objects = append(objects, store.Object{
