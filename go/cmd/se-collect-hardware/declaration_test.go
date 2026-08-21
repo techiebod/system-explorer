@@ -35,12 +35,16 @@ type declaredFact struct {
 }
 
 type declaredCollection struct {
-	Name      string                  `json:"name"`
-	Prefix    string                  `json:"prefix"`
-	Answer    []string                `json:"answer"`
-	Facts     map[string]declaredFact `json:"facts"`
-	Exemption string                  `json:"redaction_exemption"`
-	Commands  []struct {
+	Name       string                  `json:"name"`
+	Prefix     string                  `json:"prefix"`
+	Answer     []string                `json:"answer"`
+	Facts      map[string]declaredFact `json:"facts"`
+	Exemption  string                  `json:"redaction_exemption"`
+	Redactions []struct {
+		Path      string `json:"path"`
+		Discloses string `json:"discloses"`
+	} `json:"redactions"`
+	Commands []struct {
 		Purpose string   `json:"purpose"`
 		Argv    []string `json:"argv"`
 	} `json:"reference_commands"`
@@ -103,9 +107,56 @@ func TestEveryDeclaredFactCarriesASentenceAndEveryAnswerNamesOne(t *testing.T) {
 				t.Errorf("%s: answer names %q, which is not a declared fact", collection.Name, name)
 			}
 		}
-		if strings.TrimSpace(collection.Exemption) == "" {
-			t.Errorf("%s declares neither redactions nor an exemption", collection.Name)
+		// The message said "neither redactions nor an exemption" and the
+		// check only ever looked at the exemption, so a collection that
+		// declared a real redaction list read as undeclared — found when
+		// platform grew one at R3c. The contract makes the two exclusive;
+		// this asks for exactly one.
+		exempt := strings.TrimSpace(collection.Exemption) != ""
+		if exempt == (len(collection.Redactions) > 0) {
+			t.Errorf("%s declares %d redactions and an exemption %q: exactly "+
+				"one of the two, because both together are two rulings "+
+				"contradicting each other in one document",
+				collection.Name, len(collection.Redactions), collection.Exemption)
 		}
+	}
+}
+
+// What the platform collection withholds, path by path. Its exemption used to
+// say that DMI carries product_serial, chassis_serial, board_serial and
+// product_uuid, that they ARE identity, and that this collector read none of
+// them — true until R3c, when the evidence verb began reading the DMI
+// directory WHOLE. The exemption became false the moment that landed, so it
+// was replaced by this list rather than reworded, and the list is pinned here
+// because a forgotten redaction publishes a machine's own identity.
+func TestThePlatformEvidenceWithholdsTheMachinesIdentity(t *testing.T) {
+	var platform *declaredCollection
+	for _, collection := range decodeDeclaration(t) {
+		if collection.Name == "platform" {
+			found := collection
+			platform = &found
+		}
+	}
+	if platform == nil {
+		t.Fatal("no platform collection")
+	}
+	withheld := map[string]bool{}
+	for _, redaction := range platform.Redactions {
+		if redaction.Discloses != "identity" {
+			t.Errorf("%s is withheld as %q; a machine's serial is identity",
+				redaction.Path, redaction.Discloses)
+		}
+		withheld[redaction.Path] = true
+	}
+	for _, attribute := range []string{"product_serial", "chassis_serial",
+		"board_serial", "product_uuid"} {
+		if !withheld["/dmi/"+attribute] {
+			t.Errorf("DMI %s is not withheld from evidence", attribute)
+		}
+	}
+	if len(platform.Redactions) != 4 {
+		t.Errorf("%d redactions declared; a fifth means the ruling moved and "+
+			"this pin must move with it", len(platform.Redactions))
 	}
 }
 

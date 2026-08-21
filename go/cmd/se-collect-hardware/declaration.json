@@ -32,6 +32,16 @@
   "collections": [
     {
       "name": "platform",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what machine is this, and what is it made of?",
       "prefix": "platform",
       "freshness": "3600s",
@@ -100,7 +110,24 @@
           "sentence": "Memory the kernel can allocate, which is the installed total minus what the firmware and the kernel reserved. It is smaller than the DIMM total on every machine, and that gap is not a fault."
         }
       },
-      "redaction_exemption": "the platform row is DMI identity strings, util-linux's CPU table and one line of /proc/meminfo — a vendor, a model, a firmware release, an instruction set, four topology counts and a size. Every one of them is the same on every machine of that model, and none is a credential, a name somebody chose or a locator in this estate. THE BOUND IS STATED because it is a decision and not a shape: DMI also carries product_serial, chassis_serial and product_uuid, which ARE identity, and this collector reads none of the three — a future fact that did would move this collection out of its exemption rather than inherit it.",
+      "redactions": [
+        {
+          "path": "/dmi/product_serial",
+          "discloses": "identity"
+        },
+        {
+          "path": "/dmi/chassis_serial",
+          "discloses": "identity"
+        },
+        {
+          "path": "/dmi/board_serial",
+          "discloses": "identity"
+        },
+        {
+          "path": "/dmi/product_uuid",
+          "discloses": "identity"
+        }
+      ],
       "reference_commands": [
         { "purpose": "the same firmware identity, by hand", "argv": ["dmidecode", "-t", "system"] },
         { "purpose": "the CPU topology this reads, in its native JSON", "argv": ["lscpu", "-J"] },
@@ -109,6 +136,16 @@
     },
     {
       "name": "pci",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what is plugged into this machine's buses, and which driver claimed it?",
       "prefix": "pci",
       "freshness": "3600s",
@@ -151,6 +188,16 @@
     },
     {
       "name": "usb",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what is attached over usb, and at what speed did it negotiate?",
       "prefix": "usb",
       "freshness": "600s",
@@ -203,6 +250,16 @@
     },
     {
       "name": "scsi",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what is attached to each storage controller, by what physical route, and is it healthy?",
       "prefix": "scsi",
       "freshness": "300s",
@@ -674,6 +731,16 @@
     },
     {
       "name": "nvme",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what nvme controllers are fitted, how fast is each link, and how much life is left in them?",
       "prefix": "nvme",
       "freshness": "300s",

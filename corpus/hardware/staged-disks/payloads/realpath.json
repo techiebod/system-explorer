@@ -22,6 +22,9 @@
   "/sys/class/hwmon/hwmon0": {
     "device": "/sys/devices/pci0000:00/0000:00:10.0/nvme/nvme0"
   },
+  "/sys/class/nvme": {
+    "nvme0": "/sys/devices/pci0000:00/0000:00:10.0/nvme/nvme0"
+  },
   "/sys/class/nvme/nvme0": {
     "device": "/sys/devices/pci0000:00/0000:00:10.0"
   },

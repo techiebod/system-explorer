@@ -449,9 +449,25 @@ for name, attr in (("read", "_read"), ("read-bytes", "_read_bytes"),
 
 adapter = hardware.Adapter()
 
+# The collection walk, and then the DETAIL of the collections whose objects are
+# devices with a directory of their own. The verbs read further than the walk —
+# every readable file in the device directory, the udev reply, the DMI tree —
+# so a capture of the walk alone leaves a corpus that cannot replay a single
+# verb request, and the alternative is a hand-written fixture of what somebody
+# believes sysfs looks like.
+#
+# scsi, nvme and platform only. pci and usb would add the whole attribute set
+# of every function and hub on the machine, which is payload weight for a
+# surface these two collections answer identically; corpus meta states the
+# bound rather than implying the verbs were covered everywhere.
 async def walk():
     for collection in adapter.collections():
-        await adapter.acquire(collection)
+        items = await adapter.acquire(collection)
+        if collection not in ("scsi", "nvme", "platform"):
+            continue
+        for item in items:
+            await adapter.get_object(collection, item["id"])
+            await adapter.get_evidence(collection, item["id"])
 
 asyncio.run(walk())
 print(json.dumps(seen.get(want, {}), indent=1, sort_keys=True))

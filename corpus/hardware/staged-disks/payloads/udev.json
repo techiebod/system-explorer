@@ -3,7 +3,7 @@
     "sda": {
       "CURRENT_TAGS": ":systemd:",
       "DEVICE_ID": "b8:0",
-      "DEVLINKS": "/dev/disk/by-path/pci-0000:00:08.0-scsi-0:0:0:0 /dev/disk/by-id/wwn-0x30493d187fe67bfc /dev/disk/by-diskseq/11 /dev/disk/by-id/scsi-330493d187fe67bfc",
+      "DEVLINKS": "/dev/disk/by-path/pci-0000:00:08.0-scsi-0:0:0:0 /dev/disk/by-id/scsi-330493d187fe67bfc /dev/disk/by-id/wwn-0x30493d187fe67bfc /dev/disk/by-diskseq/11",
       "DEVNAME": "/dev/sda",
       "DEVPATH": "/devices/pci0000:00/0000:00:08.0/virtio5/host0/target0:0:0/0:0:0:0/block/sda",
       "DEVTYPE": "disk",

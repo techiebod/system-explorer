@@ -60,8 +60,52 @@ func (s *liveSource) drives() (map[string]driveHealth, bool) {
 		return nil, false
 	}
 	s.udisksMap = driveHealthByBlock(reply.Data[0])
+	s.udisksRaw = rawByBlock(reply.Data[0])
 	s.udisksOK = true
 	return s.udisksMap, true
+}
+
+func (s *liveSource) drivesRaw() (map[string]map[string]map[string]variant, bool) {
+	if _, ok := s.drives(); !ok {
+		return nil, false
+	}
+	return s.udisksRaw, true
+}
+
+// rawByBlock keys the daemon's own objects by the kernel block name, the same
+// join driveHealthByBlock makes and for the same reason: a Block object holds
+// the name and points at the Drive that holds the properties. What is kept
+// here is the interfaces of BOTH, unfolded, because evidence is the document
+// and not our reading of it.
+func rawByBlock(objects map[string]map[string]map[string]variant,
+) map[string]map[string]map[string]variant {
+	out := map[string]map[string]map[string]variant{}
+	for objectPath, interfaces := range objects {
+		block, ok := interfaces[udisksBlock]
+		if !ok {
+			continue
+		}
+		name := path.Base(byteStringOf(block["Device"]))
+		if name == "" || name == "." || name == "/" {
+			continue
+		}
+		merged := map[string]map[string]variant{}
+		for iface, properties := range interfaces {
+			merged[iface] = properties
+		}
+		// The Drive's interfaces travel with the Block's, because that is
+		// where the SMART properties live and a reader following the evidence
+		// would otherwise be handed a device node with no health on it.
+		if owner, _ := stringValue(block["Drive"]); owner != "" && owner != objectPath {
+			for iface, properties := range objects[owner] {
+				merged[iface] = properties
+			}
+		}
+		if _, seen := out[name]; !seen {
+			out[name] = merged
+		}
+	}
+	return out
 }
 
 // driveHealthByBlock folds the managed-object tree into {block name → facts}.

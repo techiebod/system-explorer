@@ -504,6 +504,8 @@ def _check_prefix_pair(node: dict, path: str, findings: list[Finding]) -> None:
 # Long enough to hold something worth hiding, and a multiple of four so a
 # fragment of ordinary prose does not decode to noise. A serial is at least a
 # few characters, so twelve base64 characters (nine octets) is the floor.
+NQN_TAIL = re.compile(
+    r"\b(nqn\.\d{4}-\d{2}\.[\w.\-]+:(?:[^\s:]+:)*)([A-Za-z0-9\-_]{4,})\b")
 BASE64_LEAF = re.compile(r"^[A-Za-z0-9+/]{12,}={0,2}$")
 PRINTABLE_RUN = re.compile(r"[ -~]{4,}")
 
@@ -628,6 +630,18 @@ def _scan_text(
             f"MAC {m.group(0)} wears a registered OUI, not the locally-"
             "administered 02:/03: scrub convention — a real interface's address",
         ))
+
+    # An NVMe subsystem NQN ends in the drive's serial — qemu and the NVMe
+    # base spec both spell it that way — and no shape above matched a bare
+    # serial string, so the whole NQN walked past this checker until the
+    # evidence verb first read a controller directory.
+    for m in NQN_TAIL.finditer(text):
+        if not m.group(2).startswith(SERIAL_MARKER):
+            findings.append(Finding(
+                path, "serial",
+                f"NQN {m.group(0)} ends in a serial without the "
+                f"{SERIAL_MARKER} marker",
+            ))
 
     for m in BYID_TAIL.finditer(text):
         if m.group(1).lower().startswith("scsi-3") or in_spelled(m.span()):

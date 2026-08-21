@@ -458,6 +458,12 @@ NVME_WWID = re.compile(r"^nvme\.([0-9a-fA-F]{4})-([0-9a-fA-F]+)-([0-9a-fA-F]+)-(
 # digit sits where a word boundary would have to be. Types 1 to 6 are the ones
 # SPC defines; the tail is the WWN every other spelling of this drive carries.
 UDEV_NAA_SERIAL = re.compile(r"^([1-6])([0-9a-fA-F]{16})$")
+# An NVMe subsystem NQN ends in the drive's serial: qemu writes
+# `nqn.2019-08.org.qemu:<serial>`, and the NVMe base spec's own generated form
+# is `nqn.2014-08.org.nvmexpress:<vid>:<serial>:<model>`. No pattern here
+# matched a bare serial string, so the whole spelling walked through until the
+# evidence verb first read a controller directory (2026-08-21).
+NQN_SERIAL = re.compile(r"\b(nqn\.\d{4}-\d{2}\.[\w.\-]+:(?:[^\s:]+:)*)([A-Za-z0-9\-_]{4,})\b")
 NVME_WWID_IN_TEXT = re.compile(
     r"\bnvme\.([0-9a-fA-F]{4})-([0-9a-fA-F]+)-([0-9a-fA-F]+)-([0-9a-fA-F]+)\b")
 
@@ -749,6 +755,9 @@ def scrub_text(text: str, ctx: Ctx) -> str:
     # patterns below, which would otherwise chew the serial chunk in half —
     # and it must run on free text at all because the LISTING of /dev/disk/by-id
     # is where the join a reader follows actually lives.
+    text = NQN_SERIAL.sub(
+        lambda m: park(m.group(1) + _serial_replacement(ctx, m.group(2))), text)
+
     text = NVME_WWID_IN_TEXT.sub(
         lambda m: park(_nvme_wwid_in_text(ctx, m)), text)
 

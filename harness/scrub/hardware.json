@@ -459,5 +459,276 @@
  },
  "read:*.size": {
   "discloses": "nothing"
+ },
+ "#the_evidence_verb_reads_the_whole_directory": "From R3c the object and evidence verbs read every readable file in a device's own sysfs directory, where the collection walk read a dozen named attributes — so the capture now carries the whole surface and every leaf of it is classified below. Nearly all are kernel counters, queue parameters, event flags and driver names, identical on every machine running that driver. Four are not, and each was read before it was classified: subsysnqn spells an NVMe subsystem name that ENDS IN THE DRIVE'S SERIAL, unique_id and inquiry may carry a device designator, and chassis_asset_tag is whoever labelled the box. Those four take the free-text pass under prose, which is the format allowed to find nothing — because on this guest three of them are null and on a real machine they are not.",
+ "read:*.subsysnqn": {
+  "discloses": "identity",
+  "format": "prose"
+ },
+ "read:*.unique_id": {
+  "discloses": "identity",
+  "format": "prose"
+ },
+ "read:*.inquiry": {
+  "discloses": "identity",
+  "format": "prose"
+ },
+ "read:*.chassis_asset_tag": {
+  "discloses": "identity",
+  "format": "prose"
+ },
+ "read:*.vpd_pg83": {
+  "discloses": "identity",
+  "format": "prose"
+ },
+ "read:*.access_state": {
+  "discloses": "nothing"
+ },
+ "read:*.active_mode": {
+  "discloses": "nothing"
+ },
+ "read:*.address": {
+  "discloses": "nothing"
+ },
+ "read:*.bios_release": {
+  "discloses": "nothing"
+ },
+ "read:*.bios_vendor": {
+  "discloses": "nothing"
+ },
+ "read:*.blacklist": {
+  "discloses": "nothing"
+ },
+ "read:*.block": {
+  "discloses": "nothing"
+ },
+ "read:*.bsg": {
+  "discloses": "nothing"
+ },
+ "read:*.can_queue": {
+  "discloses": "nothing"
+ },
+ "read:*.cdl_enable": {
+  "discloses": "nothing"
+ },
+ "read:*.cdl_supported": {
+  "discloses": "nothing"
+ },
+ "read:*.chassis_type": {
+  "discloses": "nothing"
+ },
+ "read:*.chassis_vendor": {
+  "discloses": "nothing"
+ },
+ "read:*.chassis_version": {
+  "discloses": "nothing"
+ },
+ "read:*.cmd_per_lun": {
+  "discloses": "nothing"
+ },
+ "read:*.cntlid": {
+  "discloses": "nothing"
+ },
+ "read:*.cntrltype": {
+  "discloses": "nothing"
+ },
+ "read:*.dctype": {
+  "discloses": "nothing"
+ },
+ "read:*.delete": {
+  "discloses": "nothing"
+ },
+ "read:*.dev": {
+  "discloses": "nothing"
+ },
+ "read:*.device": {
+  "discloses": "nothing"
+ },
+ "read:*.device_blocked": {
+  "discloses": "nothing"
+ },
+ "read:*.device_busy": {
+  "discloses": "nothing"
+ },
+ "read:*.dh_state": {
+  "discloses": "nothing"
+ },
+ "read:*.driver": {
+  "discloses": "nothing"
+ },
+ "read:*.eh_deadline": {
+  "discloses": "nothing"
+ },
+ "read:*.eh_timeout": {
+  "discloses": "nothing"
+ },
+ "read:*.evt_capacity_change_reported": {
+  "discloses": "nothing"
+ },
+ "read:*.evt_inquiry_change_reported": {
+  "discloses": "nothing"
+ },
+ "read:*.evt_lun_change_reported": {
+  "discloses": "nothing"
+ },
+ "read:*.evt_media_change": {
+  "discloses": "nothing"
+ },
+ "read:*.evt_mode_parameter_change_reported": {
+  "discloses": "nothing"
+ },
+ "read:*.evt_soft_threshold_reached": {
+  "discloses": "nothing"
+ },
+ "read:*.generic": {
+  "discloses": "nothing"
+ },
+ "read:*.host_busy": {
+  "discloses": "nothing"
+ },
+ "read:*.host_reset": {
+  "discloses": "nothing"
+ },
+ "read:*.hwmon0": {
+  "discloses": "nothing"
+ },
+ "read:*.iocounterbits": {
+  "discloses": "nothing"
+ },
+ "read:*.iodone_cnt": {
+  "discloses": "nothing"
+ },
+ "read:*.ioerr_cnt": {
+  "discloses": "nothing"
+ },
+ "read:*.iorequest_cnt": {
+  "discloses": "nothing"
+ },
+ "read:*.iotmo_cnt": {
+  "discloses": "nothing"
+ },
+ "read:*.kato": {
+  "discloses": "nothing"
+ },
+ "read:*.modalias": {
+  "discloses": "nothing"
+ },
+ "read:*.ng0n1": {
+  "discloses": "nothing"
+ },
+ "read:*.nr_hw_queues": {
+  "discloses": "nothing"
+ },
+ "read:*.numa_node": {
+  "discloses": "nothing"
+ },
+ "read:*.nvme0n1": {
+  "discloses": "nothing"
+ },
+ "read:*.passthru_err_log_enabled": {
+  "discloses": "nothing"
+ },
+ "read:*.power": {
+  "discloses": "nothing"
+ },
+ "read:*.preferred_path": {
+  "discloses": "nothing"
+ },
+ "read:*.product_family": {
+  "discloses": "nothing"
+ },
+ "read:*.product_sku": {
+  "discloses": "nothing"
+ },
+ "read:*.product_version": {
+  "discloses": "nothing"
+ },
+ "read:*.prot_capabilities": {
+  "discloses": "nothing"
+ },
+ "read:*.prot_guard_type": {
+  "discloses": "nothing"
+ },
+ "read:*.queue_count": {
+  "discloses": "nothing"
+ },
+ "read:*.queue_depth": {
+  "discloses": "nothing"
+ },
+ "read:*.queue_ramp_up_period": {
+  "discloses": "nothing"
+ },
+ "read:*.queue_type": {
+  "discloses": "nothing"
+ },
+ "read:*.quirks": {
+  "discloses": "nothing"
+ },
+ "read:*.rescan": {
+  "discloses": "nothing"
+ },
+ "read:*.rescan_controller": {
+  "discloses": "nothing"
+ },
+ "read:*.reset_controller": {
+  "discloses": "nothing"
+ },
+ "read:*.scan": {
+  "discloses": "nothing"
+ },
+ "read:*.scsi_device": {
+  "discloses": "nothing"
+ },
+ "read:*.scsi_disk": {
+  "discloses": "nothing"
+ },
+ "read:*.scsi_generic": {
+  "discloses": "nothing"
+ },
+ "read:*.scsi_level": {
+  "discloses": "nothing"
+ },
+ "read:*.sg_prot_tablesize": {
+  "discloses": "nothing"
+ },
+ "read:*.sg_tablesize": {
+  "discloses": "nothing"
+ },
+ "read:*.sqsize": {
+  "discloses": "nothing"
+ },
+ "read:*.subsystem": {
+  "discloses": "nothing"
+ },
+ "read:*.supported_mode": {
+  "discloses": "nothing"
+ },
+ "read:*.timeout": {
+  "discloses": "nothing"
+ },
+ "read:*.uevent": {
+  "discloses": "nothing"
+ },
+ "read:*.use_blk_mq": {
+  "discloses": "nothing"
+ },
+ "read:*.vpd_pg0": {
+  "discloses": "nothing"
+ },
+ "read:*.vpd_pgb0": {
+  "discloses": "nothing"
+ },
+ "read:*.vpd_pgb1": {
+  "discloses": "nothing"
+ },
+ "read:*.vpd_pgb2": {
+  "discloses": "nothing"
+ },
+ "read:*.vpd_pg80": {
+  "discloses": "identity",
+  "format": "prose"
+ },
+ "exists:*.uevent": {
+  "discloses": "nothing"
  }
 }

@@ -113,6 +113,12 @@ type source interface {
 	// daemon answered at all. The second value is what keeps the source
 	// note truthful about a reading nobody could take.
 	drives() (map[string]driveHealth, bool)
+	// drivesRaw is the same reply BEFORE it was folded — the daemon's own
+	// managed-object tree, keyed by block-device name. It exists for the
+	// evidence verb and for nothing else: evidence is the raw document a
+	// fact was read from, and serving driveHealth there would serve our
+	// interpretation back as though it were the machine's words.
+	drivesRaw() (map[string]map[string]map[string]variant, bool)
 
 	// hostname is the name the platform object is published under — law 1's
 	// obligation, the name this machine was observed by. Behind the seam
@@ -234,6 +240,7 @@ type liveSource struct {
 
 	udisksOnce bool
 	udisksMap  map[string]driveHealth
+	udisksRaw  map[string]map[string]map[string]variant
 	udisksOK   bool
 }
 
@@ -809,6 +816,13 @@ func (r *replaySource) drives() (map[string]driveHealth, bool) {
 	// that raises, its _drive_health catches, and the row it builds is the
 	// row a host with no udisks2 on the bus produces. Dialling the system bus
 	// of whichever machine is replaying is the one thing this must never do.
+	return nil, false
+}
+
+func (r *replaySource) drivesRaw() (map[string]map[string]map[string]variant, bool) {
+	// Same refusal, same reason: no committed variant carries a udisks2
+	// document, so the evidence verb serves what a host without the daemon
+	// has, which is nothing from it.
 	return nil, false
 }
 

@@ -336,7 +336,10 @@ func (*fakeTree) sysfsAbsent() bool                      { return false }
 func (*fakeTree) failure() error                         { return nil }
 func (*fakeTree) smartctlUsable(string) bool             { return false }
 func (*fakeTree) drives() (map[string]driveHealth, bool) { return nil, false }
-func (*fakeTree) smartReason(string) (string, bool)      { return "", false }
+func (*fakeTree) drivesRaw() (map[string]map[string]map[string]variant, bool) {
+	return nil, false
+}
+func (*fakeTree) smartReason(string) (string, bool) { return "", false }
 func (*fakeTree) smartSnapshot(string) (map[string]json.RawMessage, float64, bool) {
 	return nil, 0, false
 }

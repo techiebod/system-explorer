@@ -335,9 +335,20 @@ def _lscpu_json() -> dict:
 
 
 def _read(path: str) -> str | None:
+    """One sysfs attribute as text, or None where there is no text to read.
+
+    UnicodeDecodeError is caught beside OSError because sysfs holds BINARY
+    attributes — SCSI VPD pages, EDID blobs — and a device directory read
+    whole will meet one. It was uncaught until 2026-08-21, when the evidence
+    verb first read a real SCSI disk's directory and died on vpd_pg80's 0x80
+    byte: every evidence request for a SCSI disk raised, and main.py turned it
+    into an error envelope, so the surface had never worked and nothing said
+    so. A binary attribute is not unreadable, it is not TEXT — it travels
+    through _read_bytes, which is asked for it by name.
+    """
     try:
         return Path(path).read_text().strip() or None
-    except OSError:
+    except (OSError, UnicodeDecodeError):
         return None
 
 
@@ -465,6 +476,47 @@ def _disk_names(wwn: str | None, serial: str | None,
     if not stable:
         return None
     return {"stable": stable, "ephemeral": {"kernel": [f"/dev/{block}"]}}
+
+
+# The DMI attributes an evidence document does not serve, as the platform
+# collection's declared `redactions` state. The row facts are a vendor, a
+# model, a firmware release and four topology counts, all identical on every
+# machine of that model; DMI also carries the machine's OWN identity, and the
+# evidence verb reads the directory whole.
+WITHHELD_DMI = frozenset({"product_serial", "chassis_serial", "board_serial",
+                          "product_uuid"})
+
+
+def _device_directory(base: str) -> bool:
+    """Whether a device's own sysfs directory is there, through the seam.
+
+    A sysfs device directory always holds a uevent file, so the probe is a
+    presence test on that — and it goes through _exists rather than
+    os.path.isdir because an unseamed probe answers out of the tree of
+    whichever machine is REPLAYING. Under replay that made every evidence
+    request fail with UnknownObject regardless of what the capture held, and
+    live it silently searched three classes with no record of having done so.
+    """
+    return _exists(f"{base}/uevent")
+
+
+def _attributes(base: str, withheld: frozenset[str] = frozenset()) -> dict[str, str]:
+    """Every readable attribute in one sysfs directory, by name.
+
+    A name with nothing to read is left OUT rather than carried as a null: a
+    directory entry may be a subdirectory, a write-only trigger or a binary
+    page, and none of those is an attribute whose value is nothing. The Go
+    collector's own attributes() skips on the same rule, so an evidence
+    document means the same thing whichever implementation served it.
+    """
+    out: dict[str, str] = {}
+    for name in _listdir(base):
+        if name in withheld:
+            continue
+        value = _read(f"{base}/{name}")
+        if value is not None:
+            out[name] = value
+    return out
 
 
 def _link_status(current, device_max, slot_max) -> str | None:
@@ -1517,15 +1569,14 @@ class Adapter:
         payload: dict
         if collection == "platform":
             payload = {
-                "dmi": {name: _read(f"{DMI}/{name}") for name in _listdir(DMI)
-                        if os.path.isfile(f"{DMI}/{name}")},
+                "dmi": _attributes(DMI, withheld=WITHHELD_DMI),
                 "lscpu": await anyio.to_thread.run_sync(_lscpu_json),
                 "meminfo_MemTotal_bytes": _meminfo_total_bytes(),
             }
         elif collection in ("pci", "usb"):
             name = object_id.split(":", 1)[1]
             base = f"{PCI_DEVICES if collection == 'pci' else USB_DEVICES}/{name}"
-            if not os.path.isdir(base):
+            if not _device_directory(base):
                 raise env.UnknownObject(object_id)
             payload = {
                 "syspath": _realpath(base),
@@ -1535,12 +1586,10 @@ class Adapter:
             name = object_id.split(":", 1)[1]
             for base in (f"{SCSI_HOSTS}/{name}", f"{SAS_EXPANDERS}/{name}",
                          f"{SCSI_DEVICES}/{name}"):
-                if os.path.isdir(base):
+                if _device_directory(base):
                     payload = {
                         "syspath": _realpath(base),
-                        "attributes": {attr: _read(f"{base}/{attr}")
-                                       for attr in _listdir(base)
-                                       if os.path.isfile(f"{base}/{attr}")},
+                        "attributes": _attributes(base),
                     }
                     block = next(iter(_listdir(f"{base}/block")), None)
                     if block:
@@ -1552,13 +1601,11 @@ class Adapter:
         elif collection == "nvme":
             name = object_id.split(":", 1)[1]
             base = f"{NVME_DEVICES}/{name}"
-            if not os.path.isdir(base):
+            if not _device_directory(base):
                 raise env.UnknownObject(object_id)
             payload = {
                 "syspath": _realpath(base),
-                "attributes": {attr: _read(f"{base}/{attr}")
-                               for attr in _listdir(base)
-                               if os.path.isfile(f"{base}/{attr}")},
+                "attributes": _attributes(base),
             }
             namespaces = [n for n in _listdir(base)
                           if re.match(rf"^{re.escape(name)}n\d+$", n)]
