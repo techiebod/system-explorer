@@ -435,15 +435,17 @@ REGISTER: tuple[Row, ...] = (
         "and the explicit cursor are asserted by "
         "go/internal/collate/query_test.go."),
     Row(13, "`/v1/capabilities` serving `object_prefixes` (id→route)",
-        "owed", "R3a",
-        lambda: _in_file("go/internal/collate/rest.go", "object_prefixes"),
-        "the probe sees the member name in the REST source."),
+        "built", "R3a",
+        lambda: _in_file("go/internal/collate/dictionary.go", "object_prefixes"),
+        "the probe sees the member served; the narrowing and the contended-"
+        "prefix refusal are asserted by "
+        "go/internal/collate/dictionary_test.go."),
     Row(14, "fact dictionary route + MCP tool",
-        "owed", "R3a",
-        lambda: (_in_file("go/internal/collate/rest.go", "/v1/facts")
-                 or _in_file("src/system_explorer/hub/routes.py", "/v1/facts")),
-        "the probe accepts the route at either tier, because which serves it "
-        "is R3a's decision to make."),
+        "built", "R3a",
+        lambda: _in_file("go/internal/collate/rest.go", "/v1/facts"),
+        "the probe sees the collator route; the MCP tool derives from the "
+        "published route table (tools are per route), and verbatim serving "
+        "is asserted by go/internal/collate/dictionary_test.go."),
     Row(15, "host-header allowlist on the read listeners",
         "owed", "R3a",
         lambda: _in_file("go/internal/collate/rest.go", "r.Host"),

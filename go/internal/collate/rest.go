@@ -89,6 +89,7 @@ func NewHandler(st *store.Store, now func() float64, bootID string) http.Handler
 	})
 
 	registerStatus(mux, st)
+	registerDictionary(mux, st)
 
 	mux.HandleFunc("GET /v1/collections", func(w http.ResponseWriter, r *http.Request) {
 		states, err := st.Collections()
@@ -331,6 +332,18 @@ var publishedRoutes = []map[string]any{
 			"and, separately, which collections carry no rule table at all. " +
 			"An unjudged collection is its own state, never a quiet null: " +
 			"absence of judgement must not read as health.",
+		"params": []string{}},
+	{"path": "/v1/capabilities", "tool": "host_capabilities",
+		"summary": "How to open things here: each collection's declared " +
+			"prefix and question, and the id-prefix map to the route where " +
+			"an object wearing that prefix is served. Narrowed to what this " +
+			"host's store knows, so a link built from it never dead-ends.",
+		"params": []string{}},
+	{"path": "/v1/facts", "tool": "fact_dictionary",
+		"summary": "What each fact means: per collection, every declared " +
+			"fact's axes and one-sentence meaning, verbatim from the " +
+			"collector's own declaration. Fetch once and cache — it changes " +
+			"only when a declaration does.",
 		"params": []string{}},
 	{"path": "/v1/collections", "tool": "list_collections",
 		"summary": "Every collection this host holds, with its generation, its " +
