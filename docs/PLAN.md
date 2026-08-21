@@ -484,12 +484,12 @@ Every known miss, each owned or ruled. A row neither built, owned nor ruled is a
 | 1 | `object` verb — object density (`LoadError`, `NRestarts`, `MainPID`, timers' `NextElapse`…) | owed by the phase-3 verb ruling, never delivered | R3c/R3d |
 | 2 | `evidence` verb — capture-fresh raw document + digest; "the only thing that is not our interpretation" | owed by the same ruling | R3c/R3d |
 | 3 | `lookup` verb — parametrised queries, the lookup palette | owed by the same ruling | R3d |
-| 4 | object `type` on the wire | nowhere; ruled 2026-08-21 into the contract | R1 |
-| 5 | applied order preserved; trees derived from relations | store discards it today; ruled 2026-08-21 | R1 |
+| 4 | object `type` on the wire | built at R1 | R1 |
+| 5 | applied order preserved; trees derived from relations | built at R1 | R1 |
 | 6 | name families on `units`/`hardware` (and fleet-wide audit) | storage/vms only | R3c/R3d |
 | 7 | relations on `units`/`hardware` (and fleet-wide audit) | declared by neither | R3c/R3d |
 | 8 | rule tables fleet-wide (restart-churn, SMART verdicts, link-rate…) | mechanism built, no first-party collector declares any | R3c/R3d |
-| 9 | eighteen unported collections (network 8, storage 5, system 4, plex 1) | listed in `test_port_completeness` | R3b/R3d |
+| 9 | eighteen unported collections (network 8, storage 5, system 4, plex 1) | encoded in the shared register (`harness/se_harness/register.py`) | R3b/R3d |
 | 10 | `/v1/status` roll-up (worst per collection, attention counts) | nowhere | R3a |
 | 11 | fact filters with the 422 near-miss refusal | nowhere | R3a |
 | 12 | pagination — limit/cursor, declared ceilings honoured on reads | nowhere | R3a |
@@ -506,8 +506,8 @@ Every known miss, each owned or ruled. A row neither built, owned nor ruled is a
 | 23 | root SMART snapshot arrangement (grantDiskAccess) | unaddressed | R5 |
 | 24 | resource measurement — the stated objective of the rewrite | never measured | R5, in the gate |
 | 25 | §27/§28 surface + hide-group invariants carried from app.js | reopened gate 5's table | R4 |
-| 26 | `answer`-list divergences vs the argued column presets (3 same / 14 differ / 14 absent) | unruled accidents | R2 turns each into an explicit ruling |
-| 27 | `system/identity` never compared (gate 3's "no second implementation" claim was false) | recorded | R2/R3b |
+| 26 | `answer`-list divergences vs the argued column presets (3 same / 14 differ / 14 absent) | each ruled or owed in `ANSWER_RULINGS`, guarded both directions | done at R2 |
+| 27 | `system/identity` never compared (gate 3's "no second implementation" claim was false) | the comparator drives it since R2; its replay seam owed | R2 done / R3b |
 
 #### R1 — structure on the wire (small) — **GATE R1 OPEN, 2026-08-21**
 
@@ -515,9 +515,13 @@ Every known miss, each owned or ruled. A row neither built, owned nor ruled is a
 
 Done in one commit across every implementation, because the half-states were both measured first: a member the reference emits and the ports do not was ninety-two red tests, and a member the ports emit and the corpus lacks is a parity report nobody can read. All twenty collectors emit their kind, the reference seam emits the adapter's own verbatim, thirty corpus variants regenerated with every diff a pure type addition, and the adversaries were re-trued to stay wrong in exactly one way. Rows serve typed, in applied order, asserted at the store (with its reversion drill) and again at the REST surface, because nothing between the two may quietly re-sort.
 
-#### R2 — the guards inverted (small, load-bearing)
+#### R2 — the guards inverted (small, load-bearing) — **GATE R2 OPEN, 2026-08-21**
 
-`se-compare` derives its work list from the reference adapters' own `collections()` — the `SERVES` table dies. It compares all six layers. `test_port_completeness` grows to the register above: every row is built, owned or ruled, checked in both directions. Each `answer`-list divergence becomes an explicit ruling. **Gate R2 (mechanical):** reversion drills show each new check discriminating; the register is fully encoded.
+The authority is one module now — `harness/se_harness/register.py` — and every venue derives from it. `se-compare`'s hand-written `SERVES` table is dead: the work list derives from the reference adapters' own `collections()`, every exclusion is a named register entry that appears in the report itself, and a register that disagrees with the tree — an unregistered gap, a stale owed entry, a port-only collection under the capability freeze — refuses the whole run rather than comparing a subset while looking exhaustive. The live driver's `LIVE` table keeps only the *how* of driving each adapter; its served sets come from the same derivation, and `system` gained the driving entry gate 3 falsely said could not exist, so `system/identity` is asked for at last (row 27 — its replay seam stays owed at R3b, named in `NO_REPLAY_SEAM`). The replay seam's own table is held to the register with that one named excuse.
+
+Six layers. Facts, type, names and relations were already discriminated by the corpus's own diff — now proven by drills rather than assumed — and **order** is the new check: `replay.order_differences` reports where two streams agree on every row and disagree on the sequence, which since R1's ruling is two different pages; it stays silent where membership already differs, so one defect is never spelled twice. Rules cannot be compared on this wire — opinions are collator-evaluated and the reference's judgement is code — so the comparator states exactly that on every run, with what the port declares, instead of a silence that read as coverage.
+
+The 27-row register above is encoded with a probe wherever the tree can attest a row, checked in both directions: a row claiming built whose probe fails is gate 3's shape, and a row claiming owed whose probe passes is how a hole gets forgotten twice. All fourteen `answer`-list divergences against the argued presets are ruled or owed in `ANSWER_RULINGS`, deny-by-default with a staleness guard, and an anti-vacuity check pins that agreement is still measurable at all. Reversion drills, each planted, seen red, reverted: a resurrected `SERVES`; a `collections` member back on a `LIVE` entry; the seam excuse cleared; an owed entry deleted — the conformance suite fails *and* `se-compare` itself refuses with the gap named; a register row flipped to built; the order check's reorder, membership and per-collection cases. Found on the way: both comparator scripts had been committed mode 100644 since creation, invisible because every CI caller invokes them through `sys.executable` — now 100755.
 
 #### R3 — the port, finished (large, in waves)
 

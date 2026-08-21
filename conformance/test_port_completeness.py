@@ -1,197 +1,342 @@
-"""Every collection the shipping product serves is ported, or says why not.
+"""Every known gap between the reference and the rewrite, held to reality.
 
 **This is the guard that was missing, and its absence carried a gate.**
 Gate 3 declared twenty of twenty collectors ported and nineteen of
 nineteen clean. Both were true and neither was the question: a collector
 is "ported" at the granularity of a BINARY, and the parity comparator
-drives a hand-maintained list of collections which had been filled in
+drove a hand-maintained list of collections which had been filled in
 with exactly what the port implements. So both sides were asked only for
 what the port already had, agreed, and reported clean — while eighteen
 collections the reference serves were never asked for at all.
 
 That is this estate's most repeated defect, in the guard built to catch
 it: a check that enumerates what its author thought of and reports
-success about the rest. The comparator's own comment even names the
-shape — "a collection served but never compared is the hole `nft-rules`
-sat in" — and fixes the one instance rather than inverting the rule.
+success about the rest. Found on 2026-08-20 by a person opening the UI
+and saying it looked empty, which no assertion in this suite had managed
+to say.
 
-So this test is **deny-by-default over the reference**. Every collection
-an adapter serves must be ported, or be listed below with a reason. A
-collection that is neither fails, and nothing about adding a collector
-can make it pass quietly.
+Since R2 the authority is ``se_harness.register``, shared with the live
+comparator and the reference driver, and this file holds it to the tree
+in BOTH directions:
 
-Found on 2026-08-20 by a person opening the UI and saying it looked
-empty, which no assertion in this suite had managed to say.
+* the served/ported/registered accounting (``comparator_work`` raises on
+  any unregistered gap, stale entry, or frozen-capability breach — and
+  the drills below feed it worlds wrong in exactly one way each);
+* the 27-row gap register from PLAN's re-baseline — every row built,
+  owed or ruled, with a probe wherever the tree can attest it, checked
+  in the "claims built and is not" direction AND the "claims owed and
+  was built" direction, because the second is how a hole gets forgotten
+  twice;
+* the answer rulings (register row 26) — every divergence between a
+  port's ``answer`` list and the old UI's argued COLUMNS preset carries
+  an explicit ruling, and a ruling with no divergence left to rule fails
+  as stale.
 """
 
 from __future__ import annotations
 
-import json
+import ast
 import re
 from pathlib import Path
 
 import pytest
 
+from se_harness import register
+from se_harness.register import (
+    ANSWER_RULINGS,
+    DELIBERATELY_DROPPED,
+    NO_REPLAY_SEAM,
+    NOT_YET_PORTED,
+    REGISTER,
+    RegisterViolation,
+)
+
 REPO = Path(__file__).resolve().parent.parent
-ADAPTERS = REPO / "src" / "system_explorer" / "agent" / "adapters"
 
-#: Collections the rewrite deliberately does not carry, each with the
-#: ruling that settled it. A reason here is a decision somebody made, not
-#: a note that the work is outstanding — for that, see NOT_YET_PORTED.
-DELIBERATELY_DROPPED: dict[str, str] = {
-    "network/lookups": "lookup is a VERB in the new contract, not a collection "
-                       "(DESIGN 18): the collector serves `lookup` and there is "
-                       "nothing to enumerate.",
-    "storage/lookups": "same ruling as network/lookups.",
-    "system/self": "the collator reports its own cost per collection (DESIGN 19), "
-                   "so a self collection would be a second account of it.",
-}
-
-#: Collections that ARE owed and are not built. Every entry is a hole in
-#: the product a person would notice, and the list is what stops gate 6
-#: being reachable while they are open.
-NOT_YET_PORTED: dict[str, str] = {
-    "network/links": "interfaces on every Linux host; the largest single hole.",
-    "network/routes": "routing table; present on every host.",
-    "network/listening": "listening sockets — half of 'what is exposed'.",
-    "network/resolver": "resolver configuration.",
-    "network/nft-tables": "the table-grained view above nft-chains.",
-    "network/port-exposure": "the joined answer nft + listening produce together.",
-    "network/tailscale": "a discovery source membership depends on (DESIGN 23).",
-    "storage/block-devices": "block devices on every host.",
-    "storage/mounts": "mount points on every host.",
-    "storage/arrays": "md arrays.",
-    "storage/datasets": "ZFS datasets — the level protection joins against.",
-    "system/time": "clock and sync state, which §09's skew work needs.",
-    "system/boot": "boot time and kernel command line.",
-    "system/overview": "the per-host summary the old UI opened on.",
-    "plex/requests": "seerr requests.",
-}
+OLD = register.reference_collections()
+NEW = register.ported_collections()
 
 
-#: Ported collections the live comparator does not drive, each with why.
-#: A ported collection nobody compares is a second way to be wrong that
-#: nothing would catch, so the list is short and every entry is owed work
-#: rather than a decision.
-NOT_YET_COMPARED: dict[str, str] = {
-    "system/identity": "gate 3 recorded that system 'has no second implementation "
-                       "to disagree with'. That is not true — adapters/system.py "
-                       "serves identity — and comparing it needs a replay seam "
-                       "defined for that adapter, which does not exist yet. The "
-                       "claim is corrected in PLAN; the work is owed here.",
-}
-
-
-def old_collections() -> dict[str, set[str]]:
-    """What each shipping adapter serves, read from its own collections()."""
-    out: dict[str, set[str]] = {}
-    for path in sorted(ADAPTERS.glob("*.py")):
-        if path.stem == "__init__":
-            continue
-        text = path.read_text()
-        match = re.search(
-            r"def collections\(self\)[^\n]*\n(?:\s*#[^\n]*\n)*\s*return \[(.*?)\]",
-            text, re.S)
-        if match:
-            out[path.stem] = set(re.findall(r'"([a-z][a-z0-9-]*)"', match.group(1)))
-    return out
-
-
-def ported_collections() -> dict[str, set[str]]:
-    out: dict[str, set[str]] = {}
-    for path in sorted((REPO / "go" / "cmd").glob("se-collect-*/declaration.json")):
-        document = json.loads(path.read_text())
-        out[document["collector"]] = {c["name"] for c in document["collections"]}
-    return out
-
-
-OLD = old_collections()
-NEW = ported_collections()
+# ── the accounting, and the drills that prove it discriminates ────────────
 
 
 def test_the_scan_finds_the_adapters_we_know_about() -> None:
-    """Anti-vacuity. A regex that stopped matching would make the whole
+    """Anti-vacuity. A parse that stopped matching would make the whole
     file pass by measuring nothing — which is the failure this file is
-    about, one level up."""
-    assert len(OLD) >= 18, f"only found collections() in {sorted(OLD)}"
+    about, one level up. register.reference_collections raises below 20
+    itself; this pins the shape further."""
+    assert len(OLD) == 20, sorted(OLD)
     for expected in ("network", "storage", "system", "units"):
         assert OLD.get(expected), f"{expected} adapter's collections() went unread"
     assert len(OLD["network"]) >= 10 and len(OLD["storage"]) >= 6
 
 
-def test_every_served_collection_is_ported_or_accounted_for() -> None:
-    unexplained: list[str] = []
-    for adapter, collections in sorted(OLD.items()):
-        for collection in sorted(collections - NEW.get(adapter, set())):
-            key = f"{adapter}/{collection}"
-            if key not in DELIBERATELY_DROPPED and key not in NOT_YET_PORTED:
-                unexplained.append(key)
-    assert not unexplained, (
-        "these collections are served by the shipping product, are not ported, "
-        "and nothing says why:\n  " + "\n  ".join(unexplained) +
-        "\n\nAdd each to DELIBERATELY_DROPPED with its ruling, or to "
-        "NOT_YET_PORTED as owed work. Silence is what let eighteen of them "
-        "sit behind a green gate."
+def test_the_register_and_the_tree_agree() -> None:
+    """The whole accounting in one call: every reference collection ported
+    or registered, no stale entries, no unserved registrations, no frozen-
+    capability breach. comparator_work raises with every problem named."""
+    work = register.comparator_work()
+    assert set(work) == set(OLD)
+    compared = {f"{collector}/{name}"
+                for collector, entry in work.items()
+                for name in entry["compare"]}
+    declared = {f"{collector}/{name}"
+                for collector, collections in NEW.items()
+                for name in collections}
+    assert compared == declared, (
+        "the compared set and the declared set must be the same set; "
+        f"only-compared {sorted(compared - declared)}, "
+        f"only-declared {sorted(declared - compared)}"
     )
 
 
-def test_the_owed_list_is_honest_in_both_directions() -> None:
-    """A collection listed as owed that HAS been ported is a stale list,
-    and a stale list is how a hole gets forgotten twice."""
-    stale = [key for key in list(NOT_YET_PORTED) + list(DELIBERATELY_DROPPED)
-             if key.split("/")[1] in NEW.get(key.split("/")[0], set())]
-    assert not stale, f"these are ported and still listed as missing: {stale}"
+def test_an_unregistered_gap_refuses_the_run() -> None:
+    """The drill for the hole the eighteen sat in: an adapter collection
+    that is neither ported nor registered must refuse, not vanish."""
+    reference = {k: list(v) for k, v in OLD.items()}
+    reference["network"] = reference["network"] + ["brand-new-collection"]
+    with pytest.raises(RegisterViolation, match="brand-new-collection"):
+        register.comparator_work(reference=reference)
 
 
-def test_the_comparator_drives_every_ported_collection() -> None:
-    """The other half of the hole. Comparing a subset of what the port
-    serves is how `nft-rules` hid; comparing exactly what the port serves
-    is how the eighteen hid. This asserts the first, and the test above
-    asserts the second."""
-    source = (REPO / "harness" / "bin" / "se-compare").read_text()
-    match = re.search(r"SERVES\s*=\s*\{(.*?)\n\}", source, re.S)
-    assert match, "se-compare no longer has a SERVES table"
-    served: dict[str, set[str]] = {}
-    for line in match.group(1).splitlines():
-        entry = re.match(r'\s*"([a-z-]+)":\s*\[(.*?)\]', line)
-        if entry:
-            served[entry.group(1)] = set(re.findall(r'"([a-z0-9-]+)"', entry.group(2)))
-    missing = sorted(
-        f"{collector}/{collection}"
-        for collector, collections in NEW.items()
-        for collection in collections - served.get(collector, set())
-    )
-    unexplained = [key for key in missing if key not in NOT_YET_COMPARED]
-    assert not unexplained, (
-        "the comparator never asks for these ported collections, and nothing "
-        f"says why: {unexplained}"
-    )
+def test_a_stale_owed_entry_refuses_the_run() -> None:
+    """The drill for the direction that lets a hole be forgotten twice: a
+    collection listed as owed that the port now declares must refuse until
+    the register is updated."""
+    ported = {k: dict(v) for k, v in NEW.items()}
+    ported["network"] = dict(ported["network"])
+    ported["network"]["links"] = {"name": "links", "answer": []}
+    with pytest.raises(RegisterViolation, match="network/links"):
+        register.comparator_work(ported=ported)
 
 
-def test_the_uncompared_list_is_not_stale() -> None:
-    source = (REPO / "harness" / "bin" / "se-compare").read_text()
-    match = re.search(r"SERVES\s*=\s*\{(.*?)\n\}", source, re.S)
-    served: dict[str, set[str]] = {}
-    for line in match.group(1).splitlines():
-        entry = re.match(r'\s*"([a-z-]+)":\s*\[(.*?)\]', line)
-        if entry:
-            served[entry.group(1)] = set(re.findall(r'"([a-z0-9-]+)"', entry.group(2)))
-    now_compared = [
-        key for key in NOT_YET_COMPARED
-        if key.split("/")[1] in served.get(key.split("/")[0], set())
-    ]
-    assert not now_compared, (
-        f"these are compared now and still listed as not: {now_compared}"
-    )
+def test_a_port_only_collection_refuses_the_run() -> None:
+    """New capability is frozen until parity (PLAN, the re-baseline): a
+    port declaring a collection the reference never served is a breach,
+    not an extension."""
+    ported = {k: dict(v) for k, v in NEW.items()}
+    ported["storage"] = dict(ported["storage"])
+    ported["storage"]["shiny"] = {"name": "shiny", "answer": []}
+    with pytest.raises(RegisterViolation, match="storage/shiny"):
+        register.comparator_work(ported=ported)
+
+
+def test_a_registration_with_no_subject_refuses_the_run() -> None:
+    """An exclusion naming a collection no adapter serves excludes nothing
+    and rots silently — refused rather than ignored."""
+    reference = {k: list(v) for k, v in OLD.items()}
+    reference["system"] = [c for c in reference["system"] if c != "self"]
+    with pytest.raises(RegisterViolation, match="system/self"):
+        register.comparator_work(reference=reference)
 
 
 @pytest.mark.parametrize("adapter", sorted(OLD))
 def test_no_adapter_lost_more_than_it_kept_without_saying_so(adapter: str) -> None:
     """A per-adapter view, so a single number cannot hide where the holes
     are. network kept 2 of 10 and storage 1 of 6, and both are recorded."""
-    old, new = OLD[adapter], NEW.get(adapter, set())
+    old, new = set(OLD[adapter]), set(NEW.get(adapter, {}))
     if len(new) >= len(old):
         return
     for collection in old - new:
         key = f"{adapter}/{collection}"
         assert key in DELIBERATELY_DROPPED or key in NOT_YET_PORTED, key
+
+
+# ── the three tables one derivation now feeds ─────────────────────────────
+
+
+def _table_collections(path: Path, name: str) -> dict[str, list[str]]:
+    """The `collections` members of a driver table, by AST. Returns {} for
+    a table whose entries carry none — which is the desired end state for
+    LIVE, whose served sets derive from the register."""
+    tree = ast.parse(path.read_text())
+    out: dict[str, list[str]] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == name for t in node.targets
+        ):
+            for key, value in zip(node.value.keys, node.value.values):
+                for k, v in zip(value.keys, value.values):
+                    if getattr(k, "value", None) == "collections":
+                        out[key.value] = ast.literal_eval(v)
+    return out
+
+
+def _table_keys(path: Path, name: str) -> set[str]:
+    tree = ast.parse(path.read_text())
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == name for t in node.targets
+        ):
+            return {key.value for key in node.value.keys}
+    raise AssertionError(f"{path} no longer defines {name}")
+
+
+def test_the_comparator_no_longer_carries_its_own_list() -> None:
+    """SERVES was a second list of what a collector answers for, filled in
+    with what the port implemented. It is dead; the comparator derives its
+    work from the register, and a resurrected table would be the defect
+    returning under its old name."""
+    source = (REPO / "harness" / "bin" / "se-compare").read_text()
+    assert "comparator_work" in source
+    assert re.search(r"^SERVES\s*=", source, re.M) is None, (
+        "se-compare has grown a SERVES table again; the work list derives "
+        "from the register and a hand list beside it WILL drift"
+    )
+
+
+def test_the_live_driver_serves_the_register_not_a_list() -> None:
+    """LIVE's entries say HOW to drive an adapter, never WHICH collections
+    it answers for — that is the register's, and a `collections` member
+    reappearing would be the three-agreeing-lists defect returning."""
+    path = REPO / "harness" / "bin" / "se-live-reference"
+    assert _table_collections(path, "LIVE") == {}, (
+        "a LIVE entry carries its own collections list again"
+    )
+    assert "comparator_work" in path.read_text()
+    assert _table_keys(path, "LIVE") == set(OLD), (
+        "every reference adapter must have a LIVE driving entry — a missing "
+        "one silently excludes that collector from every live comparison"
+    )
+
+
+def test_the_replay_seam_stages_what_the_register_compares() -> None:
+    """The replay seam physically stages payloads per adapter, so its list
+    survives — but held to the register, not to its siblings: SEAM must
+    stage exactly the compared set for every collector that has a seam,
+    and only NO_REPLAY_SEAM may excuse one that does not."""
+    seam = _table_collections(
+        REPO / "harness" / "bin" / "se-reference-collector", "SEAM")
+    work = register.comparator_work()
+    missing = set(work) - set(seam)
+    assert missing == set(NO_REPLAY_SEAM), (
+        f"collectors with no replay seam: {sorted(missing)}; excused: "
+        f"{sorted(NO_REPLAY_SEAM)} — an unexcused gap is a collector the "
+        "corpus venues silently skip, and a stale excuse is owed work "
+        "hidden as a decision"
+    )
+    for collector, staged in sorted(seam.items()):
+        assert sorted(staged) == sorted(work[collector]["compare"]), (
+            f"{collector}: the seam stages {sorted(staged)}, the register "
+            f"compares {sorted(work[collector]['compare'])}"
+        )
+
+
+# ── the gap register: 27 rows, probed in both directions ──────────────────
+
+
+def test_the_register_is_fully_encoded() -> None:
+    """Anti-vacuity for the register itself: 27 rows, numbered without gap
+    or duplicate, every row owned, every probe-less row saying why."""
+    numbers = [row.number for row in REGISTER]
+    assert numbers == list(range(1, 28)), numbers
+    for row in REGISTER:
+        assert row.state in ("built", "owed"), (row.number, row.state)
+        assert row.owner.strip(), row.number
+        assert len(row.coverage.strip()) >= 30, (
+            f"row {row.number}: a probe's coverage — or the reason there is "
+            "none — must actually be stated"
+        )
+
+
+@pytest.mark.parametrize("row", [r for r in REGISTER if r.probe],
+                         ids=lambda r: f"row-{r.number}")
+def test_a_probed_row_matches_the_tree(row) -> None:
+    """Both directions at once. A row claiming built whose probe fails is
+    an over-claim — gate 3's shape. A row claiming owed whose probe passes
+    is a stale register — the shape that let a hole be forgotten twice.
+    Either way the fix is the same: look, then update the register row."""
+    built = row.probe()
+    assert built == (row.state == "built"), (
+        f"register row {row.number} ({row.item}) says {row.state!r} and the "
+        f"tree says {'built' if built else 'not built'}. Coverage of this "
+        f"probe: {row.coverage}"
+    )
+
+
+def test_the_registers_known_rows_read_as_expected() -> None:
+    """Spot pins so a mass edit cannot silently renumber the register: the
+    two R1 rows are built, the resource measurement is owed in R5's gate,
+    and the two R2 rows are built by this phase."""
+    by_number = {row.number: row for row in REGISTER}
+    assert by_number[4].state == "built" and "R1" in by_number[4].owner
+    assert by_number[5].state == "built" and "R1" in by_number[5].owner
+    assert by_number[24].state == "owed" and "gate" in by_number[24].owner
+    assert by_number[26].state == "built" and "R2" in by_number[26].owner
+    assert by_number[27].state == "built" and "R2" in by_number[27].owner
+
+
+# ── the answer rulings (register row 26) ──────────────────────────────────
+
+
+PRESETS = register.old_answer_presets()
+DIVERGENCES = register.answer_divergences()
+
+
+def test_every_preset_names_a_collection_something_serves() -> None:
+    """A COLUMNS route naming a collection no adapter serves would fall out
+    of every other guard here — caught as an orphan instead."""
+    for route in PRESETS:
+        adapter, collection = route.split("/", 1)
+        assert collection in OLD.get(adapter, []), (
+            f"{route}: the old UI carries a preset for a collection no "
+            "adapter serves"
+        )
+
+
+def test_every_answer_divergence_is_ruled() -> None:
+    """Deny-by-default over the argued presets: a ported collection whose
+    answer differs from the old UI's COLUMNS entry — as ordered lists,
+    because several presets argue their order — carries a ruling, or fails.
+    Coverage: presets only; a port collection the old UI had no preset for
+    has nothing argued to diverge from, and an unported preset is owned by
+    its NOT_YET_PORTED entry until the collection exists to judge."""
+    unruled = sorted(set(DIVERGENCES) - set(ANSWER_RULINGS))
+    assert not unruled, (
+        "these answer lists diverge from the old UI's argued preset and "
+        "nothing rules on it:\n  " + "\n  ".join(
+            f"{route}: reference {DIVERGENCES[route]['reference']} vs port "
+            f"{DIVERGENCES[route]['port']}" for route in unruled) +
+        "\n\nAdd each to ANSWER_RULINGS as ruled (with the ground) or owed "
+        "(with the phase). Silence is how fourteen of these sat behind a "
+        "green gate."
+    )
+
+
+def test_every_answer_ruling_still_has_its_divergence() -> None:
+    """The staleness direction: a ruling whose divergence has healed — the
+    port now matches the preset, or the preset moved — is a record of a
+    decision about nothing, and it would hide a NEW divergence arriving
+    under the same route."""
+    stale = sorted(set(ANSWER_RULINGS) - set(DIVERGENCES))
+    assert not stale, f"these rulings have no divergence left to rule: {stale}"
+
+
+def test_every_answer_ruling_is_ruled_or_owed() -> None:
+    """A ruling is a decision with a ground, or owed work with an owner —
+    never a bare acknowledgement, which is the follow-up-promise shape this
+    estate has measured the worth of."""
+    for route, text in sorted(ANSWER_RULINGS.items()):
+        assert text.startswith(("ruled: ", "owed: ")), (
+            f"{route}: a ruling starts with its disposition, "
+            f"got {text[:40]!r}"
+        )
+        if text.startswith("owed: "):
+            assert re.search(r"R[0-9]\w*", text), (
+                f"{route}: owed work names the phase that owns it"
+            )
+
+
+def test_an_agreeing_preset_exists() -> None:
+    """Anti-vacuity for the divergence computation: if NO route matches its
+    preset exactly, the comparison is producing garbage (a parse artefact
+    would differ everywhere) rather than measuring agreement."""
+    agreeing = [
+        route for route in PRESETS
+        if route not in DIVERGENCES
+        and route.split("/", 1)[1] in NEW.get(route.split("/", 1)[0], {})
+    ]
+    assert agreeing, (
+        "no ported collection matches its old preset at all — the parse or "
+        "the mapping has gone blind, and every ruling above is judging noise"
+    )

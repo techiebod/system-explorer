@@ -209,10 +209,13 @@ def diff(expected: list[dict], emitted: list[dict],
          moving: frozenset[str] = frozenset()) -> list[str]:
     """Differences between two streams, named so a reader can act on them.
 
-    Ordering inside a stream is not significant (DESIGN 19 — the collator
-    buffers a collection until it ends), so records are compared by identity
-    rather than by position; a reordering is not a defect and must not read
-    as one. Multiplicity IS significant: emitting one object twice is a real
+    Records are compared by identity rather than by position, so this
+    function is deliberately order-blind — and since the 2026-08-21 ruling
+    (applied order is preserved, DESIGN §19) that blindness is a stated
+    limit, not a licence: an object reordering IS a defect now, and
+    :func:`order_differences` is the check that sees it. The two stay
+    separate so a parity report and an order report cannot bury each other.
+    Multiplicity IS significant: emitting one object twice is a real
     collector bug, so counts are compared, not just key sets.
 
     `moving` names facts whose VALUE may legitimately differ between the two
@@ -310,6 +313,52 @@ def _fact_differences(key: tuple, want: object, got: object,
         elif not typed_equal(a, b):
             out.append(f"{key}: facts.{name}: expected {a!r}, got {b!r}")
     return out
+
+
+def order_differences(expected: list[dict], emitted: list[dict]) -> list[str]:
+    """Where the emitted stream serves its objects in a different order.
+
+    Applied order is preserved end to end since the 2026-08-21 ruling
+    (DESIGN §19): the store keeps the emission sequence and serves it, so
+    the order a collector emits a collection in IS the order a page shows —
+    the systemctl-status order, the first-match-wins rule order. Two streams
+    that agree on every row and disagree on the sequence are therefore two
+    different pages, and :func:`diff` — order-blind by design — cannot say
+    so. This can, and only this.
+
+    Compared per collection, by object name, and ONLY where both sides agree
+    on the multiset of names: a membership or multiplicity disagreement is
+    diff()'s to report, and repeating it here as an order problem would bury
+    the parity report under a second spelling of the same defect.
+
+    Consumed by the live comparator. The corpus judge stays order-blind
+    deliberately: a ported collector's corpus is captured from its own
+    emissions, so order agreement there is true by construction and a check
+    would be reporting success it had not established — the live comparator,
+    where the reference emits one sequence and the port another, is the tier
+    where order can actually be wrong.
+    """
+    def sequence(records: list[dict]) -> dict[str, list[str]]:
+        out: dict[str, list[str]] = {}
+        for record in records:
+            if record.get("record") == "object":
+                out.setdefault(str(record.get("collection")), []).append(
+                    str(record.get("name")))
+        return out
+
+    want, got = sequence(expected), sequence(emitted)
+    problems: list[str] = []
+    for collection in sorted(set(want) & set(got)):
+        a, b = want[collection], got[collection]
+        if Counter(a) != Counter(b) or a == b:
+            continue
+        at = next(i for i, (x, y) in enumerate(zip(a, b)) if x != y)
+        problems.append(
+            f"{collection}: applied order diverges at position {at}: "
+            f"expected {a[at]!r}, emitted {b[at]!r} — the rows agree and the "
+            "page they make does not (DESIGN 19, applied order)"
+        )
+    return problems
 
 
 def _measured(value: object) -> bool:

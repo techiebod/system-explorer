@@ -260,80 +260,142 @@ def test_the_accepted_divergence_names_only_facts_the_ruling_covers() -> None:
     )
 
 
-def test_the_comparator_drives_every_collection_the_seam_serves() -> None:
-    """SERVES is a second list of what a collector answers for, and a second
-    list is a second thing to disagree with the first. Held to the replay
-    seam's table, which is the authority the corpus coverage check already
-    reads."""
-    import ast
-    from pathlib import Path
+def test_the_comparator_derives_its_work_from_the_register() -> None:
+    """SERVES — a second list of what a collector answers for, filled in
+    with what the port implemented — is dead. The work list derives from
+    the shared register (whose own drills live in test_port_completeness),
+    and the comparator refuses to start on an inconsistent one rather than
+    comparing a subset while looking exhaustive. Here: the derived work is
+    what compare() actually receives, and the excluded rows reach the
+    REPORT — an exclusion only visible in a source file is one a reader of
+    the report cannot see."""
+    from se_harness import register
 
-    root = Path(__file__).resolve().parent.parent
+    work = register.comparator_work()
+    assert set(work) == set(register.reference_collections())
+    assert "identity" in work["system"]["compare"], (
+        "register row 27: the derived work list is what finally drives "
+        "system/identity"
+    )
+    assert "owed: " in work["network"]["excluded"]["links"]
+    assert work["plex"]["excluded"] == {
+        "requests": "owed: " + register.NOT_YET_PORTED["plex/requests"]}
 
-    def table(path: Path, name: str) -> dict:
-        tree = ast.parse(path.read_text())
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Assign):
-                for target in node.targets:
-                    if isinstance(target, ast.Name) and target.id == name:
-                        return ast.literal_eval(node.value)
-        raise AssertionError(f"{path} no longer defines {name}")
+    rendered = compare.render({
+        "collector": "network",
+        "collections": work["network"]["compare"],
+        "not_compared": work["network"]["excluded"],
+        "nothing_to_compare": "stub — stop before the subprocess half",
+    })
+    for name in work["network"]["excluded"]:
+        assert f"not compared: {name}" in rendered, rendered
 
-    # The seam's entry is a dict of specs; only the collections matter here.
-    seam_src = (root / "harness" / "bin" / "se-reference-collector").read_text()
-    seam_tree = ast.parse(seam_src)
-    seam: dict[str, list[str]] = {}
-    for node in ast.walk(seam_tree):
-        if isinstance(node, ast.Assign) and any(
-            isinstance(t, ast.Name) and t.id == "SEAM" for t in node.targets
-        ):
-            for key, value in zip(node.value.keys, node.value.values):
-                for k, v in zip(value.keys, value.values):
-                    if getattr(k, "value", None) == "collections":
-                        seam[key.value] = ast.literal_eval(v)
 
-    serves = table(root / "harness" / "bin" / "se-compare", "SERVES")
-    assert serves == seam, (
-        "the comparator's SERVES and the replay seam's collections must name "
-        f"the same set: comparator {serves}, seam {seam}. A collection served "
-        "and never compared is a hole with a clean report over it"
+def test_a_collector_with_everything_excluded_says_so_and_stays_clean() -> None:
+    """The empty-compare shape must be its own visible state: comparing
+    nothing is not agreement, and reporting it as bare clean would be
+    absence rendered as health."""
+    result = compare.compare(
+        "storage", {"compare": [], "excluded": {"pools": "owed: stub"}},
+        twice=False)
+    assert result["clean"] is True
+    assert "nothing_to_compare" in result
+    assert result["not_compared"] == {"pools": "owed: stub"}
+
+
+# ── the order layer (register row 5's parity half, new at R2) ─────────────
+
+
+def _objects(names: list[str], collection: str = "pools") -> list[dict]:
+    return [{"record": "object", "collection": collection, "name": name,
+             "facts": {}, "at": 1.0} for name in names]
+
+
+def test_matching_order_is_clean() -> None:
+    """The control, so the drills below cannot pass by the check being
+    unconditionally red."""
+    from se_harness import replay
+
+    assert replay.order_differences(_objects(["a", "b", "c"]),
+                                    _objects(["a", "b", "c"])) == []
+
+
+def test_a_reordered_collection_is_named_with_its_first_divergence() -> None:
+    """The drill: same rows, different sequence. diff() is order-blind by
+    design, so without this check two different pages would compare clean —
+    and applied order IS the page since the 2026-08-21 ruling."""
+    from se_harness import replay
+
+    want, got = _objects(["a", "b", "c"]), _objects(["a", "c", "b"])
+    assert replay.diff(want, got) == [], "precondition: diff stays order-blind"
+    problems = replay.order_differences(want, got)
+    assert len(problems) == 1 and "position 1" in problems[0], problems
+    assert "'b'" in problems[0] and "'c'" in problems[0], problems
+
+
+def test_a_membership_difference_is_not_repeated_as_an_order_problem() -> None:
+    """A missing or extra row is diff()'s to report; spelling it again as
+    an order problem would bury the parity report under a second account of
+    one defect."""
+    from se_harness import replay
+
+    assert replay.order_differences(_objects(["a", "b", "c"]),
+                                    _objects(["a", "c"])) == []
+    assert replay.diff(_objects(["a", "b", "c"]), _objects(["a", "c"])), (
+        "precondition: the membership difference is diff()'s finding"
     )
 
 
-def test_the_live_reference_serves_what_the_replay_reference_serves() -> None:
-    """The two references are one implementation reached two ways. If the live
-    one served a different set, the comparator would be diffing a port against
-    a reference the corpus was never built from."""
-    import ast
-    from pathlib import Path
+def test_order_is_judged_per_collection() -> None:
+    from se_harness import replay
 
-    root = Path(__file__).resolve().parent.parent
-    tree = ast.parse((root / "harness" / "bin" / "se-live-reference").read_text())
-    live_table: dict[str, list[str]] = {}
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Assign) and any(
-            isinstance(t, ast.Name) and t.id == "LIVE" for t in node.targets
-        ):
-            for key, value in zip(node.value.keys, node.value.values):
-                for k, v in zip(value.keys, value.values):
-                    if getattr(k, "value", None) == "collections":
-                        live_table[key.value] = ast.literal_eval(v)
+    want = _objects(["a", "b"], "pools") + _objects(["x", "y"], "datasets")
+    got = _objects(["a", "b"], "pools") + _objects(["y", "x"], "datasets")
+    problems = replay.order_differences(want, got)
+    assert len(problems) == 1 and problems[0].startswith("datasets:"), problems
 
-    seam_tree = ast.parse(
-        (root / "harness" / "bin" / "se-reference-collector").read_text())
-    seam: dict[str, list[str]] = {}
-    for node in ast.walk(seam_tree):
-        if isinstance(node, ast.Assign) and any(
-            isinstance(t, ast.Name) and t.id == "SEAM" for t in node.targets
-        ):
-            for key, value in zip(node.value.keys, node.value.values):
-                for k, v in zip(value.keys, value.values):
-                    if getattr(k, "value", None) == "collections":
-                        seam[key.value] = ast.literal_eval(v)
 
-    assert live_table == seam, (
-        f"live reference serves {live_table}, replay reference serves {seam}"
-    )
+# ── the names and type layers: diff() must discriminate on both ───────────
+
+
+def test_a_dropped_names_member_is_a_named_difference() -> None:
+    """The names layer (register row 6) rides the object record, and a port
+    that stopped emitting it would sever every stable-identity join. Proven
+    here to be diff()'s finding, both dropped and altered, so the layer
+    cannot silently leave the comparison."""
+    from se_harness import replay
+
+    def one(names):
+        record = {"record": "object", "collection": "pools", "name": "tank",
+                  "facts": {}, "at": 1.0}
+        if names:
+            record["names"] = names
+        return [record]
+
+    stable = {"stable": {"guid": ["123"]}}
+    assert replay.diff(one(stable), one(stable)) == []
+    dropped = replay.diff(one(stable), one(None))
+    assert dropped and any("names" in d for d in dropped), dropped
+    altered = replay.diff(one(stable), one({"stable": {"guid": ["999"]}}))
+    assert altered and any("names" in d for d in altered), altered
+
+
+def test_a_changed_type_is_a_named_difference() -> None:
+    """The type layer (register row 4): type is part of a record's identity,
+    so a port emitting the wrong kind — or none — must surface, not pair."""
+    from se_harness import replay
+
+    def one(kind):
+        record = {"record": "object", "collection": "scsi", "name": "0:0:0:0",
+                  "facts": {}, "at": 1.0}
+        if kind:
+            record["type"] = kind
+        return [record]
+
+    assert replay.diff(one("disk"), one("disk")) == []
+    for wrong in ("expander", None):
+        problems = replay.diff(one("disk"), one(wrong))
+        assert problems, f"type {wrong!r} compared equal to 'disk'"
 
 
 def test_the_live_reference_refuses_to_be_used_as_a_replay() -> None:

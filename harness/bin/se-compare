@@ -40,33 +40,20 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO / "harness"))
 
-from se_harness import live, replay  # noqa: E402
+from se_harness import live, register, replay  # noqa: E402
 
-# Which collections each collector is asked for. The comparator drives the
-# WHOLE served set rather than one collection, because a two-collection request
-# is the only shape that exercises cross-collection resolution — and because a
-# collection served but never compared is the hole `nft-rules` sat in.
-SERVES = {
-    "storage": ["pools"],
-    "resources": ["workloads"],
-    "network": ["nft-chains", "nft-rules"],
-    "vms": ["domains"],
-    "packages": ["packages"],
-    "nix": ["generations"],
-    "docker": ["containers", "volumes", "networks"],
-    "traefik": ["overview", "routers", "services"],
-    "unbound": ["daemon"],
-    "kea": ["daemon", "subnets", "reservations", "leases"],
-    "logs": ["journal"],
-    "bazarr": ["instance"],
-    "servarr": ["apps", "health", "queue", "history"],
-    "downloaders": ["clients", "transfers"],
-    "hardware": ["platform", "pci", "usb", "scsi", "nvme"],
-    "units": ["units"],
-    "paperless": ["instance"],
-    "plex": ["server", "libraries", "sessions"],
-    "protection": ["targets", "jobs", "destinations"],
-}
+# The work list DERIVES from the reference adapters' own collections(),
+# through the shared register (R2, 2026-08-21). The hand-written SERVES
+# table this replaces was filled in with exactly what the port implemented,
+# so both sides were asked only for what the port already had — eighteen
+# collections the reference serves were never asked for at all, behind a
+# clean report. Now: every reference collection is either compared or
+# excluded by a named register entry, the excluded ones appear in the
+# report, and a register that disagrees with the tree refuses to run at
+# all (register.RegisterViolation) rather than comparing a subset while
+# looking exhaustive. The comparator still drives each collector's WHOLE
+# compared set in one request, because a multi-collection request is the
+# only shape that exercises cross-collection resolution.
 
 REFERENCE = REPO / "harness" / "bin" / "se-live-reference"
 
@@ -120,12 +107,12 @@ def is_ported(collector: str) -> bool:
     """Whether a Go collector exists to compare the reference against.
 
     NOT PORTED is a third state beside clean and failed, and it has to be its
-    own state for the fleet phase to be legible: SERVES names every collection
-    the replay seam can serve — which the subset guard requires, so no
-    collector can be quietly left out of the report — and porting lags capture
-    by design. Collapsing "no binary yet" into a failure would make the gate-3
-    report read as seventeen defects, and collapsing it into a pass would be
-    the far worse direction: silence over a collector nothing has compared.
+    own state for the report to be legible: the work list derives from the
+    reference adapters, so no collector can be quietly left out — but a
+    checkout without built binaries is a real venue this tool runs in.
+    Collapsing "no binary here" into a failure would make the report read as
+    twenty defects on any such machine, and collapsing it into a pass would
+    be the far worse direction: silence over a collector nothing compared.
     """
     return port_binary(collector).exists()
 
@@ -213,9 +200,22 @@ def _without(record: dict, facts: frozenset) -> dict:
     return {**record, "facts": kept}
 
 
-def compare(collector: str, twice: bool) -> dict:
-    collections = SERVES[collector]
+def compare(collector: str, work: dict, twice: bool) -> dict:
+    collections = work["compare"]
     result: dict = {"collector": collector, "collections": collections}
+    if work["excluded"]:
+        # Every reference collection this run does NOT drive, with the
+        # register entry that says why. Reported on every run, because an
+        # exclusion that is only visible in a source file is an exclusion
+        # a reader of the report cannot see.
+        result["not_compared"] = dict(work["excluded"])
+    if not collections:
+        result["nothing_to_compare"] = (
+            "every collection this adapter serves is excluded by the "
+            "register; the entries above say why"
+        )
+        result["clean"] = True
+        return result
 
     if not is_ported(collector):
         result["not_ported"] = (
@@ -267,6 +267,29 @@ def compare(collector: str, twice: bool) -> dict:
             if name in accepted["facts"]
         })
     result["differences"] = replay.diff(reference, port, moving)
+    # The order layer, which diff() is deliberately blind to: applied order
+    # is preserved end to end (DESIGN 19, ruled 2026-08-21), so two streams
+    # that agree on every row and disagree on the sequence are two different
+    # pages. Reported only where the rows themselves agree — a membership
+    # disagreement is already in `differences` and must not be spelled twice.
+    result["order"] = replay.order_differences(reference, port)
+    # The rules layer, stated rather than compared, because it cannot be
+    # compared here and saying nothing would report coverage this tool does
+    # not have: opinions never reach the collect stream — the collator
+    # evaluates them from the declaration's rule tables — and the reference's
+    # opinions are code, not data. What CAN be read is whether the port
+    # declares any tables at all; parity of judgement is register row 8,
+    # owed R3c/R3d.
+    declared = register.ported_collections().get(collector, {})
+    result["rules"] = {
+        "port_declares": {
+            name: len(c.get("rules") or []) for name, c in declared.items()
+            if name in collections},
+        "coverage": (
+            "declared rule tables counted only; opinions are collator-"
+            "evaluated and never on this wire, and the reference's judgement "
+            "is code — parity of judgement is register row 8"),
+    }
 
     # Clock truth, per side. The REFERENCE is judged too — it is the thing
     # every corpus pair is generated from, and a reference that had stopped
@@ -316,8 +339,8 @@ def compare(collector: str, twice: bool) -> dict:
 
     result["clean"] = not any(
         result.get(key) for key in (
-            "differences", "reference_clock", "port_clock", "port_stream",
-            "reference_advanced", "port_advanced",
+            "differences", "order", "reference_clock", "port_clock",
+            "port_stream", "reference_advanced", "port_advanced",
         )
     )
     return result
@@ -365,6 +388,11 @@ def _counts(records: list[dict]) -> dict[str, int]:
 
 def render(result: dict) -> str:
     lines = [f"── {result['collector']} ({', '.join(result['collections'])})"]
+    for collection, reason in sorted(result.get("not_compared", {}).items()):
+        lines.append(f"  · not compared: {collection} — {reason}")
+    if "nothing_to_compare" in result:
+        lines.append(f"  · {result['nothing_to_compare']}")
+        return "\n".join(lines)
     if "not_ported" in result:
         lines.append(f"  · not ported: {result['not_ported']}")
         return "\n".join(lines)
@@ -393,6 +421,7 @@ def render(result: dict) -> str:
     for label, key in (
         ("port stayed out of the accepted divergence", "port_emitted_accepted"),
         ("parity", "differences"),
+        ("applied order", "order"),
         ("reference clock", "reference_clock"),
         ("port clock", "port_clock"),
         ("port stream", "port_stream"),
@@ -410,6 +439,12 @@ def render(result: dict) -> str:
             lines.append(f"      - {problem}")
         if len(problems) > 20:
             lines.append(f"      … {len(problems) - 20} more")
+    if "rules" in result:
+        declared = result["rules"]["port_declares"]
+        lines.append("  · rules: " + (
+            ", ".join(f"{name} declares {n}" for name, n in sorted(declared.items())
+                      if n)
+            or "no rule tables declared") + f" — {result['rules']['coverage']}")
     if "cross_boot" in result:
         lines.append(f"  · cross-boot: {result['cross_boot']}")
     if "stderr" in result:
@@ -422,18 +457,31 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("collectors", nargs="*", default=None,
-                        help=f"which to compare; default all of {sorted(SERVES)}")
+                        help="which to compare; default every collector the "
+                             "reference adapters serve")
     parser.add_argument("--twice", action="store_true",
                         help="run each twice and prove the stamps advance")
     parser.add_argument("--json", action="store_true", help="machine-readable report")
     args = parser.parse_args()
 
-    chosen = args.collectors or sorted(SERVES)
-    unknown = [c for c in chosen if c not in SERVES]
-    if unknown:
-        raise SystemExit(f"unknown collector(s) {unknown}; known: {sorted(SERVES)}")
+    # Derived, and derived FIRST: a register that disagrees with the tree —
+    # an unregistered gap, a stale owed entry, a port collection the
+    # reference never served — refuses the whole run before a single
+    # collector is compared. A comparator that ran anyway would report
+    # parity about a subset while looking exhaustive, which is the exact
+    # shape this derivation replaced.
+    try:
+        work = register.comparator_work()
+    except register.RegisterViolation as exc:
+        raise SystemExit(f"refusing to compare: {exc}") from exc
 
-    results = [compare(collector, args.twice) for collector in chosen]
+    chosen = args.collectors or sorted(work)
+    unknown = [c for c in chosen if c not in work]
+    if unknown:
+        raise SystemExit(f"unknown collector(s) {unknown}; known: {sorted(work)}")
+
+    results = [compare(collector, work[collector], args.twice)
+               for collector in chosen]
     if args.json:
         print(json.dumps(results, indent=2, sort_keys=True))
     else:

@@ -57,26 +57,29 @@ if os.environ.get("SE_REPLAY_DIR"):
         "must never be confused for one another."
     )
 
+from se_harness import register  # noqa: E402
 from system_explorer.agent import envelope as env  # noqa: E402
 from system_explorer.agent.adapters import (  # noqa: E402
     bazarr, docker, downloaders, hardware, kea, logs, network, nix, packages,
-    paperless, plex, protection, resources, servarr, storage, traefik,
-    unbound, units, vms,
+    paperless, plex, protection, resources, servarr, storage, system,
+    traefik, unbound, units, vms,
 )
 
-# The collections each adapter serves live, and the capability attributes the
-# comparator may need to set. Deliberately the same shape as the replay seam's
-# table so a reader can hold both in one head — but with no acquisitions to
-# redirect, because nothing is redirected.
+# HOW each adapter is driven live: the module, the capability attributes the
+# comparator may need to set, and the per-collector conditions. WHICH
+# collections it answers for is deliberately not here — that derives from
+# the adapter's own collections() through the shared register (R2,
+# 2026-08-21), so this table cannot be a second list that agrees with the
+# comparator and disagrees with the reference, which is exactly what its
+# hand-written `collections` members spent gate 3 being.
 LIVE = {
     "storage": {"module": storage, "adapter": storage.Adapter,
-                "interface": "zpool", "collections": ["pools"]},
+                "interface": "zpool"},
     # The tree-shaped one. Nothing is redirected here, so `_walk` and
     # `_read_text` read this machine's own cgroupfs — which is the point of
     # this tool and the exact thing its replay twin refuses.
     "resources": {"module": resources, "adapter": resources.Adapter,
-                  "interface": "cgroup v2 hierarchy",
-                  "collections": ["workloads"]},
+                  "interface": "cgroup v2 hierarchy"},
     "network": {"module": network, "adapter": network.Adapter,
                 # No `nft` on PATH is the closed storage reading exactly: the
                 # userspace tool and the kernel tables ship together, so a host
@@ -84,7 +87,7 @@ LIVE = {
                 # must commit zero — or a host that loses nftables serves its
                 # old chains for ever.
                 "not_applicable": lambda a: shutil.which("nft") is None,
-                "interface": "nft", "collections": ["nft-chains", "nft-rules"]},
+                "interface": "nft"},
     "vms": {"module": vms, "adapter": vms.Adapter,
             # The read-only socket, which is what the PORT tests and the only
             # thing either implementation opens. A host with no libvirt socket
@@ -93,9 +96,9 @@ LIVE = {
             # gap in the agent, not a statement about the machine, and it must
             # not retire a hypervisor's domains.
             "not_applicable": lambda a: not os.path.exists(vms.SOCKET_RO),
-            "interface": "libvirt", "collections": ["domains"]},
+            "interface": "libvirt"},
     "packages": {"module": packages, "adapter": packages.Adapter,
-                 "interface": "package manager", "collections": ["packages"]},
+                 "interface": "package manager"},
     # LIVE, the deltas are ON — this is the shipping adapter reading a real
     # machine, and turning them off here would make the two sides agree by
     # construction on the one thing the ruling says they disagree about. The
@@ -120,38 +123,34 @@ LIVE = {
             # MCP; two implementations answering one condition with two
             # sentences is the same defect as the vms address note, found in
             # the same run.
-            "interface": "nix system closure", "collections": ["generations"]},
+            "interface": "nix system closure"},
     "docker": {"module": docker, "adapter": docker.Adapter,
                # The socket's ABSENCE only. A socket that exists and refuses is
                # a different reading — permission, or a daemon that is down —
                # and neither may retire anything, so neither reaches here.
                "not_applicable": lambda a: not os.path.exists(docker.SOCKET),
-               "interface": "docker socket",
-               "collections": ["containers", "volumes", "networks"]},
+               "interface": "docker socket"},
     "traefik": {"module": traefik, "adapter": traefik.Adapter,
                 "receipts": lambda a: a.url is None,
-                "interface": "traefik api",
-                "collections": ["overview", "routers", "services"]},
+                "interface": "traefik api"},
     "unbound": {"module": unbound, "adapter": unbound.Adapter,
                 "receipts": lambda a: a.socket_path is None,
-                "interface": "unbound control socket",
-                "collections": ["daemon"]},
+                "interface": "unbound control socket"},
     # Addressed by environment, like every HTTP-interface adapter here:
     # SE_BAZARR_URL and SE_BAZARR_API_KEY are read in __init__, so the
     # comparator must be given the same receipts the port is or the two sides
     # are answering about different instances.
     "bazarr": {"module": bazarr, "adapter": bazarr.Adapter,
                "receipts": lambda a: a.url is None,
-               "interface": "bazarr api", "collections": ["instance"]},
+               "interface": "bazarr api"},
     "paperless": {"module": paperless, "adapter": paperless.Adapter,
                   "receipts": lambda a: a.url is None,
-                  "interface": "paperless api", "collections": ["instance"]},
-    # THREE collections, matching the replay seam rather than the adapter's
-    # four. `requests` is seerr's, and it is absent from both sides for the
-    # same reason: seerr's first-run setup authenticates against a Plex
-    # ACCOUNT. Listing it here would make the comparator report a defect on
-    # every run against a host with no seerr — and against one WITH seerr it
-    # would compare a collection no corpus can stage.
+                  "interface": "paperless api"},
+    # `requests` is seerr's and is excluded by its register entry
+    # (NOT_YET_PORTED, plex/requests), not by anything here: seerr's
+    # first-run setup authenticates against a Plex ACCOUNT, so no corpus can
+    # stage it, and the exclusion now appears in the comparator's own report
+    # rather than living silently in a table.
     "plex": {"module": plex, "adapter": plex.Adapter,
              "receipts": lambda a: a.plex_url is None and a.seerr_url is None,
              # The one adjudicated per-collection receipt gap: a Plex that IS
@@ -163,8 +162,7 @@ LIVE = {
              "gated": lambda a, c: "unavailable" if (
                  c in ("libraries", "sessions")
                  and a.plex_url is not None and not a._plex_token_set) else None,
-             "interface": "plex api",
-             "collections": ["server", "libraries", "sessions"]},
+             "interface": "plex api"},
     # Reads files this host publishes, so live means literally that — and it
     # is the one adapter here whose LIVE run is the interesting one: the
     # replayed corpus is a single host's documents, while the estate's
@@ -176,8 +174,7 @@ LIVE = {
                    # a manifest that exists and will not parse is a reading
                    # nobody took and stays out of this branch.
                    "not_applicable": lambda a: not os.path.exists(protection.MANIFEST),
-                   "interface": "homelab protection surfaces",
-                   "collections": ["targets", "jobs", "destinations"]},
+                   "interface": "homelab protection surfaces"},
     "kea": {"module": kea, "adapter": kea.Adapter,
             "receipts": lambda a: a.socket_path is None,
             # lease4-get-all lives in libdhcp_lease_cmds, a HOOK library, so
@@ -188,8 +185,7 @@ LIVE = {
             # not offered by this server and will not be until it is
             # reconfigured, which is not a transient failure to retry.
             "gated": lambda a, c: "unsupported" if c == "leases" else None,
-            "interface": "kea control socket",
-            "collections": ["daemon", "subnets", "reservations", "leases"]},
+            "interface": "kea control socket"},
     # The one adapter here addressed entirely by environment: SE_TRANSMISSION_
     # URL, SE_SABNZBD_URL and SE_SABNZBD_API_KEY decide which client rows
     # exist at all. Nothing is pinned — reading the host IS the point on this
@@ -197,24 +193,27 @@ LIVE = {
     # agent would, or the two sides are answering about different deployments.
     "downloaders": {"module": downloaders, "adapter": downloaders.Adapter,
                     "receipts": lambda a: a.transmission_url is None and a.sab_url is None,
-                    "interface": "download client",
-                    "collections": ["clients", "transfers"]},
+                    "interface": "download client"},
     # Five collections off one tree, and the comparator drives all five: the
     # walk that finds a scsi host is the walk that resolves its PCI function,
     # so a request naming one collection would leave the sharing untested.
     "hardware": {"module": hardware, "adapter": hardware.Adapter,
-                 "interface": "sysfs",
-                 "collections": ["platform", "pci", "usb", "scsi", "nvme"]},
+                 "interface": "sysfs"},
     # The one adapter whose acquisition is a shared singleton rather than a
-    # module function or an instance fetcher. Nothing is redirected here, so
-    # the entry names only what it serves — but `units.BUS` is what the replay
-    # seam replaces, and this row exists so the two references are held to the
-    # same served set: a live comparison whose reference read a different
-    # collection than the corpus did would diff a port against an answer nobody
-    # captured.
+    # module function or an instance fetcher. Nothing is redirected here —
+    # `units.BUS` is what the replay seam replaces — and the served set comes
+    # from the register like every other row, so the two references cannot
+    # drift apart on what a collector answers for.
     "units": {"module": units, "adapter": units.Adapter,
-              "interface": "systemd on the system bus",
-              "collections": ["units"]},
+              "interface": "systemd on the system bus"},
+    # Added at R2 (register row 27): gate 3 recorded that `system` had "no
+    # second implementation to disagree with", which was false — the shipping
+    # adapter serves identity — and nothing compared it until the work list
+    # started deriving from the reference. Reads the host's own identity
+    # files; no gate, because a machine that cannot answer for its hostname
+    # and os-release is not a condition to bridge, it is a run to fail.
+    "system": {"module": system, "adapter": system.Adapter,
+               "interface": "host identity files"},
     # The one adapter with no acquire(): a bounded journal query has no "all
     # items" to materialise, so `page` names the collect() call to drive and
     # emission.materialise dispatches on it. Declared here as well as in the
@@ -222,7 +221,7 @@ LIVE = {
     # question — a live comparison whose reference read a different page than
     # the corpus did would diff a port against an answer nobody captured.
     "logs": {"module": logs, "adapter": logs.Adapter,
-             "interface": "systemd journal", "collections": ["journal"],
+             "interface": "systemd journal",
              "page": {"query": {}, "limit": None, "cursor": None}},
     # The one adapter that fronts a FLEET. Nothing is pinned here on purpose:
     # this tool reads the live host, so the instances it observes are the ones
@@ -231,8 +230,7 @@ LIVE = {
     # and exactly the half this side exists to read.
     "servarr": {"module": servarr, "adapter": servarr.Adapter,
                 "receipts": lambda a: not a.specs,
-                "interface": "servarr api",
-                "collections": ["apps", "health", "queue", "history"]},
+                "interface": "servarr api"},
 }
 
 
@@ -288,14 +286,23 @@ def run(collector: str, generations: dict[str, int]) -> None:
     if spec is None:
         fail(f"unknown collector {collector!r}; known: {sorted(LIVE)}")
 
-    unservable = [c for c in generations if c not in spec["collections"]]
+    # The served set derives from the adapter's own collections() through
+    # the shared register, exactly as the comparator's work list does — one
+    # derivation, so the asking side and the answering side cannot disagree
+    # about what a collector answers for. A register inconsistency fails
+    # here for the same reason the comparator refuses to start on one.
+    try:
+        servable = register.comparator_work()[collector]["compare"]
+    except register.RegisterViolation as exc:
+        fail(f"refusing to serve on an inconsistent register: {exc}")
+    unservable = [c for c in generations if c not in servable]
     if unservable:
         # Declining would be the collector contract's answer, and this is not
         # a collector — it is the reference one is measured against. A request
         # naming a collection it does not serve is a comparator misconfigured,
         # and answering it would silently compare nothing.
         fail(
-            f"{collector}: serves {spec['collections']}, asked for {unservable}"
+            f"{collector}: serves {servable}, asked for {unservable}"
         )
 
     started_cpu, started_wall = time.process_time(), time.monotonic()
