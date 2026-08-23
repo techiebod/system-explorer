@@ -378,6 +378,198 @@
       ]
     },
     {
+      "name": "datasets",
+      "question": "how full is each dataset, and how is it mounted?",
+      "prefix": "dataset",
+      "freshness": "5m",
+      "perishability": "reconstructible",
+      "answer": [
+        "UsedBytes",
+        "SnapshotUsedBytes",
+        "AvailBytes",
+        "UsePercent",
+        "Mountpoint",
+        "ReadOnly",
+        "Mounted"
+      ],
+      "ceiling": {
+        "records": 8192,
+        "bytes": 8388608
+      },
+      "facts": {
+        "UsedBytes": {
+          "type": "integer",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/datasets/*/properties/used",
+          "sentence": "Bytes this dataset and its descendants consume."
+        },
+        "AvailBytes": {
+          "type": "integer",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/datasets/*/properties/available",
+          "sentence": "Bytes this dataset could still grow into — bounded by its quota where one is set, else by the pool."
+        },
+        "UsePercent": {
+          "type": "integer",
+          "temperament": "gauge",
+          "kind": "derived",
+          "derived_from": [
+            "UsedBytes",
+            "AvailBytes"
+          ],
+          "discloses": "nothing",
+          "from": "/datasets/*/properties",
+          "sentence": "Share of what this dataset could grow into, quota- or pool-bounded — the same gauge the mounts carry, so the two pages read alike."
+        },
+        "SnapshotUsedBytes": {
+          "type": "integer",
+          "temperament": "gauge",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/datasets/*/properties/usedbysnapshots",
+          "sentence": "Bytes held only by snapshots — space a destroy of live data would not return."
+        },
+        "SnapshotsLookup": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": [
+            "UsedBytes"
+          ],
+          "discloses": "content",
+          "from": "/datasets/*/name",
+          "sentence": "A door, not a datum: the id a consumer follows to this subsystem's lookups collection for the dataset's snapshot list."
+        },
+        "Mountpoint": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/datasets/*/properties/mountpoint",
+          "sentence": "Where this dataset mounts, in zfs's own rendering."
+        },
+        "MountpointSource": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/datasets/*/properties/mountpoint/source",
+          "sentence": "Where the mountpoint setting comes from: local, default, or inherited — naming the ancestor it inherits from, because that is where an operator changes it."
+        },
+        "CanMount": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/datasets/*/properties/canmount",
+          "sentence": "Whether this dataset may mount at all: `noauto` is the spelling the estate's own fileSystems discipline requires, so this is the fact that audit reads."
+        },
+        "CanMountSource": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/datasets/*/properties/canmount/source",
+          "sentence": "Where the canmount setting comes from."
+        },
+        "Mounted": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/datasets/*/properties/mounted",
+          "sentence": "Whether the dataset is mounted right now, zfs's own yes/no."
+        },
+        "ReadOnly": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/datasets/*/properties/readonly",
+          "sentence": "The stored readonly property. Absent where the agent's own sandbox masks it — see ReadOnlyUnobservable."
+        },
+        "ReadOnlySource": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/datasets/*/properties/readonly/source",
+          "sentence": "Where the readonly value comes from. `temporary` is the one that matters: it means a mount option is overriding the stored property in the reader's own namespace."
+        },
+        "ReadOnlyUnobservable": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "derived",
+          "derived_from": [
+            "ReadOnlySource"
+          ],
+          "discloses": "nothing",
+          "from": "/datasets/*/properties/readonly/source",
+          "sentence": "Present where the stored readonly property cannot be read truthfully: libzfs derives it from the QUERYING process's mount table, so under ProtectSystem=strict every mounted dataset reported the sandbox's read-only view while PID 1's table said rw — 21 rows across two hosts, every one wrong (2026-08-10 audit). The dataset's mount row carries the host's live state."
+        }
+      },
+      "rules": [
+        {
+          "key": "dataset-capacity-critical",
+          "level": "critical",
+          "grounds": "threshold",
+          "when": {
+            "fact": "UsePercent",
+            "at_least": 95
+          },
+          "sentence": "The dataset has nearly consumed its available headroom, quota- or pool-bounded.",
+          "cites": [
+            "UsePercent",
+            "AvailBytes",
+            "UsedBytes"
+          ]
+        },
+        {
+          "key": "dataset-capacity",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "all": [
+              {
+                "fact": "UsePercent",
+                "at_least": 90
+              },
+              {
+                "not": {
+                  "fact": "UsePercent",
+                  "at_least": 95
+                }
+              }
+            ]
+          },
+          "sentence": "The dataset is running out of headroom, quota- or pool-bounded.",
+          "cites": [
+            "UsePercent",
+            "AvailBytes",
+            "UsedBytes"
+          ]
+        }
+      ],
+      "redaction_exemption": "dataset names, mountpoints and property sources are operator-chosen words and are declared content above — the corpus scrub substitutes them through one context. Byte counts, switch positions and source types are zfs's own vocabulary, and no property this collection reads can carry a credential.",
+      "reference_commands": [
+        {
+          "purpose": "the dataset inventory these rows carry, by hand",
+          "argv": [
+            "zfs",
+            "list",
+            "-j",
+            "-p",
+            "-o",
+            "name,used,avail,usedbysnapshots,mountpoint,canmount,readonly,mounted"
+          ]
+        }
+      ]
+    },
+    {
       "name": "mounts",
       "question": "what is mounted where, and is any filesystem running out of space?",
       "prefix": "mount",

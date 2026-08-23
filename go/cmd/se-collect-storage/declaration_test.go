@@ -64,10 +64,11 @@ func TestTheDeclarationNamesExactlyTheFactsThisCollectorEmits(t *testing.T) {
 	if declaration.Schema != "se.declaration/1" || declaration.Collector != "storage" {
 		t.Fatalf("collector %q under schema %q", declaration.Collector, declaration.Schema)
 	}
-	if len(declaration.Collections) != 3 || declaration.Collections[0].Name != "pools" ||
+	if len(declaration.Collections) != 4 || declaration.Collections[0].Name != "pools" ||
 		declaration.Collections[1].Name != "block-devices" ||
-		declaration.Collections[2].Name != "mounts" {
-		t.Fatalf("three collections — pools, block-devices, mounts; got %v",
+		declaration.Collections[2].Name != "datasets" ||
+		declaration.Collections[3].Name != "mounts" {
+		t.Fatalf("four collections — pools, block-devices, datasets, mounts; got %v",
 			declaration.Collections)
 	}
 	collection := declaration.Collections[0]
@@ -114,6 +115,25 @@ func TestTheDeclarationNamesExactlyTheFactsThisCollectorEmits(t *testing.T) {
 	for _, fact := range collection.Answer {
 		if _, ok := collection.Facts[fact]; !ok {
 			t.Errorf("the row answers with %s, which is not declared", fact)
+		}
+	}
+
+	// datasets, held to the same discipline: every key collectDatasets can
+	// put in `facts`, beside the declaration so the two cannot drift.
+	datasets := declaration.Collections[2]
+	datasetFacts := []string{
+		"UsedBytes", "AvailBytes", "UsePercent", "SnapshotUsedBytes",
+		"SnapshotsLookup", "Mountpoint", "MountpointSource",
+		"CanMount", "CanMountSource", "Mounted",
+		"ReadOnly", "ReadOnlySource", "ReadOnlyUnobservable",
+	}
+	if len(datasets.Facts) != len(datasetFacts) {
+		t.Errorf("datasets declares %d facts, this collector emits %d",
+			len(datasets.Facts), len(datasetFacts))
+	}
+	for _, fact := range datasetFacts {
+		if _, ok := datasets.Facts[fact]; !ok {
+			t.Errorf("datasets emits %s and does not declare it", fact)
 		}
 	}
 

@@ -53,6 +53,10 @@ type source interface {
 	// lsblk is the block-device tree, every transport at once — the one
 	// honest answer to "what disks does this host have".
 	lsblk() (*value, error)
+	// zfsList is `zfs list -j -p` — the dataset inventory, in the same
+	// three-state shape as zpool: a document, a host-with-no-zfs decline
+	// (absent, authoritative-empty), or could-not-run.
+	zfsList() (*value, error)
 	// findmnt is PID 1's mount table — the host's truth, not this
 	// process's sandbox view. fellBack reports the older-util-linux
 	// fallback to our own namespace, printed to stderr rather than
@@ -221,6 +225,11 @@ func (liveSource) zpool() (zpoolReading, error) {
 	return zpoolReading{status: status, list: list, links: devlinks()}, nil
 }
 
+// zfsListArgv is the reference's ZFS_LIST_COLUMNS, verbatim: the columns
+// ARE the fact surface, so a drift here is a facts drift.
+var zfsListArgv = []string{"zfs", "list", "-j", "-p", "-o",
+	"name,used,avail,usedbysnapshots,mountpoint,canmount,readonly,mounted"}
+
 var lsblkArgv = []string{"lsblk", "-J", "-o",
 	"NAME,KNAME,TYPE,SIZE,FSTYPE,MOUNTPOINTS,MODEL,SERIAL,ROTA,RM,TRAN"}
 
@@ -234,6 +243,17 @@ var findmntOwn = []string{"findmnt", "-J", "--real", "-b",
 	"-o", "TARGET,SOURCE,FSTYPE,OPTIONS,SIZE,USED,AVAIL,USE%"}
 
 func (liveSource) lsblk() (*value, error) { return runJSON(lsblkArgv) }
+
+func (liveSource) zfsList() (*value, error) {
+	if _, err := exec.LookPath("zfs"); err != nil {
+		// The zpool reading's own argument, verbatim: no OpenZFS userspace
+		// means no datasets — absent, authoritative-empty, retiring what a
+		// previous batch published.
+		reason := declineNoZpool
+		return nil, &reason
+	}
+	return runJSON(zfsListArgv)
+}
 
 func (liveSource) findmnt() (*value, bool, error) {
 	if doc, err := runJSON(findmntTask1); err == nil {
@@ -416,6 +436,21 @@ func (r replaySource) payload(stem string) (*value, error) {
 		return nil, err
 	}
 	return decodeDocument(raw)
+}
+
+func (r replaySource) zfsList() (*value, error) {
+	doc, err := r.payload("zfs-list")
+	if errors.Is(err, fs.ErrNotExist) {
+		// No dataset document captured: the variant records a host with no
+		// zfs — the same absent the zpool seam reads from its own missing
+		// pair, through the same constant.
+		reason := declineNoZpool
+		return nil, &reason
+	}
+	if err != nil {
+		return nil, fmt.Errorf("zfs-list %w: %v", errUncaptured, err)
+	}
+	return doc, nil
 }
 
 func (r replaySource) lsblk() (*value, error) {

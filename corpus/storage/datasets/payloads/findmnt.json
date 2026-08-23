@@ -1,0 +1,104 @@
+{
+  "filesystems": [
+    {
+      "target": "/",
+      "source": "/dev/vda1",
+      "fstype": "ext4",
+      "options": "rw,relatime,discard,errors=remount-ro,commit=30",
+      "size": 15429406720,
+      "used": 2792615936,
+      "avail": 12620013568,
+      "use%": "18%",
+      "children": [
+        {
+          "target": "/boot",
+          "source": "/dev/vda13",
+          "fstype": "ext4",
+          "options": "rw,relatime",
+          "size": 1036431360,
+          "used": 157159424,
+          "avail": 808861696,
+          "use%": "15%",
+          "children": [
+            {
+              "target": "/boot/efi",
+              "source": "/dev/vda15",
+              "fstype": "vfat",
+              "options": "rw,relatime,fmask=0077,dmask=0077,codepage=437,iocharset=iso8859-1,shortname=mixed,errors=remount-ro",
+              "size": 109395456,
+              "used": 6567424,
+              "avail": 102828032,
+              "use%": "6%"
+            }
+          ]
+        },
+        {
+          "target": "/brimful",
+          "source": "brimful",
+          "fstype": "zfs",
+          "options": "rw,relatime,xattr,noacl,casesensitive",
+          "size": 793247744,
+          "used": 131072,
+          "avail": 793116672,
+          "use%": "0%",
+          "children": [
+            {
+              "target": "/brimful/data",
+              "source": "brimful/data",
+              "fstype": "zfs",
+              "options": "rw,relatime,xattr,noacl,casesensitive",
+              "size": 801636352,
+              "used": 8519680,
+              "avail": 793116672,
+              "use%": "1%",
+              "children": [
+                {
+                  "target": "/brimful/data/tight",
+                  "source": "brimful/data/tight",
+                  "fstype": "zfs",
+                  "options": "rw,relatime,xattr,noacl,casesensitive",
+                  "size": 67108864,
+                  "used": 61997056,
+                  "avail": 5111808,
+                  "use%": "92%"
+                }
+              ]
+            },
+            {
+              "target": "/brimful/frozen",
+              "source": "brimful/frozen",
+              "fstype": "zfs",
+              "options": "ro,relatime,xattr,noacl,casesensitive",
+              "size": 793247744,
+              "used": 131072,
+              "avail": 793116672,
+              "use%": "0%"
+            }
+          ]
+        },
+        {
+          "target": "/srv/brimful",
+          "source": "brimful/custom",
+          "fstype": "zfs",
+          "options": "rw,relatime,xattr,noacl,casesensitive",
+          "size": 793247744,
+          "used": 131072,
+          "avail": 793116672,
+          "use%": "0%",
+          "children": [
+            {
+              "target": "/srv/brimful/kid",
+              "source": "brimful/custom/kid",
+              "fstype": "zfs",
+              "options": "rw,relatime,xattr,noacl,casesensitive",
+              "size": 793247744,
+              "used": 131072,
+              "avail": 793116672,
+              "use%": "0%"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

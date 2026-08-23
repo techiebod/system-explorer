@@ -1,0 +1,408 @@
+{
+  "output_version": {
+    "command": "zfs list",
+    "vers_major": 0,
+    "vers_minor": 1
+  },
+  "datasets": {
+    "host-5797a2": {
+      "name": "host-5797a2",
+      "type": "FILESYSTEM",
+      "pool": "host-5797a2",
+      "createtxg": "1",
+      "properties": {
+        "used": {
+          "value": "79188992",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "available": {
+          "value": "793226240",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "usedbysnapshots": {
+          "value": "0",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "mountpoint": {
+          "value": "/host-5797a2",
+          "source": {
+            "type": "DEFAULT",
+            "data": "-"
+          }
+        },
+        "canmount": {
+          "value": "on",
+          "source": {
+            "type": "DEFAULT",
+            "data": "-"
+          }
+        },
+        "readonly": {
+          "value": "off",
+          "source": {
+            "type": "DEFAULT",
+            "data": "-"
+          }
+        },
+        "mounted": {
+          "value": "yes",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        }
+      }
+    },
+    "host-5797a2/custom": {
+      "name": "host-5797a2/custom",
+      "type": "FILESYSTEM",
+      "pool": "host-5797a2",
+      "createtxg": "12",
+      "properties": {
+        "used": {
+          "value": "49152",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "available": {
+          "value": "793226240",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "usedbysnapshots": {
+          "value": "0",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "mountpoint": {
+          "value": "/srv/host-5797a2",
+          "source": {
+            "type": "LOCAL",
+            "data": "-"
+          }
+        },
+        "canmount": {
+          "value": "on",
+          "source": {
+            "type": "DEFAULT",
+            "data": "-"
+          }
+        },
+        "readonly": {
+          "value": "off",
+          "source": {
+            "type": "DEFAULT",
+            "data": "-"
+          }
+        },
+        "mounted": {
+          "value": "yes",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        }
+      }
+    },
+    "host-5797a2/custom/kid": {
+      "name": "host-5797a2/custom/kid",
+      "type": "FILESYSTEM",
+      "pool": "host-5797a2",
+      "createtxg": "14",
+      "properties": {
+        "used": {
+          "value": "24576",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "available": {
+          "value": "793226240",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "usedbysnapshots": {
+          "value": "0",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "mountpoint": {
+          "value": "/srv/host-5797a2/kid",
+          "source": {
+            "type": "INHERITED",
+            "data": "host-5797a2/custom"
+          }
+        },
+        "canmount": {
+          "value": "on",
+          "source": {
+            "type": "DEFAULT",
+            "data": "-"
+          }
+        },
+        "readonly": {
+          "value": "off",
+          "source": {
+            "type": "DEFAULT",
+            "data": "-"
+          }
+        },
+        "mounted": {
+          "value": "yes",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        }
+      }
+    },
+    "host-5797a2/data": {
+      "name": "host-5797a2/data",
+      "type": "FILESYSTEM",
+      "pool": "host-5797a2",
+      "createtxg": "6",
+      "properties": {
+        "used": {
+          "value": "78777344",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "available": {
+          "value": "793226240",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "usedbysnapshots": {
+          "value": "8408064",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "mountpoint": {
+          "value": "/host-5797a2/data",
+          "source": {
+            "type": "DEFAULT",
+            "data": "-"
+          }
+        },
+        "canmount": {
+          "value": "on",
+          "source": {
+            "type": "DEFAULT",
+            "data": "-"
+          }
+        },
+        "readonly": {
+          "value": "off",
+          "source": {
+            "type": "DEFAULT",
+            "data": "-"
+          }
+        },
+        "mounted": {
+          "value": "yes",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        }
+      }
+    },
+    "host-5797a2/data/tight": {
+      "name": "host-5797a2/data/tight",
+      "type": "FILESYSTEM",
+      "pool": "host-5797a2",
+      "createtxg": "8",
+      "properties": {
+        "used": {
+          "value": "61948928",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "available": {
+          "value": "5159936",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "usedbysnapshots": {
+          "value": "14336",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "mountpoint": {
+          "value": "/host-5797a2/data/tight",
+          "source": {
+            "type": "DEFAULT",
+            "data": "-"
+          }
+        },
+        "canmount": {
+          "value": "on",
+          "source": {
+            "type": "DEFAULT",
+            "data": "-"
+          }
+        },
+        "readonly": {
+          "value": "off",
+          "source": {
+            "type": "DEFAULT",
+            "data": "-"
+          }
+        },
+        "mounted": {
+          "value": "yes",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        }
+      }
+    },
+    "host-5797a2/frozen": {
+      "name": "host-5797a2/frozen",
+      "type": "FILESYSTEM",
+      "pool": "host-5797a2",
+      "createtxg": "15",
+      "properties": {
+        "used": {
+          "value": "24576",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "available": {
+          "value": "793226240",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "usedbysnapshots": {
+          "value": "0",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "mountpoint": {
+          "value": "/host-5797a2/frozen",
+          "source": {
+            "type": "DEFAULT",
+            "data": "-"
+          }
+        },
+        "canmount": {
+          "value": "on",
+          "source": {
+            "type": "DEFAULT",
+            "data": "-"
+          }
+        },
+        "readonly": {
+          "value": "on",
+          "source": {
+            "type": "LOCAL",
+            "data": "-"
+          }
+        },
+        "mounted": {
+          "value": "yes",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        }
+      }
+    },
+    "host-5797a2/noauto": {
+      "name": "host-5797a2/noauto",
+      "type": "FILESYSTEM",
+      "pool": "host-5797a2",
+      "createtxg": "10",
+      "properties": {
+        "used": {
+          "value": "24576",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "available": {
+          "value": "793226240",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "usedbysnapshots": {
+          "value": "0",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "mountpoint": {
+          "value": "/host-5797a2/noauto",
+          "source": {
+            "type": "DEFAULT",
+            "data": "-"
+          }
+        },
+        "canmount": {
+          "value": "noauto",
+          "source": {
+            "type": "LOCAL",
+            "data": "-"
+          }
+        },
+        "readonly": {
+          "value": "off",
+          "source": {
+            "type": "DEFAULT",
+            "data": "-"
+          }
+        },
+        "mounted": {
+          "value": "no",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        }
+      }
+    }
+  }
+}

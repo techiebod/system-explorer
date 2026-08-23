@@ -97,6 +97,11 @@ VALID_VARIANTS = frozenset(
         # residue. Every staged rule accepts, so the staging cannot cut the
         # guest's own ssh off.
         "exposure",
+        # datasets, added with storage/datasets' R3d port: a file-backed
+        # pool staged so every property surface is a real value — a quota
+        # bounding the headroom, snapshot churn, all three mountpoint
+        # sources, noauto, and a stored readonly.
+        "datasets",
         # staged-disks, added with hardware's R3c retrofit: a guest given a
         # virtio-scsi disk and an NVMe controller in its domain definition,
         # each with a serial and a wwn. The default guest has virtio-blk,
@@ -158,6 +163,24 @@ _ANCHOR_FORMS = (
 # beside a real degraded pool, so the entries below now say what is true of a
 # tool that exists. An entry whose venue is still unbuilt keeps saying so.
 NAMED_RESIDUALS = {
+    # R3d: the ProtectSystem mask needs a SANDBOXED reader — libzfs derives
+    # readonly from the querying process's own mount table, so the fact fires
+    # only where the agent runs under ProtectSystem=strict, and every corpus
+    # capture runs unsandboxed by construction. Mintable in principle by a
+    # differential operator setting a readonly source to TEMPORARY, but the
+    # storage differential seed predates the zfs-list payload it would
+    # mutate; when the seed moves to a datasets-bearing variant this becomes
+    # an operator and this entry is deleted.
+    "storage/readonly-mask": (
+        "ReadOnlyUnobservable is emitted only where a dataset's readonly "
+        "source reads `temporary` — the agent's own sandbox masking the "
+        "stored property (the 2026-08-10 audit: 21 rows across two hosts, "
+        "every one wrong). No unsandboxed capture can produce it. Venue: the "
+        "collector's own replay tests stage the temporary source directly "
+        "(go/cmd/se-collect-storage/datasets_test.go), and the reference's "
+        "half is its adapter's audited branch, quoted in the fact's own "
+        "sentence."
+    ),
     # R3c: the object verb's density facts — LoadError, UnitFileState,
     # FragmentPath, ActiveEnterTimestamp, MainPID, NRestarts, Result,
     # TasksCurrent, ExecMainStartTimestamp, NextElapse, LastTrigger — ride a

@@ -1,0 +1,116 @@
+{
+  "blockdevices": [
+    {
+      "name": "sda",
+      "kname": "sda",
+      "type": "disk",
+      "size": "1G",
+      "fstype": null,
+      "mountpoints": [],
+      "model": "QEMU HARDDISK",
+      "serial": "ANON33C812E85DD4",
+      "rota": true,
+      "rm": false,
+      "tran": null
+    },
+    {
+      "name": "vda",
+      "kname": "vda",
+      "type": "disk",
+      "size": "16G",
+      "fstype": null,
+      "mountpoints": [],
+      "model": null,
+      "serial": null,
+      "rota": true,
+      "rm": false,
+      "tran": "virtio",
+      "children": [
+        {
+          "name": "vda1",
+          "kname": "vda1",
+          "type": "part",
+          "size": "14.9G",
+          "fstype": "ext4",
+          "mountpoints": [
+            "/"
+          ],
+          "model": null,
+          "serial": null,
+          "rota": true,
+          "rm": false,
+          "tran": "virtio"
+        },
+        {
+          "name": "vda13",
+          "kname": "vda13",
+          "type": "part",
+          "size": "1023M",
+          "fstype": "ext4",
+          "mountpoints": [
+            "/boot"
+          ],
+          "model": null,
+          "serial": null,
+          "rota": true,
+          "rm": false,
+          "tran": "virtio"
+        },
+        {
+          "name": "vda14",
+          "kname": "vda14",
+          "type": "part",
+          "size": "4M",
+          "fstype": null,
+          "mountpoints": [],
+          "model": null,
+          "serial": null,
+          "rota": true,
+          "rm": false,
+          "tran": "virtio"
+        },
+        {
+          "name": "vda15",
+          "kname": "vda15",
+          "type": "part",
+          "size": "106M",
+          "fstype": "vfat",
+          "mountpoints": [
+            "/boot/efi"
+          ],
+          "model": null,
+          "serial": null,
+          "rota": true,
+          "rm": false,
+          "tran": "virtio"
+        }
+      ]
+    },
+    {
+      "name": "vdb",
+      "kname": "vdb",
+      "type": "disk",
+      "size": "366K",
+      "fstype": "iso9660",
+      "mountpoints": [],
+      "model": null,
+      "serial": null,
+      "rota": true,
+      "rm": false,
+      "tran": "virtio"
+    },
+    {
+      "name": "nvme0n1",
+      "kname": "nvme0n1",
+      "type": "disk",
+      "size": "512M",
+      "fstype": null,
+      "mountpoints": [],
+      "model": "QEMU NVMe Ctrl",
+      "serial": "ANONC38AC9AE8F0",
+      "rota": false,
+      "rm": false,
+      "tran": "nvme"
+    }
+  ]
+}

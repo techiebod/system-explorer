@@ -1,0 +1,79 @@
+{
+ "collector": "storage",
+ "collections": [
+  "datasets"
+ ],
+ "variant": "datasets",
+ "provenance": "captured-then-scrubbed",
+ "os": "ubuntu",
+ "os_version": "26.04",
+ "source_version": "zfs-2.4.1-1ubuntu5 linux-7.0.0-28-generic",
+ "captured": "2026-08-23T13:10:00Z",
+ "regenerable": true,
+ "regenerable_on": "a lab guest with OpenZFS installed and the brimful staging: a 1 GiB file-backed pool carrying a quota-bounded dataset filled past the warn line, a dataset with snapshot churn (write, snapshot, rewrite), a canmount=noauto dataset, a readonly=on dataset, a local-mountpoint dataset with a child that INHERITS it, and defaults everywhere else.",
+ "anonymised": true,
+ "note": "storage/datasets' first committed pair, staged so every property surface the collection reads is a real value: use percentage under a QUOTA (headroom is quota-bounded, not pool-bounded), snapshot-held bytes from genuine churn, all three mountpoint source shapes (default, local, inherited-naming-its-ancestor), canmount=noauto with mounted=no beside it, and readonly=on stored — not masked, because the capture ran unsandboxed; the ProtectSystem mask is the Go collector's unit-tested branch and the reference's recorded audit. The pool itself also rides the payloads as the corpus's first FILE-vdev pool, unrequested by this variant's collections.",
+ "coverage_note": "What this variant does not reach: ReadOnlyUnobservable (the ProtectSystem=strict mask needs a sandboxed reader, so the fact is exercised by the collector's own unit tests and named in corpus.NAMED_RESIDUALS with that venue), a received property source, and volumes/bookmarks — every staged dataset is a filesystem.",
+ "canaries": [],
+ "anchors": [
+  {
+   "collection": "datasets",
+   "commit_objects": 7
+  },
+  {
+   "collection": "datasets",
+   "object": "host-5797a2/data/tight",
+   "fact": "UsePercent",
+   "value": 92
+  },
+  {
+   "collection": "datasets",
+   "object": "host-5797a2/data/tight",
+   "fact": "AvailBytes",
+   "value": 5159936
+  },
+  {
+   "collection": "datasets",
+   "object": "host-5797a2/data",
+   "fact": "SnapshotUsedBytes",
+   "value": 8408064
+  },
+  {
+   "collection": "datasets",
+   "object": "host-5797a2/custom/kid",
+   "fact": "MountpointSource",
+   "value": "inherited from host-5797a2/custom"
+  },
+  {
+   "collection": "datasets",
+   "object": "host-5797a2/custom",
+   "fact": "MountpointSource",
+   "value": "local"
+  },
+  {
+   "collection": "datasets",
+   "object": "host-5797a2/noauto",
+   "fact": "CanMount",
+   "value": "noauto"
+  },
+  {
+   "collection": "datasets",
+   "object": "host-5797a2/noauto",
+   "fact": "Mounted",
+   "value": "no"
+  },
+  {
+   "collection": "datasets",
+   "object": "host-5797a2/frozen",
+   "fact": "ReadOnly",
+   "value": "on"
+  },
+  {
+   "collection": "datasets",
+   "object": "host-5797a2/frozen",
+   "fact": "ReadOnlySource",
+   "value": "local"
+  }
+ ],
+ "anchors_note": "Transcribed from the scrubbed zfs-list.json (the staged name brimful was substituted to host-5797a2, consistently through keys, paths and the inherited source's data). tight: used 61948928 of a 67108864 quota leaves avail 5159936, and 61948928*100/67108864 = 92.31 → 92 under the half-even rounding both implementations share — inside the warn band, so the dataset-capacity rule fires warn and not critical. data's snapshot bytes are the 8 MiB blob rewritten after snapshotting. kid's mountpoint source names the ancestor it inherits from; custom's is local; everything else is DEFAULT, rendered as the word default — only NONE and an absent source render as no statement."
+}

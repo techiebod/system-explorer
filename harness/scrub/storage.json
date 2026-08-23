@@ -1,1131 +1,1192 @@
 {
-  "#": "Scrub manifest for the storage collector: the union of every payload its pools collection captures \u2014 zpool status -j (status.json), zpool list -j -p -v (list.json) and the device alias map (devlinks.json). Same tree of pools and vdevs in the first two, at different depths: status nests root -> raidz -> disks, list starts at the raidz, so the vdev entries repeat per depth for the union of members each depth carries. devlinks shares no root with either, which is what the payload-scoped entries at the bottom are for.",
-  "#names": "Pool and vdev dicts are keyed by the very names their rows repeat, so every such level carries a '~key' entry. The keys mix classes the pattern language cannot split \u2014 a pool name somebody chose, zpool's own structural names (raidz1-0), and by-id WWNs \u2014 so they take the free-text pass (format name): the WWN spelling is substituted, the structural names carry nothing it matches, and the pool name is handed to the run as --hostnames, which is the one global-substring mechanism the tool has for operator-chosen words.",
-  "#identity": "guid is the identifier that survives rename and import \u2014 identity at every depth, guid_u64 because zpool status emits it as a JSON integer and zpool list as a digit string; one entry serves both spellings and derives the same replacement, which is the cross-file join the specimen teaches. devid spells the WWN as scsi-3<16hex> (no 0x \u2014 the spelling the old scrubber missed) and path embeds it as by-id; both identity.",
-  "#phys_path": "A bus address locates a card on a bus and is identical across every machine of that model \u2014 the field the shape-guessing scrubber rewrote into the documentation range (DESIGN 21). The manifest, not shape, is what says it stays.",
-  "#nothing": "States, error counters, sizes, scan statistics, txg, feature versions and property tables are measurements and verdicts \u2014 the same on every machine that has them.",
-  "output_version.command": {
-    "discloses": "nothing"
-  },
-  "output_version.vers_major": {
-    "discloses": "nothing"
-  },
-  "output_version.vers_minor": {
-    "discloses": "nothing"
-  },
-  "pools.~key": {
-    "discloses": "content",
-    "format": "name"
-  },
-  "pools.*.name": {
-    "discloses": "content",
-    "format": "name"
-  },
-  "pools.*.type": {
-    "discloses": "nothing"
-  },
-  "pools.*.state": {
-    "discloses": "nothing"
-  },
-  "pools.*.pool_guid": {
-    "discloses": "identity",
-    "format": "guid_u64"
-  },
-  "pools.*.txg": {
-    "discloses": "nothing"
-  },
-  "pools.*.spa_version": {
-    "discloses": "nothing"
-  },
-  "pools.*.zpl_version": {
-    "discloses": "nothing"
-  },
-  "pools.*.error_count": {
-    "discloses": "nothing"
-  },
-  "pools.*.status": {
-    "discloses": "nothing"
-  },
-  "pools.*.action": {
-    "discloses": "nothing"
-  },
-  "pools.*.msgid": {
-    "discloses": "nothing"
-  },
-  "pools.*.moreinfo": {
-    "discloses": "nothing"
-  },
-  "#status": "The four members a pool grows only when something is wrong, and the reason the degraded specimen exists. They are OpenZFS's own catalogue entry for msgid ZFS-8000-9P \u2014 the same four strings on every machine in that condition, a verdict rather than a description of this estate \u2014 so they stay verbatim, which is also what lets a variant anchor the exact prose. The bound is stated because it is a decision and not a shape: were a future OpenZFS to interpolate a device or pool name into the prose, this classification would be wrong and the entry would have to move to the free-text pass.",
-  "pools.*.scan_stats.function": {
-    "discloses": "nothing"
-  },
-  "pools.*.scan_stats.state": {
-    "discloses": "nothing"
-  },
-  "pools.*.scan_stats.start_time": {
-    "discloses": "nothing"
-  },
-  "pools.*.scan_stats.end_time": {
-    "discloses": "nothing"
-  },
-  "pools.*.scan_stats.to_examine": {
-    "discloses": "nothing"
-  },
-  "pools.*.scan_stats.examined": {
-    "discloses": "nothing"
-  },
-  "pools.*.scan_stats.skipped": {
-    "discloses": "nothing"
-  },
-  "pools.*.scan_stats.processed": {
-    "discloses": "nothing"
-  },
-  "pools.*.scan_stats.errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.scan_stats.bytes_per_scan": {
-    "discloses": "nothing"
-  },
-  "pools.*.scan_stats.pass_start": {
-    "discloses": "nothing"
-  },
-  "pools.*.scan_stats.scrub_pause": {
-    "discloses": "nothing"
-  },
-  "pools.*.scan_stats.scrub_spent_paused": {
-    "discloses": "nothing"
-  },
-  "pools.*.scan_stats.issued_bytes_per_scan": {
-    "discloses": "nothing"
-  },
-  "pools.*.scan_stats.issued": {
-    "discloses": "nothing"
-  },
-  "pools.*.properties.~key": {
-    "discloses": "nothing"
-  },
-  "pools.*.properties.*.value": {
-    "discloses": "nothing"
-  },
-  "pools.*.properties.*.source.type": {
-    "discloses": "nothing"
-  },
-  "pools.*.properties.*.source.data": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.~key": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "pools.*.vdevs.*.name": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "pools.*.vdevs.*.vdev_type": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.guid": {
-    "discloses": "identity",
-    "format": "guid_u64"
-  },
-  "pools.*.vdevs.*.class": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.state": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.alloc_space": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.total_space": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.def_space": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.read_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.write_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.checksum_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.properties.~key": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.properties.*.value": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.properties.*.source.type": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.properties.*.source.data": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.~key": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "pools.*.vdevs.*.vdevs.*.name": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdev_type": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.guid": {
-    "discloses": "identity",
-    "format": "guid_u64"
-  },
-  "pools.*.vdevs.*.vdevs.*.path": {
-    "discloses": "identity",
-    "format": "path"
-  },
-  "pools.*.vdevs.*.vdevs.*.phys_path": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.devid": {
-    "discloses": "identity",
-    "format": "wwn"
-  },
-  "pools.*.vdevs.*.vdevs.*.class": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.state": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.alloc_space": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.total_space": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.def_space": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.rep_dev_size": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.read_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.write_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.checksum_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.properties.~key": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.properties.*.value": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.properties.*.source.type": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.properties.*.source.data": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.~key": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.name": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdev_type": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.guid": {
-    "discloses": "identity",
-    "format": "guid_u64"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.path": {
-    "discloses": "identity",
-    "format": "path"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.phys_path": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.devid": {
-    "discloses": "identity",
-    "format": "wwn"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.class": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.state": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.rep_dev_size": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.phys_space": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.read_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.write_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.checksum_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.self_healed": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.scan_processed": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.slow_ios": {
-    "discloses": "nothing"
-  },
-  "~key": {
-    "discloses": "identity",
-    "format": "path",
-    "payload": "devlinks"
-  },
-  "*": {
-    "discloses": "nothing",
-    "payload": "devlinks"
-  },
-  "#devlinks": "The third payload the pools collection captures, and the only one whose ROOT keys are data: an alias path per device symlink, mapping to the kernel name it dereferences to. Scoped to that payload, because the same two patterns unscoped would say zpool's schema roots ('pools', 'output_version') are data too, and the scrubber would refuse a document it understands perfectly. The key is classified identity for its TAIL \u2014 a by-partuuid link ends in the partition UUID that correlates this disk across captures \u2014 and takes the free-text pass so the tree it sits in survives: /dev/disk/by-partuuid is the kernel's own vocabulary, and which tree a vdev resolves through is the fact the payload exists to teach. The value is a kernel block name, positional on every machine of that shape, so it is 'nothing' for the same reason phys_path is.",
-  "#group-vdevs": "zpool status -j carries spares, log devices and cache devices as TOP-LEVEL keys on the pool object, beside 'vdevs' rather than inside it. The manifest knew only the nested tree, so the scrubber refused to classify a payload holding any of them \u2014 which is why no capture ever staged one, and why the collection's blindness to group vdevs went unseen for as long as it did. The members are disk leaves and carry exactly what a nested leaf carries, so the classifications mirror the nested ones rather than being restated with a different opinion.",
-  "pools.*.logs.~key": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "pools.*.logs.*.name": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "pools.*.logs.*.vdev_type": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.guid": {
-    "discloses": "identity",
-    "format": "guid_u64"
-  },
-  "pools.*.logs.*.path": {
-    "discloses": "identity",
-    "format": "path"
-  },
-  "pools.*.logs.*.phys_path": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.devid": {
-    "discloses": "identity",
-    "format": "wwn"
-  },
-  "pools.*.logs.*.class": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.state": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.alloc_space": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.total_space": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.def_space": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.rep_dev_size": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.read_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.write_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.checksum_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.properties.~key": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.properties.*.value": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.properties.*.source.type": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.properties.*.source.data": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.vdevs.~key": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "pools.*.logs.*.vdevs.*.name": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "pools.*.logs.*.vdevs.*.vdev_type": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.vdevs.*.guid": {
-    "discloses": "identity",
-    "format": "guid_u64"
-  },
-  "pools.*.logs.*.vdevs.*.path": {
-    "discloses": "identity",
-    "format": "path"
-  },
-  "pools.*.logs.*.vdevs.*.phys_path": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.vdevs.*.devid": {
-    "discloses": "identity",
-    "format": "wwn"
-  },
-  "pools.*.logs.*.vdevs.*.class": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.vdevs.*.state": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.vdevs.*.rep_dev_size": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.vdevs.*.phys_space": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.vdevs.*.read_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.vdevs.*.write_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.vdevs.*.checksum_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.vdevs.*.self_healed": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.vdevs.*.scan_processed": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.vdevs.*.slow_ios": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.~key": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "pools.*.l2cache.*.name": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "pools.*.l2cache.*.vdev_type": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.guid": {
-    "discloses": "identity",
-    "format": "guid_u64"
-  },
-  "pools.*.l2cache.*.path": {
-    "discloses": "identity",
-    "format": "path"
-  },
-  "pools.*.l2cache.*.phys_path": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.devid": {
-    "discloses": "identity",
-    "format": "wwn"
-  },
-  "pools.*.l2cache.*.class": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.state": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.alloc_space": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.total_space": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.def_space": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.rep_dev_size": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.read_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.write_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.checksum_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.properties.~key": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.properties.*.value": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.properties.*.source.type": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.properties.*.source.data": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.vdevs.~key": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "pools.*.l2cache.*.vdevs.*.name": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "pools.*.l2cache.*.vdevs.*.vdev_type": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.vdevs.*.guid": {
-    "discloses": "identity",
-    "format": "guid_u64"
-  },
-  "pools.*.l2cache.*.vdevs.*.path": {
-    "discloses": "identity",
-    "format": "path"
-  },
-  "pools.*.l2cache.*.vdevs.*.phys_path": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.vdevs.*.devid": {
-    "discloses": "identity",
-    "format": "wwn"
-  },
-  "pools.*.l2cache.*.vdevs.*.class": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.vdevs.*.state": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.vdevs.*.rep_dev_size": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.vdevs.*.phys_space": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.vdevs.*.read_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.vdevs.*.write_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.vdevs.*.checksum_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.vdevs.*.self_healed": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.vdevs.*.scan_processed": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.vdevs.*.slow_ios": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.~key": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "pools.*.spares.*.name": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "pools.*.spares.*.vdev_type": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.guid": {
-    "discloses": "identity",
-    "format": "guid_u64"
-  },
-  "pools.*.spares.*.path": {
-    "discloses": "identity",
-    "format": "path"
-  },
-  "pools.*.spares.*.phys_path": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.devid": {
-    "discloses": "identity",
-    "format": "wwn"
-  },
-  "pools.*.spares.*.class": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.state": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.alloc_space": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.total_space": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.def_space": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.rep_dev_size": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.read_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.write_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.checksum_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.properties.~key": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.properties.*.value": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.properties.*.source.type": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.properties.*.source.data": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.vdevs.~key": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "pools.*.spares.*.vdevs.*.name": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "pools.*.spares.*.vdevs.*.vdev_type": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.vdevs.*.guid": {
-    "discloses": "identity",
-    "format": "guid_u64"
-  },
-  "pools.*.spares.*.vdevs.*.path": {
-    "discloses": "identity",
-    "format": "path"
-  },
-  "pools.*.spares.*.vdevs.*.phys_path": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.vdevs.*.devid": {
-    "discloses": "identity",
-    "format": "wwn"
-  },
-  "pools.*.spares.*.vdevs.*.class": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.vdevs.*.state": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.vdevs.*.rep_dev_size": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.vdevs.*.phys_space": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.vdevs.*.read_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.vdevs.*.write_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.vdevs.*.checksum_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.vdevs.*.self_healed": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.vdevs.*.scan_processed": {
-    "discloses": "nothing"
-  },
-  "pools.*.spares.*.vdevs.*.slow_ios": {
-    "discloses": "nothing"
-  },
-  "#spares-aux": "`aux` is zpool's auxiliary state word on a spare \u2014 SPARED when it has been pulled in. A fixed vocabulary word, identifying nothing.",
-  "pools.*.spares.*.aux": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.phys_space": {
-    "discloses": "nothing"
-  },
-  "pools.*.l2cache.*.slow_ios": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.phys_space": {
-    "discloses": "nothing"
-  },
-  "pools.*.logs.*.slow_ios": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.l2cache.*.class": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.l2cache.*.guid": {
-    "discloses": "identity",
-    "format": "guid_u64"
-  },
-  "pools.*.vdevs.l2cache.*.name": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "pools.*.vdevs.l2cache.*.path": {
-    "discloses": "identity",
-    "format": "path"
-  },
-  "pools.*.vdevs.l2cache.*.properties.*.source.data": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.l2cache.*.properties.*.source.type": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.l2cache.*.properties.*.value": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.l2cache.*.state": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.l2cache.*.vdev_type": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.scan_processed": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.checksum_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.class": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.guid": {
-    "discloses": "identity",
-    "format": "guid_u64"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.name": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.path": {
-    "discloses": "identity",
-    "format": "path"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.phys_space": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.read_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.rep_dev_size": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.slow_ios": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.state": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.vdev_type": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.write_errors": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.scan_processed": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.logs.*.class": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.logs.*.guid": {
-    "discloses": "identity",
-    "format": "guid_u64"
-  },
-  "pools.*.vdevs.logs.*.name": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "pools.*.vdevs.logs.*.path": {
-    "discloses": "identity",
-    "format": "path"
-  },
-  "pools.*.vdevs.logs.*.properties.*.source.data": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.logs.*.properties.*.source.type": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.logs.*.properties.*.value": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.logs.*.state": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.logs.*.vdev_type": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.properties.*.source.data": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.properties.*.source.type": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.properties.*.value": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.spares.*.class": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.spares.*.guid": {
-    "discloses": "identity",
-    "format": "guid_u64"
-  },
-  "pools.*.vdevs.spares.*.name": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "pools.*.vdevs.spares.*.path": {
-    "discloses": "identity",
-    "format": "path"
-  },
-  "pools.*.vdevs.spares.*.properties.*.source.data": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.spares.*.properties.*.source.type": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.spares.*.properties.*.value": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.spares.*.state": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.spares.*.vdev_type": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.l2cache.*.properties.~key": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.l2cache.~key": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.~key": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "pools.*.vdevs.logs.*.properties.~key": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.logs.~key": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "pools.*.vdevs.*.vdevs.*.vdevs.*.properties.~key": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.spares.*.properties.~key": {
-    "discloses": "nothing"
-  },
-  "pools.*.vdevs.spares.~key": {
-    "discloses": "identity",
-    "format": "name"
-  },
-  "#lsblk-findmnt": "the R3b payloads: lsblk's device tree and PID 1's mount table. Device serials are substituted shape-preserved \u2014 they are the identity they are on any machine. Everything else is kernel-published metadata whose values on a LAB GUEST disclose nothing; an ESTATE capture's mount sources and options can carry NFS hosts and addresses \u2014 reclassify findmnt's source and options before capturing from one.",
-  "lsblk:blockdevices.*.name": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.kname": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.type": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.size": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.fstype": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.model": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.rota": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.rm": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.tran": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.serial": {
-    "discloses": "identity",
-    "format": "serial"
-  },
-  "lsblk:blockdevices.*.mountpoints.*": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.name": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.kname": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.type": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.size": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.fstype": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.model": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.rota": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.rm": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.tran": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.serial": {
-    "discloses": "identity",
-    "format": "serial"
-  },
-  "lsblk:blockdevices.*.children.*.mountpoints.*": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.children.*.name": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.children.*.kname": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.children.*.type": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.children.*.size": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.children.*.fstype": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.children.*.model": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.children.*.rota": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.children.*.rm": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.children.*.tran": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.children.*.serial": {
-    "discloses": "identity",
-    "format": "serial"
-  },
-  "lsblk:blockdevices.*.children.*.children.*.mountpoints.*": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.children.*.children.*.name": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.children.*.children.*.kname": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.children.*.children.*.type": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.children.*.children.*.size": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.children.*.children.*.fstype": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.children.*.children.*.model": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.children.*.children.*.rota": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.children.*.children.*.rm": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.children.*.children.*.tran": {
-    "discloses": "nothing"
-  },
-  "lsblk:blockdevices.*.children.*.children.*.children.*.serial": {
-    "discloses": "identity",
-    "format": "serial"
-  },
-  "lsblk:blockdevices.*.children.*.children.*.children.*.mountpoints.*": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.target": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.source": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.fstype": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.options": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.size": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.used": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.avail": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.use%": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.target": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.source": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.fstype": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.options": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.size": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.used": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.avail": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.use%": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.target": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.source": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.fstype": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.options": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.size": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.used": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.avail": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.use%": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.children.*.target": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.children.*.source": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.children.*.fstype": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.children.*.options": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.children.*.size": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.children.*.used": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.children.*.avail": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.children.*.use%": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.target": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.source": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.fstype": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.options": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.size": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.used": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.avail": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.use%": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.children.*.target": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.children.*.source": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.children.*.fstype": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.children.*.options": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.children.*.size": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.children.*.used": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.children.*.avail": {
-    "discloses": "nothing"
-  },
-  "findmnt:filesystems.*.children.*.children.*.children.*.children.*.children.*.use%": {
-    "discloses": "nothing"
-  }
+ "#": "Scrub manifest for the storage collector: the union of every payload its pools collection captures — zpool status -j (status.json), zpool list -j -p -v (list.json) and the device alias map (devlinks.json). Same tree of pools and vdevs in the first two, at different depths: status nests root -> raidz -> disks, list starts at the raidz, so the vdev entries repeat per depth for the union of members each depth carries. devlinks shares no root with either, which is what the payload-scoped entries at the bottom are for.",
+ "#names": "Pool and vdev dicts are keyed by the very names their rows repeat, so every such level carries a '~key' entry. The keys mix classes the pattern language cannot split — a pool name somebody chose, zpool's own structural names (raidz1-0), and by-id WWNs — so they take the free-text pass (format name): the WWN spelling is substituted, the structural names carry nothing it matches, and the pool name is handed to the run as --hostnames, which is the one global-substring mechanism the tool has for operator-chosen words.",
+ "#identity": "guid is the identifier that survives rename and import — identity at every depth, guid_u64 because zpool status emits it as a JSON integer and zpool list as a digit string; one entry serves both spellings and derives the same replacement, which is the cross-file join the specimen teaches. devid spells the WWN as scsi-3<16hex> (no 0x — the spelling the old scrubber missed) and path embeds it as by-id; both identity.",
+ "#phys_path": "A bus address locates a card on a bus and is identical across every machine of that model — the field the shape-guessing scrubber rewrote into the documentation range (DESIGN 21). The manifest, not shape, is what says it stays.",
+ "#nothing": "States, error counters, sizes, scan statistics, txg, feature versions and property tables are measurements and verdicts — the same on every machine that has them.",
+ "output_version.command": {
+  "discloses": "nothing"
+ },
+ "output_version.vers_major": {
+  "discloses": "nothing"
+ },
+ "output_version.vers_minor": {
+  "discloses": "nothing"
+ },
+ "pools.~key": {
+  "discloses": "content",
+  "format": "name"
+ },
+ "pools.*.name": {
+  "discloses": "content",
+  "format": "name"
+ },
+ "pools.*.type": {
+  "discloses": "nothing"
+ },
+ "pools.*.state": {
+  "discloses": "nothing"
+ },
+ "pools.*.pool_guid": {
+  "discloses": "identity",
+  "format": "guid_u64"
+ },
+ "pools.*.txg": {
+  "discloses": "nothing"
+ },
+ "pools.*.spa_version": {
+  "discloses": "nothing"
+ },
+ "pools.*.zpl_version": {
+  "discloses": "nothing"
+ },
+ "pools.*.error_count": {
+  "discloses": "nothing"
+ },
+ "pools.*.status": {
+  "discloses": "nothing"
+ },
+ "pools.*.action": {
+  "discloses": "nothing"
+ },
+ "pools.*.msgid": {
+  "discloses": "nothing"
+ },
+ "pools.*.moreinfo": {
+  "discloses": "nothing"
+ },
+ "#status": "The four members a pool grows only when something is wrong, and the reason the degraded specimen exists. They are OpenZFS's own catalogue entry for msgid ZFS-8000-9P — the same four strings on every machine in that condition, a verdict rather than a description of this estate — so they stay verbatim, which is also what lets a variant anchor the exact prose. The bound is stated because it is a decision and not a shape: were a future OpenZFS to interpolate a device or pool name into the prose, this classification would be wrong and the entry would have to move to the free-text pass.",
+ "pools.*.scan_stats.function": {
+  "discloses": "nothing"
+ },
+ "pools.*.scan_stats.state": {
+  "discloses": "nothing"
+ },
+ "pools.*.scan_stats.start_time": {
+  "discloses": "nothing"
+ },
+ "pools.*.scan_stats.end_time": {
+  "discloses": "nothing"
+ },
+ "pools.*.scan_stats.to_examine": {
+  "discloses": "nothing"
+ },
+ "pools.*.scan_stats.examined": {
+  "discloses": "nothing"
+ },
+ "pools.*.scan_stats.skipped": {
+  "discloses": "nothing"
+ },
+ "pools.*.scan_stats.processed": {
+  "discloses": "nothing"
+ },
+ "pools.*.scan_stats.errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.scan_stats.bytes_per_scan": {
+  "discloses": "nothing"
+ },
+ "pools.*.scan_stats.pass_start": {
+  "discloses": "nothing"
+ },
+ "pools.*.scan_stats.scrub_pause": {
+  "discloses": "nothing"
+ },
+ "pools.*.scan_stats.scrub_spent_paused": {
+  "discloses": "nothing"
+ },
+ "pools.*.scan_stats.issued_bytes_per_scan": {
+  "discloses": "nothing"
+ },
+ "pools.*.scan_stats.issued": {
+  "discloses": "nothing"
+ },
+ "pools.*.properties.~key": {
+  "discloses": "nothing"
+ },
+ "pools.*.properties.*.value": {
+  "discloses": "nothing"
+ },
+ "pools.*.properties.*.source.type": {
+  "discloses": "nothing"
+ },
+ "pools.*.properties.*.source.data": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.~key": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "pools.*.vdevs.*.name": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "pools.*.vdevs.*.vdev_type": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.guid": {
+  "discloses": "identity",
+  "format": "guid_u64"
+ },
+ "pools.*.vdevs.*.class": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.state": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.alloc_space": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.total_space": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.def_space": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.read_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.write_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.checksum_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.properties.~key": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.properties.*.value": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.properties.*.source.type": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.properties.*.source.data": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.~key": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "pools.*.vdevs.*.vdevs.*.name": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdev_type": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.guid": {
+  "discloses": "identity",
+  "format": "guid_u64"
+ },
+ "pools.*.vdevs.*.vdevs.*.path": {
+  "discloses": "identity",
+  "format": "path"
+ },
+ "pools.*.vdevs.*.vdevs.*.phys_path": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.devid": {
+  "discloses": "identity",
+  "format": "wwn"
+ },
+ "pools.*.vdevs.*.vdevs.*.class": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.state": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.alloc_space": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.total_space": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.def_space": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.rep_dev_size": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.read_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.write_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.checksum_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.properties.~key": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.properties.*.value": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.properties.*.source.type": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.properties.*.source.data": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.~key": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.name": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.vdev_type": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.guid": {
+  "discloses": "identity",
+  "format": "guid_u64"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.path": {
+  "discloses": "identity",
+  "format": "path"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.phys_path": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.devid": {
+  "discloses": "identity",
+  "format": "wwn"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.class": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.state": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.rep_dev_size": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.phys_space": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.read_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.write_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.checksum_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.self_healed": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.scan_processed": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.slow_ios": {
+  "discloses": "nothing"
+ },
+ "~key": {
+  "discloses": "identity",
+  "format": "path",
+  "payload": "devlinks"
+ },
+ "*": {
+  "discloses": "nothing",
+  "payload": "devlinks"
+ },
+ "#devlinks": "The third payload the pools collection captures, and the only one whose ROOT keys are data: an alias path per device symlink, mapping to the kernel name it dereferences to. Scoped to that payload, because the same two patterns unscoped would say zpool's schema roots ('pools', 'output_version') are data too, and the scrubber would refuse a document it understands perfectly. The key is classified identity for its TAIL — a by-partuuid link ends in the partition UUID that correlates this disk across captures — and takes the free-text pass so the tree it sits in survives: /dev/disk/by-partuuid is the kernel's own vocabulary, and which tree a vdev resolves through is the fact the payload exists to teach. The value is a kernel block name, positional on every machine of that shape, so it is 'nothing' for the same reason phys_path is.",
+ "#group-vdevs": "zpool status -j carries spares, log devices and cache devices as TOP-LEVEL keys on the pool object, beside 'vdevs' rather than inside it. The manifest knew only the nested tree, so the scrubber refused to classify a payload holding any of them — which is why no capture ever staged one, and why the collection's blindness to group vdevs went unseen for as long as it did. The members are disk leaves and carry exactly what a nested leaf carries, so the classifications mirror the nested ones rather than being restated with a different opinion.",
+ "pools.*.logs.~key": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "pools.*.logs.*.name": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "pools.*.logs.*.vdev_type": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.guid": {
+  "discloses": "identity",
+  "format": "guid_u64"
+ },
+ "pools.*.logs.*.path": {
+  "discloses": "identity",
+  "format": "path"
+ },
+ "pools.*.logs.*.phys_path": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.devid": {
+  "discloses": "identity",
+  "format": "wwn"
+ },
+ "pools.*.logs.*.class": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.state": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.alloc_space": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.total_space": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.def_space": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.rep_dev_size": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.read_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.write_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.checksum_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.properties.~key": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.properties.*.value": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.properties.*.source.type": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.properties.*.source.data": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.vdevs.~key": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "pools.*.logs.*.vdevs.*.name": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "pools.*.logs.*.vdevs.*.vdev_type": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.vdevs.*.guid": {
+  "discloses": "identity",
+  "format": "guid_u64"
+ },
+ "pools.*.logs.*.vdevs.*.path": {
+  "discloses": "identity",
+  "format": "path"
+ },
+ "pools.*.logs.*.vdevs.*.phys_path": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.vdevs.*.devid": {
+  "discloses": "identity",
+  "format": "wwn"
+ },
+ "pools.*.logs.*.vdevs.*.class": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.vdevs.*.state": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.vdevs.*.rep_dev_size": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.vdevs.*.phys_space": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.vdevs.*.read_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.vdevs.*.write_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.vdevs.*.checksum_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.vdevs.*.self_healed": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.vdevs.*.scan_processed": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.vdevs.*.slow_ios": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.~key": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "pools.*.l2cache.*.name": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "pools.*.l2cache.*.vdev_type": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.guid": {
+  "discloses": "identity",
+  "format": "guid_u64"
+ },
+ "pools.*.l2cache.*.path": {
+  "discloses": "identity",
+  "format": "path"
+ },
+ "pools.*.l2cache.*.phys_path": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.devid": {
+  "discloses": "identity",
+  "format": "wwn"
+ },
+ "pools.*.l2cache.*.class": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.state": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.alloc_space": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.total_space": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.def_space": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.rep_dev_size": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.read_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.write_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.checksum_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.properties.~key": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.properties.*.value": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.properties.*.source.type": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.properties.*.source.data": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.vdevs.~key": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "pools.*.l2cache.*.vdevs.*.name": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "pools.*.l2cache.*.vdevs.*.vdev_type": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.vdevs.*.guid": {
+  "discloses": "identity",
+  "format": "guid_u64"
+ },
+ "pools.*.l2cache.*.vdevs.*.path": {
+  "discloses": "identity",
+  "format": "path"
+ },
+ "pools.*.l2cache.*.vdevs.*.phys_path": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.vdevs.*.devid": {
+  "discloses": "identity",
+  "format": "wwn"
+ },
+ "pools.*.l2cache.*.vdevs.*.class": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.vdevs.*.state": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.vdevs.*.rep_dev_size": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.vdevs.*.phys_space": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.vdevs.*.read_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.vdevs.*.write_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.vdevs.*.checksum_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.vdevs.*.self_healed": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.vdevs.*.scan_processed": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.vdevs.*.slow_ios": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.~key": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "pools.*.spares.*.name": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "pools.*.spares.*.vdev_type": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.guid": {
+  "discloses": "identity",
+  "format": "guid_u64"
+ },
+ "pools.*.spares.*.path": {
+  "discloses": "identity",
+  "format": "path"
+ },
+ "pools.*.spares.*.phys_path": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.devid": {
+  "discloses": "identity",
+  "format": "wwn"
+ },
+ "pools.*.spares.*.class": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.state": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.alloc_space": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.total_space": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.def_space": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.rep_dev_size": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.read_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.write_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.checksum_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.properties.~key": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.properties.*.value": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.properties.*.source.type": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.properties.*.source.data": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.vdevs.~key": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "pools.*.spares.*.vdevs.*.name": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "pools.*.spares.*.vdevs.*.vdev_type": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.vdevs.*.guid": {
+  "discloses": "identity",
+  "format": "guid_u64"
+ },
+ "pools.*.spares.*.vdevs.*.path": {
+  "discloses": "identity",
+  "format": "path"
+ },
+ "pools.*.spares.*.vdevs.*.phys_path": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.vdevs.*.devid": {
+  "discloses": "identity",
+  "format": "wwn"
+ },
+ "pools.*.spares.*.vdevs.*.class": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.vdevs.*.state": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.vdevs.*.rep_dev_size": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.vdevs.*.phys_space": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.vdevs.*.read_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.vdevs.*.write_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.vdevs.*.checksum_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.vdevs.*.self_healed": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.vdevs.*.scan_processed": {
+  "discloses": "nothing"
+ },
+ "pools.*.spares.*.vdevs.*.slow_ios": {
+  "discloses": "nothing"
+ },
+ "#spares-aux": "`aux` is zpool's auxiliary state word on a spare — SPARED when it has been pulled in. A fixed vocabulary word, identifying nothing.",
+ "pools.*.spares.*.aux": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.phys_space": {
+  "discloses": "nothing"
+ },
+ "pools.*.l2cache.*.slow_ios": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.phys_space": {
+  "discloses": "nothing"
+ },
+ "pools.*.logs.*.slow_ios": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.l2cache.*.class": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.l2cache.*.guid": {
+  "discloses": "identity",
+  "format": "guid_u64"
+ },
+ "pools.*.vdevs.l2cache.*.name": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "pools.*.vdevs.l2cache.*.path": {
+  "discloses": "identity",
+  "format": "path"
+ },
+ "pools.*.vdevs.l2cache.*.properties.*.source.data": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.l2cache.*.properties.*.source.type": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.l2cache.*.properties.*.value": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.l2cache.*.state": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.l2cache.*.vdev_type": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.scan_processed": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.checksum_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.class": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.guid": {
+  "discloses": "identity",
+  "format": "guid_u64"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.name": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.path": {
+  "discloses": "identity",
+  "format": "path"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.phys_space": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.read_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.rep_dev_size": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.slow_ios": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.state": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.vdev_type": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.write_errors": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.*.scan_processed": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.logs.*.class": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.logs.*.guid": {
+  "discloses": "identity",
+  "format": "guid_u64"
+ },
+ "pools.*.vdevs.logs.*.name": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "pools.*.vdevs.logs.*.path": {
+  "discloses": "identity",
+  "format": "path"
+ },
+ "pools.*.vdevs.logs.*.properties.*.source.data": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.logs.*.properties.*.source.type": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.logs.*.properties.*.value": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.logs.*.state": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.logs.*.vdev_type": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.properties.*.source.data": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.properties.*.source.type": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.properties.*.value": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.spares.*.class": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.spares.*.guid": {
+  "discloses": "identity",
+  "format": "guid_u64"
+ },
+ "pools.*.vdevs.spares.*.name": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "pools.*.vdevs.spares.*.path": {
+  "discloses": "identity",
+  "format": "path"
+ },
+ "pools.*.vdevs.spares.*.properties.*.source.data": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.spares.*.properties.*.source.type": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.spares.*.properties.*.value": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.spares.*.state": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.spares.*.vdev_type": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.l2cache.*.properties.~key": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.l2cache.~key": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.vdevs.~key": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "pools.*.vdevs.logs.*.properties.~key": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.logs.~key": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "pools.*.vdevs.*.vdevs.*.vdevs.*.properties.~key": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.spares.*.properties.~key": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.spares.~key": {
+  "discloses": "identity",
+  "format": "name"
+ },
+ "#lsblk-findmnt": "the R3b payloads: lsblk's device tree and PID 1's mount table. Device serials are substituted shape-preserved — they are the identity they are on any machine. Everything else is kernel-published metadata whose values on a LAB GUEST disclose nothing; an ESTATE capture's mount sources and options can carry NFS hosts and addresses — reclassify findmnt's source and options before capturing from one.",
+ "lsblk:blockdevices.*.name": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.kname": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.type": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.size": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.fstype": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.model": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.rota": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.rm": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.tran": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.serial": {
+  "discloses": "identity",
+  "format": "serial"
+ },
+ "lsblk:blockdevices.*.mountpoints.*": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.name": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.kname": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.type": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.size": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.fstype": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.model": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.rota": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.rm": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.tran": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.serial": {
+  "discloses": "identity",
+  "format": "serial"
+ },
+ "lsblk:blockdevices.*.children.*.mountpoints.*": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.children.*.name": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.children.*.kname": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.children.*.type": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.children.*.size": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.children.*.fstype": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.children.*.model": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.children.*.rota": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.children.*.rm": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.children.*.tran": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.children.*.serial": {
+  "discloses": "identity",
+  "format": "serial"
+ },
+ "lsblk:blockdevices.*.children.*.children.*.mountpoints.*": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.children.*.children.*.name": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.children.*.children.*.kname": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.children.*.children.*.type": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.children.*.children.*.size": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.children.*.children.*.fstype": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.children.*.children.*.model": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.children.*.children.*.rota": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.children.*.children.*.rm": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.children.*.children.*.tran": {
+  "discloses": "nothing"
+ },
+ "lsblk:blockdevices.*.children.*.children.*.children.*.serial": {
+  "discloses": "identity",
+  "format": "serial"
+ },
+ "lsblk:blockdevices.*.children.*.children.*.children.*.mountpoints.*": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.target": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.source": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.fstype": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.options": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.size": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.used": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.avail": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.use%": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.target": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.source": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.fstype": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.options": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.size": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.used": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.avail": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.use%": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.target": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.source": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.fstype": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.options": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.size": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.used": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.avail": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.use%": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.children.*.target": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.children.*.source": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.children.*.fstype": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.children.*.options": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.children.*.size": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.children.*.used": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.children.*.avail": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.children.*.use%": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.children.*.children.*.target": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.children.*.children.*.source": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.children.*.children.*.fstype": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.children.*.children.*.options": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.children.*.children.*.size": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.children.*.children.*.used": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.children.*.children.*.avail": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.children.*.children.*.use%": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.children.*.children.*.children.*.target": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.children.*.children.*.children.*.source": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.children.*.children.*.children.*.fstype": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.children.*.children.*.children.*.options": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.children.*.children.*.children.*.size": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.children.*.children.*.children.*.used": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.children.*.children.*.children.*.avail": {
+  "discloses": "nothing"
+ },
+ "findmnt:filesystems.*.children.*.children.*.children.*.children.*.children.*.use%": {
+  "discloses": "nothing"
+ },
+ "#zfs_list_names_are_content": "The zfs-list payload is `zfs list -j -p`: dataset NAMES are operator-chosen words and appear as the map's keys, in each entry's name and pool members, inside mountpoint paths, and in an inherited property's source.data — those are content, substituted through one context so the specimen keeps demonstrating inheritance. Everything else is per-property: byte counts are numbers, switch positions are zfs's own vocabulary, and neither can carry a name.",
+ "zfs-list:datasets.~key": {
+  "discloses": "content",
+  "format": "name"
+ },
+ "zfs-list:datasets.*.name": {
+  "discloses": "content",
+  "format": "name"
+ },
+ "zfs-list:datasets.*.pool": {
+  "discloses": "content",
+  "format": "name"
+ },
+ "zfs-list:datasets.*.type": {
+  "discloses": "nothing"
+ },
+ "zfs-list:datasets.*.createtxg": {
+  "discloses": "nothing"
+ },
+ "zfs-list:datasets.*.properties.*.source.type": {
+  "discloses": "nothing"
+ },
+ "zfs-list:datasets.*.properties.*.source.data": {
+  "discloses": "content",
+  "format": "name"
+ },
+ "zfs-list:datasets.*.properties.used.value": {
+  "discloses": "nothing"
+ },
+ "zfs-list:datasets.*.properties.available.value": {
+  "discloses": "nothing"
+ },
+ "zfs-list:datasets.*.properties.usedbysnapshots.value": {
+  "discloses": "nothing"
+ },
+ "zfs-list:datasets.*.properties.canmount.value": {
+  "discloses": "nothing"
+ },
+ "zfs-list:datasets.*.properties.readonly.value": {
+  "discloses": "nothing"
+ },
+ "zfs-list:datasets.*.properties.mounted.value": {
+  "discloses": "nothing"
+ },
+ "zfs-list:datasets.*.properties.mountpoint.value": {
+  "discloses": "content",
+  "format": "path"
+ },
+ "zfs-list:datasets.*.properties.~key": {
+  "discloses": "nothing"
+ },
+ "status:pools.*.vdevs.*.vdevs.*.phys_space": {
+  "discloses": "nothing"
+ },
+ "status:pools.*.vdevs.*.vdevs.*.slow_ios": {
+  "discloses": "nothing"
+ },
+ "pools.*.vdevs.*.path": {
+  "discloses": "identity",
+  "format": "path"
+ }
 }

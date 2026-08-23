@@ -278,6 +278,9 @@ KEEP_UNCHANGED_TOKENS = {
     # meta l4proto spells the v6 ICMP protocol its own way, met when the
     # first staged ruleset carried one (corpus/network/exposure).
     "ipv6-icmp",
+    # zfs's not-applicable dash, in a property's source.data beside the
+    # dataset names that CAN appear there: a dash identifies nobody.
+    "-",
     # Interface names software assigns identically on every install: the
     # loopback, and tailscaled's one device. They teach which daemon runs,
     # not which machine — an operator-named bridge is exactly not here.
@@ -681,7 +684,13 @@ WWN_SPELLED = re.compile(
     r"(wwn-0x|scsi-3|naa\.|nvme-eui\.|eui\.|0x)([0-9a-fA-F]{32}|[0-9a-fA-F]{16})"
 )
 BARE_HEX16 = re.compile(r"\b[0-9a-fA-F]{16}\b")
-BYID_SERIAL = re.compile(r"\b((?:ata|scsi|sas|usb|nvme)-[\w.\-]+_)([A-Za-z0-9]{4,})\b")
+# The optional _N tail is an nvme NAMESPACE suffix: udev mints
+# nvme-<model>_<serial>_1 beside the bare link, and the underscore run left
+# no word boundary after the serial, so the suffixed twin defeated the
+# pattern entirely — met on the first capture whose devlinks walk included
+# nvme by-id links (corpus/storage/datasets, 2026-08-23).
+BYID_SERIAL = re.compile(
+    r"\b((?:ata|scsi|sas|usb|nvme)-[\w.\-]+_)([A-Za-z0-9]{4,})(_\d+)?\b")
 UUID = re.compile(
     r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
     r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
@@ -776,7 +785,8 @@ def scrub_text(text: str, ctx: Ctx) -> str:
 
     text = BARE_HEX16.sub(bare16, text)
     text = BYID_SERIAL.sub(
-        lambda m: m.group(1) + park(_serial_replacement(ctx, m.group(2))), text
+        lambda m: m.group(1) + park(_serial_replacement(ctx, m.group(2)))
+        + (m.group(3) or ""), text
     )
 
     def uuid(match: re.Match) -> str:

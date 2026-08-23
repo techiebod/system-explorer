@@ -1163,8 +1163,12 @@ class Adapter:
                 facts["ReadOnly"] = _prop_value(props, "readonly")
             facts["ReadOnlySource"] = readonly_source
             facts, absent = _split_absent(facts)
+            # Lowercased: zfs -j spells it FILESYSTEM, and the new wire's
+            # type member is lowercase by schema — the port normalises, so
+            # the reference must speak the same casing or the two implement
+            # different objects.
             item = env.item_summary(
-                f"dataset:{name}", ds.get("type", "filesystem"), name, facts,
+                f"dataset:{name}", ds.get("type", "filesystem").lower(), name, facts,
                 opinions=dataset_opinions(facts),
                 healthy="ok" if use_pct is not None else "info")
             items.append(_attach_channels(item, absent, unobservable))

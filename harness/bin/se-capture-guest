@@ -861,6 +861,7 @@ case "$collector" in
         acquisitions=(
             "status.json?|zpool status -j --json-int 2>/dev/null || true"
             "list.json?|zpool list -j -p -v -o name,size,alloc,free,cap,frag,health 2>/dev/null || true"
+            "zfs-list.json?|zfs list -j -p -o name,used,avail,usedbysnapshots,mountpoint,canmount,readonly,mounted 2>/dev/null || sudo zfs list -j -p -o name,used,avail,usedbysnapshots,mountpoint,canmount,readonly,mounted 2>/dev/null || true"
             "devlinks.json|python3 -c '$devlinks_py'"
             "lsblk.json|lsblk -J -o NAME,KNAME,TYPE,SIZE,FSTYPE,MOUNTPOINTS,MODEL,SERIAL,ROTA,RM,TRAN"
             "findmnt.json|findmnt -J --real -b --task 1 -o TARGET,SOURCE,FSTYPE,OPTIONS,SIZE,USED,AVAIL,USE%"

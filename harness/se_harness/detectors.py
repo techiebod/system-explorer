@@ -97,9 +97,13 @@ ID_LONG_DECIMAL = re.compile(r"\b\d{16,20}\b")
 # from udev's spellings, deliberately not from the scrubber's own list: the
 # scrubber knowing fewer spellings than its checker is the asymmetry that
 # catches the miss (nvme was exactly such a gap).
+# The optional _N tail is an nvme NAMESPACE suffix, without which the
+# suffixed twin link (`…_<serial>_1`) sat in an unbroken word run and the
+# pattern never fired on it — the scrubber's half met the same shape the
+# same day.
 BYID_TAIL = re.compile(
     r"\b((?:ata|scsi|sas|usb|nvme|mmc|memstick|virtio|ieee1394)-[\w.\-]+)"
-    r"_([A-Za-z0-9]{4,})\b"
+    r"_([A-Za-z0-9]{4,})(?:_\d+)?\b"
 )
 # A dashed UUID: boot ids, filesystem ids, partition ids. Scrubbed ones carry
 # the 5cb0 marker in their first four nibbles like any other 32-hex identity.
