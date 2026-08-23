@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/techiebod/system-explorer/go/internal/store"
@@ -406,21 +407,37 @@ func NewHandlerWithReverse(st *store.Store, now func() float64, bootID string,
 				})
 				return
 			}
+			// The collection resolves to ITS collector, and a miss is a
+			// stated refusal rather than a guess.
+			//
+			// This took `reverse[name]` and, on a miss, whatever the map
+			// yielded first — and Go randomises map iteration, so the
+			// same URL was answered by three different collectors across
+			// thirty requests. A collector asked for a collection it does
+			// not serve answers `decline`/`unsupported`, which is data
+			// and reads exactly like the object not existing, so the
+			// wrong-collector case was indistinguishable from an honest
+			// absence. Found by review the day the channel landed.
 			client, held := reverse[name]
 			if !held {
-				// Every collector, until the store can say which one owns
-				// a collection. Stated as coverage rather than guessed.
-				for _, candidate := range reverse {
-					client = candidate
-					break
-				}
-			}
-			declared, err := reachableCollections(st)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				writeJSON(w, map[string]any{
+					"refused": "no-collector-serves-it",
+					"detail": "no collector on this host publishes " +
+						strconv.Quote(name) + "; the reverse channel reaches " +
+						"the collector that serves a collection, and asking " +
+						"another one would get a decline that reads exactly " +
+						"like the object not existing",
+				})
 				return
 			}
+			// The set §06 admits the request for. A LOOKUP name is not a
+			// collection — the palette is a declaration-root member — so
+			// the two are checked against different sets. Checking a
+			// lookup against the collection list made /v1/lookups refuse
+			// every request it could ever receive.
+			declared := map[string]bool{name: true}
 			var raw []byte
+			var err error
 			ctx := r.Context()
 			switch verb {
 			case wire.VerbObject:
@@ -462,22 +479,6 @@ func NewHandlerWithReverse(st *store.Store, now func() float64, bootID string,
 	mux.HandleFunc("GET /v1/lookups/{name}", serveVerb(wire.VerbLookup))
 
 	return mux
-}
-
-// reachableCollections is the set §06 admits the reverse channel for:
-// "only for collections this collator's own declaration lists". Named
-// apart from dictionary.go's declaredCollections, which answers a
-// different question with a different shape.
-func reachableCollections(st *store.Store) (map[string]bool, error) {
-	states, err := st.Collections()
-	if err != nil {
-		return nil, err
-	}
-	declared := map[string]bool{}
-	for _, cs := range states {
-		declared[cs.Name] = true
-	}
-	return declared, nil
 }
 
 // relationView is one assembled edge as the API serves it. Observability is

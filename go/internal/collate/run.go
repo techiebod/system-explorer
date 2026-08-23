@@ -32,6 +32,7 @@ package collate
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -114,7 +115,15 @@ func Main() int {
 	}
 	go func() {
 		// The daemon's own boot clock serves ages; see boottime_linux.go.
-		if err := http.Serve(ln, HostGuard(NewHandler(st, BootNow, bootID),
+		//
+		// The reverse map is built here and NOWHERE ELSE was it built
+		// until 2026-08-23: NewHandlerWithReverse had exactly one caller
+		// — NewHandler, passing nil — so every deployment and every test
+		// answered `no-collectors` and the whole serveVerb body had never
+		// executed. Three register rows read "built" over that. Found by
+		// a review of the commit that added it, the same day.
+		if err := http.Serve(ln, HostGuard(
+			NewHandlerWithReverse(st, BootNow, bootID, reverseFor(collectors)),
 			os.Getenv("SE_ALLOWED_HOSTS"))); err != nil {
 			fmt.Fprintf(os.Stderr, "se-collate: serve: %v\n", err)
 		}
@@ -127,6 +136,66 @@ func Main() int {
 		go hubLoop(st, collectors, bootID)
 	}
 	select {} // the loops and the listener are the process
+}
+
+// reverseFor maps each COLLECTION to the collector that serves it, so a
+// verb request reaches the one collector that can answer it.
+//
+// Built from each collector's own declaration rather than from a table
+// here, which is what makes a plugin's collection reachable the day its
+// collector is configured. A collector that cannot be asked for its
+// declaration contributes nothing and is not guessed at: the route then
+// states that no collector serves the collection, which is a different
+// answer from a collector declining — and telling those apart is the
+// whole reason this map is keyed by collection at all.
+//
+// Lookups are keyed here too. The palette is a declaration-ROOT member,
+// never a collection, so a lookup name and a collection name live in one
+// map deliberately: both resolve to the collector that publishes them,
+// and the wire refuses a name the collector never declared.
+func reverseFor(collectors []collectorConfig) map[string]Reverse {
+	reverse := map[string]Reverse{}
+	for _, c := range collectors {
+		client := &wire.Client{Socket: c.socket}
+		raw, err := client.Declare(context.Background())
+		if err != nil {
+			// Stated on stderr rather than silently skipped: a collector
+			// that cannot be asked at start-up is a deployment fault, and
+			// its collections then answer "no collector serves it" rather
+			// than being routed somewhere arbitrary.
+			fmt.Fprintf(os.Stderr, "se-collate: %s: no declaration for the "+
+				"reverse channel: %v\n", c.name, err)
+			continue
+		}
+		for _, name := range declaredNames(raw) {
+			reverse[name] = client
+		}
+	}
+	return reverse
+}
+
+// declaredNames is every collection and every lookup a declaration
+// publishes — the names a reverse request may legitimately carry.
+func declaredNames(raw []byte) []string {
+	var document struct {
+		Collections []struct {
+			Name string `json:"name"`
+		} `json:"collections"`
+		Lookups []struct {
+			Name string `json:"name"`
+		} `json:"lookups"`
+	}
+	if err := json.Unmarshal(raw, &document); err != nil {
+		return nil
+	}
+	names := make([]string, 0, len(document.Collections)+len(document.Lookups))
+	for _, c := range document.Collections {
+		names = append(names, c.Name)
+	}
+	for _, l := range document.Lookups {
+		names = append(names, l.Name)
+	}
+	return names
 }
 
 type collectorConfig struct {

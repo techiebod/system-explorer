@@ -4,13 +4,16 @@ package collate
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/techiebod/system-explorer/go/internal/store"
+	"github.com/techiebod/system-explorer/go/internal/wire"
 )
 
 // seeded applies two objects under fakeBootID and returns the store, so
@@ -665,5 +668,147 @@ func TestTheChangesRouteReachesAnInstanceScopedRecord(t *testing.T) {
 	if answer.Gap != nil {
 		t.Fatalf("the instance's record has begun and the route must reach it, "+
 			"not deny it: %+v", answer.Gap)
+	}
+}
+
+// --- the reverse channel, ROUTED --------------------------------------
+
+// fakeReverse records what it was asked, so a test can assert WHICH
+// collector answered rather than only that something did.
+type fakeReverse struct {
+	name  string
+	asked *[]string
+}
+
+func (f fakeReverse) note(verb, collection, token string) ([]byte, error) {
+	*f.asked = append(*f.asked, f.name+":"+verb+":"+collection+":"+token)
+	return []byte(`{"record":"verb_end","verb":"` + verb + `"}` + "\n"), nil
+}
+
+func (f fakeReverse) Object(_ context.Context, c, n string, d map[string]bool) ([]byte, error) {
+	if !d[c] {
+		return nil, &wire.Refused{Verb: "object", Reason: "undeclared-collection", Detail: c}
+	}
+	return f.note("object", c, n)
+}
+func (f fakeReverse) Evidence(_ context.Context, c, n string, d map[string]bool) ([]byte, error) {
+	if !d[c] {
+		return nil, &wire.Refused{Verb: "evidence", Reason: "undeclared-collection", Detail: c}
+	}
+	return f.note("evidence", c, n)
+}
+func (f fakeReverse) Lookup(_ context.Context, l, in string, d map[string]bool) ([]byte, error) {
+	if !d[l] {
+		return nil, &wire.Refused{Verb: "lookup", Reason: "undeclared-collection", Detail: l}
+	}
+	return f.note("lookup", l, in)
+}
+
+func routedHandler(t *testing.T, asked *[]string) http.Handler {
+	t.Helper()
+	return NewHandlerWithReverse(seeded(t), func() float64 { return 26.0 }, fakeBootID,
+		map[string]Reverse{
+			"identity":  fakeReverse{"system", asked},
+			"pools":     fakeReverse{"storage", asked},
+			"route-get": fakeReverse{"network", asked},
+		})
+}
+
+func TestAVerbReachesTheCollectorThatServesTheCollection(t *testing.T) {
+	// serveVerb took whatever the map yielded first on a miss, and Go
+	// randomises map iteration — the same URL was answered by three
+	// different collectors across thirty requests. A collector asked for
+	// a collection it does not serve answers decline/unsupported, which
+	// is DATA and reads exactly like the object not existing, so the
+	// wrong-collector case was indistinguishable from an honest absence.
+	var asked []string
+	handler := routedHandler(t, &asked)
+
+	if got := get(t, handler, "/v1/collections/identity/objects/host1"); got.Code != 200 {
+		t.Fatalf("%d: %s", got.Code, got.Body.String())
+	}
+	if len(asked) != 1 || asked[0] != "system:object:identity:host1" {
+		t.Fatalf("the collection's OWN collector answers: %v", asked)
+	}
+	asked = nil
+	if got := get(t, handler, "/v1/collections/pools/objects/tank/evidence"); got.Code != 200 {
+		t.Fatalf("%d: %s", got.Code, got.Body.String())
+	}
+	if len(asked) != 1 || asked[0] != "storage:evidence:pools:tank" {
+		t.Fatalf("%v", asked)
+	}
+}
+
+func TestACollectionNoCollectorServesIsStatedNotGuessed(t *testing.T) {
+	var asked []string
+	got := get(t, routedHandler(t, &asked), "/v1/collections/nobody/objects/x")
+	if got.Code != 200 {
+		t.Fatalf("%d", got.Code)
+	}
+	var answer map[string]any
+	if err := json.Unmarshal(got.Body.Bytes(), &answer); err != nil {
+		t.Fatal(err)
+	}
+	if answer["refused"] != "no-collector-serves-it" {
+		t.Fatalf("%+v", answer)
+	}
+	if len(asked) != 0 {
+		t.Fatalf("nothing is dialled for a collection nobody serves: %v", asked)
+	}
+}
+
+func TestALookupIsCheckedAgainstThePaletteNotTheCollections(t *testing.T) {
+	// The declared set was built from st.Collections(), and a lookup name
+	// is a declaration-ROOT palette entry — so every lookup request was
+	// refused as an undeclared collection, and the route could never
+	// succeed at all.
+	var asked []string
+	got := get(t, routedHandler(t, &asked),
+		"/v1/lookups/route-get?input=192.0.2.7")
+	if got.Code != 200 {
+		t.Fatalf("%d: %s", got.Code, got.Body.String())
+	}
+	if len(asked) != 1 || asked[0] != "network:lookup:route-get:192.0.2.7" {
+		t.Fatalf("%v", asked)
+	}
+}
+
+func TestTheReverseRoutesAreWiredByTheDaemon(t *testing.T) {
+	// NewHandlerWithReverse had ONE caller — NewHandler, passing nil — so
+	// every deployment answered `no-collectors` and the entire serveVerb
+	// body had never executed, while three register rows read "built".
+	// This holds the wiring rather than the handler: the daemon must
+	// build a map, and it must build it from the collectors' own
+	// declarations.
+	source, err := os.ReadFile("run.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(source), "NewHandlerWithReverse(") {
+		t.Fatal("the daemon serves the read API without the reverse channel, " +
+			"so every verb route answers no-collectors")
+	}
+	if !strings.Contains(string(source), "reverseFor(collectors)") {
+		t.Fatal("the reverse map must be built from the configured collectors")
+	}
+	// And built from DECLARATIONS: a hand-kept table here would be the
+	// thing that stops a plugin's collection being reachable.
+	if !strings.Contains(string(source), "declaredNames(raw)") {
+		t.Fatal("the map must come from each collector's own declaration")
+	}
+}
+
+func TestReverseForKeysCollectionsAndLookupsAlike(t *testing.T) {
+	names := declaredNames([]byte(`{"collections":[{"name":"links"},{"name":"routes"}],
+		"lookups":[{"name":"route-get"},{"name":"resolve"}]}`))
+	want := map[string]bool{"links": true, "routes": true,
+		"route-get": true, "resolve": true}
+	if len(names) != len(want) {
+		t.Fatalf("%v", names)
+	}
+	for _, name := range names {
+		if !want[name] {
+			t.Fatalf("unexpected %q in %v", name, names)
+		}
 	}
 }

@@ -420,7 +420,15 @@ def _verb_landed(verb: str) -> bool:
                   for path in GO_CMD.glob("se-collect-*/main.go"))
     reaches = _in_file("go/internal/wire/verbs.go", f'Verb{verb.capitalize()}')
     serves = _in_file("go/internal/collate/rest.go", f'wire.Verb{verb.capitalize()}')
-    return answers and reaches and serves
+    # **And WIRED.** The three tiers above were each a grep, so a channel
+    # that existed and was never handed to the running daemon satisfied
+    # all of them: NewHandlerWithReverse had one caller, NewHandler,
+    # passing nil — every deployment answered `no-collectors` and the
+    # serving body had never executed. The probe said built. Found by a
+    # review of the commit that widened it, the same day it was widened.
+    wired = (_in_file("go/internal/collate/run.go", "NewHandlerWithReverse(")
+             and _in_file("go/internal/collate/run.go", "reverseFor(collectors)"))
+    return answers and reaches and serves and wired
 
 
 def _declares(collector: str, member: str) -> bool:
