@@ -329,3 +329,76 @@ XML
     sudo virsh start se-nested-probe >/dev/null 2>&1 || true
     say "vms venue: $(sudo virsh list --all --name | grep -c . ) domain(s) defined"
 fi
+
+# ------------------------------------------------------------- nftables
+# The network collector's second collection, `port-exposure`, and the one
+# venue whose absence made the comparator report a REFERENCE CRASH rather
+# than a decline: the reference shells out to `nft` and raised
+# FileNotFoundError, so the collection was unanswered on both sides while
+# the surrounding run read clean. That is the estate's own failure mode —
+# unobservable and healthy rendering alike — inside the tool that exists
+# to catch it.
+#
+# A ruleset is loaded rather than only the binary installed. An empty
+# ruleset compares two implementations agreeing there is nothing, which
+# is the "proves nothing about either" case this whole script exists to
+# avoid. The shape is deliberately family-ASYMMETRIC — inet and ip, not
+# the same rules in both — because a collector that reads one family and
+# reports it as the whole is the defect a symmetric ruleset cannot show.
+#
+# `command -v nft` is the WRONG TEST and was the first thing written here.
+# nftables ships nft in /usr/sbin, which is not on a non-root user's PATH
+# on Debian, so the probe reported "not installed" about a package that
+# was already at its newest version and the install it then ran was a
+# no-op that printed nothing. Both implementations resolve the tool by
+# PATH lookup — `shutil.which` on the reference, `exec.LookPath` on the
+# port — so the tool's PRESENCE and its REACHABILITY are different facts
+# and only the second one is the venue.
+NFT=/usr/sbin/nft
+if [ ! -x "$NFT" ] && ! NFT="$(command -v nft 2>/dev/null)"; then
+    say "installing nftables"
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q nftables \
+        >/dev/null 2>&1 || say "nftables install failed"
+    NFT=/usr/sbin/nft
+fi
+if [ -x "$NFT" ]; then
+    if sudo "$NFT" list table inet se_lab >/dev/null 2>&1; then
+        say "nftables venue already loaded"
+    else
+        # Written to a file and loaded, not piped as a string: the rules
+        # are a payload and the repository's rule about remote payloads
+        # applies to what a payload itself carries.
+        sudo tee /etc/nftables-se-lab.conf >/dev/null <<'RULES'
+table inet se_lab {
+  chain input {
+    type filter hook input priority filter; policy accept;
+    tcp dport 22 accept
+    tcp dport { 8095, 9601 } accept
+    udp dport 53 accept
+  }
+  chain forward {
+    type filter hook forward priority filter; policy drop;
+  }
+}
+table ip se_lab_nat {
+  chain postrouting {
+    type nat hook postrouting priority srcnat; policy accept;
+  }
+}
+RULES
+        sudo "$NFT" -f /etc/nftables-se-lab.conf \
+            && say "nftables venue loaded: inet filter + ip nat, asymmetric" \
+            || say "nftables load failed"
+    fi
+    # A receipt only if the ruleset ANSWERS, matching how the unbound
+    # venue above distinguishes a socket that exists from one that
+    # replies: `nft` installed and a ruleset that lists are different
+    # facts, and only the second is a venue.
+    if sudo "$NFT" list table inet se_lab >/dev/null 2>&1; then
+        forget SE_NFT_TABLE
+        emit SE_NFT_TABLE inet:se_lab
+        say "nftables venue answered"
+    else
+        say "nft is installed but the lab table did not list — receipt omitted"
+    fi
+fi

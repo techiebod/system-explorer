@@ -26,6 +26,27 @@ sides and names the difference rather than declaring a winner.
     se-compare storage                  # parity + clock truth
     se-compare storage network --twice  # and prove the clock moves
     se-compare --json storage           # for a machine, e.g. gate 3's report
+
+THE ANSWER DEPENDS ON TWO CONDITIONS OF THE INVOCATION, and neither is
+checkable from in here — both are properties of the process a person
+started, so this says them rather than pretending the run is unconditional:
+
+  **Privilege.** Some interfaces are readable only to root — `nft list
+  ruleset` refuses outright — and the deployed agent holds capabilities the
+  comparator's shell does not. Run under `sudo` for a report that compares
+  READINGS; without it both sides truthfully decline `unauthorised` and the
+  run reports agreement about a question neither could ask.
+
+  **PATH.** Both implementations resolve their tools by PATH lookup
+  (`shutil.which` on the reference, `exec.LookPath` on the port), and Debian
+  puts `nft` in /usr/sbin, which is not on a non-root user's PATH. On
+  2026-08-23 that alone cost the whole `network` collector: the reference
+  raised FileNotFoundError and exited 2, losing all NINE of its collections,
+  where the port declined the four affected ones and still published 48
+  objects. With PATH fixed both sides publish 68 and agree. So:
+
+    sudo env PATH=/usr/sbin:/usr/bin:/bin SE_PORT_BIN_DIR=go/bin \
+        .venv/bin/python harness/bin/se-compare --json
 """
 
 from __future__ import annotations
