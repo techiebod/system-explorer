@@ -15,6 +15,16 @@
   "collections": [
     {
       "name": "packages",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what is installed on this machine, and which package manager says so?",
       "prefix": "package",
       "freshness": "1h",

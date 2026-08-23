@@ -13,6 +13,16 @@
   "collections": [
     {
       "name": "daemon",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "is the resolver up, and how much work is it doing?",
       "prefix": "daemon",
       "freshness": "60s",

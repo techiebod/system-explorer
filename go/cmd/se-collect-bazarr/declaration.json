@@ -13,6 +13,16 @@
   "collections": [
     {
       "name": "instance",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "is the subtitle manager up, which release is it, and is it complaining about anything?",
       "prefix": "instance",
       "freshness": "60s",

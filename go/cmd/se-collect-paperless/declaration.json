@@ -13,6 +13,16 @@
   "collections": [
     {
       "name": "instance",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "how many documents does the archive hold, and are the app's own components healthy enough to be believed about that?",
       "prefix": "instance",
       "freshness": "60s",
