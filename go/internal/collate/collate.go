@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/techiebod/system-explorer/go/internal/store"
 	"github.com/techiebod/system-explorer/go/internal/wire"
@@ -267,8 +268,35 @@ func applyCollection(st *store.Store, name, scope string, batch *wire.Batch) err
 			At:     o.At,
 		})
 	}
-	_, err := st.ApplyCommit(name, scope, gen, batch.Begin.Batch, batch.Begin.BootID, objects)
-	return err
+	outcome, err := st.ApplyCommit(name, scope, gen, batch.Begin.Batch, batch.Begin.BootID, objects)
+	if err != nil || outcome != store.OutcomeApplied {
+		return err
+	}
+	return recordSnapshot(st, name, scope, gen)
+}
+
+// recordSnapshot keeps the record (DESIGN 06), after an apply and only
+// after one: a refused or duplicate commit changed nothing, so a
+// snapshot of it would be a baseline for a reading that never landed.
+//
+// **A failure here does not fail the apply.** The record is a product
+// feature over state that is already durable, and the collection has
+// already committed in its own transaction; refusing the apply because
+// the diff's baseline could not be written would let a secondary store
+// reject an observation the host actually made. What it must not do is
+// pass silently — the refusal is recorded where refusals go, so a record
+// that has stopped keeping itself is visible rather than inferred from a
+// diff that answers "no change" for ever.
+func recordSnapshot(st *store.Store, name, scope string, gen uint64) error {
+	snapshot, ok, err := SnapshotFor(st, name, scope,
+		time.Now().UTC().Format(time.RFC3339), gen)
+	if err == nil && ok {
+		_, err = st.RecordSnapshot(snapshot)
+	}
+	if err != nil {
+		return st.RecordRejection(name, "", "record-failed", err.Error())
+	}
+	return nil
 }
 
 // applyRelations mints one collection's assertions into relations (DESIGN

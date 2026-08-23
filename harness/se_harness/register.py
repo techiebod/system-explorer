@@ -556,16 +556,32 @@ REGISTER: tuple[Row, ...] = (
         "REST tests. The collator's own slice accounting — the authoritative "
         "figure DESIGN 19 names — is R5's resource measurement, not this."),
     Row(17, "change tracking — history, `/v1/changes`, `what_changed`",
-        "owed", "R3e — ruled 2026-08-23, unbuilt",
-        lambda: _in_file("src/system_explorer/hub/routes.py", "/v1/changes"),
-        "the probe sees the hub route, and nothing serves it yet. The "
-        "migration question is no longer what blocks this: ruled "
-        "2026-08-23 in §06's cut — tracking begins at the cut, no snapshot "
-        "is translated forward, and an interval reaching before it renders "
-        "as a stated gap rather than an answer from an empty baseline. "
-        "What the probe cannot see, and what the ruling does not supply: "
-        "the store, the differ and the counter exclusion are all still "
-        "owed work."),
+        "built", "R3e",
+        lambda: (_in_file("go/internal/store/record.go", "snapshots")
+                 and _in_file("go/internal/collate/changes.go", "MeasureFacts")
+                 and _in_file("go/internal/collate/rest.go", "what_changed")),
+        "the probe reads the COLLATOR, and that is the correction this row "
+        "needed: it probed the hub until 2026-08-23, encoding an assumption "
+        "the design contradicts — §06 gives the record to the collator, "
+        "because that is the tier that already holds both samples. Flipped "
+        "the same day. Three pieces, because any one alone is a store "
+        "nothing reads, a differ with no record, or a route with neither. "
+        "The measures are excluded by DECLARATION, not by a list: a fact "
+        "whose declared temperament is counter or gauge never reaches the "
+        "diff OR the snapshot, so a plugin's counter is excluded the day it "
+        "arrives and there is no table here to fall out of step with one — "
+        "which the reference could not do, having no declared temperament "
+        "to read. A snapshot is written only when the diffable content "
+        "moved, so a host whose counters advance every sweep stores one row "
+        "rather than one per sweep. A question reaching before the record "
+        "begins is a stated gap: an unreachable baseline is not an empty "
+        "one, and diffing against nothing would report every object as "
+        "added. Seven plants proven to bite. What the probe cannot see: the "
+        "absent list is NOT diffed — store.ObjectRow serves no reader for "
+        "that column — so a fact moving between value and absent is "
+        "invisible, which is stated in changes.go where the type is "
+        "defined; and no scheduler calls PruneSnapshots yet, so retention "
+        "is a function nothing invokes."),
     Row(18, "findings persistence (a registry that survives restart)",
         "built", "R3e",
         lambda: any(_in_file(f"src/system_explorer/hub/{m}.py", "sqlite3")

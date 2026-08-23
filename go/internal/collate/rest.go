@@ -285,6 +285,38 @@ func NewHandler(st *store.Store, now func() float64, bootID string) http.Handler
 		writeJSON(w, views)
 	})
 
+	// What changed, at the tier that keeps the record (DESIGN 06). The
+	// baseline is a stored snapshot with the measures already dropped —
+	// so a collection whose counters advanced every sweep answers "no
+	// change", which is the honest answer and the one the reference
+	// could not give.
+	mux.HandleFunc("GET /v1/collections/{name}/changes", func(w http.ResponseWriter, r *http.Request) {
+		name := r.PathValue("name")
+		known, err := st.HasCollection(name)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !known {
+			http.Error(w, "unknown collection", http.StatusNotFound)
+			return
+		}
+		// No `since` means since the record began — a well-defined moment
+		// rather than a guess, and the answer states which reading it
+		// actually rests on, so "what changed while you have been
+		// watching" is askable without knowing when that started.
+		since := r.URL.Query().Get("since")
+		if since == "" {
+			since = nowStamp()
+		}
+		changes, err := ChangesSince(st, name, store.HostNative, since)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, changes)
+	})
+
 	return mux
 }
 
@@ -369,6 +401,18 @@ var publishedRoutes = []map[string]any{
 			"inferred. Reaches a plugin's collection the day it exists, " +
 			"because nothing here names a first-party one.",
 		"params": []string{"name", "limit", "cursor"}},
+	{"path": "/v1/collections/{name}/changes", "tool": "what_changed",
+		"summary": "What changed in one collection since a moment you name. " +
+			"Facts whose declared temperament is counter or gauge do NOT " +
+			"participate — a counter advances by definition, so a diff " +
+			"carrying one reports change continuously and says nothing — and " +
+			"the exclusion is read from the collection's own declaration, so " +
+			"a plugin's counter is excluded the day it arrives. A question " +
+			"reaching before the record begins is answered with a stated gap " +
+			"rather than from an empty baseline: an unreachable baseline is " +
+			"not an empty one, and diffing against nothing would report every " +
+			"object as added.",
+		"params": []string{"name", "since"}},
 	{"path": "/v1/collections/{name}/relations", "tool": "get_relations",
 		"summary": "One collection's assembled relations, each carrying its " +
 			"observability — asserted is NOT a degraded confirmed, and an " +
