@@ -60,12 +60,21 @@ class Actors:
     """Token to actor name, as the deployment supplied it.
 
     Empty means unconfigured, and unconfigured means every write is
-    refused — never an open door. The distinction between "no credential
-    was presented" and "this hub accepts no writes" is kept in the
-    refusal text, because they need different fixes.
+    refused — never an open door.
+
+    `unreadable` carries the path of a credential document that exists
+    and could not be read, because "the credential is there and I cannot
+    read it" and "this hub was never meant to accept writes" need
+    different fixes and rendered identically until 2026-08-23. Both
+    refuse; only one is a deployment fault. A comment claimed the
+    distinction was made and the code did not make it, which is the
+    over-claim this repository warns about twice — found by an audit of
+    this module the day it was written.
     """
 
     by_token: dict[str, str]
+    #: The credential document that exists and could not be read, if any.
+    unreadable: str = ""
 
     def identify(self, token: str) -> str | None:
         """The actor a token names, compared in constant time.
@@ -73,10 +82,21 @@ class Actors:
         `hmac.compare_digest` over every candidate rather than a dict
         lookup: a dict lookup's timing is a function of the token, and an
         unauthenticated socket is exactly where that is measurable.
+
+        Compared as BYTES, and that is not a detail. `compare_digest`
+        raises TypeError on a str carrying non-ASCII, and
+        BaseHTTPRequestHandler decodes headers as latin-1 — so one header
+        byte from any unauthenticated client reached this line and killed
+        the request before any credential check, with no response at all.
+        Found by an audit of this module on 2026-08-23.
         """
+        try:
+            presented = token.encode("utf-8")
+        except (UnicodeEncodeError, AttributeError):
+            return None
         found: str | None = None
         for candidate, actor in self.by_token.items():
-            if hmac.compare_digest(candidate, token):
+            if hmac.compare_digest(candidate.encode("utf-8"), presented):
                 found = actor
         return found
 
@@ -126,10 +146,13 @@ def deployed_actors() -> Actors:
     try:
         return actors_from(Path(path).read_text(encoding="utf-8"))
     except OSError:
-        # Unreadable is not unconfigured, and it must not become an open
-        # door NOR a silent closed one: no actor is identified, and the
-        # refusal below says the credential could not be read.
-        return Actors(by_token={})
+        # Unreadable is not unconfigured, and it must become neither an
+        # open door nor a silent closed one. It refuses like an
+        # unconfigured hub and SAYS which of the two it is, because a
+        # chmod or a systemd credential that failed to materialise
+        # otherwise presents as a deliberate posture — unobservable and
+        # healthy rendering the same, in the write plane.
+        return Actors(by_token={}, unreadable=path)
 
 
 def handler_class(log: Log,
@@ -148,11 +171,37 @@ def handler_class(log: Log,
             # accumulating somewhere nobody prunes.
             return
 
-        def _send(self, code: int, payload: dict[str, Any]) -> None:
+        def _send(self, code: int, payload: dict[str, Any],
+                  body_unread: bool = False) -> None:
+            """One response. A refusal that did not read the request body
+            CLOSES the connection.
+
+            **This is request smuggling if it does not.** protocol_version
+            is HTTP/1.1, so the socket stays open, and every refusal path
+            returned before touching rfile — so the unread body was then
+            parsed as the next request on the same connection. Reproduced
+            on 2026-08-23: one POST with a wrong bearer token, whose body
+            was itself a well-formed POST with a valid one, drew a 401
+            followed by a 201 and wrote an attributed transition. Behind
+            any proxy that pools upstream connections that is also
+            response-queue poisoning, on the one listener in the product
+            that accepts credentials — and it defeats the property the
+            separate door exists to buy, because a record can be
+            attributed to the token that arrived on a desynced connection
+            rather than the one that sent the request.
+
+            Closing rather than draining is deliberate: draining means
+            reading a body this handler has already decided not to trust,
+            in whatever length it claims.
+            """
             body = json.dumps(payload).encode()
+            if body_unread:
+                self.close_connection = True
             self.send_response(code)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
+            if body_unread:
+                self.send_header("Connection", "close")
             self.end_headers()
             self.wfile.write(body)
 
@@ -164,21 +213,57 @@ def handler_class(log: Log,
             return identities.identify(token.strip())
 
         def do_POST(self) -> None:  # noqa: N802
+            try:
+                self._transition()
+            except Exception as exc:  # noqa: BLE001
+                # The TYPE, never the message — acceptance item 11, the
+                # same posture http.py holds on the read surface. Without
+                # this the caller got a closed connection and could not
+                # tell "refused" from "stored" from "the store is broken",
+                # on the one tier whose whole job is a durable attributed
+                # record. An operator who cannot tell those apart cannot
+                # know whether to retry, and a retry after a partial
+                # failure is how the log stops being the record it claims
+                # to be.
+                self._send(500, {"error": type(exc).__name__,
+                                 "detail": "this listener failed while "
+                                           "recording; the transition may not "
+                                           "have been stored"},
+                           body_unread=True)
+
+        def _transition(self) -> None:
             if self.path.split("?", 1)[0] != TRANSITIONS_PATH:
                 self._send(404, {"error": "no such route",
                                  "detail": f"this listener answers {TRANSITIONS_PATH} "
-                                           "and nothing else"})
+                                           "and nothing else"}, body_unread=True)
                 return
             if not identities.configured():
                 # Deny by default, and say which of the two states this
                 # is: an operator whose credential file is missing needs
                 # a different fix from one who never meant to accept
                 # writes at all.
+                if identities.unreadable:
+                    # A deployment fault, and it must not present as a
+                    # deliberate posture: a chmod or a systemd credential
+                    # that failed to materialise renders identically to
+                    # "this hub was never meant to accept writes"
+                    # otherwise, which is unobservable and healthy
+                    # rendering the same, one tier down.
+                    self._send(503, {
+                        "error": "credential-unreadable",
+                        "detail": "a credential document is configured for this "
+                                  "listener and could not be read, so no actor "
+                                  "can be established; this is a deployment "
+                                  "fault rather than a hub that accepts no "
+                                  "writes, and the two need different fixes"},
+                        body_unread=True)
+                    return
                 self._send(503, {
                     "error": "no-actors-configured",
                     "detail": "this hub accepts no transitions: no credential "
-                              "naming an actor was readable, and a write plane "
-                              "that opens itself when unconfigured is not one"})
+                              "naming an actor was configured, and a write plane "
+                              "that opens itself when unconfigured is not one"},
+                    body_unread=True)
                 return
             actor = self._actor()
             if actor is None:
@@ -186,7 +271,20 @@ def handler_class(log: Log,
                     "error": "unattributed",
                     "detail": "a transition carries the actor who made it, and "
                               "the actor comes from the credential rather than "
-                              "the request — a self-declared actor is a claim"})
+                              "the request — a self-declared actor is a claim"},
+                    body_unread=True)
+                return
+            if self.headers.get("Transfer-Encoding", "").lower() == "chunked":
+                # Read as length 0 before 2026-08-23, which answered
+                # "unknown-action" for an empty document and then parsed
+                # the chunk-size line as the next request. This handler
+                # does not decode chunked bodies, and saying so is the
+                # only honest answer.
+                self._send(411, {
+                    "error": "length-required",
+                    "detail": "this listener does not decode a chunked body; "
+                              "send a transition with a Content-Length"},
+                    body_unread=True)
                 return
             try:
                 length = int(self.headers.get("Content-Length", "0"))
@@ -194,7 +292,8 @@ def handler_class(log: Log,
                 length = -1
             if length < 0 or length > MAX_BODY:
                 self._send(413, {"error": "body-bounds",
-                                 "detail": f"a transition body is at most {MAX_BODY} bytes"})
+                                 "detail": f"a transition body is at most {MAX_BODY} bytes"},
+                           body_unread=True)
                 return
             try:
                 document = json.loads(self.rfile.read(length) or b"{}")
@@ -233,18 +332,30 @@ def handler_class(log: Log,
             # stamp it did not set.
             self._send(201, {"recorded": transition.as_wire()})
 
+        def do_HEAD(self) -> None:  # noqa: N802
+            # A 405 with no body: a HEAD carrying one desyncs any client
+            # that obeys RFC 9110 and does not read it, which on a
+            # keep-alive socket is the same class of defect as the
+            # smuggling above.
+            self.close_connection = True
+            self.send_response(405)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", "0")
+            self.send_header("Connection", "close")
+            self.end_headers()
+
         def _refuse_read(self) -> None:
             self._send(405, {
                 "error": "this listener is write-only",
                 "detail": "findings and their acknowledgement state are on the "
                           "read surface; this socket exists so that surface can "
-                          "stay read-only"})
+                          "stay read-only"}, body_unread=True)
 
         # Symmetric to http.py's refusal, and for the same reason: named
         # rather than defaulted, because 501 is what a caller gets from a
         # handler that simply has no method, and 405 with a stated reason
         # is what an operator can act on.
-        do_GET = do_HEAD = do_PUT = do_PATCH = do_DELETE = _refuse_read
+        do_GET = do_PUT = do_PATCH = do_DELETE = _refuse_read
 
     return Handler
 

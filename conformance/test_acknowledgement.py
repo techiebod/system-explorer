@@ -315,3 +315,177 @@ def test_the_credential_document_skips_comments_and_blanks() -> None:
     assert actors.identify("tok-ada") == "ada lovelace"
     assert actors.identify("nope") is None
     assert actors.configured()
+
+
+# --- what an audit of this module found the day it was written -------
+
+import socket
+
+
+def _raw(port: int, request: bytes, deadline: float = 3.0) -> bytes:
+    """One TCP connection, one write, read until the peer stops.
+
+    urllib cannot see any of the defects below: it sends one
+    fixed-length request per connection and reads exactly one response,
+    which is the shape that made the module look correct.
+    """
+    sock = socket.create_connection(("127.0.0.1", port))
+    sock.settimeout(deadline)
+    try:
+        sock.sendall(request)
+        chunks = []
+        try:
+            while True:
+                block = sock.recv(4096)
+                if not block:
+                    break
+                chunks.append(block)
+        except socket.timeout:
+            pass
+        return b"".join(chunks)
+    finally:
+        sock.close()
+
+
+def _listener(log, actors="tok-ada ada"):
+    from http.server import ThreadingHTTPServer
+    server = ThreadingHTTPServer(
+        ("127.0.0.1", 0),
+        writes.handler_class(log, lambda: at(5), writes.actors_from(actors)))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server
+
+
+def test_a_refused_requests_body_is_never_executed_as_the_next_one() -> None:
+    """Request smuggling on the one listener that accepts credentials.
+
+    protocol_version is HTTP/1.1 so the socket stays open, and every
+    refusal returned before touching rfile — so the unread body was
+    parsed as the next request. Reproduced 2026-08-23: a POST with a
+    wrong bearer token, whose body was itself a well-formed POST with a
+    valid one, drew a 401 and then a 201 and wrote an attributed
+    transition. Behind a proxy that pools upstream connections it is
+    also response-queue poisoning, and it defeats attribution itself —
+    a record can be attributed to the token that arrived on a desynced
+    connection rather than the one that sent the request.
+    """
+    log = Log()
+    server = _listener(log)
+    try:
+        smuggled = json.dumps({"finding": "SMUGGLED/o/k", "action": ACKNOWLEDGE})
+        inner = (f"POST {writes.TRANSITIONS_PATH} HTTP/1.1\r\nHost: x\r\n"
+                 f"Authorization: Bearer tok-ada\r\n"
+                 f"Content-Length: {len(smuggled)}\r\n\r\n{smuggled}")
+        outer = (f"POST {writes.TRANSITIONS_PATH} HTTP/1.1\r\nHost: x\r\n"
+                 f"Authorization: Bearer WRONG\r\n"
+                 f"Content-Length: {len(inner)}\r\n\r\n{inner}").encode()
+        answer = _raw(server.server_port, outer)
+        assert answer.count(b"HTTP/1.1") == 1, (
+            "a refusal answers once and closes; a second response on the "
+            f"same connection is the smuggled request executing: {answer!r}")
+        assert b"401" in answer
+        assert log.all() == (), "the smuggled transition must not be recorded"
+    finally:
+        server.shutdown()
+
+
+def test_a_non_ascii_token_is_refused_rather_than_killing_the_request() -> None:
+    """Reachable before any credential check, from any client, with one
+    header byte: headers decode as latin-1, and hmac.compare_digest
+    raises TypeError on a str carrying non-ASCII. The caller got no
+    response at all."""
+    log = Log()
+    server = _listener(log)
+    try:
+        body = json.dumps({"finding": FINDING, "action": ACKNOWLEDGE})
+        request = (f"POST {writes.TRANSITIONS_PATH} HTTP/1.1\r\nHost: x\r\n"
+                   f"Authorization: Bearer \xe9vil\r\n"
+                   f"Content-Length: {len(body)}\r\n\r\n{body}").encode("latin-1")
+        answer = _raw(server.server_port, request)
+        assert b"HTTP/1.1 401" in answer, (
+            f"an unknown token is refused, never a dropped connection: {answer!r}")
+        assert log.all() == ()
+    finally:
+        server.shutdown()
+
+
+def test_a_chunked_body_is_refused_rather_than_read_as_empty() -> None:
+    log = Log()
+    server = _listener(log)
+    try:
+        request = (f"POST {writes.TRANSITIONS_PATH} HTTP/1.1\r\nHost: x\r\n"
+                   f"Authorization: Bearer tok-ada\r\n"
+                   f"Transfer-Encoding: chunked\r\n\r\n"
+                   f"2d\r\n").encode()
+        answer = _raw(server.server_port, request)
+        assert b"411" in answer, answer
+        # And no second response: the chunk-size line was parsed as a
+        # request line before this fix.
+        assert answer.count(b"HTTP/1.1") == 1, answer
+    finally:
+        server.shutdown()
+
+
+def test_a_head_carries_no_body() -> None:
+    server = _listener(Log())
+    try:
+        answer = _raw(server.server_port,
+                      f"HEAD {writes.TRANSITIONS_PATH} HTTP/1.1\r\n"
+                      f"Host: x\r\n\r\n".encode())
+        assert b"405" in answer
+        head, _, body = answer.partition(b"\r\n\r\n")
+        assert body == b"", f"a HEAD with a body desyncs a conforming client: {body!r}"
+    finally:
+        server.shutdown()
+
+
+def test_a_store_failure_answers_rather_than_dropping_the_connection(tmp_path) -> None:
+    """This is the tier whose whole job is a durable attributed record.
+    On a store failure the caller could not tell 'refused' from 'stored'
+    from 'the store is broken' — it got nothing — and a retry after a
+    partial failure is how the log stops being the record it claims to
+    be."""
+    class Broken(Log):
+        def append(self, transition):
+            raise OSError("the store is gone")
+
+    server = _listener(Broken())
+    try:
+        code, body = _post(f"http://127.0.0.1:{server.server_port}",
+                           {"finding": FINDING, "action": ACKNOWLEDGE},
+                           token="tok-ada")
+        assert code == 500, body
+        assert body["error"] == "OSError"
+        # The type, never the message: acceptance item 11.
+        assert "the store is gone" not in json.dumps(body)
+    finally:
+        server.shutdown()
+
+
+def test_an_unreadable_credential_is_not_a_hub_that_accepts_no_writes(tmp_path) -> None:
+    """Two comments claimed this distinction and the code did not make
+    it: a chmod, or a systemd credential that failed to materialise,
+    presented as a deliberate posture. Unobservable and healthy
+    rendering the same, in the write plane."""
+    missing = tmp_path / "nope"
+    unreadable = writes.Actors(by_token={}, unreadable=str(missing))
+    never = writes.actors_from("")
+
+    from http.server import ThreadingHTTPServer
+    answers = {}
+    for name, actors in (("unreadable", unreadable), ("never", never)):
+        server = ThreadingHTTPServer(
+            ("127.0.0.1", 0),
+            writes.handler_class(Log(), lambda: at(5), actors))
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            answers[name] = _post(f"http://127.0.0.1:{server.server_port}",
+                                  {"finding": FINDING, "action": ACKNOWLEDGE},
+                                  token="anything")
+        finally:
+            server.shutdown()
+    assert answers["unreadable"][0] == answers["never"][0] == 503
+    assert answers["unreadable"][1]["error"] == "credential-unreadable"
+    assert answers["never"][1]["error"] == "no-actors-configured"
+    assert answers["unreadable"][1] != answers["never"][1], (
+        "a deployment fault and a deliberate posture need different fixes")
