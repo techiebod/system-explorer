@@ -1,47 +1,168 @@
 {
-  "/org/freedesktop/timedate1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.timedate1": {
+  "/org/freedesktop/hostname1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.hostname1": {
     "type": "a{sv}",
     "data": [
       {
-        "Timezone": {
+        "Hostname": {
           "type": "s",
-          "data": "Etc/UTC"
+          "data": "host-8d33ac"
         },
-        "LocalRTC": {
-          "type": "b",
-          "data": false
+        "StaticHostname": {
+          "type": "s",
+          "data": "host-8d33ac"
         },
-        "CanNTP": {
-          "type": "b",
-          "data": true
+        "PrettyHostname": {
+          "type": "s",
+          "data": ""
         },
-        "NTP": {
-          "type": "b",
-          "data": true
+        "DefaultHostname": {
+          "type": "s",
+          "data": "localhost"
         },
-        "NTPSynchronized": {
-          "type": "b",
-          "data": true
+        "HostnameSource": {
+          "type": "s",
+          "data": "static"
         },
-        "TimeUSec": {
+        "IconName": {
+          "type": "s",
+          "data": "computer-vm"
+        },
+        "Chassis": {
+          "type": "s",
+          "data": "vm"
+        },
+        "Deployment": {
+          "type": "s",
+          "data": ""
+        },
+        "Location": {
+          "type": "s",
+          "data": ""
+        },
+        "KernelName": {
+          "type": "s",
+          "data": "Linux"
+        },
+        "KernelRelease": {
+          "type": "s",
+          "data": "7.0.0-28-generic"
+        },
+        "KernelVersion": {
+          "type": "s",
+          "data": "#28-Ubuntu SMP PREEMPT_DYNAMIC Sun Jun 21 01:01:36 UTC 2026"
+        },
+        "OperatingSystemPrettyName": {
+          "type": "s",
+          "data": "Ubuntu 26.04 LTS"
+        },
+        "OperatingSystemCPEName": {
+          "type": "s",
+          "data": ""
+        },
+        "OperatingSystemSupportEnd": {
           "type": "t",
-          "data": 1787325624854283
+          "data": 18446744073709551615
         },
-        "RTCTimeUSec": {
+        "HomeURL": {
+          "type": "s",
+          "data": "https://www.ubuntu.com/"
+        },
+        "OperatingSystemImageID": {
+          "type": "s",
+          "data": ""
+        },
+        "OperatingSystemImageVersion": {
+          "type": "s",
+          "data": ""
+        },
+        "HardwareVendor": {
+          "type": "s",
+          "data": "QEMU"
+        },
+        "HardwareModel": {
+          "type": "s",
+          "data": "Standard PC _i440FX + PIIX, 1996_"
+        },
+        "HardwareSKU": {
+          "type": "s",
+          "data": ""
+        },
+        "HardwareVersion": {
+          "type": "s",
+          "data": "pc-i440fx-10.2"
+        },
+        "FirmwareVersion": {
+          "type": "s",
+          "data": "edk2-stable202408-prebuilt.qemu.org"
+        },
+        "FirmwareVendor": {
+          "type": "s",
+          "data": "EDK II"
+        },
+        "FirmwareDate": {
           "type": "t",
-          "data": 1787325624000000
+          "data": 1723507200000000
+        },
+        "MachineID": {
+          "type": "ay",
+          "data": [
+            92,
+            176,
+            120,
+            26,
+            88,
+            204,
+            186,
+            97,
+            230,
+            78,
+            60,
+            144,
+            115,
+            37,
+            0,
+            1
+          ]
+        },
+        "BootID": {
+          "type": "ay",
+          "data": [
+            57,
+            193,
+            215,
+            118,
+            85,
+            130,
+            75,
+            237,
+            149,
+            94,
+            129,
+            226,
+            220,
+            31,
+            110,
+            92
+          ]
+        },
+        "VSockCID": {
+          "type": "u",
+          "data": 4294967295
+        },
+        "ChassisAssetTag": {
+          "type": "s",
+          "data": ""
         }
       }
     ]
   },
-  "/org/freedesktop/timesync1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.timesync1.Manager": false,
   "/org/freedesktop/systemd1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.systemd1.Manager": {
     "type": "a{sv}",
     "data": [
       {
         "Version": {
           "type": "s",
-          "data": "259.5-0ubuntu3"
+          "data": "259.5-0ubuntu3.4"
         },
         "Features": {
           "type": "s",
@@ -169,11 +290,11 @@
         },
         "UnitsLoadTimestamp": {
           "type": "t",
-          "data": 1787323040509036
+          "data": 1787466205564921
         },
         "UnitsLoadTimestampMonotonic": {
           "type": "t",
-          "data": 6359784
+          "data": 143169898560
         },
         "InitRDSecurityStartTimestamp": {
           "type": "t",
@@ -233,7 +354,7 @@
         },
         "NNames": {
           "type": "u",
-          "data": 469
+          "data": 532
         },
         "NFailedUnits": {
           "type": "u",
@@ -245,7 +366,7 @@
         },
         "NInstalledJobs": {
           "type": "u",
-          "data": 412
+          "data": 1605
         },
         "NFailedJobs": {
           "type": "u",
@@ -262,8 +383,8 @@
         "Environment": {
           "type": "as",
           "data": [
-            "LANG=C.UTF-8",
-            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/snap/bin"
+            "LANG=\u00abredacted\u00bb",
+            "PATH=\u00abredacted\u00bb"
           ]
         },
         "ConfirmSpawn": {
@@ -558,163 +679,6 @@
         "SoftRebootsCount": {
           "type": "u",
           "data": 0
-        }
-      }
-    ]
-  },
-  "/org/freedesktop/hostname1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.hostname1": {
-    "type": "a{sv}",
-    "data": [
-      {
-        "Hostname": {
-          "type": "s",
-          "data": "host-77df07"
-        },
-        "StaticHostname": {
-          "type": "s",
-          "data": "host-77df07"
-        },
-        "PrettyHostname": {
-          "type": "s",
-          "data": ""
-        },
-        "DefaultHostname": {
-          "type": "s",
-          "data": "localhost"
-        },
-        "HostnameSource": {
-          "type": "s",
-          "data": "static"
-        },
-        "IconName": {
-          "type": "s",
-          "data": "computer-vm"
-        },
-        "Chassis": {
-          "type": "s",
-          "data": "vm"
-        },
-        "Deployment": {
-          "type": "s",
-          "data": ""
-        },
-        "Location": {
-          "type": "s",
-          "data": ""
-        },
-        "KernelName": {
-          "type": "s",
-          "data": "Linux"
-        },
-        "KernelRelease": {
-          "type": "s",
-          "data": "7.0.0-28-generic"
-        },
-        "KernelVersion": {
-          "type": "s",
-          "data": "#28-Ubuntu SMP PREEMPT_DYNAMIC Sun Jun 21 01:01:36 UTC 2026"
-        },
-        "OperatingSystemPrettyName": {
-          "type": "s",
-          "data": "Ubuntu 26.04 LTS"
-        },
-        "OperatingSystemCPEName": {
-          "type": "s",
-          "data": ""
-        },
-        "OperatingSystemSupportEnd": {
-          "type": "t",
-          "data": 18446744073709551615
-        },
-        "HomeURL": {
-          "type": "s",
-          "data": "https://www.ubuntu.com/"
-        },
-        "OperatingSystemImageID": {
-          "type": "s",
-          "data": ""
-        },
-        "OperatingSystemImageVersion": {
-          "type": "s",
-          "data": ""
-        },
-        "HardwareVendor": {
-          "type": "s",
-          "data": "QEMU"
-        },
-        "HardwareModel": {
-          "type": "s",
-          "data": "Standard PC _i440FX + PIIX, 1996_"
-        },
-        "HardwareSKU": {
-          "type": "s",
-          "data": ""
-        },
-        "HardwareVersion": {
-          "type": "s",
-          "data": "pc-i440fx-10.2"
-        },
-        "FirmwareVersion": {
-          "type": "s",
-          "data": "edk2-stable202408-prebuilt.qemu.org"
-        },
-        "FirmwareVendor": {
-          "type": "s",
-          "data": "EDK II"
-        },
-        "FirmwareDate": {
-          "type": "t",
-          "data": 1723507200000000
-        },
-        "MachineID": {
-          "type": "ay",
-          "data": [
-            92,
-            176,
-            120,
-            26,
-            88,
-            204,
-            186,
-            97,
-            230,
-            78,
-            60,
-            144,
-            115,
-            37,
-            0,
-            3
-          ]
-        },
-        "BootID": {
-          "type": "ay",
-          "data": [
-            57,
-            193,
-            215,
-            118,
-            85,
-            130,
-            75,
-            237,
-            149,
-            94,
-            129,
-            226,
-            220,
-            31,
-            110,
-            92
-          ]
-        },
-        "VSockCID": {
-          "type": "u",
-          "data": 4294967295
-        },
-        "ChassisAssetTag": {
-          "type": "s",
-          "data": ""
         }
       }
     ]

@@ -67,11 +67,28 @@ func TestTheDeclarationCarriesThePinnedContract(t *testing.T) {
 		t.Fatalf("collection %q at freshness %q", collection.Name, collection.Freshness)
 	}
 
+	// The whole identity contract, pinned. It was four facts until
+	// 2026-08-23, when the first live comparison this collection has ever
+	// had found it sharing NO fact names with the reference's — the
+	// machine's own account of itself was simply missing, and no probe
+	// could see it because the row claiming the comparison read the work
+	// list. MachineID discloses `identity` because it is exactly that: it
+	// survives a rename and changes on reinstall.
 	discloses := map[string]string{
-		"OsId":         "nothing",
-		"OsVersionId":  "nothing",
-		"OsPrettyName": "nothing",
-		"Hostname":     "location",
+		"OsId":                      "nothing",
+		"OsVersionId":               "nothing",
+		"OsPrettyName":              "nothing",
+		"Hostname":                  "location",
+		"StaticHostname":            "identity",
+		"Chassis":                   "identity",
+		"OperatingSystemPrettyName": "identity",
+		"KernelName":                "nothing",
+		"KernelRelease":             "nothing",
+		"HardwareVendor":            "identity",
+		"HardwareModel":             "identity",
+		"Architecture":              "nothing",
+		"Virtualization":            "identity",
+		"MachineID":                 "identity",
 	}
 	if len(collection.Facts) != len(discloses) {
 		t.Fatalf("declared facts %v", collection.Facts)

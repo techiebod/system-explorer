@@ -167,6 +167,43 @@ var identityFacts = [...]struct{ fact, key string }{
 	{"OsPrettyName", "PRETTY_NAME"},
 }
 
+// The facts hostname1 carries, each with the property it is read from.
+//
+// **Restored 2026-08-23, after the first live comparison this collection
+// has ever had.** `system` has no replay seam, `se-compare` is its only
+// venue, and nobody had run it — so identity shipped four facts against
+// the reference's ten and NOT ONE NAME was on both sides. MachineID,
+// Virtualization, HardwareVendor and Chassis — the facts that answer
+// what this machine IS, as opposed to what OS is on it — were simply
+// absent, and the register row claiming the comparison read the WORK
+// LIST rather than a result.
+//
+// Ruled an omission rather than a scope decision, on the evidence: the
+// collector already declares `busctl` authority, already talks to
+// timedate1 and systemd1, and nothing anywhere — no ADR, no queue entry,
+// no declaration member — records identity as deliberately narrowed. A
+// real scope cut in this estate looks like `system/self`, which is ruled
+// out in writing and named in the comparator's own exclusions. What
+// would reopen it: the owner saying identity is meant to mean "what OS
+// is this", in which case the ruling is a written exclusion rather than
+// these facts.
+var hostname1Facts = [...]struct{ fact, property string }{
+	{"StaticHostname", "StaticHostname"},
+	{"Chassis", "Chassis"},
+	{"OperatingSystemPrettyName", "OperatingSystemPrettyName"},
+	{"KernelName", "KernelName"},
+	{"KernelRelease", "KernelRelease"},
+	{"HardwareVendor", "HardwareVendor"},
+	{"HardwareModel", "HardwareModel"},
+}
+
+// Two more ride on the systemd manager, which this collector already
+// asks for the boot collection.
+var systemd1IdentityFacts = [...]struct{ fact, property string }{
+	{"Architecture", "Architecture"},
+	{"Virtualization", "Virtualization"},
+}
+
 // served binds each collection to the function that emits it — package-level
 // so the collect walk and the verbs answer from ONE table rather than two
 // that drift.
@@ -241,6 +278,91 @@ func collectIdentity(out *emitter, stderr io.Writer, src source, collection stri
 	doc := parseOsRelease(raw)
 	facts := map[string]any{"Hostname": host}
 	var absent []string
+
+	// **The machine's own account of itself.** A host whose bus does not
+	// answer keeps the os-release half and says the rest is unobservable
+	// rather than absent: "we could not look" and "the thing has no such
+	// property" are different claims, and rendering them the same is the
+	// failure this product exists to prevent.
+	if raw, err := src.hostname1(); err != nil {
+		if errors.Is(err, errUncaptured) {
+			fmt.Fprintln(stderr, err)
+			return exitRuntime
+		}
+		for _, f := range hostname1Facts {
+			out.emit(unobservableRecord{
+				Record: "unobservable", Collection: collection, Name: host,
+				Fact: f.fact, Reason: "hostname1 did not answer on the system bus",
+			})
+		}
+	} else if props, perr := propertiesOf(raw); perr != nil {
+		for _, f := range hostname1Facts {
+			out.emit(unobservableRecord{
+				Record: "unobservable", Collection: collection, Name: host,
+				Fact:   f.fact,
+				Reason: "hostname1 answered a document this collector cannot read",
+			})
+		}
+	} else {
+		for _, f := range hostname1Facts {
+			if value, ok := propString(props, f.property); ok && value != "" {
+				facts[f.fact] = value
+			} else {
+				absent = append(absent, f.fact)
+			}
+		}
+	}
+
+	// Architecture and Virtualization are the manager's, on the bus this
+	// collector already opens for `boot`.
+	//
+	// A manager that does not answer makes them UNOBSERVABLE, never
+	// silent. The first version of this dropped both without a word when
+	// systemd1 errored — they were absent from the facts and absent from
+	// the absent list, which is a fact nobody can tell was ever meant to
+	// be there. That is absence rendered as health, introduced while
+	// fixing an absence problem, and caught by reading the regenerated
+	// corpus rather than by any test.
+	if raw, err := src.systemd1(); err != nil {
+		if errors.Is(err, errUncaptured) {
+			fmt.Fprintln(stderr, err)
+			return exitRuntime
+		}
+		for _, f := range systemd1IdentityFacts {
+			out.emit(unobservableRecord{
+				Record: "unobservable", Collection: collection, Name: host,
+				Fact:   f.fact,
+				Reason: "the systemd manager did not answer on the system bus",
+			})
+		}
+	} else if props, perr := propertiesOf(raw); perr != nil {
+		for _, f := range systemd1IdentityFacts {
+			out.emit(unobservableRecord{
+				Record: "unobservable", Collection: collection, Name: host,
+				Fact:   f.fact,
+				Reason: "the systemd manager answered a document this collector cannot read",
+			})
+		}
+	} else {
+		for _, f := range systemd1IdentityFacts {
+			if value, ok := propString(props, f.property); ok && value != "" {
+				facts[f.fact] = value
+			} else {
+				absent = append(absent, f.fact)
+			}
+		}
+	}
+
+	// The identity that survives a rename and CHANGES on reinstall, which
+	// is why a rebuilt host is a new host to everything keyed on it.
+	if id, err := src.machineID(); err == nil && id != "" {
+		facts["MachineID"] = id
+	} else if errors.Is(err, errUncaptured) {
+		fmt.Fprintln(stderr, err)
+		return exitRuntime
+	} else {
+		absent = append(absent, "MachineID")
+	}
 	for _, f := range identityFacts {
 		// A key present with an empty value states nothing a reader can
 		// use, so it joins the genuinely-missing on the absent list

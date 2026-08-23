@@ -42,6 +42,7 @@ type source interface {
 	stamp(i int) (float64, error)
 	osRelease() ([]byte, error)
 	hostname() (string, error)
+	machineID() (string, error)
 	// The two bus documents behind the time collection, each busctl's own
 	// JSON rendering of a GetAll reply. An error wrapping errCallFailed is
 	// the interface not answering — an observation, routed per collection;
@@ -56,6 +57,10 @@ type source interface {
 	// machine lacked; the meta anchors are what catch a thin capture.
 	proc(name string) string
 	systemd1() ([]byte, error)
+	// hostname1 is the machine's own account of itself. A host without
+	// it is a host whose identity narrows to what os-release says, which
+	// is a real state and states itself through the absent list.
+	hostname1() ([]byte, error)
 	// nix is nil off NixOS; efivars is nil on a BIOS host — each absence
 	// is a reading, never an error.
 	nix() *nixPointers
@@ -116,9 +121,17 @@ const (
 	timedate1Request = "/org/freedesktop/timedate1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.timedate1"
 	timesync1Request = "/org/freedesktop/timesync1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.timesync1.Manager"
 	systemd1Request  = "/org/freedesktop/systemd1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.systemd1.Manager"
+	// hostname1 is what the machine says it IS: its static name, its
+	// chassis, its hardware vendor and model, its kernel. The port read
+	// os-release and the kernel hostname alone until 2026-08-23, when
+	// the comparator ran for the first time and found identity sharing
+	// no fact names at all with the reference's — ten missing, and the
+	// bus already open for two other destinations.
+	hostname1Request = "/org/freedesktop/hostname1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.hostname1"
 	timedate1Dest    = "org.freedesktop.timedate1"
 	timesync1Dest    = "org.freedesktop.timesync1"
 	systemd1Dest     = "org.freedesktop.systemd1"
+	hostname1Dest    = "org.freedesktop.hostname1"
 )
 
 // nixPointers is the three system closures that can disagree, plus the raw
@@ -149,6 +162,17 @@ func (liveSource) timens() int64 { return timensOffset() }
 func (liveSource) batch() (string, error) { return newUUIDv4() }
 
 func (liveSource) stamp(int) (float64, error) { return bootClock() }
+
+// machineID is /etc/machine-id: the identity that survives a rename and
+// changes on reinstall, which is why a rebuilt host is a NEW host to
+// everything keyed on it (DESIGN §15).
+func (liveSource) machineID() (string, error) {
+	raw, err := os.ReadFile("/etc/machine-id")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(raw)), nil
+}
 
 func (liveSource) osRelease() ([]byte, error) {
 	raw, err := os.ReadFile("/etc/os-release")
@@ -204,6 +228,10 @@ func (liveSource) timesync1() ([]byte, error) {
 
 func (liveSource) systemd1() ([]byte, error) {
 	return busCall(os.Stderr, systemd1Dest, systemd1Request)
+}
+
+func (liveSource) hostname1() ([]byte, error) {
+	return busCall(os.Stderr, hostname1Dest, hostname1Request)
 }
 
 func (liveSource) nix() *nixPointers {
@@ -446,6 +474,20 @@ func (r replaySource) cpus() int {
 func (r replaySource) wallNow() float64 { return r.nowPin }
 
 func (r replaySource) systemd1() ([]byte, error) { return r.bus(systemd1Request) }
+
+func (r replaySource) hostname1() ([]byte, error) { return r.bus(hostname1Request) }
+
+// machineID replays from a staged file, and its ABSENCE is a capture that
+// predates the fact rather than a host without one — errUncaptured says
+// so, which is what keeps an old corpus from silently asserting that a
+// machine has no machine-id.
+func (r replaySource) machineID() (string, error) {
+	raw, err := os.ReadFile(filepath.Join(r.dir, "machine-id"))
+	if err != nil {
+		return "", fmt.Errorf("machine-id %w: %v", errUncaptured, err)
+	}
+	return strings.TrimSpace(string(raw)), nil
+}
 
 func (r replaySource) nix() *nixPointers {
 	raw, err := os.ReadFile(filepath.Join(r.dir, "nix-pointers.json"))

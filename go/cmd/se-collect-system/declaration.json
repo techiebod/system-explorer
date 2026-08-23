@@ -47,7 +47,9 @@
       "perishability": "reconstructible",
       "answer": [
         "Hostname",
-        "OsPrettyName"
+        "OsPrettyName",
+        "Chassis",
+        "Virtualization"
       ],
       "ceiling": {
         "records": 4,
@@ -84,6 +86,86 @@
           "kind": "observed",
           "discloses": "location",
           "sentence": "The kernel hostname, which is also this object's native name: the name observed, never a minted id."
+        },
+        "StaticHostname": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "identity",
+          "from": "hostname1/StaticHostname",
+          "sentence": "The name this machine is configured to answer to, as hostname1 holds it \u2014 the one an operator set, not whatever DHCP or a transient rename made current."
+        },
+        "Chassis": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "identity",
+          "from": "hostname1/Chassis",
+          "sentence": "What kind of machine this is \u2014 desktop, laptop, server, vm, container \u2014 as the firmware or the administrator declared it."
+        },
+        "OperatingSystemPrettyName": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "identity",
+          "from": "hostname1/OperatingSystemPrettyName",
+          "sentence": "The operating system's own display name, from hostname1 rather than from os-release: the two can differ, and this is the one systemd reports to anything asking the bus."
+        },
+        "KernelName": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "hostname1/KernelName",
+          "sentence": "The kernel this machine runs, by name."
+        },
+        "KernelRelease": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "hostname1/KernelRelease",
+          "sentence": "The kernel's release string, which is what a CVE is matched against."
+        },
+        "HardwareVendor": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "identity",
+          "from": "hostname1/HardwareVendor",
+          "sentence": "Who made this machine, as the firmware reports it. Absent on hardware that declares no vendor, which most virtual machines do not."
+        },
+        "HardwareModel": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "identity",
+          "from": "hostname1/HardwareModel",
+          "sentence": "The model this machine reports itself as. With the vendor it is what an operator matches against a purchase record or a support contract."
+        },
+        "Architecture": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "systemd1",
+          "sentence": "The instruction set this machine runs, as the systemd manager reports it."
+        },
+        "Virtualization": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "identity",
+          "from": "systemd1",
+          "sentence": "The hypervisor or container runtime this machine runs UNDER, empty where it runs on metal. It is the fact that says whether 'reboot the host' means this machine or another one."
+        },
+        "MachineID": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "identity",
+          "from": "/etc/machine-id",
+          "sentence": "The identity that survives a rename and CHANGES on reinstall, so a rebuilt host is a new host to everything keyed on it \u2014 which is the absence-as-health shape arriving through the door marked 'clean install' (DESIGN 15)."
         }
       },
       "redaction_exemption": "every served fact is a single declared scalar; the evidence document is os-release verbatim, whose remaining members are distribution constants that disclose nothing",

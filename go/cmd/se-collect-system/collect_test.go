@@ -29,6 +29,10 @@ type fakeSource struct {
 	now      float64
 	sysd     []byte
 	sderr    error
+	hn1      []byte
+	hn1err   error
+	machine  string
+	mcherr   error
 	nixp     *nixPointers
 	vars     map[string][]byte
 	partmap  map[string]string
@@ -87,6 +91,19 @@ func (f *fakeSource) systemd1() ([]byte, error) {
 	}
 	return f.sysd, f.sderr
 }
+
+func (f *fakeSource) hostname1() ([]byte, error) {
+	f.note("hostname1")
+	if f.hn1 == nil && f.hn1err == nil {
+		return nil, errCallFailed
+	}
+	return f.hn1, f.hn1err
+}
+
+func (f *fakeSource) machineID() (string, error) {
+	f.note("machine-id")
+	return f.machine, f.mcherr
+}
 func (f *fakeSource) nix() *nixPointers          { return f.nixp }
 func (f *fakeSource) efivars() map[string][]byte { return f.vars }
 func (f *fakeSource) partitionDevice(uuid string) string {
@@ -108,6 +125,18 @@ func healthyFake() *fakeSource {
 	return &fakeSource{
 		osrel: []byte("ID=debian\nVERSION_ID=\"12\"\nPRETTY_NAME=\"Debian GNU/Linux 12 (bookworm)\"\n"),
 		host:  "corpus-host",
+		// hostname1 and machine-id, so a healthy host is one whose
+		// identity is WHOLE. A fake missing them would make every test
+		// here assert over a machine that cannot say what it is.
+		hn1: []byte(`{"type":"a{sv}","data":[{` +
+			`"StaticHostname":{"type":"s","data":"corpus-host"},` +
+			`"Chassis":{"type":"s","data":"vm"},` +
+			`"OperatingSystemPrettyName":{"type":"s","data":"Debian GNU/Linux 12 (bookworm)"},` +
+			`"KernelName":{"type":"s","data":"Linux"},` +
+			`"KernelRelease":{"type":"s","data":"6.1.0-18-amd64"},` +
+			`"HardwareVendor":{"type":"s","data":"QEMU"},` +
+			`"HardwareModel":{"type":"s","data":"Standard PC"}}]}`),
+		machine: "5cb0781a58ccba61e64e3c90732537cb",
 	}
 }
 

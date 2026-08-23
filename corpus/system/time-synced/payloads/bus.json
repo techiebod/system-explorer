@@ -649,5 +649,142 @@
         }
       }
     ]
+  },
+  "/org/freedesktop/hostname1 org.freedesktop.DBus.Properties GetAll s org.freedesktop.hostname1": {
+    "type": "a{sv}",
+    "data": [
+      {
+        "Hostname": {
+          "type": "s",
+          "data": "host-9330c2"
+        },
+        "StaticHostname": {
+          "type": "s",
+          "data": "host-9330c2"
+        },
+        "PrettyHostname": {
+          "type": "s",
+          "data": ""
+        },
+        "DefaultHostname": {
+          "type": "s",
+          "data": "localhost"
+        },
+        "HostnameSource": {
+          "type": "s",
+          "data": "static"
+        },
+        "IconName": {
+          "type": "s",
+          "data": "computer-vm"
+        },
+        "Chassis": {
+          "type": "s",
+          "data": "vm"
+        },
+        "Deployment": {
+          "type": "s",
+          "data": ""
+        },
+        "Location": {
+          "type": "s",
+          "data": ""
+        },
+        "KernelName": {
+          "type": "s",
+          "data": "Linux"
+        },
+        "KernelRelease": {
+          "type": "s",
+          "data": "6.12.101+deb13-amd64"
+        },
+        "KernelVersion": {
+          "type": "s",
+          "data": "#1 SMP PREEMPT_DYNAMIC Debian 6.12.101-1 (2026-08-05)"
+        },
+        "OperatingSystemPrettyName": {
+          "type": "s",
+          "data": "Debian GNU/Linux 13 (trixie)"
+        },
+        "OperatingSystemCPEName": {
+          "type": "s",
+          "data": ""
+        },
+        "OperatingSystemSupportEnd": {
+          "type": "t",
+          "data": 18446744073709551615
+        },
+        "HomeURL": {
+          "type": "s",
+          "data": "https://www.debian.org/"
+        },
+        "HardwareVendor": {
+          "type": "s",
+          "data": "QEMU"
+        },
+        "HardwareModel": {
+          "type": "s",
+          "data": "Standard PC _i440FX + PIIX, 1996_"
+        },
+        "FirmwareVersion": {
+          "type": "s",
+          "data": "edk2-stable202408-prebuilt.qemu.org"
+        },
+        "FirmwareVendor": {
+          "type": "s",
+          "data": "EDK II"
+        },
+        "FirmwareDate": {
+          "type": "t",
+          "data": 1723507200000000
+        },
+        "MachineID": {
+          "type": "ay",
+          "data": [
+            92,
+            176,
+            120,
+            26,
+            88,
+            204,
+            186,
+            97,
+            230,
+            78,
+            60,
+            144,
+            115,
+            37,
+            0,
+            2
+          ]
+        },
+        "BootID": {
+          "type": "ay",
+          "data": [
+            151,
+            10,
+            165,
+            139,
+            129,
+            138,
+            70,
+            93,
+            191,
+            43,
+            202,
+            55,
+            101,
+            95,
+            1,
+            201
+          ]
+        },
+        "VSockCID": {
+          "type": "u",
+          "data": 4294967295
+        }
+      }
+    ]
   }
 }
