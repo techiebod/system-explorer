@@ -23,7 +23,7 @@ import copy
 import httpx
 
 from .. import envelope as env
-from ..rules.docker import container_opinions
+from ..rules.docker import EXITED_STATUS_RE, container_opinions
 
 SOCKET = "/var/run/docker.sock"
 # The container states that have processes, and therefore a live scope
@@ -228,6 +228,24 @@ def _stated(facts: dict) -> dict:
     return {fact: value for fact, value in facts.items() if value is not None}
 
 
+def _exited_code(c: dict) -> int | None:
+    """The exit code the Status string carries, through the rulebook's own
+    pattern so the fact and the evaluator's fallback cannot drift."""
+    match = EXITED_STATUS_RE.match(str(c.get("Status") or ""))
+    return int(match.group(1)) if match else None
+
+
+def _list_health(c: dict) -> str | None:
+    """The list entry's health verdict, or None where the image declares no
+    healthcheck (Status "none") or the engine's list API predates the
+    block."""
+    health = c.get("Health")
+    if not isinstance(health, dict):
+        return None
+    status = health.get("Status")
+    return status if status and status != "none" else None
+
+
 # One entry so far, deliberately: the facts an opinion already cites are
 # carried in test_fact_dictionary's UNDOCUMENTED_EVIDENCE debt register, and
 # documenting them here is that list's work to retire, not this change's.
@@ -245,6 +263,14 @@ _CONTAINER_GLOSSARY = {
                  "and nothing else becomes this container. Absent on a "
                  "stopped container, whose scope systemd deleted with its "
                  "last process.",
+    "Health": "The engine's own healthcheck verdict — healthy, unhealthy or "
+              "starting. Present only where the image declares a healthcheck: "
+              "a container with none has no health, which is different from "
+              "unhealthy and from unknown.",
+    "ExitCode": "How the last run ended, parsed from the engine's own status "
+                "line for an exited container. Absent while it runs: a code "
+                "for a run that has not ended would positively assert a clean "
+                "exit for a process that never exited.",
     "NetworkMode": "The container's network namespace as docker runs it: a "
                    "bridge or network name means ports reach it only via "
                    "published mappings, while \"host\" means it shares the "
@@ -374,6 +400,20 @@ class Adapter:
             name = self._container_name(c)
             facts = _stated({
                 "State": c.get("State"), "Status": c.get("Status"),
+                # The engine's own verdict, on the LIST row since API 1.44 —
+                # only where the image declares a healthcheck: "none" is a
+                # container with no health, which is different from
+                # unhealthy and from unknown, so it is omitted rather than
+                # published as a word about nothing. Minted on both
+                # implementations for the declared rule table (register row
+                # 8's residue); the evaluator's Status-substring fallback
+                # stays for engines whose list omits the block.
+                "Health": _list_health(c),
+                # The exit code the Status string carries for an exited
+                # container — the same parse the evaluator has always done,
+                # now a fact a declared rule can name.
+                "ExitCode": _exited_code(c)
+                            if c.get("State") == "exited" else None,
                 "Image": c.get("Image"),
                 "Created": env.usec_to_iso(int(c.get("Created", 0)) * 1_000_000),
                 "ComposeProject": (c.get("Labels") or {}).get(COMPOSE_PROJECT),

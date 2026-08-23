@@ -14,6 +14,75 @@
   "collections": [
     {
       "name": "containers",
+      "rules": [
+        {
+          "key": "container-health",
+          "level": "critical",
+          "grounds": "interface",
+          "when": {
+            "fact": "Health",
+            "equals": "unhealthy"
+          },
+          "sentence": "The container's own healthcheck reports unhealthy.",
+          "cites": [
+            "Health",
+            "Status"
+          ]
+        },
+        {
+          "key": "container-health",
+          "level": "critical",
+          "grounds": "interface",
+          "when": {
+            "fact": "State",
+            "equals": "restarting"
+          },
+          "sentence": "The container is stuck restarting.",
+          "cites": [
+            "State",
+            "Status"
+          ]
+        },
+        {
+          "key": "container-health",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "State",
+            "in": [
+              "paused",
+              "dead"
+            ]
+          },
+          "sentence": "The container exists and is not doing its job — paused or dead.",
+          "cites": [
+            "State"
+          ]
+        },
+        {
+          "key": "container-exit",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "State",
+                "equals": "exited"
+              },
+              {
+                "fact": "ExitCode",
+                "not_equals": 0
+              }
+            ]
+          },
+          "sentence": "The container exited with a non-zero code.",
+          "cites": [
+            "State",
+            "ExitCode",
+            "Status"
+          ]
+        }
+      ],
       "relations": [
         {
           "type": "member-of",
@@ -62,6 +131,30 @@
         "bytes": 4194304
       },
       "facts": {
+        "Health": {
+          "type": "enum",
+          "values": [
+            "starting",
+            "healthy",
+            "unhealthy"
+          ],
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/*/Health/Status",
+          "sentence": "The engine's own healthcheck verdict. Present only where the image declares a healthcheck: a container with none has no health, which is different from unhealthy and from unknown, so the fact is omitted rather than published as a word about nothing."
+        },
+        "ExitCode": {
+          "type": "integer",
+          "temperament": "state",
+          "kind": "derived",
+          "derived_from": [
+            "Status"
+          ],
+          "discloses": "nothing",
+          "from": "/*/Status",
+          "sentence": "How the last run ended, parsed from the engine's own status line for an exited container. Absent while it runs: a code for a run that has not ended would positively assert a clean exit for a process that never exited."
+        },
         "State": {
           "type": "enum",
           "values": [

@@ -130,8 +130,7 @@ def cited_facts_by_subsystem() -> dict[str, set[str]]:
 # SUBPROCESS_ALLOWLIST. Shrinking this list is the work; growing it is a
 # decision someone made on purpose.
 UNDOCUMENTED_EVIDENCE: dict[str, set[str]] = {
-    "docker": {"ExitCode", "Health", "OOMKilled", "RestartCount", "State",
-               "Status"},
+    "docker": {"OOMKilled", "RestartCount", "State", "Status"},
     "logs": {"Container", "Priority", "RepeatCount", "RepeatWindow"},
     # links, routes and resolver are documented; what remains is tailscale.
     "network": {"BackendState", "Health", "KeyExpiry", "KeyExpiryDays",

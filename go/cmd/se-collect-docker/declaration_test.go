@@ -81,8 +81,9 @@ func decodeDeclaration(t *testing.T) (string, map[string]declaredCollection, []s
 func TestTheDeclarationNamesExactlyTheFactsThisCollectorEmits(t *testing.T) {
 	_, collections, _ := decodeDeclaration(t)
 	emitted := map[string][]string{
-		"containers": {"State", "Status", "Image", "Created", "ComposeProject",
-			"NetworkMode", "ContainerID", "ScopeUnit", "Ports"},
+		"containers": {"State", "Status", "Health", "ExitCode", "Image",
+			"Created", "ComposeProject", "NetworkMode", "ContainerID",
+			"ScopeUnit", "Ports"},
 		"volumes":  {"Driver", "Mountpoint", "ComposeProject"},
 		"networks": {"Driver", "Scope", "Internal", "BridgeInterface", "ComposeProject"},
 	}

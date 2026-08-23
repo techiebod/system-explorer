@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -32,6 +33,11 @@ type row struct {
 // of /containers/json?all=1, in the order dockerd listed them. The list order
 // is the answer's order — nothing sorts the containers — so a port that keyed
 // them into a map would publish a different `at` ordering on every run.
+// exitedStatus is the reference's EXITED_STATUS_RE: the list endpoint's
+// Status prefix for a stopped container, group 1 the code inspect would
+// report as ExitCode.
+var exitedStatus = regexp.MustCompile(`^Exited \((-?\d+)\)`)
+
 func containerRows(document *value) ([]row, error) {
 	if document == nil || document.kind != jsonArray {
 		return nil, errors.New("the staged containers payload is not a list of containers")
@@ -64,6 +70,27 @@ func buildContainer(container *value) (row, error) {
 	// keeps a null off the row (DESIGN 19) — see jsondoc's set.
 	facts.set("State", container.get("State"))
 	facts.set("Status", container.get("Status"))
+	// The engine's own verdict, on the LIST row — only where the image
+	// declares a healthcheck: "none" is a container with no health, which
+	// is different from unhealthy and from unknown, so it is omitted
+	// rather than published as a word about nothing. Minted on both
+	// implementations for the declared rule table (register row 8's
+	// residue).
+	if health := container.dig("Health", "Status"); health.isString() &&
+		health.text != "" && health.text != "none" {
+		facts.set("Health", health)
+	}
+	// The exit code the Status string carries for an exited container —
+	// the same parse the reference's evaluator has always done, now a
+	// fact a declared rule can name.
+	if container.get("State").stringOr("") == "exited" {
+		if match := exitedStatus.FindStringSubmatch(
+			container.get("Status").stringOr("")); match != nil {
+			if _, err := strconv.ParseInt(match[1], 10, 64); err == nil {
+				facts.set("ExitCode", &value{kind: jsonNumber, text: match[1]})
+			}
+		}
+	}
 	facts.set("Image", container.get("Image"))
 	facts.set("Created", created)
 	facts.set("ComposeProject", container.dig("Labels", composeProject))
