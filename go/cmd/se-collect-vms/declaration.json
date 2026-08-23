@@ -11,6 +11,16 @@
   "collections": [
     {
       "name": "domains",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "which guests does this host define, which of them are up, and what is each one holding?",
       "prefix": "domain",
       "freshness": "60s",

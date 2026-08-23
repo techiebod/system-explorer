@@ -19,6 +19,16 @@
   "collections": [
     {
       "name": "workloads",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what is eating this machine, and what is it stalled on?",
       "prefix": "unit",
       "freshness": "30s",

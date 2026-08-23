@@ -14,6 +14,16 @@
   "collections": [
     {
       "name": "generations",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what has this host been, which of those closures is it running, and which would it boot?",
       "prefix": "generation",
       "freshness": "300s",

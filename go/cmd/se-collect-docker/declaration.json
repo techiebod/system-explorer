@@ -14,6 +14,16 @@
   "collections": [
     {
       "name": "containers",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what is running on this host under docker, how do I reach it, and which stack does it belong to?",
       "prefix": "container",
       "freshness": "60s",
@@ -163,6 +173,16 @@
     },
     {
       "name": "volumes",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what named storage does docker hold on this host, and which stack owns it?",
       "prefix": "volume",
       "freshness": "5m",
@@ -234,6 +254,16 @@
     },
     {
       "name": "networks",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what networks does docker run on this host, and which host interface is each one plumbed onto?",
       "prefix": "docker-network",
       "freshness": "5m",
