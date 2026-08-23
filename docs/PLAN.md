@@ -559,7 +559,11 @@ The 29-row register above is encoded with a probe wherever the tree can attest a
 >
 > This is row 28's prediction arriving: `system` has no replay seam, `se-compare` is its only venue, and that comparison had never been executed. Row 27 claimed it was compared and its probe read the WORK LIST — so "compared" meant "listed for comparison" through two waves.
 >
-> **Owed to the owner as an adjudication under §20, not patched.** Losing ten facts is a scope ruling rather than a defect, and the reference has lost three times before.
+> **Ruled an omission and restored the same day**, on the evidence: the collector already declared `busctl` authority and already called `systemd1`, and nothing anywhere recorded a narrowing — where a real scope cut here looks like `system/self`, ruled out in writing and named in the comparator's exclusions. The corpus was CAPTURED from both lab guests rather than crafted, each variant taking the reply from the OS its own os-release names.
+>
+> **The run then closed from six unreachable and three differing to 19 of 20 at parity with nothing unreachable.** Every one of the six was the reference DRIVER overriding a per-collection statement the shipping adapter had already made correctly — a collector-level probe answering for collections it never governed, a narrowed gate leaving a collection with none, and `unavailable_collections` read only where a `gated` lambda also existed. Three regressions were introduced fixing them and each was caught by re-running the comparator, the worst turning storage's `absent` into an `unavailable`: no zpool means no imported pools, a successful reading that commits zero, not an incident.
+>
+> **What remains is one collector and it is the owner's.** `system/identity` emits `Hostname`, `OsId`, `OsPrettyName` and `OsVersionId`, which the reference does not. The port emitting MORE is what §20 reserves for the owner, and the comparator can only express an accepted divergence in the other direction — so there is no way to record "the port wins" without the ruling.
 >
 > One more finding, recorded rather than counted: `resources` reported a `StallAttributionUnobservable` divergence once and was clean in four further runs. That fact records that a member's pressure could not be READ, so the live comparator catches the class by luck. It belongs in the corpus as a staged variant.
 
