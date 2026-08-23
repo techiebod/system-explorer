@@ -11,6 +11,81 @@
   "collections": [
     {
       "name": "domains",
+      "rules": [
+        {
+          "key": "domain-health",
+          "level": "critical",
+          "grounds": "interface",
+          "when": {
+            "fact": "State",
+            "equals": "crashed"
+          },
+          "sentence": "The domain has crashed.",
+          "cites": [
+            "State"
+          ]
+        },
+        {
+          "key": "domain-health",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "State",
+            "in": [
+              "paused",
+              "blocked"
+            ]
+          },
+          "sentence": "The domain is paused or blocked.",
+          "cites": [
+            "State"
+          ]
+        },
+        {
+          "key": "domain-health",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "State",
+                "equals": "shutoff"
+              },
+              {
+                "fact": "Autostart",
+                "equals": true
+              }
+            ]
+          },
+          "sentence": "The domain is marked autostart but is shut off — something meant to be up is down.",
+          "cites": [
+            "State",
+            "Autostart"
+          ]
+        },
+        {
+          "key": "domain-address-unobservable",
+          "level": "info",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "State",
+                "equals": "running"
+              },
+              {
+                "fact": "IPAddressesUnobservable",
+                "present": true
+              }
+            ]
+          },
+          "sentence": "No address source could answer for this running guest, so its address is unknown rather than absent.",
+          "cites": [
+            "State",
+            "IPAddressesUnobservable"
+          ]
+        }
+      ],
       "verbs": {
         "object": {
           "bytes": 262144,

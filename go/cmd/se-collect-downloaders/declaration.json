@@ -13,6 +13,48 @@
   "collections": [
     {
       "name": "clients",
+      "rules": [
+        {
+          "key": "downloader-unconfigured",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "ConfigMissing",
+            "non_empty": true
+          },
+          "sentence": "The client is configured by URL but its receipts are incomplete; ConfigMissing names what is still needed.",
+          "cites": [
+            "ConfigMissing"
+          ]
+        },
+        {
+          "key": "downloader-unreachable",
+          "level": "critical",
+          "grounds": "interface",
+          "when": {
+            "fact": "StatusUnobservable",
+            "present": true
+          },
+          "sentence": "The configured client did not answer its API — every manager dispatching to it is blocked.",
+          "cites": [
+            "Client",
+            "StatusUnobservable"
+          ]
+        },
+        {
+          "key": "downloader-paused",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "Paused",
+            "equals": true
+          },
+          "sentence": "The whole queue is paused; nothing the managers dispatch will move until it is resumed.",
+          "cites": [
+            "Paused"
+          ]
+        }
+      ],
       "verbs": {
         "object": {
           "bytes": 262144,
@@ -168,6 +210,71 @@
     },
     {
       "name": "transfers",
+      "rules": [
+        {
+          "key": "transfer-error",
+          "level": "critical",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "Error",
+                "equals": 3
+              },
+              {
+                "fact": "ErrorString",
+                "present": true
+              }
+            ]
+          },
+          "sentence": "The client reports a local error for this transfer; ErrorString carries its own words.",
+          "cites": [
+            "Error",
+            "ErrorString"
+          ]
+        },
+        {
+          "key": "transfer-error",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "Error",
+                "not_equals": 0
+              },
+              {
+                "not": {
+                  "fact": "Error",
+                  "equals": 3
+                }
+              },
+              {
+                "fact": "ErrorString",
+                "present": true
+              }
+            ]
+          },
+          "sentence": "The client reports a tracker problem for this transfer; ErrorString carries its own words.",
+          "cites": [
+            "Error",
+            "ErrorString"
+          ]
+        },
+        {
+          "key": "transfer-stalled",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "IsStalled",
+            "equals": true
+          },
+          "sentence": "The client's own verdict: no peers are moving this transfer.",
+          "cites": [
+            "IsStalled"
+          ]
+        }
+      ],
       "verbs": {
         "object": {
           "bytes": 262144,

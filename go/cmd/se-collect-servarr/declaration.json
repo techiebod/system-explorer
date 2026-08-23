@@ -17,6 +17,84 @@
   "collections": [
     {
       "name": "apps",
+      "rules": [
+        {
+          "key": "servarr-duplicate",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "ConfigDuplicate",
+            "non_empty": true
+          },
+          "sentence": "SE_SERVARR_INSTANCES names this instance more than once; the first entry won and ConfigDuplicate lists what was dropped.",
+          "cites": [
+            "ConfigDuplicate"
+          ]
+        },
+        {
+          "key": "servarr-unconfigured",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "ConfigMissing",
+            "non_empty": true
+          },
+          "sentence": "The instance is named in SE_SERVARR_INSTANCES but its receipts are missing; ConfigMissing names them.",
+          "cites": [
+            "ConfigMissing"
+          ]
+        },
+        {
+          "key": "servarr-unreachable",
+          "level": "critical",
+          "grounds": "interface",
+          "when": {
+            "fact": "StatusUnobservable",
+            "present": true
+          },
+          "sentence": "The configured instance did not answer its API.",
+          "cites": [
+            "App",
+            "StatusUnobservable"
+          ]
+        },
+        {
+          "key": "servarr-health",
+          "level": "critical",
+          "grounds": "interface",
+          "when": {
+            "fact": "HealthErrors",
+            "at_least": 1
+          },
+          "sentence": "The app reports health errors of its own — each is a row on the health collection.",
+          "cites": [
+            "HealthErrors"
+          ]
+        },
+        {
+          "key": "servarr-health",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "HealthWarnings",
+                "at_least": 1
+              },
+              {
+                "not": {
+                  "fact": "HealthErrors",
+                  "at_least": 1
+                }
+              }
+            ]
+          },
+          "sentence": "The app reports health warnings of its own — each is a row on the health collection.",
+          "cites": [
+            "HealthWarnings"
+          ]
+        }
+      ],
       "verbs": {
         "object": {
           "bytes": 262144,
@@ -139,6 +217,82 @@
     },
     {
       "name": "health",
+      "rules": [
+        {
+          "key": "servarr-health-item",
+          "level": "critical",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "Type",
+                "equals": "error"
+              },
+              {
+                "fact": "Message",
+                "present": true
+              }
+            ]
+          },
+          "sentence": "The app grades this item error, its own severest grade; Message carries its words.",
+          "cites": [
+            "Type",
+            "Message"
+          ]
+        },
+        {
+          "key": "servarr-health-item",
+          "level": "info",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "Type",
+                "equals": "notice"
+              },
+              {
+                "fact": "Message",
+                "present": true
+              }
+            ]
+          },
+          "sentence": "The app grades this item notice — below attention by its own definition.",
+          "cites": [
+            "Type",
+            "Message"
+          ]
+        },
+        {
+          "key": "servarr-health-item",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "Type",
+                "not_equals": "ok"
+              },
+              {
+                "fact": "Type",
+                "not_equals": "notice"
+              },
+              {
+                "fact": "Type",
+                "not_equals": "error"
+              },
+              {
+                "fact": "Message",
+                "present": true
+              }
+            ]
+          },
+          "sentence": "The app raises this item at a grade between notice and error — or one this table has never heard of, which is still the app raising its hand.",
+          "cites": [
+            "Type",
+            "Message"
+          ]
+        }
+      ],
       "verbs": {
         "object": {
           "bytes": 262144,
@@ -206,6 +360,24 @@
     },
     {
       "name": "queue",
+      "rules": [
+        {
+          "key": "queue-item-stuck",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "TrackedDownloadStatus",
+            "in": [
+              "warning",
+              "error"
+            ]
+          },
+          "sentence": "The app marks this download as needing attention; ErrorMessage and StatusMessages carry its own words.",
+          "cites": [
+            "TrackedDownloadStatus"
+          ]
+        }
+      ],
       "verbs": {
         "object": {
           "bytes": 262144,

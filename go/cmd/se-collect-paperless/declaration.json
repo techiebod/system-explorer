@@ -13,6 +13,91 @@
   "collections": [
     {
       "name": "instance",
+      "rules": [
+        {
+          "key": "paperless-empty",
+          "level": "critical",
+          "grounds": "threshold",
+          "when": {
+            "fact": "DocumentCount",
+            "equals": 0
+          },
+          "sentence": "The instance reports zero documents — the emptied-library shape. Data loss and a permission-scoped token are both consistent with this reading.",
+          "cites": [
+            "DocumentCount"
+          ]
+        },
+        {
+          "key": "paperless-database",
+          "level": "critical",
+          "grounds": "interface",
+          "when": {
+            "fact": "DatabaseStatus",
+            "not_equals": "OK"
+          },
+          "sentence": "The instance reports its database check as other than OK.",
+          "cites": [
+            "DatabaseStatus",
+            "DatabaseError"
+          ]
+        },
+        {
+          "key": "paperless-redis",
+          "level": "critical",
+          "grounds": "interface",
+          "when": {
+            "fact": "RedisStatus",
+            "not_equals": "OK"
+          },
+          "sentence": "The instance reports its redis broker check as other than OK.",
+          "cites": [
+            "RedisStatus",
+            "RedisError"
+          ]
+        },
+        {
+          "key": "paperless-celery",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "CeleryStatus",
+            "not_equals": "OK"
+          },
+          "sentence": "The instance reports its celery worker check as other than OK.",
+          "cites": [
+            "CeleryStatus",
+            "CeleryError"
+          ]
+        },
+        {
+          "key": "paperless-index",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "IndexStatus",
+            "not_equals": "OK"
+          },
+          "sentence": "The instance reports its search index check as other than OK.",
+          "cites": [
+            "IndexStatus",
+            "IndexError"
+          ]
+        },
+        {
+          "key": "paperless-classifier",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "ClassifierStatus",
+            "not_equals": "OK"
+          },
+          "sentence": "The instance reports its classifier check as other than OK.",
+          "cites": [
+            "ClassifierStatus",
+            "ClassifierError"
+          ]
+        }
+      ],
       "verbs": {
         "object": {
           "bytes": 262144,

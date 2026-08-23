@@ -70,6 +70,61 @@
     },
     {
       "name": "subnets",
+      "rules": [
+        {
+          "key": "kea-pool-capacity-critical",
+          "level": "critical",
+          "grounds": "threshold",
+          "when": {
+            "fact": "UsedPercent",
+            "at_least": 95
+          },
+          "sentence": "The pool is nearly fully assigned — new devices get nothing while every existing lease keeps working, so this fails silently.",
+          "cites": [
+            "UsedPercent",
+            "TotalAddresses",
+            "AssignedAddresses"
+          ]
+        },
+        {
+          "key": "kea-pool-capacity",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "all": [
+              {
+                "fact": "UsedPercent",
+                "at_least": 90
+              },
+              {
+                "not": {
+                  "fact": "UsedPercent",
+                  "at_least": 95
+                }
+              }
+            ]
+          },
+          "sentence": "The pool is close to fully assigned — new devices get nothing while every existing lease keeps working, so this fails silently.",
+          "cites": [
+            "UsedPercent",
+            "TotalAddresses",
+            "AssignedAddresses"
+          ]
+        },
+        {
+          "key": "kea-declined",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "fact": "DeclinedAddresses",
+            "at_least": 1
+          },
+          "sentence": "Addresses stand declined — offered, then refused on the wire, which usually means something is squatting on them.",
+          "cites": [
+            "DeclinedAddresses"
+          ]
+        }
+      ],
       "verbs": {
         "object": {
           "bytes": 262144,

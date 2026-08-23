@@ -19,6 +19,34 @@
   "collections": [
     {
       "name": "workloads",
+      "rules": [
+        {
+          "key": "workload-io-stall",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "fact": "PsiIoFullAvg60",
+            "at_least": 20
+          },
+          "sentence": "This workload made no progress for a fifth or more of the last minute: every task in it that had work to do was waiting on I/O. Tasks with nothing to do are not counted.",
+          "cites": [
+            "PsiIoFullAvg60"
+          ]
+        },
+        {
+          "key": "workload-memory-stall",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "fact": "PsiMemoryFullAvg60",
+            "at_least": 10
+          },
+          "sentence": "This workload made no progress for a tenth or more of the last minute: every task in it that had work to do was waiting on memory reclaim. Tasks with nothing to do are not counted.",
+          "cites": [
+            "PsiMemoryFullAvg60"
+          ]
+        }
+      ],
       "verbs": {
         "object": {
           "bytes": 262144,

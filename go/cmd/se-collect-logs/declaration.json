@@ -16,6 +16,88 @@
   "collections": [
     {
       "name": "journal",
+      "rules": [
+        {
+          "key": "journal-priority",
+          "level": "critical",
+          "grounds": "interface",
+          "when": {
+            "fact": "Priority",
+            "at_most": 2
+          },
+          "sentence": "Entry logged at priority 2 or below; emerg, alert and crit are trusted as severity from the priority alone.",
+          "cites": [
+            "Priority"
+          ]
+        },
+        {
+          "key": "journal-priority",
+          "level": "info",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "Priority",
+                "equals": 3
+              },
+              {
+                "fact": "Container",
+                "present": true
+              }
+            ]
+          },
+          "sentence": "Entry logged at err by a container: the journald log driver maps a container's stderr to err, so the priority is the stream it was written on, not a severity the application chose.",
+          "cites": [
+            "Priority",
+            "Container"
+          ]
+        },
+        {
+          "key": "journal-priority",
+          "level": "info",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "Priority",
+                "equals": 3
+              },
+              {
+                "not": {
+                  "fact": "Container",
+                  "present": true
+                }
+              }
+            ]
+          },
+          "sentence": "Entry logged at err. err alone is not attention-worthy — applications log routine output at err — so this entry is recorded, not judged.",
+          "cites": [
+            "Priority"
+          ]
+        },
+        {
+          "key": "journal-repeated",
+          "level": "info",
+          "grounds": "threshold",
+          "when": {
+            "all": [
+              {
+                "fact": "Priority",
+                "at_most": 3
+              },
+              {
+                "fact": "RepeatCount",
+                "at_least": 3
+              }
+            ]
+          },
+          "sentence": "This message identity repeats within the page this entry was read from: repetition is the signal priority cannot give — judge it by content, not by level.",
+          "cites": [
+            "RepeatCount",
+            "RepeatWindow"
+          ]
+        }
+      ],
       "verbs": {
         "object": {
           "bytes": 262144,

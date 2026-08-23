@@ -14,6 +14,53 @@
   "collections": [
     {
       "name": "generations",
+      "rules": [
+        {
+          "key": "generation-pending",
+          "level": "info",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "Profile",
+                "equals": true
+              },
+              {
+                "fact": "Current",
+                "equals": false
+              }
+            ]
+          },
+          "sentence": "This is the system profile, but a different closure is currently activated.",
+          "cites": [
+            "Profile",
+            "Current"
+          ]
+        },
+        {
+          "key": "deployment-unattested",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "ReceiptsExpected",
+                "equals": true
+              },
+              {
+                "not": {
+                  "fact": "Deployment",
+                  "present": true
+                }
+              }
+            ]
+          },
+          "sentence": "This closure expects every deployment to leave a receipt and there is none for this generation: something activated it outside the deployment workflow, so what was previewed, risk-assessed and verified for it is not recorded anywhere.",
+          "cites": [
+            "ReceiptsExpected"
+          ]
+        }
+      ],
       "verbs": {
         "object": {
           "bytes": 262144,

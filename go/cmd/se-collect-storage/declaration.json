@@ -29,6 +29,144 @@
   "collections": [
     {
       "name": "pools",
+      "rules": [
+        {
+          "key": "pool-health",
+          "level": "critical",
+          "grounds": "interface",
+          "when": {
+            "fact": "State",
+            "not_equals": "ONLINE"
+          },
+          "sentence": "The pool itself reports a state other than ONLINE.",
+          "cites": [
+            "State",
+            "StatusMessage"
+          ]
+        },
+        {
+          "key": "vdev-health",
+          "level": "critical",
+          "grounds": "interface",
+          "when": {
+            "fact": "UnhealthyVdevs",
+            "non_empty": true
+          },
+          "sentence": "One or more member vdevs report a state other than healthy.",
+          "cites": [
+            "UnhealthyVdevs",
+            "Vdevs"
+          ]
+        },
+        {
+          "key": "vdev-errors",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "VdevsWithErrors",
+            "non_empty": true
+          },
+          "sentence": "Read, write or checksum errors stand recorded against member vdevs.",
+          "cites": [
+            "VdevsWithErrors",
+            "Vdevs"
+          ]
+        },
+        {
+          "key": "pool-capacity-critical",
+          "level": "critical",
+          "grounds": "threshold",
+          "when": {
+            "fact": "CapacityPercent",
+            "at_least": 90
+          },
+          "sentence": "The pool is nearly full; ZFS performance degrades as pools fill.",
+          "cites": [
+            "CapacityPercent",
+            "AllocatedBytes",
+            "FreeBytes"
+          ]
+        },
+        {
+          "key": "pool-capacity",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "all": [
+              {
+                "fact": "CapacityPercent",
+                "at_least": 80
+              },
+              {
+                "not": {
+                  "fact": "CapacityPercent",
+                  "at_least": 90
+                }
+              }
+            ]
+          },
+          "sentence": "The pool is filling; ZFS performance degrades as pools fill.",
+          "cites": [
+            "CapacityPercent",
+            "AllocatedBytes",
+            "FreeBytes"
+          ]
+        },
+        {
+          "key": "pool-scan",
+          "level": "info",
+          "grounds": "interface",
+          "when": {
+            "fact": "ScanState",
+            "equals": "SCANNING"
+          },
+          "sentence": "A scan is in progress.",
+          "cites": [
+            "ScanFunction",
+            "ScanState"
+          ]
+        },
+        {
+          "key": "pool-scrub-age-unknown",
+          "level": "info",
+          "grounds": "interface",
+          "when": {
+            "fact": "LastScrubEndTimeUnobservable",
+            "present": true
+          },
+          "sentence": "Time since the last completed scrub cannot be answered: the record the age would come from was replaced or never carried an epoch.",
+          "cites": [
+            "ScanFunction",
+            "LastScrubEndTimeUnobservable"
+          ]
+        },
+        {
+          "key": "pool-scrub-stale",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "all": [
+              {
+                "fact": "ScanFunction",
+                "equals": "SCRUB"
+              },
+              {
+                "fact": "ScanState",
+                "equals": "FINISHED"
+              },
+              {
+                "fact": "ScanAgeDays",
+                "at_least": 35
+              }
+            ]
+          },
+          "sentence": "The last completed scrub finished 35 or more days ago; latent disk errors surface only when a scrub reads them.",
+          "cites": [
+            "ScanEndTime",
+            "ScanAgeDays"
+          ]
+        }
+      ],
       "verbs": {
         "object": {
           "bytes": 262144,

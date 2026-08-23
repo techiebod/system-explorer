@@ -454,13 +454,19 @@ REGISTER: tuple[Row, ...] = (
         "exists' stopped discriminating; the probe reads the champions, whose "
         "named rules — restart-churn, the SMART verdicts, the link-rate "
         "opinion — are this row's own examples and are all three declared. "
-        "What no probe here shows is PARITY: that the declared tables reach "
-        "the same judgement as the reference's evaluators on the same facts. "
-        "The tables are fired against characteristic readings in each "
-        "collector's own tests, and agreement with agent/rules/*.py is "
-        "asserted by those cases being written from those files, which is a "
-        "correspondence no machine checks. That half is the owner's to judge "
-        "at acceptance."),
+        "The fleet rollout landed at R3d — every reference evaluator whose "
+        "conditions the closed vocabulary can express is a declared table, "
+        "fired in its collector's rules_test.go — with the inexpressible "
+        "residue stated where each table is tested: docker's whole book "
+        "(dual-representation and substring parses), downloader-disk and "
+        "paperless-storage (two-fact arithmetic), nix's Deployment.Outcome "
+        "(a nested member), resources' slice rules (a per-fact map), and "
+        "protection's target rules (set arithmetic) all await derived facts "
+        "minted on both implementations. What no probe here shows is PARITY: "
+        "that the declared tables reach the same judgement as the reference's "
+        "evaluators on the same facts. The firing cases are written from "
+        "agent/rules/*.py, which is a correspondence no machine checks — the "
+        "owner's to judge at acceptance."),
     Row(9, "the unported collections (network, storage, system, plex)",
         "built", "R3b/R3d", lambda: not NOT_YET_PORTED,
         "the probe is the register's own owed list emptying, which it did on "

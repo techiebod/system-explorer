@@ -488,7 +488,7 @@ Every known miss, each owned or ruled. A row neither built, owned nor ruled is a
 | 5 | applied order preserved; trees derived from relations | built at R1 | R1 |
 | 6 | name families on `units`/`hardware` (and fleet-wide audit) | storage/vms only — hardware publishes the disk's four families at R3c; a unit has one native name and publishes none | R3c/R3d |
 | 7 | relations on `units`/`hardware` (and fleet-wide audit) | declared by neither — declared by both champions at R3c | R3c/R3d |
-| 8 | rule tables fleet-wide (restart-churn, SMART verdicts, link-rate…) | mechanism built, no first-party collector declares any — thirty-one rules across the two champions at R3c | R3c/R3d |
+| 8 | rule tables fleet-wide (restart-churn, SMART verdicts, link-rate…) | thirty-one rules across the two champions at R3c; the fleet's expressible tables landed at R3d (sixty-seven more rules over thirteen collectors, each fired in its own tests), with the inexpressible residue stated per table and owed to derived facts | R3c/R3d |
 | 9 | eighteen unported collections (network 8, storage 5, system 4, plex 1) | the bare-guest nine built at R3b; the remaining six landed at R3d (nft-tables, port-exposure, tailscale, arrays, datasets, plex/requests) and NOT_YET_PORTED is empty | R3b done / R3d |
 | 10 | `/v1/status` roll-up (worst per collection, attention counts) | built at R3a | R3a |
 | 11 | fact filters with the 422 near-miss refusal | built at R3a | R3a |

@@ -13,6 +13,47 @@
   "collections": [
     {
       "name": "instance",
+      "rules": [
+        {
+          "key": "bazarr-unconfigured",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "ConfigMissing",
+            "non_empty": true
+          },
+          "sentence": "The instance is configured by URL but its receipts are incomplete; ConfigMissing names what is still needed.",
+          "cites": [
+            "ConfigMissing"
+          ]
+        },
+        {
+          "key": "bazarr-unreachable",
+          "level": "critical",
+          "grounds": "interface",
+          "when": {
+            "fact": "StatusUnobservable",
+            "present": true
+          },
+          "sentence": "The configured instance did not answer its API.",
+          "cites": [
+            "StatusUnobservable"
+          ]
+        },
+        {
+          "key": "bazarr-health",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "HealthIssues",
+            "non_empty": true
+          },
+          "sentence": "The app reports health issues of its own — each is listed in HealthIssues.",
+          "cites": [
+            "HealthIssues"
+          ]
+        }
+      ],
       "verbs": {
         "object": {
           "bytes": 262144,

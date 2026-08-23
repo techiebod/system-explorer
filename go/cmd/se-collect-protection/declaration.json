@@ -209,6 +209,182 @@
     },
     {
       "name": "jobs",
+      "rules": [
+        {
+          "key": "protection-verdict-stale",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "fact": "CheckedAgeSeconds",
+            "at_least": 11101
+          },
+          "sentence": "This row's verdict is hours old: its state, basis and age are what the checker saw when it last completed, not what is true now. A checker that stops writing leaves its last verdict in place, so green here says nothing until it runs again.",
+          "cites": [
+            "CheckedAt",
+            "CheckedAgeSeconds",
+            "State"
+          ]
+        },
+        {
+          "key": "protection-never-succeeded",
+          "level": "critical",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "State",
+                "equals": "stale"
+              },
+              {
+                "fact": "Basis",
+                "equals": "registered-never-succeeded"
+              },
+              {
+                "fact": "TargetClass",
+                "equals": "backup"
+              }
+            ]
+          },
+          "sentence": "This job has never succeeded since it was registered, and its window has passed — for this irreplaceable target there is no copy, only a unit that was supposed to make one.",
+          "cites": [
+            "State",
+            "Basis",
+            "AgeSeconds",
+            "MaxAgeSeconds",
+            "TargetClass"
+          ]
+        },
+        {
+          "key": "protection-never-succeeded",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "State",
+                "equals": "stale"
+              },
+              {
+                "fact": "Basis",
+                "equals": "registered-never-succeeded"
+              },
+              {
+                "not": {
+                  "fact": "TargetClass",
+                  "equals": "backup"
+                }
+              }
+            ]
+          },
+          "sentence": "This job has never succeeded since it was registered, and its window has passed. Where no declared target could be joined, this grade assumes replaceable and may not be.",
+          "cites": [
+            "State",
+            "Basis",
+            "AgeSeconds",
+            "MaxAgeSeconds",
+            "TargetNotScoped"
+          ]
+        },
+        {
+          "key": "protection-stale",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "State",
+                "equals": "stale"
+              },
+              {
+                "not": {
+                  "fact": "Basis",
+                  "equals": "registered-never-succeeded"
+                }
+              }
+            ]
+          },
+          "sentence": "No success inside this job's declared window — an older copy exists, and nothing has replaced it since.",
+          "cites": [
+            "State",
+            "AgeSeconds",
+            "MaxAgeSeconds",
+            "LastSuccessAt"
+          ]
+        },
+        {
+          "key": "protection-first-run-failed",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "LastResult",
+                "not_equals": "success"
+              },
+              {
+                "not": {
+                  "fact": "State",
+                  "equals": "stale"
+                }
+              },
+              {
+                "fact": "Basis",
+                "equals": "registered-never-succeeded"
+              }
+            ]
+          },
+          "sentence": "The most recent run failed and this job has never succeeded since it was registered — it is unstale only because its first window has not passed yet, and there is no copy behind it.",
+          "cites": [
+            "Basis",
+            "LastResult",
+            "LastFinishedAt"
+          ]
+        },
+        {
+          "key": "protection-last-run-failed",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "LastResult",
+                "not_equals": "success"
+              },
+              {
+                "not": {
+                  "fact": "State",
+                  "equals": "stale"
+                }
+              },
+              {
+                "not": {
+                  "fact": "Basis",
+                  "equals": "registered-never-succeeded"
+                }
+              }
+            ]
+          },
+          "sentence": "The most recent run failed, though an earlier success is still inside the window — the next window is the one that goes stale.",
+          "cites": [
+            "LastResult",
+            "LastFinishedAt",
+            "LastSuccessAt"
+          ]
+        },
+        {
+          "key": "protection-receipt-unreadable",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "ReceiptsUnobservable",
+            "present": true
+          },
+          "sentence": "A receipt this job has already written cannot be read, so this row cannot say when it last ran or last succeeded from its own evidence.",
+          "cites": [
+            "ReceiptsUnobservable"
+          ]
+        }
+      ],
       "verbs": {
         "object": {
           "bytes": 262144,

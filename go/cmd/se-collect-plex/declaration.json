@@ -13,6 +13,34 @@
   "collections": [
     {
       "name": "server",
+      "rules": [
+        {
+          "key": "plex-unconfigured",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "ConfigMissing",
+            "non_empty": true
+          },
+          "sentence": "The server is configured by URL but its receipts are incomplete; ConfigMissing names what is still needed.",
+          "cites": [
+            "ConfigMissing"
+          ]
+        },
+        {
+          "key": "plex-unreachable",
+          "level": "critical",
+          "grounds": "interface",
+          "when": {
+            "fact": "StatusUnobservable",
+            "present": true
+          },
+          "sentence": "The configured media server did not answer its API.",
+          "cites": [
+            "StatusUnobservable"
+          ]
+        }
+      ],
       "verbs": {
         "object": {
           "bytes": 262144,

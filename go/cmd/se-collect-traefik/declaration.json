@@ -12,6 +12,21 @@
   "collections": [
     {
       "name": "overview",
+      "rules": [
+        {
+          "key": "middlewares-errors",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "MiddlewaresErrors",
+            "at_least": 1
+          },
+          "sentence": "Traefik reports middlewares in error. Middlewares have no rows here — their documents are where basic-auth hashes live — so the count is the one overview-level verdict.",
+          "cites": [
+            "MiddlewaresErrors"
+          ]
+        }
+      ],
       "verbs": {
         "object": {
           "bytes": 262144,
@@ -162,6 +177,94 @@
     },
     {
       "name": "routers",
+      "rules": [
+        {
+          "key": "router-error",
+          "level": "critical",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "Error",
+                "non_empty": true
+              },
+              {
+                "fact": "Status",
+                "equals": "disabled"
+              }
+            ]
+          },
+          "sentence": "Traefik rejects this router; Error carries its own words.",
+          "cites": [
+            "Error",
+            "Status"
+          ]
+        },
+        {
+          "key": "router-warning",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "Error",
+                "non_empty": true
+              },
+              {
+                "not": {
+                  "fact": "Status",
+                  "equals": "disabled"
+                }
+              }
+            ]
+          },
+          "sentence": "Traefik loaded this router with warnings — still routing; Error carries its own words.",
+          "cites": [
+            "Error",
+            "Status"
+          ]
+        },
+        {
+          "key": "router-disabled",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "Status",
+            "equals": "disabled"
+          },
+          "sentence": "Router status is disabled; nothing routes through it.",
+          "cites": [
+            "Status"
+          ]
+        },
+        {
+          "key": "router-warning",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "Status",
+                "not_equals": "enabled"
+              },
+              {
+                "fact": "Status",
+                "not_equals": "disabled"
+              },
+              {
+                "not": {
+                  "fact": "Error",
+                  "non_empty": true
+                }
+              }
+            ]
+          },
+          "sentence": "Router status is neither enabled nor disabled, with no error text — stated without asserting an outage the API did not claim.",
+          "cites": [
+            "Status"
+          ]
+        }
+      ],
       "verbs": {
         "object": {
           "bytes": 262144,
@@ -280,6 +383,138 @@
     },
     {
       "name": "services",
+      "rules": [
+        {
+          "key": "service-error",
+          "level": "critical",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "Error",
+                "non_empty": true
+              },
+              {
+                "fact": "Status",
+                "equals": "disabled"
+              }
+            ]
+          },
+          "sentence": "Traefik rejects this service; Error carries its own words.",
+          "cites": [
+            "Error",
+            "Status"
+          ]
+        },
+        {
+          "key": "service-warning",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "Error",
+                "non_empty": true
+              },
+              {
+                "not": {
+                  "fact": "Status",
+                  "equals": "disabled"
+                }
+              }
+            ]
+          },
+          "sentence": "Traefik loaded this service with warnings — still routing; Error carries its own words.",
+          "cites": [
+            "Error",
+            "Status"
+          ]
+        },
+        {
+          "key": "service-disabled",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "Status",
+            "equals": "disabled"
+          },
+          "sentence": "Service status is disabled; nothing routes through it.",
+          "cites": [
+            "Status"
+          ]
+        },
+        {
+          "key": "service-warning",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "Status",
+                "not_equals": "enabled"
+              },
+              {
+                "fact": "Status",
+                "not_equals": "disabled"
+              },
+              {
+                "not": {
+                  "fact": "Error",
+                  "non_empty": true
+                }
+              }
+            ]
+          },
+          "sentence": "Service status is neither enabled nor disabled, with no error text — stated without asserting an outage the API did not claim.",
+          "cites": [
+            "Status"
+          ]
+        },
+        {
+          "key": "service-servers-down",
+          "level": "critical",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "ServersDown",
+                "at_least": 1
+              },
+              {
+                "fact": "ServersUp",
+                "equals": 0
+              }
+            ]
+          },
+          "sentence": "Every backend server of this service reports down — the route is a front door onto nothing.",
+          "cites": [
+            "ServersDown",
+            "DownServers"
+          ]
+        },
+        {
+          "key": "service-servers-down",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "ServersDown",
+                "at_least": 1
+              },
+              {
+                "fact": "ServersUp",
+                "at_least": 1
+              }
+            ]
+          },
+          "sentence": "Some backend servers of this service report down — degraded capacity, still routing.",
+          "cites": [
+            "ServersDown",
+            "DownServers"
+          ]
+        }
+      ],
       "verbs": {
         "object": {
           "bytes": 262144,
