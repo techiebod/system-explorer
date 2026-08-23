@@ -781,4 +781,23 @@ REGISTER: tuple[Row, ...] = (
         "staged set matches what the register compares, which "
         "test_the_replay_seam_stages_what_the_register_compares asserts "
         "once a seam exists."),
+    Row(29, "the findings surface — `get_findings` has no port tool at "
+        "either tier",
+        "owed", "R4",
+        lambda: (_in_file("src/system_explorer/hub/routes.py", "/v1/findings")
+                 or _in_file("go/internal/collate/rest.go", '"get_findings"')),
+        "the probe asks whether either tier publishes it. Added 2026-08-23 "
+        "by an audit that derived the reference's MCP tool set and held the "
+        "port to it — the dimension the register's own hand-transcribed row "
+        "set never covered, which is PLAN rule 7 obeyed for collections and "
+        "not for the surface. The port serves `get_opinions` and "
+        "`get_acknowledgements` and neither is findings: a finding is an "
+        "opinion at warn or above WITH A LIFECYCLE, which is the registry's, "
+        "and no route serves the registry's open set. So the lifecycle "
+        "landed at R3e and its surface did not, and the one question the "
+        "reference's attention surface answers — what needs attention, and "
+        "how long it has been true — has no tool. Held to R4 because it is "
+        "a page as much as a route. What the probe cannot see: whether the "
+        "surface carries the reset marker post-cut findings must display, "
+        "which is acceptance item 12's."),
 )
