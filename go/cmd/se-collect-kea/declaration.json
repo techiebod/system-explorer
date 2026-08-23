@@ -13,6 +13,16 @@
   "collections": [
     {
       "name": "daemon",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "is the DHCP service itself up, and which release is answering?",
       "prefix": "daemon",
       "freshness": "60s",
@@ -60,6 +70,16 @@
     },
     {
       "name": "subnets",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "how full is each pool, and what does it hand out?",
       "prefix": "subnet",
       "freshness": "60s",
@@ -211,6 +231,16 @@
     },
     {
       "name": "reservations",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "which addresses are pinned to which machines?",
       "prefix": "reservation",
       "freshness": "300s",
@@ -322,6 +352,16 @@
     },
     {
       "name": "leases",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "who holds an address right now?",
       "prefix": "lease",
       "freshness": "60s",
