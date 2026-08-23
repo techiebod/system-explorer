@@ -82,8 +82,8 @@ func parseDeclaration(t *testing.T) map[string]declaredCollection {
 	for _, collection := range declaration.Collections {
 		out[collection.Name] = collection
 	}
-	if len(out) != 7 {
-		t.Fatalf("seven collections — the nft trio, routes, listening, resolver, links; got %d", len(out))
+	if len(out) != 8 {
+		t.Fatalf("eight collections — the nft trio, port-exposure, routes, listening, resolver, links; got %d", len(out))
 	}
 	return out
 }
@@ -94,6 +94,9 @@ func parseDeclaration(t *testing.T) map[string]declaredCollection {
 func TestTheDeclarationCoversExactlyTheFactsEitherCollectionEmits(t *testing.T) {
 	declared := parseDeclaration(t)
 	emitted := map[string][]string{
+		"port-exposure": {"Protocol", "LocalAddress", "LocalPort", "Scope",
+			"PathCoverage", "AdmittingRules", "AdmittedFromCertain",
+			"AdmittedFromPossible", "ClosureGap", "ClosureGapRules"},
 		"nft-tables": {"Family", "Chains", "ChainCount", "RuleCount"},
 		"nft-chains": {"Family", "Table", "Name", "Handle", "BaseChain", "Hook",
 			"Type", "Priority", "Policy", "RuleCount", "JumpedFrom", "Unreferenced"},
@@ -150,6 +153,10 @@ func TestTheDeclarationCoversExactlyTheFactsEitherCollectionEmits(t *testing.T) 
 func TestTheDeclaredFactKindsMatchTheReferences(t *testing.T) {
 	declared := parseDeclaration(t)
 	derived := map[string]map[string]bool{
+		"port-exposure": {"Scope": true, "PathCoverage": true,
+			"AdmittingRules": true, "AdmittedFromCertain": true,
+			"AdmittedFromPossible": true, "ClosureGap": true,
+			"ClosureGapRules": true},
 		"nft-tables": {"ChainCount": true},
 		"nft-chains": {"JumpedFrom": true, "Unreferenced": true, "BaseChain": true},
 		"nft-rules": {"Rendered": true, "Comprehension": true, "OpaqueReason": true,

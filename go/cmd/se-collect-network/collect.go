@@ -110,9 +110,10 @@ func (e *emitter) emit(record any) {
 }
 
 const (
-	collectionTables = "nft-tables"
-	collectionChains = "nft-chains"
-	collectionRules  = "nft-rules"
+	collectionTables   = "nft-tables"
+	collectionChains   = "nft-chains"
+	collectionRules    = "nft-rules"
+	collectionExposure = "port-exposure"
 )
 
 // collect runs one batch: begin, each requested collection under its issued
@@ -153,7 +154,7 @@ func collect(stdout, stderr io.Writer, src source, order []string, generations m
 	var acqErr error
 	for _, collection := range order {
 		if collection == collectionTables || collection == collectionChains ||
-			collection == collectionRules {
+			collection == collectionRules || collection == collectionExposure {
 			doc, acqErr = src.nftRuleset()
 			break
 		}
@@ -204,6 +205,18 @@ func collect(stdout, stderr io.Writer, src source, order []string, generations m
 			}
 		case "resolver":
 			if code := collectResolver(out, stderr, src, collection, generations[collection], &objects); code != exitOK {
+				return code
+			}
+		case collectionExposure:
+			// Both acquisitions, and the nft one decides the decline: a host
+			// with no nft has no input path to walk, and the reference
+			// declines the collection rather than publishing every socket as
+			// admitted by nothing.
+			if acqErr != nil {
+				declineAcquisition(out, collection, generations[collection], acqErr)
+				continue
+			}
+			if code := emitExposure(out, stderr, src, collection, doc, generations[collection], &objects); code != exitOK {
 				return code
 			}
 		case collectionTables, collectionChains, collectionRules:

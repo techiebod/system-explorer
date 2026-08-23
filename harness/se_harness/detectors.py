@@ -504,6 +504,9 @@ def _check_prefix_pair(node: dict, path: str, findings: list[Finding]) -> None:
 # Long enough to hold something worth hiding, and a multiple of four so a
 # fragment of ordinary prose does not decode to noise. A serial is at least a
 # few characters, so twelve base64 characters (nine octets) is the floor.
+# /proc/net's byte-swapped spelling of ::1 — four 32-bit words, host order.
+PROC_V6_LOOPBACK = "00000000000000000000000001000000"
+
 NQN_TAIL = re.compile(
     r"\b(nqn\.\d{4}-\d{2}\.[\w.\-]+:(?:[^\s:]+:)*)([A-Za-z0-9\-_]{4,})\b")
 BASE64_LEAF = re.compile(r"^[A-Za-z0-9+/]{12,}={0,2}$")
@@ -581,9 +584,12 @@ def _scan_text(
             continue
         # All zeros identifies nobody — the nil-UUID reasoning, met again in
         # /proc/net's hex encoding, where the IPv6 any-address `::` is
-        # spelled as exactly this. Only the one value: 31 zeros and a 1 is
-        # back to being a finding.
-        if m.group(0) == "0" * 32:
+        # spelled as exactly this. The loopback `::1` joins it (met on the
+        # first capture with a chronyd listening on [::1]): /proc/net spells
+        # it with the 1 in the third word's low byte, and like `::` it is a
+        # protocol constant that identifies nobody. Exactly the two values:
+        # any other bit set is back to being a finding.
+        if m.group(0) in ("0" * 32, PROC_V6_LOOPBACK):
             continue
         findings.append(Finding(
             path, "machine-id",
@@ -704,6 +710,14 @@ def _scan_text(
                 "manifest declares no address fields",
             ))
     for m in V6_CANDIDATE.finditer(text):
+        # A listening-socket name glues a port onto the address with a colon,
+        # and "::1:323" happens to parse as a VALID global v6 address — so a
+        # loopback socket's own name read as a leak. Only the loopback prefix
+        # is carved out: a global address with a glued port still parses
+        # global with or without the suffix, and over-reporting is the safe
+        # direction there.
+        if re.fullmatch(r"::1:\d{1,5}", m.group(0)):
+            continue
         try:
             ip = ipaddress.ip_address(m.group(0))
         except ValueError:

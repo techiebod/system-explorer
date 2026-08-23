@@ -643,3 +643,23 @@ def test_regression_the_wwn_pass_does_not_substitute_its_own_replacement(
     # the original and its own replacement in there.
     hops = [key for key in json.loads(state.read_text()) if key.startswith("wwn:")]
     assert hops == ["wwn:5000c5006c073a0e"], hops
+
+
+def test_regression_proc_net_loopback_v6_is_a_constant_not_a_machine_id() -> None:
+    """/proc/net spells ::1 as 31 zeros and a 1 in the third word's low byte —
+    the machine-id shape — and the first capture with a chronyd on [::1] read
+    its own loopback as a leak. Like the all-zeros any-address, it is a
+    protocol constant that identifies nobody; unlike it, any OTHER bit set
+    stays a finding."""
+    assert not scan({"/proc/net.udp6": "00000000000000000000000001000000:0143"})
+    assert scan({"/proc/net.udp6": "00000000000000000000000101000000:0143"})
+
+
+def test_regression_a_loopback_socket_name_is_not_a_global_address() -> None:
+    """A listening-socket name glues the port on with a colon, and "::1:323"
+    parses as a valid GLOBAL v6 address — so a loopback socket's own name
+    fired the address detector. Only the loopback prefix is carved out: a
+    real global with a glued port parses global either way, and over-report
+    is the safe direction there."""
+    assert not scan({"name": "udp6 ::1:323"})
+    assert "address" in classes(scan({"name": "tcp6 2a00:1450:4009:81f::200e:443"}))

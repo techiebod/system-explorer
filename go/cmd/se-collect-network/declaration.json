@@ -21,6 +21,160 @@
   "probe": "nft runs and `nft -j list ruleset` parses; an empty ruleset is a successful read and an authoritative-empty commit, never a probe failure",
   "collections": [
     {
+      "name": "port-exposure",
+      "question": "which firewall rules admit each listening port, and from where?",
+      "prefix": "port-exposure",
+      "freshness": "5m",
+      "perishability": "reconstructible",
+      "answer": [
+        "LocalPort",
+        "Protocol",
+        "Scope",
+        "AdmittedFromCertain",
+        "AdmittedFromPossible",
+        "ClosureGap"
+      ],
+      "ceiling": {
+        "records": 4096,
+        "bytes": 4194304
+      },
+      "facts": {
+        "Protocol": {
+          "type": "enum",
+          "values": [
+            "tcp",
+            "tcp6",
+            "udp",
+            "udp6"
+          ],
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/proc/net/{tcp,tcp6,udp,udp6}",
+          "sentence": "The listening socket's protocol, joined from the listening collection."
+        },
+        "LocalAddress": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "location",
+          "from": "/proc/net/{tcp,tcp6,udp,udp6}",
+          "sentence": "The address the socket is bound to; the wildcard means the ruleset alone decides what reaches it."
+        },
+        "LocalPort": {
+          "type": "integer",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/proc/net/{tcp,tcp6,udp,udp6}",
+          "sentence": "The port this row is about — the number an operator arrives asking after, which is why it is the row rather than a column on a rule."
+        },
+        "Scope": {
+          "type": "enum",
+          "values": [
+            "all-interfaces",
+            "loopback",
+            "specific-address"
+          ],
+          "temperament": "state",
+          "kind": "derived",
+          "derived_from": [
+            "LocalAddress"
+          ],
+          "discloses": "nothing",
+          "from": "/proc/net/{tcp,tcp6,udp,udp6}",
+          "sentence": "What the binding says before any rule: a loopback socket is unreachable from off the host whatever the ruleset permits."
+        },
+        "AdmittingRules": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": [
+            "Protocol",
+            "LocalPort"
+          ],
+          "discloses": "content",
+          "from": "/nftables/*/rule",
+          "sentence": "Every rule on the input path that admits this port, in evaluation order, each with its handle and rendered text. Evidence for the two answers below, and the thing to go and read."
+        },
+        "AdmittedFromCertain": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": [
+            "AdmittingRules"
+          ],
+          "discloses": "content",
+          "from": "/nftables/*/rule",
+          "sentence": "The source constraints of admitting rules that were rendered in full — where traffic can reach this port from, by rules this observer understood completely. A clause it could not read contributes nothing here, so this is a lower bound and can only ever under-claim."
+        },
+        "AdmittedFromPossible": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": [
+            "AdmittingRules"
+          ],
+          "discloses": "content",
+          "from": "/nftables/*/rule",
+          "sentence": "The same computation with every unreadable clause treated as matching — an upper bound. Where this is wider than the certain answer, the difference is the part of the ruleset this observer cannot interpret rather than a property of the firewall."
+        },
+        "ClosureGap": {
+          "type": "boolean",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": [
+            "AdmittedFromCertain",
+            "AdmittedFromPossible"
+          ],
+          "discloses": "nothing",
+          "from": "/nftables/*/rule",
+          "sentence": "Whether the two answers differ. True means the ruleset contains a clause this adapter could not read that bears on this port, and the rules responsible are named beside it."
+        },
+        "ClosureGapRules": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": [
+            "AdmittingRules"
+          ],
+          "discloses": "content",
+          "from": "/nftables/*/rule",
+          "sentence": "The handles of the rules whose unreadable clauses opened the gap — where to look to close it by hand."
+        },
+        "PathCoverage": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": [
+            "AdmittingRules"
+          ],
+          "discloses": "nothing",
+          "from": "/nftables/*/rule",
+          "sentence": "Which packet paths this row accounts for. Input only: a published container port is translated in prerouting and admitted in forward and is not covered, so an empty admitting list is not a statement that nothing can reach the port. Stated on every row rather than once, because a consumer holding one object must be able to see it. Shadowing is not resolved and connection tracking is not modelled: rules are listed in evaluation order, and an earlier drop that would pre-empt a later accept is shown rather than applied."
+        }
+      },
+      "redaction_exemption": "addresses a socket is bound to and rendered rule text — interface names, subnets and ports somebody chose, declared location and content above; the corpus scrub substitutes them. No credential appears in a ruleset this collection can render, and a rule comment is not read at all.",
+      "reference_commands": [
+        {
+          "purpose": "the sockets these rows join, by hand",
+          "argv": [
+            "ss",
+            "-tulnp"
+          ]
+        },
+        {
+          "purpose": "the input-path rules the closures walk",
+          "argv": [
+            "nft",
+            "-a",
+            "list",
+            "ruleset"
+          ]
+        }
+      ]
+    },
+    {
       "name": "nft-tables",
       "question": "which firewall tables exist, and how much does each hold?",
       "prefix": "nft-table",

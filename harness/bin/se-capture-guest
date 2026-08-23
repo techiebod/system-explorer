@@ -870,7 +870,7 @@ case "$collector" in
         # nft optional since R3b: a minimal guest may not ship nftables,
         # and its absence is the reading the nft collections decline on.
         acquisitions=(
-            "nft.json?|nft -j list ruleset 2>/dev/null || true"
+            "nft.json?|sudo nft -j list ruleset 2>/dev/null || nft -j list ruleset 2>/dev/null || true"
             "ip-route4.json|ip -j -4 route show table all"
             "ip-route6.json|ip -j -6 route show table all"
             "ip-rule.json|ip -j rule show"

@@ -90,6 +90,13 @@ VALID_VARIANTS = frozenset(
         # occur on a plain guest, and the fdb's learned-MAC join is only
         # honest when a real bridge actually learned it.
         "enslaved",
+        # exposure, added with port-exposure's R3d port: a guest given the
+        # ruleset that makes each closure discipline reachable from a real
+        # capture — a guarded jump, an icmp-only accept, a bare-range dport,
+        # a negated dport, and one iptables-nft rule for a genuine xt
+        # residue. Every staged rule accepts, so the staging cannot cut the
+        # guest's own ssh off.
+        "exposure",
         # staged-disks, added with hardware's R3c retrofit: a guest given a
         # virtio-scsi disk and an NVMe controller in its domain definition,
         # each with a serial and a wwn. The default guest has virtio-blk,

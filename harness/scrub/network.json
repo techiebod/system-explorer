@@ -1,776 +1,788 @@
 {
-  "#": "Scrub manifest for the network collector: nft -j ruleset payloads (nft.json), the union across every variant \u2014 a populated ruleset, a metainfo-only empty one, and the canary plant. nftables JSON is one list of single-key objects (metainfo | table | chain | rule | set), so every entry starts nftables.*.",
-  "#nothing": "Table and chain names are distribution conventions \u2014 filter, nixos-fw, ts-input \u2014 identical across every install of that distro or daemon, so they disclose nothing and substituting them would turn a specimen of a real firewall into a specimen of nothing (DESIGN 21). The same goes for hooks, policies, priorities, handles, counters, fwmark masks, protocol/field selectors and interface-name globs.",
-  "#comments": "Rule and set comments are free text an operator can put anything into \u2014 content, and the canary variant plants a credential-shaped string in one precisely because this is a real leak surface.",
-  "#addresses": "A match comparand (match.right) is usually a port, fwmark or protocol constant and occasionally a bare address; the classes live in one member, so it takes the free-text pass, whose address rules keep well-known constants and substitute everything else within its own space. {addr, len} prefixes are scrubbed as a unit so the base stays valid for its length \u2014 the /23 that came out base-invalid is the pinned regression.",
-  "nftables.*.metainfo.version": {
-    "discloses": "nothing"
-  },
-  "nftables.*.metainfo.release_name": {
-    "discloses": "nothing"
-  },
-  "nftables.*.metainfo.json_schema_version": {
-    "discloses": "nothing"
-  },
-  "nftables.*.table.family": {
-    "discloses": "nothing"
-  },
-  "nftables.*.table.name": {
-    "discloses": "nothing"
-  },
-  "nftables.*.table.handle": {
-    "discloses": "nothing"
-  },
-  "nftables.*.chain.family": {
-    "discloses": "nothing"
-  },
-  "nftables.*.chain.table": {
-    "discloses": "nothing"
-  },
-  "nftables.*.chain.name": {
-    "discloses": "nothing"
-  },
-  "nftables.*.chain.handle": {
-    "discloses": "nothing"
-  },
-  "nftables.*.chain.type": {
-    "discloses": "nothing"
-  },
-  "nftables.*.chain.hook": {
-    "discloses": "nothing"
-  },
-  "nftables.*.chain.prio": {
-    "discloses": "nothing"
-  },
-  "nftables.*.chain.policy": {
-    "discloses": "nothing"
-  },
-  "nftables.*.set.family": {
-    "discloses": "nothing"
-  },
-  "nftables.*.set.table": {
-    "discloses": "nothing"
-  },
-  "nftables.*.set.name": {
-    "discloses": "nothing"
-  },
-  "nftables.*.set.handle": {
-    "discloses": "nothing"
-  },
-  "nftables.*.set.comment": {
-    "discloses": "content"
-  },
-  "nftables.*.set.type.*": {
-    "discloses": "nothing"
-  },
-  "nftables.*.set.flags.*": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.family": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.table": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.chain": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.handle": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.comment": {
-    "discloses": "content"
-  },
-  "nftables.*.map.family": {
-    "discloses": "nothing"
-  },
-  "nftables.*.map.table": {
-    "discloses": "nothing"
-  },
-  "nftables.*.map.name": {
-    "discloses": "nothing"
-  },
-  "nftables.*.map.handle": {
-    "discloses": "nothing"
-  },
-  "nftables.*.map.type": {
-    "discloses": "nothing"
-  },
-  "nftables.*.map.map": {
-    "discloses": "nothing"
-  },
-  "nftables.*.map.elem.*.0": {
-    "discloses": "location"
-  },
-  "nftables.*.map.elem.*.1.jump.target": {
-    "discloses": "nothing"
-  },
-  "nftables.*.map.elem.*.1.goto.target": {
-    "discloses": "nothing"
-  },
-  "nftables.*.map.elem.*.1.accept": {
-    "discloses": "nothing"
-  },
-  "nftables.*.map.elem.*.1.drop": {
-    "discloses": "nothing"
-  },
-  "#map": "A named map is a top-level object like a table or a chain, and its `elem` list is a list of [key, verdict] PAIRS \u2014 which is why the two halves are classified apart. The verdict half is nftables' own vocabulary and takes the same `nothing` as the identical statement written inline in a rule. The KEY half is whatever the map is typed on: inet_proto here, an address or a port in the next capture, exactly the mixture match.right already holds \u2014 so it takes the same free-text pass rather than a `nothing` that would publish the first address somebody keys a map on. The map's own name stays for the reason a chain's does: it is the string the dispatching rule spells as @dispatch, and substituting one side of that join would leave a specimen of a map nothing consults.",
-  "nftables.*.rule.expr.*.counter.packets": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.counter.bytes": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.jump.target": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.goto.target": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.accept": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.drop": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.return": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.masquerade": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.match.op": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.match.left.meta.key": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.match.left.ct.key": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.match.left.payload.protocol": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.match.left.payload.field": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.match.left.fib.result": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.match.left.fib.flags.*": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.match.left.&.*": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.match.left.&.*.meta.key": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.match.left.&.*.ct.key": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.match.left.concat.*.meta.key": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.match.left.concat.*.payload.protocol": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.match.left.concat.*.payload.field": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.match.right": {
-    "discloses": "location"
-  },
-  "nftables.*.rule.expr.*.match.right.~key": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.match.right.*": {
-    "discloses": "location"
-  },
-  "nftables.*.rule.expr.*.match.right.set.*": {
-    "discloses": "location"
-  },
-  "nftables.*.rule.expr.*.match.right.set.*.concat.*": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.match.right.prefix.addr": {
-    "discloses": "location",
-    "format": "ipv4"
-  },
-  "nftables.*.rule.expr.*.match.right.prefix.len": {
-    "discloses": "nothing"
-  },
-  "#prefix.addr": "Both families arrive at this one path (100.64.0.0 and fe80:: alike); the {addr, len} pair walk detects the shape itself and the substitution is family-aware, so the format here only says 'this is an address field' \u2014 which is also what arms the checker's in-space-replacements allowance.",
-  "nftables.*.rule.expr.*.vmap.key.ct.key": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.vmap.key.meta.key": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.vmap.data": {
-    "discloses": "nothing"
-  },
-  "#vmap.data": "Two shapes at one path, and only one of them is a leaf: an INLINE map carries {\"set\": [...]} and walks the entries below, while a NAMED map is the bare string \"@dispatch\". The string is the other end of the map object's name \u2014 the whole of what makes the map-dispatched chain reachable \u2014 so it is classified with the name it refers to.",
-  "nftables.*.rule.expr.*.vmap.data.set.*.*": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.vmap.data.set.*.*.accept": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.vmap.data.set.*.*.drop": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.vmap.data.set.*.*.jump.target": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.mangle.key.meta.key": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.mangle.key.ct.key": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.mangle.value.&.*": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.mangle.value.&.*.meta.key": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.mangle.value.&.*.ct.key": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.mangle.value.|.*": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.mangle.value.|.*.&.*": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.mangle.value.|.*.&.*.meta.key": {
-    "discloses": "nothing"
-  },
-  "nftables.*.rule.expr.*.mangle.value.|.*.&.*.ct.key": {
-    "discloses": "nothing"
-  },
-  "#ip-procnet": "the R3b payloads: both families' full route dumps, the rule table, and the /proc/net socket transcript. On a LAB GUEST every address is the libvirt default NAT range or link-local \u2014 the same bytes on every libvirt install on earth \u2014 so these entries pass them verbatim; a capture from an ESTATE host carries real topology and must not pass through them. Reclassify per leaf before capturing from one.",
-  "ip-route4:*.~key": {
-    "discloses": "nothing"
-  },
-  "ip-route4:*.*": {
-    "discloses": "nothing"
-  },
-  "ip-route4:*.*.*": {
-    "discloses": "nothing"
-  },
-  "ip-route4:*.*.*.*": {
-    "discloses": "nothing"
-  },
-  "ip-route6:*.~key": {
-    "discloses": "nothing"
-  },
-  "ip-route6:*.*": {
-    "discloses": "nothing"
-  },
-  "ip-route6:*.*.*": {
-    "discloses": "nothing"
-  },
-  "ip-route6:*.*.*.*": {
-    "discloses": "nothing"
-  },
-  "ip-rule:*.~key": {
-    "discloses": "nothing"
-  },
-  "ip-rule:*.*": {
-    "discloses": "nothing"
-  },
-  "ip-rule:*.*.*": {
-    "discloses": "nothing"
-  },
-  "ip-rule:*.*.*.*": {
-    "discloses": "nothing"
-  },
-  "procnet:~key": {
-    "discloses": "nothing"
-  },
-  "procnet:*.~key": {
-    "discloses": "nothing"
-  },
-  "procnet:*.*": {
-    "discloses": "nothing"
-  },
-  "#resolver": "the resolver payloads: the resolve1 bus map (or its staged false for a file-mode host), the resolv.conf reading, the interface table and the hostname. Bus documents and resolv.conf carry the lab NAT range verbatim under the same coverage limit as the route dumps; the hostname is substituted via the names mechanism, exactly as the system collector's is.",
-  "bus:~key": {
-    "discloses": "nothing"
-  },
-  "bus:*": {
-    "discloses": "nothing"
-  },
-  "bus:*.*": {
-    "discloses": "nothing"
-  },
-  "bus:*.*.*": {
-    "discloses": "nothing"
-  },
-  "bus:*.*.*.*": {
-    "discloses": "nothing"
-  },
-  "bus:*.*.*.*.*": {
-    "discloses": "nothing"
-  },
-  "bus:*.*.*.*.*.*": {
-    "discloses": "nothing"
-  },
-  "resolv-conf:~key": {
-    "discloses": "nothing"
-  },
-  "resolv-conf:*": {
-    "discloses": "nothing"
-  },
-  "ifindex:*.*": {
-    "discloses": "nothing"
-  },
-  "hostname": {
-    "payload": "hostname",
-    "whole": {
-      "discloses": "location",
-      "format": "hostname"
-    }
-  },
-  "bus:*.~key": {
-    "discloses": "nothing"
-  },
-  "bus:*.*.~key": {
-    "discloses": "nothing"
-  },
-  "bus:*.*.*.~key": {
-    "discloses": "nothing"
-  },
-  "bus:*.*.*.*.~key": {
-    "discloses": "nothing"
-  },
-  "bus:*.*.*.*.*.~key": {
-    "discloses": "nothing"
-  },
-  "bus:*.*.*.*.*.*.~key": {
-    "discloses": "nothing"
-  },
-  "bus:*.*.*.*.*.*.*": {
-    "discloses": "nothing"
-  },
-  "bus:*.*.*.*.*.*.*.~key": {
-    "discloses": "nothing"
-  },
-  "bus:*.*.*.*.*.*.*.*": {
-    "discloses": "nothing"
-  },
-  "bus:*.*.*.*.*.*.*.*.~key": {
-    "discloses": "nothing"
-  },
-  "#links": "the links payloads. MAC-bearing members are substituted shape-preserved and corpus-consistently \u2014 the fdb's learned MAC IS a veth's own address, and the join must survive the scrub. Every other member is enumerated from the committed capture under deny-by-default: a kernel that grows a field forces a classification here rather than passing silently. Addresses stay verbatim under the lab-guest coverage limit stated for the route dumps.",
-  "ip-addr:*.addr_info.*.broadcast": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.addr_info.*.dynamic": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.addr_info.*.family": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.addr_info.*.label": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.addr_info.*.local": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.addr_info.*.metric": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.addr_info.*.noprefixroute": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.addr_info.*.preferred_life_time": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.addr_info.*.prefixlen": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.addr_info.*.protocol": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.addr_info.*.scope": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.addr_info.*.valid_life_time": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.address": {
-    "discloses": "identity",
-    "format": "mac"
-  },
-  "ip-addr:*.allmulti": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.altnames.*": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.broadcast": {
-    "discloses": "identity",
-    "format": "mac"
-  },
-  "ip-addr:*.flags.*": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.gro_ipv4_max_size": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.gro_max_size": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.group": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.gso_ipv4_max_size": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.gso_max_segs": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.gso_max_size": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.ifindex": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.ifname": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.link": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.link_type": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.ageing_time": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.bridge_id": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.fdb_max_learned": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.fdb_n_learned": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.forward_delay": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.gc_timer": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.group_addr": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.group_fwd_mask": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.hello_time": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.hello_timer": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.max_age": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.mcast_hash_elasticity": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.mcast_hash_max": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.mcast_igmp_version": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.mcast_last_member_cnt": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.mcast_last_member_intvl": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.mcast_membership_intvl": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.mcast_mld_version": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.mcast_querier": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.mcast_querier_intvl": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.mcast_query_intvl": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.mcast_query_response_intvl": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.mcast_query_use_ifaddr": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.mcast_router": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.mcast_snooping": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.mcast_startup_query_cnt": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.mcast_startup_query_intvl": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.mcast_stats_enabled": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.mcast_vlan_snooping": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.mst_enabled": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.nf_call_arptables": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.nf_call_ip6tables": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.nf_call_iptables": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.no_linklocal_learn": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.priority": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.root_id": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.root_path_cost": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.root_port": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.stp_state": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.tcn_timer": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.topology_change": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.topology_change_detected": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.topology_change_timer": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.vlan_default_pvid": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.vlan_filtering": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.vlan_protocol": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.vlan_stats_enabled": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_data.vlan_stats_per_port": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_kind": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.bcast_flood": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.bridge_id": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.config_pending": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.cost": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.designated_cost": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.designated_port": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.fastleave": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.flood": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.forward_delay_timer": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.group_fwd_mask": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.group_fwd_mask_str": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.guard": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.hairpin": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.hold_timer": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.id": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.isolated": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.learning": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.locked": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.mab": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.mcast_flood": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.mcast_to_unicast": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.message_age_timer": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.multicast_router": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.neigh_suppress": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.neigh_vlan_suppress": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.no": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.priority": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.proxy_arp": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.proxy_arp_wifi": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.root_block": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.root_id": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.state": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.topology_change_ack": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_data.vlan_tunnel": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.linkinfo.info_slave_kind": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.master": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.max_mtu": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.min_mtu": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.mtu": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.num_rx_queues": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.num_tx_queues": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.operstate": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.parentbus": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.parentdev": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.promiscuity": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.qdisc": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.tso_max_segs": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.tso_max_size": {
-    "discloses": "nothing"
-  },
-  "ip-addr:*.txqlen": {
-    "discloses": "nothing"
-  },
-  "fdb:*.flags.*": {
-    "discloses": "nothing"
-  },
-  "fdb:*.ifname": {
-    "discloses": "nothing"
-  },
-  "fdb:*.mac": {
-    "discloses": "identity",
-    "format": "mac"
-  },
-  "fdb:*.master": {
-    "discloses": "nothing"
-  },
-  "fdb:*.state": {
-    "discloses": "nothing"
-  },
-  "fdb:*.vlan": {
-    "discloses": "nothing"
-  },
-  "lldp:~key": {
-    "discloses": "nothing"
-  },
-  "lldp:*": {
-    "discloses": "nothing"
-  },
-  "lldp:*.*": {
-    "discloses": "nothing"
-  },
-  "lldp:*.*.*": {
-    "discloses": "nothing"
+ "#": "Scrub manifest for the network collector: nft -j ruleset payloads (nft.json), the union across every variant — a populated ruleset, a metainfo-only empty one, and the canary plant. nftables JSON is one list of single-key objects (metainfo | table | chain | rule | set), so every entry starts nftables.*.",
+ "#nothing": "Table and chain names are distribution conventions — filter, nixos-fw, ts-input — identical across every install of that distro or daemon, so they disclose nothing and substituting them would turn a specimen of a real firewall into a specimen of nothing (DESIGN 21). The same goes for hooks, policies, priorities, handles, counters, fwmark masks, protocol/field selectors and interface-name globs.",
+ "#comments": "Rule and set comments are free text an operator can put anything into — content, and the canary variant plants a credential-shaped string in one precisely because this is a real leak surface.",
+ "#addresses": "A match comparand (match.right) is usually a port, fwmark or protocol constant and occasionally a bare address; the classes live in one member, so it takes the free-text pass, whose address rules keep well-known constants and substitute everything else within its own space. {addr, len} prefixes are scrubbed as a unit so the base stays valid for its length — the /23 that came out base-invalid is the pinned regression.",
+ "nftables.*.metainfo.version": {
+  "discloses": "nothing"
+ },
+ "nftables.*.metainfo.release_name": {
+  "discloses": "nothing"
+ },
+ "nftables.*.metainfo.json_schema_version": {
+  "discloses": "nothing"
+ },
+ "nftables.*.table.family": {
+  "discloses": "nothing"
+ },
+ "nftables.*.table.name": {
+  "discloses": "nothing"
+ },
+ "nftables.*.table.handle": {
+  "discloses": "nothing"
+ },
+ "nftables.*.chain.family": {
+  "discloses": "nothing"
+ },
+ "nftables.*.chain.table": {
+  "discloses": "nothing"
+ },
+ "nftables.*.chain.name": {
+  "discloses": "nothing"
+ },
+ "nftables.*.chain.handle": {
+  "discloses": "nothing"
+ },
+ "nftables.*.chain.type": {
+  "discloses": "nothing"
+ },
+ "nftables.*.chain.hook": {
+  "discloses": "nothing"
+ },
+ "nftables.*.chain.prio": {
+  "discloses": "nothing"
+ },
+ "nftables.*.chain.policy": {
+  "discloses": "nothing"
+ },
+ "nftables.*.set.family": {
+  "discloses": "nothing"
+ },
+ "nftables.*.set.table": {
+  "discloses": "nothing"
+ },
+ "nftables.*.set.name": {
+  "discloses": "nothing"
+ },
+ "nftables.*.set.handle": {
+  "discloses": "nothing"
+ },
+ "nftables.*.set.comment": {
+  "discloses": "content"
+ },
+ "nftables.*.set.type.*": {
+  "discloses": "nothing"
+ },
+ "nftables.*.set.flags.*": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.family": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.table": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.chain": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.handle": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.comment": {
+  "discloses": "content"
+ },
+ "nftables.*.map.family": {
+  "discloses": "nothing"
+ },
+ "nftables.*.map.table": {
+  "discloses": "nothing"
+ },
+ "nftables.*.map.name": {
+  "discloses": "nothing"
+ },
+ "nftables.*.map.handle": {
+  "discloses": "nothing"
+ },
+ "nftables.*.map.type": {
+  "discloses": "nothing"
+ },
+ "nftables.*.map.map": {
+  "discloses": "nothing"
+ },
+ "nftables.*.map.elem.*.0": {
+  "discloses": "location"
+ },
+ "nftables.*.map.elem.*.1.jump.target": {
+  "discloses": "nothing"
+ },
+ "nftables.*.map.elem.*.1.goto.target": {
+  "discloses": "nothing"
+ },
+ "nftables.*.map.elem.*.1.accept": {
+  "discloses": "nothing"
+ },
+ "nftables.*.map.elem.*.1.drop": {
+  "discloses": "nothing"
+ },
+ "#map": "A named map is a top-level object like a table or a chain, and its `elem` list is a list of [key, verdict] PAIRS — which is why the two halves are classified apart. The verdict half is nftables' own vocabulary and takes the same `nothing` as the identical statement written inline in a rule. The KEY half is whatever the map is typed on: inet_proto here, an address or a port in the next capture, exactly the mixture match.right already holds — so it takes the same free-text pass rather than a `nothing` that would publish the first address somebody keys a map on. The map's own name stays for the reason a chain's does: it is the string the dispatching rule spells as @dispatch, and substituting one side of that join would leave a specimen of a map nothing consults.",
+ "nftables.*.rule.expr.*.counter.packets": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.counter.bytes": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.jump.target": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.goto.target": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.accept": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.drop": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.return": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.masquerade": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.match.op": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.match.left.meta.key": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.match.left.ct.key": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.match.left.payload.protocol": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.match.left.payload.field": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.match.left.fib.result": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.match.left.fib.flags.*": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.match.left.&.*": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.match.left.&.*.meta.key": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.match.left.&.*.ct.key": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.match.left.concat.*.meta.key": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.match.left.concat.*.payload.protocol": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.match.left.concat.*.payload.field": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.match.right": {
+  "discloses": "location"
+ },
+ "nftables.*.rule.expr.*.match.right.~key": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.match.right.*": {
+  "discloses": "location"
+ },
+ "nftables.*.rule.expr.*.match.right.set.*": {
+  "discloses": "location"
+ },
+ "nftables.*.rule.expr.*.match.right.set.*.concat.*": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.match.right.prefix.addr": {
+  "discloses": "location",
+  "format": "ipv4"
+ },
+ "nftables.*.rule.expr.*.match.right.prefix.len": {
+  "discloses": "nothing"
+ },
+ "#prefix.addr": "Both families arrive at this one path (100.64.0.0 and fe80:: alike); the {addr, len} pair walk detects the shape itself and the substitution is family-aware, so the format here only says 'this is an address field' — which is also what arms the checker's in-space-replacements allowance.",
+ "nftables.*.rule.expr.*.vmap.key.ct.key": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.vmap.key.meta.key": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.vmap.data": {
+  "discloses": "nothing"
+ },
+ "#vmap.data": "Two shapes at one path, and only one of them is a leaf: an INLINE map carries {\"set\": [...]} and walks the entries below, while a NAMED map is the bare string \"@dispatch\". The string is the other end of the map object's name — the whole of what makes the map-dispatched chain reachable — so it is classified with the name it refers to.",
+ "nftables.*.rule.expr.*.vmap.data.set.*.*": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.vmap.data.set.*.*.accept": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.vmap.data.set.*.*.drop": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.vmap.data.set.*.*.jump.target": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.mangle.key.meta.key": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.mangle.key.ct.key": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.mangle.value.&.*": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.mangle.value.&.*.meta.key": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.mangle.value.&.*.ct.key": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.mangle.value.|.*": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.mangle.value.|.*.&.*": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.mangle.value.|.*.&.*.meta.key": {
+  "discloses": "nothing"
+ },
+ "nftables.*.rule.expr.*.mangle.value.|.*.&.*.ct.key": {
+  "discloses": "nothing"
+ },
+ "#ip-procnet": "the R3b payloads: both families' full route dumps, the rule table, and the /proc/net socket transcript. On a LAB GUEST every address is the libvirt default NAT range or link-local — the same bytes on every libvirt install on earth — so these entries pass them verbatim; a capture from an ESTATE host carries real topology and must not pass through them. Reclassify per leaf before capturing from one.",
+ "ip-route4:*.~key": {
+  "discloses": "nothing"
+ },
+ "ip-route4:*.*": {
+  "discloses": "nothing"
+ },
+ "ip-route4:*.*.*": {
+  "discloses": "nothing"
+ },
+ "ip-route4:*.*.*.*": {
+  "discloses": "nothing"
+ },
+ "ip-route6:*.~key": {
+  "discloses": "nothing"
+ },
+ "ip-route6:*.*": {
+  "discloses": "nothing"
+ },
+ "ip-route6:*.*.*": {
+  "discloses": "nothing"
+ },
+ "ip-route6:*.*.*.*": {
+  "discloses": "nothing"
+ },
+ "ip-rule:*.~key": {
+  "discloses": "nothing"
+ },
+ "ip-rule:*.*": {
+  "discloses": "nothing"
+ },
+ "ip-rule:*.*.*": {
+  "discloses": "nothing"
+ },
+ "ip-rule:*.*.*.*": {
+  "discloses": "nothing"
+ },
+ "procnet:~key": {
+  "discloses": "nothing"
+ },
+ "procnet:*.~key": {
+  "discloses": "nothing"
+ },
+ "procnet:*.*": {
+  "discloses": "nothing"
+ },
+ "#resolver": "the resolver payloads: the resolve1 bus map (or its staged false for a file-mode host), the resolv.conf reading, the interface table and the hostname. Bus documents and resolv.conf carry the lab NAT range verbatim under the same coverage limit as the route dumps; the hostname is substituted via the names mechanism, exactly as the system collector's is.",
+ "bus:~key": {
+  "discloses": "nothing"
+ },
+ "bus:*": {
+  "discloses": "nothing"
+ },
+ "bus:*.*": {
+  "discloses": "nothing"
+ },
+ "bus:*.*.*": {
+  "discloses": "nothing"
+ },
+ "bus:*.*.*.*": {
+  "discloses": "nothing"
+ },
+ "bus:*.*.*.*.*": {
+  "discloses": "nothing"
+ },
+ "bus:*.*.*.*.*.*": {
+  "discloses": "nothing"
+ },
+ "resolv-conf:~key": {
+  "discloses": "nothing"
+ },
+ "resolv-conf:*": {
+  "discloses": "nothing"
+ },
+ "ifindex:*.*": {
+  "discloses": "nothing"
+ },
+ "hostname": {
+  "payload": "hostname",
+  "whole": {
+   "discloses": "location",
+   "format": "hostname"
   }
+ },
+ "bus:*.~key": {
+  "discloses": "nothing"
+ },
+ "bus:*.*.~key": {
+  "discloses": "nothing"
+ },
+ "bus:*.*.*.~key": {
+  "discloses": "nothing"
+ },
+ "bus:*.*.*.*.~key": {
+  "discloses": "nothing"
+ },
+ "bus:*.*.*.*.*.~key": {
+  "discloses": "nothing"
+ },
+ "bus:*.*.*.*.*.*.~key": {
+  "discloses": "nothing"
+ },
+ "bus:*.*.*.*.*.*.*": {
+  "discloses": "nothing"
+ },
+ "bus:*.*.*.*.*.*.*.~key": {
+  "discloses": "nothing"
+ },
+ "bus:*.*.*.*.*.*.*.*": {
+  "discloses": "nothing"
+ },
+ "bus:*.*.*.*.*.*.*.*.~key": {
+  "discloses": "nothing"
+ },
+ "#links": "the links payloads. MAC-bearing members are substituted shape-preserved and corpus-consistently — the fdb's learned MAC IS a veth's own address, and the join must survive the scrub. Every other member is enumerated from the committed capture under deny-by-default: a kernel that grows a field forces a classification here rather than passing silently. Addresses stay verbatim under the lab-guest coverage limit stated for the route dumps.",
+ "ip-addr:*.addr_info.*.broadcast": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.addr_info.*.dynamic": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.addr_info.*.family": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.addr_info.*.label": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.addr_info.*.local": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.addr_info.*.metric": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.addr_info.*.noprefixroute": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.addr_info.*.preferred_life_time": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.addr_info.*.prefixlen": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.addr_info.*.protocol": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.addr_info.*.scope": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.addr_info.*.valid_life_time": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.address": {
+  "discloses": "identity",
+  "format": "mac"
+ },
+ "ip-addr:*.allmulti": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.altnames.*": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.broadcast": {
+  "discloses": "identity",
+  "format": "mac"
+ },
+ "ip-addr:*.flags.*": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.gro_ipv4_max_size": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.gro_max_size": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.group": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.gso_ipv4_max_size": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.gso_max_segs": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.gso_max_size": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.ifindex": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.ifname": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.link": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.link_type": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.ageing_time": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.bridge_id": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.fdb_max_learned": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.fdb_n_learned": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.forward_delay": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.gc_timer": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.group_addr": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.group_fwd_mask": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.hello_time": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.hello_timer": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.max_age": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.mcast_hash_elasticity": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.mcast_hash_max": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.mcast_igmp_version": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.mcast_last_member_cnt": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.mcast_last_member_intvl": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.mcast_membership_intvl": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.mcast_mld_version": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.mcast_querier": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.mcast_querier_intvl": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.mcast_query_intvl": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.mcast_query_response_intvl": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.mcast_query_use_ifaddr": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.mcast_router": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.mcast_snooping": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.mcast_startup_query_cnt": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.mcast_startup_query_intvl": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.mcast_stats_enabled": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.mcast_vlan_snooping": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.mst_enabled": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.nf_call_arptables": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.nf_call_ip6tables": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.nf_call_iptables": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.no_linklocal_learn": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.priority": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.root_id": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.root_path_cost": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.root_port": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.stp_state": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.tcn_timer": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.topology_change": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.topology_change_detected": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.topology_change_timer": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.vlan_default_pvid": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.vlan_filtering": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.vlan_protocol": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.vlan_stats_enabled": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_data.vlan_stats_per_port": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_kind": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.bcast_flood": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.bridge_id": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.config_pending": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.cost": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.designated_cost": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.designated_port": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.fastleave": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.flood": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.forward_delay_timer": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.group_fwd_mask": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.group_fwd_mask_str": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.guard": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.hairpin": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.hold_timer": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.id": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.isolated": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.learning": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.locked": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.mab": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.mcast_flood": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.mcast_to_unicast": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.message_age_timer": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.multicast_router": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.neigh_suppress": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.neigh_vlan_suppress": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.no": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.priority": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.proxy_arp": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.proxy_arp_wifi": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.root_block": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.root_id": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.state": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.topology_change_ack": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_data.vlan_tunnel": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.linkinfo.info_slave_kind": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.master": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.max_mtu": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.min_mtu": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.mtu": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.num_rx_queues": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.num_tx_queues": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.operstate": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.parentbus": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.parentdev": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.promiscuity": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.qdisc": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.tso_max_segs": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.tso_max_size": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.txqlen": {
+  "discloses": "nothing"
+ },
+ "fdb:*.flags.*": {
+  "discloses": "nothing"
+ },
+ "fdb:*.ifname": {
+  "discloses": "nothing"
+ },
+ "fdb:*.mac": {
+  "discloses": "identity",
+  "format": "mac"
+ },
+ "fdb:*.master": {
+  "discloses": "nothing"
+ },
+ "fdb:*.state": {
+  "discloses": "nothing"
+ },
+ "fdb:*.vlan": {
+  "discloses": "nothing"
+ },
+ "lldp:~key": {
+  "discloses": "nothing"
+ },
+ "lldp:*": {
+  "discloses": "nothing"
+ },
+ "lldp:*.*": {
+  "discloses": "nothing"
+ },
+ "lldp:*.*.*": {
+  "discloses": "nothing"
+ },
+ "ip-addr:*.netns-immutable": {
+  "discloses": "nothing"
+ },
+ "nft:nftables.*.rule.expr.*.match.right.range.*": {
+  "discloses": "nothing"
+ },
+ "nft:nftables.*.rule.expr.*.xt.type": {
+  "discloses": "nothing"
+ },
+ "nft:nftables.*.rule.expr.*.xt.name": {
+  "discloses": "nothing"
+ }
 }

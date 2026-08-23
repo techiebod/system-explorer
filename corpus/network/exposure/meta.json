@@ -1,0 +1,100 @@
+{
+ "collector": "network",
+ "collections": [
+  "listening",
+  "port-exposure",
+  "nft-tables",
+  "nft-chains",
+  "nft-rules"
+ ],
+ "variant": "exposure",
+ "provenance": "captured-then-scrubbed",
+ "os": "ubuntu",
+ "os_version": "26.04",
+ "source_version": "nftables-1.1.6 iproute2-6.17 linux-7.0.0-28-generic",
+ "captured": "2026-08-23T12:30:00Z",
+ "regenerable": true,
+ "regenerable_on": "a lab guest with the exposure ruleset staged: the inet selab table (guarded jump to a bare accept, loopback blanket accept, an ipv6-icmp meta accept, an anonymous-set range dport accept, a negated udp dport with a source), plus one iptables-nft rule so the document carries a real xt residue. Every staged rule ACCEPTS and the base chain policy is accept, so staging cannot cut the guest's own ssh off.",
+ "anonymised": true,
+ "note": "port-exposure's first committed pair, staged so each closure discipline is reachable from a REAL capture rather than a fixture: the guard travels with the jump (the 2026-08-13 inversion), the meta-l4proto icmp accept is excluded from every tcp and udp socket, nft 1.1.6 spells an anonymous single-range set as a bare range object — which both implementations treat as an unreadable dport, possible and gapped — the negated dport is possible-never-certain, and the iptables-nft xt match is the live unreadable-clause shape, reaching only the v4 socket because it sits in an ip-family table. The same payload set carries listening (the join's other half) and the nft trio over a third distinct ruleset. One curation, the same one corpus/network/resolved states: the resolve1 manager document is staged minus DNSSECNegativeTrustAnchors — a compiled-in constant list identical on every install, read by neither implementation, whose reversed-octet in-addr.arpa spellings read as public addresses to any detector honest about address shapes.",
+ "coverage_note": "What this variant does not reach: a prerouting/forward path (the PathCoverage statement is about exactly that), a drop that shadows a later accept (shadowing is listed, not resolved), and a verdict map dispatch — the vmap statement shape stays owned by the collector's unit tests until a staged ruleset carries one.",
+ "canaries": [],
+ "anchors": [
+  {
+   "collection": "port-exposure",
+   "commit_objects": 9
+  },
+  {
+   "collection": "listening",
+   "commit_objects": 9
+  },
+  {
+   "collection": "port-exposure",
+   "object": "tcp 0.0.0.0:22",
+   "fact": "ClosureGap",
+   "value": true
+  },
+  {
+   "collection": "port-exposure",
+   "object": "tcp 0.0.0.0:22",
+   "fact": "AdmittedFromCertain",
+   "value": [
+    "meta iifname lo",
+    "ip saddr 192.0.2.0/24"
+   ]
+  },
+  {
+   "collection": "port-exposure",
+   "object": "tcp 0.0.0.0:22",
+   "fact": "ClosureGapRules",
+   "value": [
+    "inet/selab/input/6",
+    "inet/selab/input/7",
+    "ip/filter/INPUT/2"
+   ]
+  },
+  {
+   "collection": "port-exposure",
+   "object": "tcp6 :::22",
+   "fact": "ClosureGapRules",
+   "value": [
+    "inet/selab/input/6",
+    "inet/selab/input/7"
+   ]
+  },
+  {
+   "collection": "port-exposure",
+   "object": "udp 127.0.0.53:53",
+   "fact": "AdmittedFromCertain",
+   "value": [
+    "meta iifname lo"
+   ]
+  },
+  {
+   "collection": "port-exposure",
+   "object": "udp 127.0.0.53:53",
+   "fact": "AdmittedFromPossible",
+   "value": [
+    "meta iifname lo",
+    "ip saddr 192.0.2.144"
+   ]
+  },
+  {
+   "collection": "port-exposure",
+   "object": "udp 127.0.0.53:53",
+   "fact": "Scope",
+   "value": "loopback"
+  },
+  {
+   "collection": "nft-tables",
+   "commit_objects": 2
+  },
+  {
+   "collection": "nft-tables",
+   "object": "inet selab",
+   "fact": "RuleCount",
+   "value": 6
+  }
+ ],
+ "anchors_note": "Each value hand-checked against the staged ruleset, over the SCRUBBED payloads. tcp 0.0.0.0:22 is certain from the loopback blanket and from the jump guard's subnet — the guard travelled, which is the inversion trap — and its gap names three rules: the bare-range dport (handle 6), the negated udp dport (7, which bears possibly on every socket the family reaches), and the xt rule (ip/filter/INPUT/2), which the tcp6 socket's gap list must NOT name because an ip-family table decides nothing about a v6 socket. The negated rule's staged source was 198.51.100.7; the scrubber's in-space substitution moved it to 192.0.2.144, and the anchor asserts the committed spelling. udp 127.0.0.53:53 shows possible wider than certain with no unreadable rendering involved on the certain side. nft-tables: two tables — the staged selab (six rules) and iptables-nft's ip filter."
+}

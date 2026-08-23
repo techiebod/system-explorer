@@ -275,6 +275,9 @@ KEEP_UNCHANGED_TOKENS = {
     "router-solicitation", "mld-listener-query", "mld-listener-report",
     "mld-listener-done",
     "ip", "ip6", "inet", "ipv4", "ipv6", "tcp", "udp", "icmp", "icmpv6",
+    # meta l4proto spells the v6 ICMP protocol its own way, met when the
+    # first staged ruleset carried one (corpus/network/exposure).
+    "ipv6-icmp",
     # Interface names software assigns identically on every install: the
     # loopback, and tailscaled's one device. They teach which daemon runs,
     # not which machine — an operator-named bridge is exactly not here.
@@ -1238,6 +1241,14 @@ def _substitute(value, fmt: str | None, path: tuple, ctx: Ctx):
     return scrub_text(value, ctx)
 
 
+_DOCUMENTATION_SPACES = tuple(ipaddress.ip_network(net) for net in (
+    "192.0.2.0/24", "198.51.100.0/24", "203.0.113.0/24", "2001:db8::/32"))
+
+
+def _in_documentation_space(address) -> bool:
+    return any(address in net for net in _DOCUMENTATION_SPACES)
+
+
 def _keeps_unchanged(value: str) -> bool:
     """True when a substituting class may hand this string back verbatim."""
     if not value:
@@ -1245,8 +1256,17 @@ def _keeps_unchanged(value: str) -> bool:
     if value in KEEP_V4 or value.lower() in KEEP_V6:
         return True
     try:
-        if ipaddress.ip_address(value).is_multicast:
+        address = ipaddress.ip_address(value)
+        if address.is_multicast:
             return True  # a group is a constant, whatever the group
+        # Documentation space is where every scrubbed address LANDS, so a
+        # captured value already inside it is already the published shape —
+        # and it is how a STAGED ruleset spells its planted subnets, which is
+        # the first legitimate source of one (corpus/network/exposure,
+        # 2026-08-23). Substituting it would break the staging's own anchors
+        # for no privacy gain.
+        if _in_documentation_space(address):
+            return True
     except ValueError:
         pass
     low = value.lower()

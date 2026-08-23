@@ -128,7 +128,11 @@ func parseProcNet(table, text string) []listeningRow {
 	return rows
 }
 
-func collectListening(out *emitter, stderr io.Writer, src source, collection string, generation uint64, objects *int) int {
+// acquireListening reads the four socket tables once, deduped and sorted —
+// shared with port-exposure, whose rows are these sockets under the firewall
+// join, so the two collections cannot come to disagree about what is
+// listening.
+func acquireListening(src source) ([]listeningRow, []string) {
 	var rows []listeningRow
 	var unread []string
 	for _, table := range [...]string{"tcp", "tcp6", "udp", "udp6"} {
@@ -138,18 +142,6 @@ func collectListening(out *emitter, stderr io.Writer, src source, collection str
 			continue
 		}
 		rows = append(rows, parseProcNet(table, text)...)
-	}
-	if len(unread) == 4 {
-		// All four dark: what this host is listening on is unobservable,
-		// and an empty commit would report a machine accepting no traffic
-		// at all — the most confident possible way to be wrong about
-		// exposure. No commit; prior state stands, marked stale.
-		out.emit(declineRecord{Record: "decline", Collection: collection,
-			Reason: "unavailable",
-			Detail: "none of the /proc/net socket tables could be read, so " +
-				"what this host is listening on is unobservable rather than nothing"})
-		fmt.Fprintln(stderr, "listening:", strings.Join(unread, "; "))
-		return exitOK
 	}
 	// SO_REUSEPORT twins collapse to one row: several sockets can listen
 	// on one (protocol, address, port) — one inode each — and the wire
@@ -177,6 +169,23 @@ func collectListening(out *emitter, stderr io.Writer, src source, collection str
 		}
 		return rows[i].address < rows[j].address
 	})
+	return rows, unread
+}
+
+func collectListening(out *emitter, stderr io.Writer, src source, collection string, generation uint64, objects *int) int {
+	rows, unread := acquireListening(src)
+	if len(unread) == 4 {
+		// All four dark: what this host is listening on is unobservable,
+		// and an empty commit would report a machine accepting no traffic
+		// at all — the most confident possible way to be wrong about
+		// exposure. No commit; prior state stands, marked stale.
+		out.emit(declineRecord{Record: "decline", Collection: collection,
+			Reason: "unavailable",
+			Detail: "none of the /proc/net socket tables could be read, so " +
+				"what this host is listening on is unobservable rather than nothing"})
+		fmt.Fprintln(stderr, "listening:", strings.Join(unread, "; "))
+		return exitOK
+	}
 	for _, row := range rows {
 		facts := map[string]any{
 			"Protocol":     row.protocol,
