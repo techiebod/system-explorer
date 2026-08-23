@@ -264,7 +264,7 @@
       "prefix": "scsi",
       "freshness": "300s",
       "perishability": "sampled",
-      "answer": ["Vendor", "Model", "State", "Block", "SizeBytes", "SmartTemperatureC"],
+      "answer": ["Transport", "Vendor", "Model", "SizeBytes", "LinkSpeed", "State", "Block", "Devices", "EnclosureSlot", "SmartTemperatureC"],
       "ceiling": { "records": 4096, "bytes": 4194304 },
       "facts": {
         "DeviceType": {
@@ -745,7 +745,7 @@
       "prefix": "nvme",
       "freshness": "300s",
       "perishability": "sampled",
-      "answer": ["Model", "State", "LinkBandwidthBytesPerSec", "SmartPercentUsed", "SmartTemperatureC"],
+      "answer": ["LinkBandwidthBytesPerSec", "Model", "FirmwareRev", "Serial", "State", "SmartPercentUsed", "SmartTemperatureC", "Namespaces"],
       "ceiling": { "records": 256, "bytes": 1048576 },
       "facts": {
         "Model": {

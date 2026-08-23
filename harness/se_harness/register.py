@@ -252,16 +252,27 @@ ANSWER_RULINGS: dict[str, str] = {
                        "emitted and compared; only the answer narrowed).",
     "packages/packages": "owed: R3d — Architecture and StorePath left the "
                          "preset; the facts are still emitted and compared.",
-    "hardware/platform": "owed: R3c — SysVendor added, BiosVersion dropped; "
-                         "re-judged with the hardware champion retrofit.",
-    "hardware/scsi": "owed: R3c — the owner's named exemplar. Kind is carried "
-                     "by the type member since R1; Transport/Link/Devices/"
-                     "EnclosureSlot are carried by nothing and return with "
-                     "the champion retrofit.",
-    "hardware/nvme": "owed: R3c — Link/FirmwareRev/Serial/Namespaces dropped, "
-                     "LinkBandwidthBytesPerSec/SmartPercentUsed added; Serial "
-                     "is also a names-layer question and lands with the "
-                     "champion retrofit.",
+    "hardware/platform": "ruled: at R3c — SysVendor stays added — vendor and "
+                         "product are the machine's identity pair, and a bare "
+                         "product string names half a machine. BiosVersion "
+                         "stays declared and leaves the answer: a one-object "
+                         "collection's answer is its headline, and a firmware "
+                         "release is a drill-down fact, not what the machine "
+                         "IS.",
+    "hardware/scsi": "ruled: at R3c — the preset returns verbatim and in order "
+                     "except its two synthetics. Kind is carried by the type "
+                     "member since R1, and Link — app.js composed it from "
+                     "LinkSpeed and a width SATA does not have — returns as "
+                     "LinkSpeed, the fact the column actually read; the SAS "
+                     "width pair stays declared for the object page.",
+    "hardware/nvme": "ruled: at R3c — FirmwareRev, Serial and Namespaces return "
+                     "with the champion (Serial is also a name family now). "
+                     "Link returns as LinkBandwidthBytesPerSec — the preset's "
+                     "own comment argues speed and width MULTIPLY into the "
+                     "one number a reader wants, and the port minted that "
+                     "number as a fact. SmartPercentUsed stays added: rated "
+                     "write life is the NVMe health headline the old UI "
+                     "never had.",
     "vms/domains": "owed: R3d — Autostart left the preset.",
 }
 
