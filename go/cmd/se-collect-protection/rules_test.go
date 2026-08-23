@@ -82,25 +82,53 @@ func TestTheTargetRulesAreDecidedByTheirEvaluatorAndStayExclusive(t *testing.T) 
 		facts map[string]any
 		want  map[string]string
 	}{
-		{"every hop built is silent",
+		{"every hop built, and never restored from",
+			// NOT silent: an irreplaceable target nothing has ever been
+			// restored from says so, at info, on every such row. The
+			// reference's own docstring calls this "true of most of them,
+			// and a tick would be this product's own absence-as-health
+			// failure wearing a backup's clothes".
 			map[string]any{"Class": "backup", "UnimplementedHops": []any{},
 				"IndependentDestinations": []any{"offsite"}},
+			map[string]string{"protection-unproven": "info"}},
+		{"every hop built and every rung proven is silent",
+			map[string]any{"Class": "backup", "UnimplementedHops": []any{},
+				"IndependentDestinations": []any{"offsite"},
+				"ProvenRungs":             []any{"offsite"},
+				"UnprovenRungs":           []any{}},
 			map[string]string{}},
+		{"a restore that did not come back is worse than never having tried",
+			map[string]any{"Class": "backup", "UnimplementedHops": []any{},
+				"ProvenRungs":      []any{"local"},
+				"FailedProofRungs": []any{"offsite-object"}},
+			map[string]string{"protection-proof-failed": "warn"}},
+		{"a failed proof on replaceable data is about the copy, not the data",
+			map[string]any{"Class": "cache", "UnimplementedHops": []any{},
+				"FailedProofRungs": []any{"offsite-object"}},
+			map[string]string{"protection-proof-failed-replaceable": "info"}},
+		{"a proven rung certifies that rung and no other",
+			map[string]any{"Class": "backup", "UnimplementedHops": []any{},
+				"ProvenRungs":   []any{"local"},
+				"UnprovenRungs": []any{"offsite"}},
+			map[string]string{"protection-unproven": "info"}},
 		{"irreplaceable with every independent destination unbuilt",
 			map[string]any{"Class": "backup", "Kind": "push",
 				"UnimplementedHops":       []any{"offsite", "local"},
 				"IndependentDestinations": []any{"offsite"}},
-			map[string]string{"protection-no-durable-copy": "warn"}},
+			map[string]string{"protection-no-durable-copy": "warn",
+				"protection-unproven": "info"}},
 		{"a mirror's history, graded apart from data that exists nowhere else",
 			map[string]any{"Class": "backup", "Kind": "saas-pull",
 				"UnimplementedHops":       []any{"offsite"},
 				"IndependentDestinations": []any{"offsite"}},
-			map[string]string{"protection-no-durable-history": "info"}},
+			map[string]string{"protection-no-durable-history": "info",
+				"protection-unproven": "info"}},
 		{"an unbuilt hop that is not the whole independent set",
 			map[string]any{"Class": "backup", "Kind": "push",
 				"UnimplementedHops":       []any{"local"},
 				"IndependentDestinations": []any{"offsite"}},
-			map[string]string{"protection-hop-unimplemented": "info"}},
+			map[string]string{"protection-hop-unimplemented": "info",
+				"protection-unproven": "info"}},
 		{"declaring no independent destination is not a durable gap",
 			// The empty set is trivially contained in anything, and
 			// treating it as a gap would fire on every target in the
@@ -108,8 +136,13 @@ func TestTheTargetRulesAreDecidedByTheirEvaluatorAndStayExclusive(t *testing.T) 
 			map[string]any{"Class": "backup", "Kind": "push",
 				"UnimplementedHops":       []any{"local"},
 				"IndependentDestinations": []any{}},
-			map[string]string{"protection-hop-unimplemented": "info"}},
+			map[string]string{"protection-hop-unimplemented": "info",
+				"protection-unproven": "info"}},
 		{"replaceable data with an unbuilt hop states the residual only",
+			// And NOT protection-unproven: that rule is scoped to Class
+			// backup, because "nothing has ever been restored from this"
+			// is a statement about data the estate cannot recreate. On a
+			// cache it would be noise on every row in the estate.
 			map[string]any{"Class": "cache", "Kind": "push",
 				"UnimplementedHops":       []any{"offsite"},
 				"IndependentDestinations": []any{"offsite"}},

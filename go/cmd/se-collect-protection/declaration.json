@@ -42,6 +42,88 @@
           ]
         },
         {
+          "key": "protection-proof-failed",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "Class",
+                "equals": "backup"
+              },
+              {
+                "fact": "FailedProofRungs",
+                "non_empty": true
+              }
+            ]
+          },
+          "sentence": "A restore was performed from this target and did not come back intact, and no later proof has answered it \u2014 this target has evidence its artifact could not be read back, which is not the same as, and is worse than, never having tried.",
+          "cites": [
+            "Class",
+            "FailedProofRungs",
+            "LastFailedProofAt"
+          ]
+        },
+        {
+          "key": "protection-proof-failed-replaceable",
+          "level": "info",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "not": {
+                  "fact": "Class",
+                  "equals": "backup"
+                }
+              },
+              {
+                "fact": "FailedProofRungs",
+                "non_empty": true
+              }
+            ]
+          },
+          "sentence": "A restore was performed from this target and did not come back intact. The data is recreatable from the estate's own definitions, so this is evidence about the copy rather than about the data.",
+          "cites": [
+            "Class",
+            "FailedProofRungs",
+            "LastFailedProofAt"
+          ]
+        },
+        {
+          "key": "protection-unproven",
+          "level": "info",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "Class",
+                "equals": "backup"
+              },
+              {
+                "any": [
+                  {
+                    "fact": "UnprovenRungs",
+                    "non_empty": true
+                  },
+                  {
+                    "not": {
+                      "fact": "ProvenRungs",
+                      "non_empty": true
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "sentence": "No restore has ever come back from at least one rung of this target: running green proves a job ran, never that its artifact can be read back. A passing proof certifies the rung it was taken from and no other.",
+          "cites": [
+            "Class",
+            "ProvenRungs",
+            "UnprovenRungs",
+            "Destinations"
+          ]
+        },
+        {
           "key": "protection-hop-unimplemented",
           "level": "info",
           "grounds": "interface",
