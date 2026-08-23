@@ -184,7 +184,7 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 func registerPage(mux *http.ServeMux, st *store.Store, now func() float64, bootID string) {
 	mux.HandleFunc("GET /collections/{name}", func(w http.ResponseWriter, r *http.Request) {
 		out, code, err := collectionPage(st, r.PathValue("name"),
-			r.URL.Query().Get("sort"), now, bootID)
+			r.URL.Query().Get("sort"), r.URL.Query().Get("facet"), now, bootID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

@@ -236,3 +236,24 @@ a.sort:hover, a.sort:focus-visible { text-decoration: underline; }
 dl.names { display: grid; grid-template-columns: auto 1fr; gap: .25rem .8rem; margin: .5rem 0; }
 dl.names dt { color: var(--text-dim); font-size: 11.5px; white-space: nowrap; }
 dl.names dd { margin: 0; }
+
+/* Facets are links that re-ask, so the current one is announced with
+   aria-current as well as coloured — a reader who cannot see the styling
+   still needs to know which one they are looking at. */
+.facets { display: flex; flex-wrap: wrap; gap: .4rem; margin: .5rem 0; }
+.facet-chip { text-decoration: none; }
+.facet-chip.current { border-color: var(--text-dim); color: var(--text); }
+.facet-chip .count { font-variant-numeric: tabular-nums; color: var(--text-faint); }
+
+/* The absent-severity mark. SPEC §8: "a UI that renders absence as
+   neutrality re-asserts the judgement the agent withheld." So a row
+   nothing could judge does NOT look like a row that was judged clean. */
+.mark-clean {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--ok);
+}
+.mark-unjudged {
+  display: inline-block; min-width: 1.1em; text-align: center;
+  border: 1px dashed var(--border-2); border-radius: 999px;
+  color: var(--text-dim); font-size: 11px;
+}

@@ -713,3 +713,150 @@ func TestTheIdentityChainPutsEveryNameOnOnePage(t *testing.T) {
 		}
 	}
 }
+
+// ── the absent-severity mark, and facets ──────────────────────────────
+
+func TestAnUnjudgedRowDoesNotRenderAsACleanOne(t *testing.T) {
+	// SPEC §8: "a UI that renders absence as neutrality re-asserts the
+	// judgement the agent withheld." pools declares no rules at all, so
+	// every row is unjudged — which must not look like a row that was
+	// judged and found fine.
+	unjudged := markup(htmlOf(t, pagesStore(t), "/collections/pools"))
+	judged := markup(htmlOf(t, hidingStore(t), "/collections/units"))
+	if !strings.Contains(unjudged, "mark-unjudged") {
+		t.Fatalf("a collection with no readable rule table marks its rows "+
+			"unjudged: %s", visible(unjudged))
+	}
+	if strings.Contains(unjudged, "mark-clean") {
+		t.Fatalf("nothing judged these rows, so none of them is clean: %s",
+			visible(unjudged))
+	}
+	// units DOES declare rules, so its rows that fire nothing are clean.
+	if !strings.Contains(judged, "mark-clean") {
+		t.Fatalf("a row every rule was evaluated against and none fired is "+
+			"clean: %s", visible(judged))
+	}
+	if strings.Contains(judged, "mark-unjudged") {
+		t.Fatalf("and is not unjudged: %s", visible(judged))
+	}
+}
+
+func TestTheUnjudgedMarkIsNotBlank(t *testing.T) {
+	// A blank cell for "nothing judged this" is exactly the neutrality
+	// SPEC §8 forbids, and the same defect as a blank cell for `absent`
+	// one density down.
+	if visible(severityMark(Unjudged)) == "" {
+		t.Fatal("an unjudged row renders something, or absence has been " +
+			"rendered as neutrality")
+	}
+	if visible(severityMark(Unjudged)) == visible(severityMark("")) {
+		t.Fatal("unjudged and clean must not render alike")
+	}
+}
+
+func TestAFacetIsALinkThatReAsksAndKeepsTheSort(t *testing.T) {
+	// §28 permits a radio group OR links carrying the facet in the
+	// query. The links are chosen because a selector facet cannot
+	// compose with the hide-group reveal rules without a rule per
+	// (group × facet) pair.
+	st := openStore(t)
+	mustIssue(t, st, "things", "sha256:th",
+		`{"schema":"se.declaration/1","collector":"t","collections":[{
+		  "name":"things","freshness":"1h","prefix":"thing","answer":["State"],
+		  "facts":{"State":{"type":"string","temperament":"state"}}}]}`)
+	objects := []store.Object{
+		{ID: "thing:a", Name: "a", Type: "mount",
+			Facts: json.RawMessage(`{"State":"x"}`), At: 10},
+		{ID: "thing:b", Name: "b", Type: "service",
+			Facts: json.RawMessage(`{"State":"y"}`), At: 10},
+		{ID: "thing:c", Name: "c", Type: "service",
+			Facts: json.RawMessage(`{"State":"z"}`), At: 10},
+	}
+	if _, err := st.ApplyCommit("things", store.HostNative, 1, "b1", fakeBootID,
+		objects); err != nil {
+		t.Fatal(err)
+	}
+	all := markup(htmlOf(t, st, "/collections/things"))
+	if !strings.Contains(all, `href="/collections/things?facet=service"`) {
+		t.Fatalf("%s", all)
+	}
+	if !strings.Contains(all, `>service <span class="count">2</span>`) {
+		t.Fatalf("a facet counts what it holds: %s", visible(all))
+	}
+	// The page arrives showing everything.
+	for _, name := range []string{">a<", ">b<", ">c<"} {
+		if !strings.Contains(all, name) {
+			t.Fatalf("a page arrives unnarrowed: %s missing", name)
+		}
+	}
+	narrowed := markup(htmlOf(t, st, "/collections/things?facet=service"))
+	if strings.Contains(narrowed, ">a<") {
+		t.Fatalf("the facet narrows: %s", visible(narrowed))
+	}
+	if !strings.Contains(narrowed, ">b<") || !strings.Contains(narrowed, ">c<") {
+		t.Fatalf("to its own rows: %s", visible(narrowed))
+	}
+	if !strings.Contains(narrowed, `aria-current="true"`) {
+		t.Fatalf("the current facet is announced, not merely coloured: %s",
+			narrowed)
+	}
+	// Sorting and facetting compose: choosing a facet keeps the sort.
+	withSort := markup(htmlOf(t, st, "/collections/things?sort=State"))
+	if !strings.Contains(withSort, "facet=service&amp;sort=State") &&
+		!strings.Contains(withSort, "facet=service&sort=State") {
+		t.Fatalf("a facet link carries the sort forward, or choosing one "+
+			"silently throws the reader's other choice away: %s", withSort)
+	}
+}
+
+func TestAFacetCountsWhatItHoldsNotWhatIsShowing(t *testing.T) {
+	// The same invariant the hide-group chips carry: the number answers
+	// "what this facet holds", so it does not change when you press it.
+	st := openStore(t)
+	mustIssue(t, st, "things", "sha256:th",
+		`{"schema":"se.declaration/1","collector":"t","collections":[{
+		  "name":"things","freshness":"1h","prefix":"thing","answer":[],
+		  "facts":{}}]}`)
+	objects := []store.Object{
+		{ID: "thing:a", Name: "a", Type: "mount", Facts: json.RawMessage(`{}`), At: 10},
+		{ID: "thing:b", Name: "b", Type: "service", Facts: json.RawMessage(`{}`), At: 10},
+	}
+	if _, err := st.ApplyCommit("things", store.HostNative, 1, "b1", fakeBootID,
+		objects); err != nil {
+		t.Fatal(err)
+	}
+	before := markup(htmlOf(t, st, "/collections/things"))
+	after := markup(htmlOf(t, st, "/collections/things?facet=mount"))
+	for _, want := range []string{`>mount <span class="count">1</span>`,
+		`>service <span class="count">1</span>`} {
+		if !strings.Contains(before, want) || !strings.Contains(after, want) {
+			t.Fatalf("a facet count must not change when it is chosen: %q\n"+
+				"before: %s\nafter: %s", want, visible(before), visible(after))
+		}
+	}
+}
+
+func TestAPageNarrowedToNothingSaysWhichControlDidIt(t *testing.T) {
+	// app.js records the case: pick a facet, then hide the group holding
+	// all its rows, and "nothing matches" is a misleading answer. Both
+	// are computed on the server, so one place knows which.
+	st := openStore(t)
+	mustIssue(t, st, "things", "sha256:th",
+		`{"schema":"se.declaration/1","collector":"t","collections":[{
+		  "name":"things","freshness":"1h","prefix":"thing","answer":[],
+		  "facts":{}}]}`)
+	objects := []store.Object{
+		{ID: "thing:a", Name: "a", Type: "mount", Facts: json.RawMessage(`{}`), At: 10},
+		{ID: "thing:b", Name: "b", Type: "service", Facts: json.RawMessage(`{}`), At: 10},
+	}
+	if _, err := st.ApplyCommit("things", store.HostNative, 1, "b1", fakeBootID,
+		objects); err != nil {
+		t.Fatal(err)
+	}
+	out := markup(htmlOf(t, st, "/collections/things?facet=nosuchtype"))
+	if !strings.Contains(out, "this facet is") {
+		t.Fatalf("the collection is not empty — the facet is, and the page "+
+			"must say so rather than reading as an empty collection: %s",
+			visible(out))
+	}
+}

@@ -33,8 +33,8 @@ import (
 	"github.com/techiebod/system-explorer/go/internal/store"
 )
 
-func collectionPage(st *store.Store, name, sortBy string, now func() float64,
-	bootID string) (string, int, error) {
+func collectionPage(st *store.Store, name, sortBy, facet string,
+	now func() float64, bootID string) (string, int, error) {
 	states, err := st.Collections()
 	if err != nil {
 		return "", http.StatusInternalServerError, err
@@ -132,7 +132,7 @@ func collectionPage(st *store.Store, name, sortBy string, now func() float64,
 
 	body.WriteString(freshnessNote(self, now, bootID))
 	body.WriteString(objectsTable(name, render, rows, could, groups, worst,
-		parentOf, nestedBy, sortBy))
+		parentOf, nestedBy, sortBy, facet))
 	return wrap(name, body.String()), http.StatusOK, nil
 }
 
@@ -204,20 +204,36 @@ func freshnessNote(cs *store.CollectionState, now func() float64, bootID string)
 		`this boot, so no age is stated rather than a negative one shown.</p>`
 }
 
-// worstPerObject is the rulebook's verdict per object, which is the only
-// input to the critical exemption. Read from the declared rules rather
-// than from anything this file decides — a severity table here would be
-// the fourth copy §27 records.
+// Unjudged is the verdict of a collection whose rule table could not be
+// read. It is NOT the same as a clean verdict and must never render as
+// one: SPEC §8 — "a UI that renders absence as neutrality re-asserts the
+// judgement the agent withheld". Nothing formed an opinion here, which
+// is a statement about the declaration; every rule ran and none fired is
+// a statement about the object.
+const Unjudged = "unjudged"
+
+// worstPerObject is the rulebook's verdict per object, which drives both
+// the row's severity mark and the critical exemption. Read from the
+// declared rules rather than from anything this file decides — a
+// severity table here would be the fourth copy §27 records.
 func worstPerObject(st *store.Store, document, collection string,
 	rows []store.ObjectRow) map[string]string {
 	out := map[string]string{}
 	rules, err := RulesFor(document, collection)
 	if err != nil || rules == nil {
-		// No rule table: nothing is known to be critical, so nothing is
-		// exempt and every group applies as declared. Stated here because
-		// the alternative reading — treat unjudged as critical and hide
-		// nothing — would make an unreadable declaration silently disable
-		// the whole mechanism.
+		// No rule table. Every row is UNJUDGED, stated as such — the
+		// earlier spelling returned an empty map, which made "nothing
+		// could judge this" and "everything was judged and is fine"
+		// the same value one layer below the mark that exists to keep
+		// them apart.
+		//
+		// Nothing is known to be critical either, so nothing is exempt
+		// and every hide group applies as declared. The alternative —
+		// treat unjudged as critical and hide nothing — would let an
+		// unreadable declaration silently disable the whole mechanism.
+		for _, row := range rows {
+			out[row.ID] = Unjudged
+		}
 		return out
 	}
 	secrets, err := SecretFacts(document, collection)
@@ -276,7 +292,7 @@ func parentsFrom(st *store.Store, collection string) (map[string]string, string)
 func objectsTable(collection string, render *CollectionRender,
 	rows []store.ObjectRow, could map[string]map[string]store.Unobserved,
 	groups []HideGroup, worst map[string]string,
-	parentOf map[string]string, nestedBy, sortBy string) string {
+	parentOf map[string]string, nestedBy, sortBy, facet string) string {
 	// Columns come from the producer's `answer`, in the producer's order.
 	var columns []string
 	if render != nil {
@@ -352,9 +368,22 @@ func objectsTable(collection string, render *CollectionRender,
 			`rather than dropped: a row omitted because its shape surprised ` +
 			`the renderer is a row nobody can find.</p>`)
 	}
+	b.WriteString(facetControls(collection, rows, order, facet, sortBy))
+	// Applied AFTER the counts are taken, so a facet chip's number keeps
+	// answering "what this facet holds" rather than "what is showing" —
+	// the same invariant the hide-group chips carry.
+	if facet != "" {
+		var kept []int
+		for _, i := range order {
+			if rows[i].Type == facet {
+				kept = append(kept, i)
+			}
+		}
+		order = kept
+	}
 	b.WriteString(hideControls(Chips(groups, assigned)))
 	b.WriteString(`<div class="scroll"><table>`)
-	b.WriteString(`<thead><tr><th>object</th>`)
+	b.WriteString(`<thead><tr><th></th><th>object</th>`)
 	for _, name := range columns {
 		title := ""
 		if render != nil {
@@ -401,6 +430,7 @@ func objectsTable(collection string, render *CollectionRender,
 		if d := depth[i]; d > 0 {
 			indent = fmt.Sprintf(` style="--depth:%d"`, d)
 		}
+		b.WriteString("<td>" + severityMark(worst[row.ID]) + "</td>")
 		b.WriteString(fmt.Sprintf(
 			`<td class="ident"%s><a href="/collections/%s/objects/%s">%s</a>%s</td>`,
 			indent, esc(collection), esc(row.Name), esc(row.Name),
@@ -411,7 +441,26 @@ func objectsTable(collection string, render *CollectionRender,
 		}
 		b.WriteString(`</tr>`)
 	}
-	b.WriteString(`</tbody></table></div></section>`)
+	b.WriteString(`</tbody></table></div>`)
+	// Narrowed to nothing, and WHICH control did it. app.js records the
+	// case: pick a facet, then hide the group that holds all of its rows,
+	// and "nothing matches" is a misleading answer — the rows are there,
+	// two controls are hiding them. Because both are computed here, one
+	// place knows which.
+	if len(order) == 0 {
+		switch {
+		case facet != "":
+			b.WriteString(fmt.Sprintf(
+				`<p class="dim">No object of type <code>%s</code> is on this `+
+					`page. The collection is not empty — this facet is.</p>`,
+				esc(facet)))
+		default:
+			b.WriteString(`<p class="dim">Every row on this page is held by a ` +
+				`hide group. Reveal one above to see them: they are in the ` +
+				`page, not missing from it.</p>`)
+		}
+	}
+	b.WriteString(`</section>`)
 	return b.String()
 }
 
@@ -516,4 +565,113 @@ func sortedOrder(rows []store.ObjectRow, render *CollectionRender, by string) []
 		return scalar(x) < scalar(y)
 	})
 	return order
+}
+
+// severityMark is the row's verdict, and its whole job is that ABSENCE OF
+// A VERDICT DOES NOT RENDER AS A GOOD ONE.
+//
+// SPEC §8: "a UI that renders absence as neutrality re-asserts the
+// judgement the agent withheld." Three states, three marks:
+//
+//	critical/warn/info — a rule fired, and the chip carries its level
+//	clean              — every declared rule ran and none fired
+//	unjudged           — no rule table could be read, so nothing formed
+//	                     an opinion at all
+//
+// The last two are the pair that must not collapse. A blank cell for
+// both is the neutrality SPEC §8 forbids, and it is the same defect as
+// the blank cell for `absent` one density down.
+func severityMark(level string) string {
+	switch level {
+	case "critical", "warn", "info":
+		return chip(level, level)
+	case Unjudged:
+		return `<span class="mark-unjudged" title="no rule table could be ` +
+			`read for this collection, so nothing has judged this object — ` +
+			`a statement about the declaration, not about the object">?</span>`
+	}
+	return `<span class="mark-clean" title="every rule this collection ` +
+		`declares was evaluated against this object and none fired">ok</span>`
+}
+
+// facetControls renders the type facet as LINKS carrying the facet in
+// the query — the second form §28's interaction table permits, and the
+// one chosen deliberately over the radio group.
+//
+// **Why not the selector form.** A facet drawn with `:checked ~` has to
+// hide rows with `display:none`, and the hide-group reveal rule un-hides
+// with `display:table-row`. The two cannot compose without a rule for
+// every (group × facet) pair, and a page that gets that wrong either
+// shows a row the reader asked to hide or hides one they asked to see —
+// which is worse than a round trip. `app.js` already recorded the shape
+// of this: a facet whose every row is held back by a hide group, "pick
+// mount, then hide mounts", where "nothing matches" is a misleading
+// answer. Computing both on the server means one place decides, and it
+// can say WHICH of the two narrowed the page to nothing.
+//
+// **"All" is first and is the default**, so a page arrives showing
+// everything. A facet that arrived pre-narrowed would be the renderer
+// hiding rows nobody asked it to hide.
+//
+// The axis is the object's declared TYPE, which the producer minted. A
+// facet derived from fact values would be this file deciding what groups
+// things.
+func facetControls(collection string, rows []store.ObjectRow, order []int,
+	chosen, sortBy string) string {
+	counts := map[string]int{}
+	var types []string
+	for _, i := range order {
+		if kind := rows[i].Type; kind != "" {
+			if counts[kind] == 0 {
+				types = append(types, kind)
+			}
+			counts[kind]++
+		}
+	}
+	if len(types) < 2 && chosen == "" {
+		// One type, or none, is not a facet — it is a control that does
+		// nothing, and a control that does nothing still costs a reader
+		// the moment they spend deciding it is not for them.
+		return ""
+	}
+	sortStrings(types)
+	keep := func(facet string) string {
+		q := "?"
+		if facet != "" {
+			q += "facet=" + facet
+		}
+		if sortBy != "" {
+			if q != "?" {
+				q += "&"
+			}
+			q += "sort=" + sortBy
+		}
+		if q == "?" {
+			q = ""
+		}
+		return "/collections/" + collection + q
+	}
+	var b strings.Builder
+	b.WriteString(`<div class="facets">`)
+	b.WriteString(facetChip(keep(""), "all", len(order), chosen == ""))
+	for _, kind := range types {
+		b.WriteString(facetChip(keep(kind), kind, counts[kind], chosen == kind))
+	}
+	b.WriteString(`</div>`)
+	return b.String()
+}
+
+func facetChip(href, label string, count int, current bool) string {
+	class := "chip facet-chip"
+	aria := ""
+	if current {
+		class += " current"
+		// The current facet is announced, not merely coloured: a reader
+		// who cannot see the styling still needs to know which one they
+		// are looking at.
+		aria = ` aria-current="true"`
+	}
+	return fmt.Sprintf(
+		`<a class="%s" href="%s"%s>%s <span class="count">%d</span></a>`,
+		class, esc(href), aria, esc(label), count)
 }
