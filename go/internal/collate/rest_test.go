@@ -619,3 +619,51 @@ func requiredQuery(path string, params []string) string {
 	}
 	return strings.Join(pairs, "&")
 }
+
+func TestTheChangesRouteReachesAnInstanceScopedRecord(t *testing.T) {
+	// The route asked store.HostNative until 2026-08-23, with no
+	// parameter to reach anything else — so a collection published only
+	// under a named instance was answered "this collection has no stored
+	// reading yet", a positive false statement about a record that had
+	// begun. This exercises the ROUTE, because the defect lived there:
+	// the same assertion against ChangesSince passes with the hardcode
+	// still in place, which is the layer-below shape this repository has
+	// caught before.
+	st := seeded(t)
+	if err := st.RecordDeclaration("sha256:test",
+		`{"collections":[{"name":"identity","question":"q","prefix":"identity",
+		  "facts":{"OsId":{"type":"string","temperament":"configuration",
+		  "kind":"observed","discloses":"nothing","sentence":"."}}}]}`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.IssueGenerations([]string{"identity"}, "sha256:test"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.ApplyCommit("identity", "radarr", 2, "b2", fakeBootID,
+		[]store.Object{{ID: "identity:host1", Name: "host1",
+			Facts: json.RawMessage(`{"OsId":"debian"}`), At: 20.0}}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, ok, err := SnapshotFor(st, "identity", "radarr", "2026-08-23T10:00:00Z", 2)
+	if err != nil || !ok {
+		t.Fatalf("%v %v", ok, err)
+	}
+	if _, err := st.RecordSnapshot(snapshot); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := NewHandler(st, func() float64 { return 26.0 }, fakeBootID)
+	got := get(t, handler,
+		"/v1/collections/identity/changes?instance=radarr&since=2026-08-23T12:00:00Z")
+	if got.Code != http.StatusOK {
+		t.Fatalf("%d: %s", got.Code, got.Body.String())
+	}
+	var answer CollectionChanges
+	if err := json.Unmarshal(got.Body.Bytes(), &answer); err != nil {
+		t.Fatal(err)
+	}
+	if answer.Gap != nil {
+		t.Fatalf("the instance's record has begun and the route must reach it, "+
+			"not deny it: %+v", answer.Gap)
+	}
+}

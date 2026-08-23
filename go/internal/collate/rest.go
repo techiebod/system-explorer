@@ -324,6 +324,20 @@ func NewHandlerWithReverse(st *store.Store, now func() float64, bootID string,
 			http.Error(w, "unknown collection", http.StatusNotFound)
 			return
 		}
+		// The scope is a REQUEST parameter, not a constant.
+		//
+		// It was store.HostNative until 2026-08-23, and a collection
+		// published only under a named instance was then unreachable:
+		// applyCollection writes its snapshot under the instance scope,
+		// and this route asked the host-native key and answered
+		// "this collection has no stored reading yet" — a positive false
+		// statement about a record that had begun, permanent and
+		// undetectable from outside, with no parameter to reach the real
+		// key. Unobservable rendering as healthy is the founding failure;
+		// this was worse, because the answer was a confident assertion
+		// rather than a null.
+		scope := r.URL.Query().Get("instance")
+
 		// No `since` means since the record BEGAN, and it is resolved
 		// from the store rather than from the clock.
 		//
@@ -337,7 +351,7 @@ func NewHandlerWithReverse(st *store.Store, now func() float64, bootID string,
 		// which is a wrong answer bought to turn a test green.
 		since := r.URL.Query().Get("since")
 		if since == "" {
-			began, err := st.RecordBegins(name, store.HostNative)
+			began, err := st.RecordBegins(name, scope)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -346,7 +360,7 @@ func NewHandlerWithReverse(st *store.Store, now func() float64, bootID string,
 			// that as a gap, and an empty `since` reaches it.
 			since = began
 		}
-		changes, err := ChangesSince(st, name, store.HostNative, since)
+		changes, err := ChangesSince(st, name, scope, since)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -556,8 +570,11 @@ var publishedRoutes = []map[string]any{
 			"reaching before the record begins is answered with a stated gap " +
 			"rather than from an empty baseline: an unreachable baseline is " +
 			"not an empty one, and diffing against nothing would report every " +
-			"object as added.",
-		"params": []string{"name", "since"}},
+			"object as added. `instance` selects the scope a collection was " +
+			"published under; omitted means the host-native one, and a " +
+			"collection served only under a named instance is reached by " +
+			"naming it.",
+		"params": []string{"name", "since", "instance"}},
 	{"path": "/v1/collections/{name}/objects/{object}", "tool": "get_object",
 		"summary": "One object in full, asked of the collector that serves it " +
 			"over the reverse channel — every fact, not the row's declared " +

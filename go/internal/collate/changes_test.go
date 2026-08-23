@@ -501,3 +501,56 @@ func ChangesFrom(t *testing.T, st *store.Store, since string) CollectionChanges 
 	}
 	return changes
 }
+
+func TestAnInstanceScopedRecordIsReachableAndNotDeniedAsAbsent(t *testing.T) {
+	// The route asked store.HostNative until 2026-08-23, so a collection
+	// published only under a named instance answered "this collection has
+	// no stored reading yet, so there is nothing to compare against" — a
+	// positive false statement about a record that had begun, under a key
+	// the route could never ask for. Unobservable rendering as healthy is
+	// the founding failure; a confident assertion is worse than a null.
+	st := recordStore(t)
+	if _, err := st.IssueGenerations([]string{"nft-rules"}, "sha256:d"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.RecordDeclaration("sha256:d", nftDeclaration); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.ApplyCommit("nft-rules", "radarr", 1, "b", "boot",
+		[]store.Object{{ID: "rule:1", Name: "a",
+			Facts: json.RawMessage(`{"Expression":"old"}`)}}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, ok, err := SnapshotFor(st, "nft-rules", "radarr", "2026-08-23T10:00:00Z", 1)
+	if err != nil || !ok {
+		t.Fatalf("%v %v", ok, err)
+	}
+	if _, err := st.RecordSnapshot(snapshot); err != nil {
+		t.Fatal(err)
+	}
+
+	// The instance's own record is there and answerable.
+	begins, err := st.RecordBegins("nft-rules", "radarr")
+	if err != nil || begins == "" {
+		t.Fatalf("the instance's record has begun: %q %v", begins, err)
+	}
+	answered, err := ChangesSince(st, "nft-rules", "radarr", "2026-08-23T12:00:00Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if answered.Gap != nil {
+		t.Fatalf("the record reaches this question: %+v", answered.Gap)
+	}
+
+	// And the host-native scope genuinely has none, which is a DIFFERENT
+	// answer and must stay reachable as one: the fix is a parameter, not
+	// a silent fallback that would merge two instances' records.
+	native, err := ChangesSince(st, "nft-rules", store.HostNative,
+		"2026-08-23T12:00:00Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if native.Gap == nil || native.Gap.Reason != "no-record" {
+		t.Fatalf("the host-native scope has no record of its own: %+v", native)
+	}
+}
