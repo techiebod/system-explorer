@@ -20,7 +20,8 @@
       "KeyExpiry": "2026-09-01T12:00:00Z",
       "PrimaryRoutes": [
         "192.0.2.0/24"
-      ]
+      ],
+      "PublicKey": "nodekey:5cb0a11ce5e1f0000000000000000000000000000000000000000000000001"
     },
     "Peer": {
       "nodekey:aa01": {
@@ -36,7 +37,8 @@
         "RxBytes": 812736,
         "TxBytes": 90412,
         "ExitNode": false,
-        "LastSeen": "0001-01-01T00:00:00Z"
+        "LastSeen": "0001-01-01T00:00:00Z",
+        "PublicKey": "nodekey:5cb0b0b0000000000000000000000000000000000000000000000000000002"
       },
       "nodekey:bb02": {
         "HostName": "shed-gateway",
@@ -55,7 +57,8 @@
         "LastSeen": "2026-08-20T07:15:42Z",
         "PrimaryRoutes": [
           "192.0.2.0/24"
-        ]
+        ],
+        "PublicKey": "nodekey:5cb0c0c0000000000000000000000000000000000000000000000000000003"
       },
       "nodekey:cc03": {
         "HostName": "no-dns-label",
@@ -67,7 +70,8 @@
         "Online": true,
         "RxBytes": 1,
         "TxBytes": 1,
-        "LastSeen": "0001-01-01T00:00:00Z"
+        "LastSeen": "0001-01-01T00:00:00Z",
+        "PublicKey": "nodekey:5cb0d0d0000000000000000000000000000000000000000000000000000004"
       }
     }
   },

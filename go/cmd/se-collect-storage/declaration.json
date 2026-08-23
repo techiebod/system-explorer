@@ -433,6 +433,16 @@
     },
     {
       "name": "block-devices",
+      "names": {
+        "by-id": {
+          "class": "stable",
+          "sentence": "Every /dev/disk/by-id spelling of this device. The kernel name is enumeration order and moves across boots; these encode the device's own identity, so they are what a collator keys rename survival on."
+        },
+        "partuuid": {
+          "class": "stable",
+          "sentence": "The partition's by-partuuid spelling, where it has one: partition identity that survives the parent disk renumbering."
+        }
+      },
       "verbs": {
         "object": {
           "bytes": 262144,
@@ -748,6 +758,12 @@
     },
     {
       "name": "arrays",
+      "names": {
+        "uuid": {
+          "class": "stable",
+          "sentence": "The md array uuid from sysfs, which survives the assembly numbering: md126 today can assemble as md0 next boot, and a collator keying on the number alone would retire the array and mint a stranger."
+        }
+      },
       "verbs": {
         "object": {
           "bytes": 262144,

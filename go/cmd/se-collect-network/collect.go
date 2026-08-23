@@ -34,6 +34,7 @@ type objectRecord struct {
 	Name       string         `json:"name"`
 	Type       string         `json:"type,omitempty"`
 	Facts      map[string]any `json:"facts"`
+	Names      map[string]any `json:"names,omitempty"`
 	At         float64        `json:"at"`
 }
 

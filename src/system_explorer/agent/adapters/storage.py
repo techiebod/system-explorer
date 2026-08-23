@@ -858,6 +858,19 @@ class Adapter:
 
     async def _block_items(self) -> list[dict]:
         data = await anyio.to_thread.run_sync(_lsblk)
+        links = await anyio.to_thread.run_sync(_devlinks)
+        # kname -> its alias spellings per identity tree, because the KERNEL
+        # name is the one spelling here that does not survive a reboot: sda
+        # is enumeration order, the by-id and partuuid links are the device
+        # (register row 6's audit). Only the two identity trees — a mapper
+        # alias is configuration naming, not identity.
+        aliases: dict[str, dict[str, list[str]]] = {}
+        for alias_path, kname in (links or {}).items():
+            for tree, family in (("/dev/disk/by-id/", "by-id"),
+                                 ("/dev/disk/by-partuuid/", "partuuid")):
+                if alias_path.startswith(tree):
+                    aliases.setdefault(kname, {}).setdefault(family, []).append(
+                        alias_path[len(tree):])
         items = []
         for node, parents, depth in _flatten_devices(data.get("blockdevices", [])):
             name = node["name"]
@@ -885,6 +898,10 @@ class Adapter:
             facts, absent = _split_absent(facts)
             item = env.item_summary(f"block-device:{name}", node.get("type") or "disk", name, facts)
             item["depth"] = depth
+            stable = {family: sorted(spellings)
+                      for family, spellings in aliases.get(name, {}).items()}
+            if stable:
+                item["names"] = {"stable": stable}
             items.append(_attach_channels(item, absent))
         return items
 
@@ -949,6 +966,11 @@ class Adapter:
             item = env.item_summary(f"array:{name}", arr["level"] or "md-array",
                                     name, facts,
                                     opinions=array_opinions(facts))
+            # The md NUMBER moves — md126 today can assemble as md0 next
+            # boot — and the uuid does not, so the uuid is the family a
+            # collator keys rename survival on (register row 6's audit).
+            if arr["uuid"]:
+                item["names"] = {"stable": {"uuid": arr["uuid"]}}
             items.append(_attach_channels(item, absent))
         return items
 

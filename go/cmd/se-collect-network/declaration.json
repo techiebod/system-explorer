@@ -38,6 +38,12 @@
   "collections": [
     {
       "name": "tailscale",
+      "names": {
+        "public-key": {
+          "class": "stable",
+          "sentence": "The node's public key from the snapshot, which survives a rename: the DNS label a row is named by is renameable in the admin console, and a collator keying on it alone would retire the node and mint a stranger."
+        }
+      },
       "verbs": {
         "object": {
           "bytes": 262144,

@@ -2382,6 +2382,11 @@ class Adapter:
             peer_native_id(node) or "self", facts,
             opinions=tailscale_opinions(facts),
             healthy="ok" if facts["Online"] else "info")]
+        # The DNS label a row is named by is RENAMEABLE in the admin
+        # console; the node key is the device (register row 6's audit).
+        # Presence-driven: a snapshot without PublicKey attaches nothing.
+        if node.get("PublicKey"):
+            items[0]["names"] = {"stable": {"public-key": node["PublicKey"]}}
         for peer in (status.get("Peer") or {}).values():
             name = peer_native_id(peer)
             if not name:
@@ -2403,10 +2408,13 @@ class Adapter:
             }
             if peer.get("PrimaryRoutes"):
                 peer_facts["PrimaryRoutes"] = peer["PrimaryRoutes"]
-            items.append(env.item_summary(
+            peer_item = env.item_summary(
                 f"tailscale:{name}", "tailscale-peer", name, peer_facts,
                 opinions=tailscale_opinions(peer_facts),
-                healthy="ok" if peer_facts["Online"] else "info"))
+                healthy="ok" if peer_facts["Online"] else "info")
+            if peer.get("PublicKey"):
+                peer_item["names"] = {"stable": {"public-key": peer["PublicKey"]}}
+            items.append(peer_item)
         return items
 
     # ── lookups ──────────────────────────────────────────────

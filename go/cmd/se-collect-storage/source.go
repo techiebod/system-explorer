@@ -54,6 +54,10 @@ type source interface {
 	// lsblk is the block-device tree, every transport at once — the one
 	// honest answer to "what disks does this host have".
 	lsblk() (*value, error)
+	// links is the devlink alias tree on its own, for the block rows'
+	// name families: the pools path acquires it inside zpool(), and a
+	// host with no pool still has by-id spellings for its disks.
+	links() (*aliasTree, error)
 	// zfsList is `zfs list -j -p` — the dataset inventory, in the same
 	// three-state shape as zpool: a document, a host-with-no-zfs decline
 	// (absent, authoritative-empty), or could-not-run.
@@ -256,6 +260,8 @@ var findmntOwn = []string{"findmnt", "-J", "--real", "-b",
 	"-o", "TARGET,SOURCE,FSTYPE,OPTIONS,SIZE,USED,AVAIL,USE%"}
 
 func (liveSource) lsblk() (*value, error) { return runJSON(lsblkArgv) }
+
+func (liveSource) links() (*aliasTree, error) { return devlinks(), nil }
 
 // mdDocument is the transcribed tree: three maps keyed the way the payloads
 // are — container path, then member — so the live walk and the replayed one
@@ -614,6 +620,8 @@ func (r replaySource) zfsList() (*value, error) {
 	}
 	return doc, nil
 }
+
+func (r replaySource) links() (*aliasTree, error) { return r.devlinks() }
 
 func (r replaySource) lsblk() (*value, error) {
 	doc, err := r.payload("lsblk")

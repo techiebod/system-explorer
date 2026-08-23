@@ -166,7 +166,7 @@ func collectArrays(out *emitter, stderr io.Writer, src source, collection string
 		// reasoning as hardware's derived judgement facts.
 		facts.set("MembersWithErrors", erroring)
 
-		out.emit(objectRecord{
+		record := objectRecord{
 			Record:     "object",
 			Collection: collection,
 			Name:       name,
@@ -174,7 +174,18 @@ func collectArrays(out *emitter, stderr io.Writer, src source, collection string
 			Facts:      facts.encode(),
 			Absent:     sortedStrings(absent),
 			At:         at,
-		})
+		}
+		// The md NUMBER moves — md126 today can assemble as md0 next boot —
+		// and the uuid does not, so the uuid is the family a collator keys
+		// rename survival on (register row 6's audit).
+		if haveUUID && uuid != "" {
+			names := newObject()
+			stable := newObject()
+			stable.set("uuid", stringValue(uuid))
+			names.set("stable", stable)
+			record.Names = names.encode()
+		}
+		out.emit(record)
 		*objects++
 		emitted++
 	}

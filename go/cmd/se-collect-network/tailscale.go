@@ -49,6 +49,13 @@ func keyExpiry(raw string, now float64) (string, int64, bool) {
 	return moment.UTC().Format("2006-01-02T15:04:05Z"), days, true
 }
 
+func publicKeyFamily(node jsonValue) map[string]any {
+	if key := node.stringMember("PublicKey"); key != "" {
+		return map[string]any{"stable": map[string]any{"public-key": key}}
+	}
+	return nil
+}
+
 func peerNativeID(node jsonValue) string {
 	label := node.stringMember("DNSName")
 	if i := strings.IndexByte(label, '.'); i >= 0 {
@@ -155,9 +162,13 @@ func collectTailscale(out *emitter, stderr io.Writer, src source, collection str
 	if name == "" {
 		name = "self"
 	}
+	// The DNS label a row is named by is RENAMEABLE in the admin console;
+	// the node key is the device (register row 6's audit). Presence-driven:
+	// a snapshot without PublicKey attaches nothing.
 	out.emit(objectRecord{
 		Record: "object", Collection: collection, Type: "tailscale-self",
-		Name: name, Facts: facts, At: src.stamp(*objects),
+		Name: name, Facts: facts, Names: publicKeyFamily(self),
+		At: src.stamp(*objects),
 	})
 	*objects++
 	emitted := 1
@@ -188,7 +199,8 @@ func collectTailscale(out *emitter, stderr io.Writer, src source, collection str
 		}
 		out.emit(objectRecord{
 			Record: "object", Collection: collection, Type: "tailscale-peer",
-			Name: peerName, Facts: peerFacts, At: src.stamp(*objects),
+			Name: peerName, Facts: peerFacts, Names: publicKeyFamily(peer),
+			At: src.stamp(*objects),
 		})
 		*objects++
 		emitted++

@@ -803,6 +803,10 @@
   "discloses": "content",
   "format": "prose"
  },
+ "tailscale:0.Self.PublicKey": {
+  "discloses": "identity",
+  "format": "prose"
+ },
  "tailscale:0.Self.HostName": {
   "discloses": "content",
   "format": "prose"
@@ -836,6 +840,10 @@
   "format": "prose"
  },
  "tailscale:0.Peer.~key": {
+  "discloses": "identity",
+  "format": "prose"
+ },
+ "tailscale:0.Peer.*.PublicKey": {
   "discloses": "identity",
   "format": "prose"
  },

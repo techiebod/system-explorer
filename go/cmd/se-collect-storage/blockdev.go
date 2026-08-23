@@ -18,6 +18,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
+	"strings"
 )
 
 // blockFacts maps the emitted fact names to lsblk's member names, in the
@@ -104,6 +106,35 @@ func collectBlockDevices(out *emitter, stderr io.Writer, src source, collection 
 		return exitOK
 	}
 
+	links, err := src.links()
+	if err != nil {
+		fmt.Fprintln(stderr, "devlinks:", err)
+		return exitRuntime
+	}
+	// kname -> alias spellings per identity tree. The KERNEL name is the
+	// one spelling here that does not survive a reboot: sda is enumeration
+	// order, the by-id and partuuid links are the device (register row 6's
+	// audit). Only the two identity trees — a mapper alias is
+	// configuration naming, not identity.
+	aliases := map[string]map[string][]string{}
+	if links != nil {
+		for alias, kname := range links.byAlias {
+			for tree, family := range map[string]string{
+				"/dev/disk/by-id/":       "by-id",
+				"/dev/disk/by-partuuid/": "partuuid",
+			} {
+				if strings.HasPrefix(alias, tree) && kname != "" {
+					families := aliases[kname]
+					if families == nil {
+						families = map[string][]string{}
+						aliases[kname] = families
+					}
+					families[family] = append(families[family], alias[len(tree):])
+				}
+			}
+		}
+	}
+
 	emitted := 0
 	for _, device := range flattenDevices(doc.get("blockdevices")) {
 		name := device.node.get("name").text
@@ -139,7 +170,7 @@ func collectBlockDevices(out *emitter, stderr io.Writer, src source, collection 
 		if t := device.node.get("type"); t.isString() && t.text != "" {
 			kind = t.text
 		}
-		out.emit(objectRecord{
+		record := objectRecord{
 			Record:     "object",
 			Collection: collection,
 			Name:       name,
@@ -147,7 +178,24 @@ func collectBlockDevices(out *emitter, stderr io.Writer, src source, collection 
 			Facts:      factValues.encode(),
 			Absent:     absent,
 			At:         at,
-		})
+		}
+		if families := aliases[name]; len(families) > 0 {
+			stable := newObject()
+			for _, family := range []string{"by-id", "partuuid"} {
+				if spellings := families[family]; len(spellings) > 0 {
+					sort.Strings(spellings)
+					list := newArray()
+					for _, spelling := range spellings {
+						list.append(stringValue(spelling))
+					}
+					stable.set(family, list)
+				}
+			}
+			names := newObject()
+			names.set("stable", stable)
+			record.Names = names.encode()
+		}
+		out.emit(record)
 		emitted++
 		*objects++
 	}

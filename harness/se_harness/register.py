@@ -437,15 +437,17 @@ REGISTER: tuple[Row, ...] = (
         "family and never will, where a disk is reachable by wwid, by-id "
         "spelling, serial and kernel path and publishes all four. The probe "
         "reads the champion's declaration only. The R3d fleet audit "
-        "(2026-08-23) found five collections carrying a family — hardware's "
-        "two, pools, domains, generations — and three whose native names "
-        "churn while a stable identity sits on the row as a fact only: "
-        "block-devices (kname moves across boots; by-id does not), arrays "
-        "(md numbering moves; the md uuid does not) and tailscale (a DNS "
-        "label is renameable; the node key is not). Each is a stream change "
-        "with collator-keying and corpus consequences, so all three are OWED "
-        "as their own landings rather than folded into an audit commit — and "
-        "this probe would not notice them either way."),
+        "(2026-08-23) found five collections carrying a family and three "
+        "whose native names churn while the stable identity sat on the row "
+        "as a fact only; all three landed the same day, on both "
+        "implementations, judged equal by the corpus replay: block-devices "
+        "carry their by-id and partuuid spellings (kname is enumeration "
+        "order and moves across boots), arrays their md uuid (the numbering "
+        "moves), and tailscale nodes their public key (the DNS label is "
+        "renameable in the admin console). Presence-driven everywhere — a "
+        "capture without the devlink trees or without PublicKey attaches "
+        "nothing — and this probe sees none of it: the champion's "
+        "declaration is still all it reads."),
     Row(7, "relations on `units`/`hardware` (fleet-wide audit follows)",
         "built", "R3c/R3d",
         lambda: (_declares_somewhere("units", "relations")
