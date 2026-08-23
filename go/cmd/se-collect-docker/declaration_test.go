@@ -37,10 +37,12 @@ type declaredCollection struct {
 		Sentence  string   `json:"sentence"`
 		Discloses string   `json:"discloses"`
 	} `json:"facts"`
-	Names      map[string]any `json:"names"`
-	Relations  []any          `json:"relations"`
-	Redactions []any          `json:"redactions"`
-	Exemption  string         `json:"redaction_exemption"`
+	Names     map[string]any `json:"names"`
+	Relations []struct {
+		Type string `json:"type"`
+	} `json:"relations"`
+	Redactions []any  `json:"redactions"`
+	Exemption  string `json:"redaction_exemption"`
 }
 
 func decodeDeclaration(t *testing.T) (string, map[string]declaredCollection, []string) {
@@ -171,11 +173,33 @@ func TestTheDeclarationsShapeIsTheOneTheStreamCarries(t *testing.T) {
 		if len(collection.Names) != 0 {
 			t.Errorf("%s declares a names family and the stream carries none", name)
 		}
-		// No `relations`: the runs, member-of, mounts and attached-to edges all
-		// belong to the opened object, and this collector does not serve that
-		// verb yet.
-		if len(collection.Relations) != 0 {
-			t.Errorf("%s declares a relation type and asserts none", name)
+		// The opened-object edges landed with the verb rollout, so the pin
+		// inverts: the palettes must now cover exactly what serveObject
+		// asserts (the collator REJECTS an undeclared type), and volumes
+		// still asserts none. The reference's runs edge travels as
+		// member-of — the assertion model asserts outward and carries no
+		// direction member — and its inward network attached-to edges are
+		// not asserted at all, because each container already asserts them
+		// outward and one collector asserting both ends counts one
+		// observation twice.
+		declared := map[string]bool{}
+		for _, relation := range collection.Relations {
+			declared[relation.Type] = true
+		}
+		want := map[string][]string{
+			"containers": {"member-of", "mounts", "attached-to"},
+			"volumes":    {},
+			"networks":   {"plumbed-onto"},
+		}[name]
+		if len(declared) != len(want) {
+			t.Errorf("%s declares %d relation types, the opened object asserts %d",
+				name, len(declared), len(want))
+		}
+		for _, relType := range want {
+			if !declared[relType] {
+				t.Errorf("%s asserts %s and the declaration does not carry it",
+					name, relType)
+			}
 		}
 		// The exemption is the false half everywhere here. A listing document
 		// carries no credential member — docker keeps Config.Env in the INSPECT

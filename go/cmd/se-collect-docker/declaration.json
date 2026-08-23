@@ -14,6 +14,29 @@
   "collections": [
     {
       "name": "containers",
+      "relations": [
+        {
+          "type": "member-of",
+          "carries_facts": false,
+          "discriminator": [],
+          "inverse_observable": false,
+          "confirmed_by": ""
+        },
+        {
+          "type": "mounts",
+          "carries_facts": false,
+          "discriminator": [],
+          "inverse_observable": false,
+          "confirmed_by": ""
+        },
+        {
+          "type": "attached-to",
+          "carries_facts": false,
+          "discriminator": [],
+          "inverse_observable": false,
+          "confirmed_by": ""
+        }
+      ],
       "verbs": {
         "object": {
           "bytes": 262144,
@@ -254,6 +277,15 @@
     },
     {
       "name": "networks",
+      "relations": [
+        {
+          "type": "plumbed-onto",
+          "carries_facts": false,
+          "discriminator": [],
+          "inverse_observable": false,
+          "confirmed_by": ""
+        }
+      ],
       "verbs": {
         "object": {
           "bytes": 262144,

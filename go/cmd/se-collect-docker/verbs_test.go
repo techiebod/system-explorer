@@ -52,6 +52,57 @@ func TestObjectServesTheRowTheCollectionPublishes(t *testing.T) {
 		terminator["truncated"] != false {
 		t.Fatalf("%+v", terminator)
 	}
+	// The opened object's edges, minted from the same listing: this
+	// capture's container sits on the default bridge with no volumes and
+	// no compose project, so the network edge is the whole statement —
+	// and the collection stream stays edge-free, as the reference's
+	// collection pages were.
+	edges := ofKind(records, "relation_assertion")
+	if len(edges) != 1 || edges[0]["type"] != "attached-to" {
+		t.Fatalf("%v", edges)
+	}
+	target := edges[0]["target"].(map[string]any)
+	if target["kind"] != "docker-network" || target["name"] != "bridge" {
+		t.Fatalf("%+v", target)
+	}
+}
+
+// The edge families the healthy capture cannot exercise, driven directly
+// over a crafted list entry: a volume mount, a compose project, a scope —
+// each an edge the reference minted on the opened object.
+func TestOpenedEdgesCoverTheFamiliesTheCaptureLacks(t *testing.T) {
+	entry, err := decodeDocument([]byte(`{
+	  "Names": ["/paperless"],
+	  "Mounts": [{"Type": "volume", "Name": "paperless-data"},
+	             {"Type": "bind", "Source": "/etc/localtime"}],
+	  "NetworkSettings": {"Networks": {"arr": {}}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts, err := decodeDocument([]byte(
+		`{"ScopeUnit": "docker-abc123.scope", "ComposeProject": "arr"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, edge := range openedEdges("containers", "paperless", entry, facts) {
+		got[edge.Type+"→"+edge.Target.Kind+":"+edge.Target.Name] = edge.Vantage
+	}
+	for _, want := range []string{
+		// The reference's runs edge travels as member-of: the assertion
+		// model asserts outward and carries no direction member.
+		"member-of→unit:docker-abc123.scope",
+		"member-of→unit:compose-stack-arr.service",
+		"mounts→volume:paperless-data",
+		"attached-to→docker-network:arr",
+	} {
+		if _, held := got[want]; !held {
+			t.Errorf("missing %s in %v", want, got)
+		}
+	}
+	if len(got) != 4 {
+		t.Errorf("exactly the reference's outward edges: %v", got)
+	}
 }
 
 // The synthetic inspect: shaped like the Engine API's answer, carrying the

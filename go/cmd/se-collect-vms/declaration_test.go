@@ -50,10 +50,12 @@ func TestTheDeclarationNamesExactlyTheFactsThisCollectorEmits(t *testing.T) {
 				Sentence  string   `json:"sentence"`
 				Discloses string   `json:"discloses"`
 			} `json:"facts"`
-			Names      map[string]any `json:"names"`
-			Relations  []any          `json:"relations"`
-			Redactions []any          `json:"redactions"`
-			Exemption  string         `json:"redaction_exemption"`
+			Names     map[string]any `json:"names"`
+			Relations []struct {
+				Type string `json:"type"`
+			} `json:"relations"`
+			Redactions []any  `json:"redactions"`
+			Exemption  string `json:"redaction_exemption"`
 		} `json:"collections"`
 	}
 	if err := json.Unmarshal(declarationBytes, &declaration); err != nil {
@@ -123,12 +125,14 @@ func TestTheDeclarationNamesExactlyTheFactsThisCollectorEmits(t *testing.T) {
 		t.Error("the domain UUID is the identifier that survives a rename")
 	}
 
-	// One absence that is a decision rather than an omission, pinned so
-	// nobody adds one without meeting the reason it is not there. No
-	// `relations`: the bridge, tap and disk edges belong to the opened
-	// object, and this collector does not serve that verb yet.
-	if len(collection.Relations) != 0 {
-		t.Error("a relation type is declared and this collection asserts none")
+	// The opened-object verb landed, so the pin inverts: the tap edge is
+	// asserted (owns — the one the row's own facts can mint) and MUST be
+	// declared, because the collator rejects an undeclared type. The
+	// bridge and PCI edges still await the facts they would cite
+	// (register row 7's audit), so exactly one type is the statement.
+	if len(collection.Relations) != 1 || collection.Relations[0].Type != "owns" {
+		t.Errorf("the opened domain asserts owns and only owns; declared: %v",
+			collection.Relations)
 	}
 	// And one presence that is the same kind of decision. The contract wants
 	// exactly one of `redactions` and `redaction_exemption`, and the exemption

@@ -21,6 +21,20 @@ import (
 	"io"
 )
 
+type relationAssertionRecord struct {
+	Record     string          `json:"record"`
+	Collection string          `json:"collection"`
+	Name       string          `json:"name"`
+	Type       string          `json:"type"`
+	Vantage    string          `json:"vantage"`
+	Target     assertionTarget `json:"target"`
+}
+
+type assertionTarget struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
+}
+
 type verbEndRecord struct {
 	Record    string `json:"record"`
 	Verb      string `json:"verb"`
@@ -104,6 +118,21 @@ func serveObject(stdout, stderr io.Writer, src source, collection, name string) 
 			record.Names = row.names.encode()
 		}
 		out.emit(record)
+		// The reference's opened-domain edge this port can mint from the
+		// facts it carries: the tap belongs to this domain alone, so it is
+		// the edge that actually attributes a link to a workload — the
+		// bridge and PCI edges await the facts they cite (register row 7's
+		// audit). Minted only when the domain is opened, as the reference
+		// minted them.
+		for _, tap := range arrayItems(row.facts.get("HostTaps")) {
+			if tap.isString() && tap.text != "" {
+				out.emit(relationAssertionRecord{
+					Record: "relation_assertion", Collection: collection,
+					Name: row.name, Vantage: collection, Type: "owns",
+					Target: assertionTarget{Kind: "link", Name: tap.text},
+				})
+			}
+		}
 		out.emit(verbEndRecord{Record: "verb_end", Verb: "object"})
 		return verbExit(out, stderr)
 	}

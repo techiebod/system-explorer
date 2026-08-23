@@ -11,6 +11,15 @@
   "collections": [
     {
       "name": "domains",
+      "relations": [
+        {
+          "type": "owns",
+          "carries_facts": false,
+          "discriminator": [],
+          "inverse_observable": false,
+          "confirmed_by": ""
+        }
+      ],
       "rules": [
         {
           "key": "domain-health",

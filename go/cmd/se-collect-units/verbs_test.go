@@ -67,6 +67,55 @@ func runVerb(t *testing.T, dir, request string) (int, string, string) {
 	return runWith(t, request+"\n", map[string]string{"SE_REPLAY_DIR": dir})
 }
 
+func TestAnOpenedMachineScopeAssertsWhatItRuns(t *testing.T) {
+	// The runs edge is minted from the scope's own NAME — the one scope
+	// family whose name carries its domain's in full — so the fixture is
+	// the ssh staging re-keyed under a machine scope's spelling, escaped
+	// dashes included, and the target must come back UNESCAPED: the
+	// collator keys the far end on the name vms publishes.
+	name := `machine-qemu\x2d1\x2dhost\x2dseven.scope`
+	scopePath := "/org/freedesktop/systemd1/unit/machine_scope"
+	// The Id lands inside a JSON body, where the backslash itself must be
+	// escaped; the map key goes through json.Marshal, which does its own.
+	jsonName := strings.ReplaceAll(name, `\`, `\\`)
+	unitProps := `{"type":"a{sv}","data":[{
+	 "Id":{"type":"s","data":"` + jsonName + `"},
+	 "ActiveState":{"type":"s","data":"active"},
+	 "SubState":{"type":"s","data":"running"},
+	 "LoadState":{"type":"s","data":"loaded"},
+	 "LoadError":{"type":"(ss)","data":["",""]},
+	 "Requires":{"type":"as","data":[]},
+	 "Wants":{"type":"as","data":[]},
+	 "PartOf":{"type":"as","data":[]},
+	 "After":{"type":"as","data":[]}}]}`
+	staged := map[string]json.RawMessage{
+		loadUnitRequest(name): json.RawMessage(
+			`{"type":"o","data":["` + scopePath + `"]}`),
+		propertiesRequest(scopePath): json.RawMessage(unitProps),
+	}
+	raw, err := json.Marshal(staged)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "verbs.json"), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr := runVerb(t, dir, "object units "+name)
+	if code != exitOK {
+		t.Fatalf("exit %d: %s", code, stderr)
+	}
+	records := parseRecords(t, stdout)
+	edges := ofKind(records, "relation_assertion")
+	if len(edges) != 1 || edges[0]["type"] != "runs" {
+		t.Fatalf("one runs edge: %v", edges)
+	}
+	target := edges[0]["target"].(map[string]any)
+	if target["kind"] != "domain" || target["name"] != "host-seven" {
+		t.Fatalf("the domain's own name, unescaped: %+v", target)
+	}
+}
+
 func TestObjectServesTheDensityTheRowCannotAfford(t *testing.T) {
 	code, stdout, stderr := runVerb(t, verbFixture(t), "object units ssh.service")
 	if code != exitOK {

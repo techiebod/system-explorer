@@ -59,24 +59,123 @@ func verbDecline(out *emitter, stderr io.Writer, verb, collection, reason, detai
 
 // verbRows is the shared acquisition gate: both verbs answer from the same
 // listing collect reads, and both route the seam's decline the same way.
-func verbRows(out *emitter, stderr io.Writer, src source, verb, collection string) ([]row, bool, int) {
+// The document rides back beside the rows because the opened object's
+// edges are minted from list-entry members the rows deliberately do not
+// carry (Mounts, NetworkSettings).
+func verbRows(out *emitter, stderr io.Writer, src source, verb, collection string) ([]row, *value, bool, int) {
 	spec := served[collection]
 	document, err := src.document(spec.path)
 	var refused *declined
 	if errors.As(err, &refused) {
-		return nil, false, verbDecline(out, stderr, verb, collection,
+		return nil, nil, false, verbDecline(out, stderr, verb, collection,
 			refused.reason, refused.detail)
 	}
 	if err != nil {
 		fmt.Fprintln(stderr, collection+":", err)
-		return nil, false, exitRuntime
+		return nil, nil, false, exitRuntime
 	}
 	built, err := spec.rows(document)
 	if err != nil {
 		fmt.Fprintln(stderr, collection+":", err)
-		return nil, false, exitRuntime
+		return nil, nil, false, exitRuntime
 	}
-	return built, true, exitOK
+	return built, document, true, exitOK
+}
+
+type relationAssertionRecord struct {
+	Record     string          `json:"record"`
+	Collection string          `json:"collection"`
+	Name       string          `json:"name"`
+	Type       string          `json:"type"`
+	Vantage    string          `json:"vantage"`
+	Target     assertionTarget `json:"target"`
+}
+
+type assertionTarget struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
+}
+
+// openedEdges is the reference's get_object relationships (adapters/
+// docker.py), minted only when an object is OPENED — the collection
+// stream stays edge-free, as the reference's collection pages were. One
+// stated deviation: the reference's `runs` edge from the scope unit
+// travelled with an inward direction the assertion model does not carry,
+// so the same join is asserted outward as member-of — the scope's cgroup
+// contains this container, and the collator's inverse machinery is where
+// the other reading lives. The reference's inward attached-to edges on a
+// network are not asserted at all: each container already asserts them
+// outward, and asserting both ends from one collector would be one
+// observation counted twice.
+func openedEdges(collection, name string, entry *value, facts *value) []relationAssertionRecord {
+	assert := func(relType, kind, target string) relationAssertionRecord {
+		return relationAssertionRecord{
+			Record: "relation_assertion", Collection: collection,
+			Name: name, Vantage: collection, Type: relType,
+			Target: assertionTarget{Kind: kind, Name: target},
+		}
+	}
+	var out []relationAssertionRecord
+	switch collection {
+	case "containers":
+		if scope := facts.get("ScopeUnit"); scope.isString() && scope.text != "" {
+			out = append(out, assert("member-of", "unit", scope.text))
+		}
+		if project := facts.get("ComposeProject"); project.isString() && project.text != "" {
+			out = append(out, assert("member-of", "unit",
+				"compose-stack-"+project.text+".service"))
+		}
+		if entry != nil {
+			for _, mount := range arrayItems(entry.get("Mounts")) {
+				if mount.get("Type").stringOr("") == "volume" &&
+					mount.get("Name").stringOr("") != "" {
+					out = append(out, assert("mounts", "volume",
+						mount.get("Name").text))
+				}
+			}
+			networks := entry.get("NetworkSettings").get("Networks")
+			if networks != nil && networks.kind == jsonObject {
+				for _, network := range networks.members.keys {
+					out = append(out, assert("attached-to", "docker-network", network))
+				}
+			}
+		}
+	case "networks":
+		if bridge := facts.get("BridgeInterface"); bridge.isString() && bridge.text != "" {
+			out = append(out, assert("plumbed-onto", "link", bridge.text))
+		}
+	}
+	return out
+}
+
+// arrayItems is nil-safe iteration over a maybe-array member.
+func arrayItems(v *value) []*value {
+	if v == nil || v.kind != jsonArray {
+		return nil
+	}
+	return v.items
+}
+
+// entryNamed finds the raw list entry behind one row, by the same name
+// rule the row builder mints from.
+func entryNamed(collection string, document *value, name string) *value {
+	for _, entry := range arrayItems(document) {
+		switch collection {
+		case "containers":
+			names := entry.get("Names")
+			if len(arrayItems(names)) > 0 {
+				first := names.items[0]
+				if first.isString() && strings.TrimPrefix(first.text, "/") == name {
+					return entry
+				}
+			}
+		default:
+			if entry.get("Name").stringOr("") == name {
+				return entry
+			}
+		}
+	}
+	return nil
 }
 
 func serveObject(stdout, stderr io.Writer, src source, collection, name string) int {
@@ -85,7 +184,7 @@ func serveObject(stdout, stderr io.Writer, src source, collection, name string) 
 		return verbDecline(out, stderr, "object", collection, "unsupported",
 			"this collector serves containers, volumes and networks only")
 	}
-	built, ok, code := verbRows(out, stderr, src, "object", collection)
+	built, document, ok, code := verbRows(out, stderr, src, "object", collection)
 	if !ok {
 		return code
 	}
@@ -101,6 +200,10 @@ func serveObject(stdout, stderr io.Writer, src source, collection, name string) 
 			Facts:      one.facts.encode(),
 			At:         src.stamp(0),
 		})
+		for _, edge := range openedEdges(collection, one.name,
+			entryNamed(collection, document, one.name), one.facts) {
+			out.emit(edge)
+		}
 		out.emit(verbEndRecord{Record: "verb_end", Verb: "object"})
 		return verbExit(out, stderr)
 	}
@@ -177,7 +280,7 @@ func serveEvidence(stdout, stderr io.Writer, src source, collection, name string
 		return verbDecline(out, stderr, "evidence", collection, "unsupported",
 			"this collector serves containers, volumes and networks only")
 	}
-	built, ok, code := verbRows(out, stderr, src, "evidence", collection)
+	built, _, ok, code := verbRows(out, stderr, src, "evidence", collection)
 	if !ok {
 		return code
 	}

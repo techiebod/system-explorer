@@ -323,6 +323,18 @@ func serveObject(stdout, stderr io.Writer, src source, collection, name string) 
 			})
 		}
 	}
+	// The runs edge, real rather than a join hint: a machine scope's own
+	// name carries its domain's, so the opened scope asserts what it runs.
+	if match := machineScope.FindStringSubmatch(name); match != nil {
+		out.emit(relationAssertionRecord{
+			Record:     "relation_assertion",
+			Collection: collection,
+			Name:       name,
+			Vantage:    collection,
+			Type:       "runs",
+			Target:     assertionTarget{Kind: "domain", Name: unescapeUnitName(match[1])},
+		})
+	}
 	// The object response is one unit's properties and sits far inside the
 	// declared bound by construction; the bound genuinely bites on
 	// evidence, where it is enforced on the payload.

@@ -321,6 +321,34 @@
           "discriminator": [],
           "inverse_observable": false,
           "confirmed_by": ""
+        },
+        {
+          "type": "requires",
+          "carries_facts": false,
+          "discriminator": [],
+          "inverse_observable": false,
+          "confirmed_by": ""
+        },
+        {
+          "type": "wants",
+          "carries_facts": false,
+          "discriminator": [],
+          "inverse_observable": false,
+          "confirmed_by": ""
+        },
+        {
+          "type": "after",
+          "carries_facts": false,
+          "discriminator": [],
+          "inverse_observable": false,
+          "confirmed_by": ""
+        },
+        {
+          "type": "runs",
+          "carries_facts": false,
+          "discriminator": [],
+          "inverse_observable": false,
+          "confirmed_by": ""
         }
       ],
       "rules": [

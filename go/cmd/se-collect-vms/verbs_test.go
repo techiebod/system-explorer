@@ -57,6 +57,51 @@ func TestObjectServesTheRowAndItsNameFamily(t *testing.T) {
 	}
 }
 
+func TestAnOpenedRunningDomainAssertsItsTap(t *testing.T) {
+	// The capture's domain is shutoff with no tap, so this fixture is the
+	// committed document with the tap the walk derives hand-added — the
+	// one edge the row's own facts can mint; bridge and PCI edges await
+	// the facts they would cite (register row 7's audit).
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "corpus", "vms",
+		"healthy", "payloads", "domains.json"))
+	if err != nil {
+		t.Skip(err)
+	}
+	var domains []map[string]any
+	if err := json.Unmarshal(raw, &domains); err != nil {
+		t.Fatal(err)
+	}
+	domains[0]["state"] = "running"
+	// HostTaps derives from the domain XML's interface targets, so the tap
+	// is added where the walk reads it.
+	xml, _ := domains[0]["xml"].(string)
+	domains[0]["xml"] = strings.Replace(xml, "</domain>",
+		"  <devices><interface type='bridge'><target dev='vnet7'/>"+
+			"</interface></devices>\n</domain>", 1)
+	staged, err := json.Marshal(domains)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "domains.json"), staged, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr := runWith(t, "object domains host-7a173d\n",
+		map[string]string{"SE_REPLAY_DIR": dir})
+	if code != exitOK {
+		t.Fatalf("exit %d: %s", code, stderr)
+	}
+	records := parseRecords(t, stdout)
+	edges := ofKind(records, "relation_assertion")
+	if len(edges) != 1 || edges[0]["type"] != "owns" {
+		t.Fatalf("%v", edges)
+	}
+	target := edges[0]["target"].(map[string]any)
+	if target["kind"] != "link" || target["name"] != "vnet7" {
+		t.Fatalf("%+v", target)
+	}
+}
+
 func TestEvidenceServesInfoAndTheDomainXML(t *testing.T) {
 	code, stdout, stderr := runVerb(t, "evidence domains host-7a173d")
 	if code != exitOK {

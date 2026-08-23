@@ -453,15 +453,20 @@ REGISTER: tuple[Row, ...] = (
         "same scope and same limit as row 6, and the same reason for the "
         "weaker test: a PCI inventory row relates to nothing, so requiring "
         "every collection would make the probe drive the port. The R3d fleet "
-        "audit (2026-08-23) found one live defect — the journal object verb "
-        "asserting member-of with no declared palette, which the collator "
-        "rejects; fixed and pinned in that package the same day — and three "
-        "object-level edges the reference mints that no port does yet: "
-        "docker's plumbed-onto, vms' owns, units' runs-to-machine-scope. "
-        "OWED as verb-response work, each needing its palette declared with "
-        "it. kea's lease-to-reservation edge stays deliberately unported "
-        "(the collect.go ruling: it belongs to a collection nothing there "
-        "serves)."),
+        "audit (2026-08-23) found the undeclared-palette defect TWICE — the "
+        "journal verb's member-of, then units asserting requires, wants and "
+        "after with only member-of declared, on the champion itself — both "
+        "fixed with their pins the day they were found; the collator rejects "
+        "an undeclared type, so each was a latent rejection. The reference's "
+        "opened-object edges landed the same day: docker's container edges "
+        "(member-of, mounts, attached-to — its runs/in travels as member-of "
+        "because the assertion model asserts outward and carries no "
+        "direction), docker networks' plumbed-onto, vms' owns per host tap, "
+        "and units' runs from a machine scope to its domain, unescaped. "
+        "Still owed, each awaiting the facts it would cite: vms' bridge and "
+        "PCI edges. kea's lease-to-reservation edge stays deliberately "
+        "unported (the collect.go ruling: it belongs to a collection nothing "
+        "there serves)."),
     Row(8, "rule tables fleet-wide (restart-churn, SMART verdicts, link-rate…)",
         "built", "R3c/R3d",
         lambda: (_declares_somewhere("units", "rules")
