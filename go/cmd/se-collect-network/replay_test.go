@@ -96,9 +96,10 @@ func TestAtIsOneCounterAcrossTheWholeBatch(t *testing.T) {
 }
 
 func TestReplayNowIsIgnoredButNeverACrash(t *testing.T) {
-	// This collector derives nothing from wall time, so SE_REPLAY_NOW has
-	// nothing to pin — the contract is only that setting it changes nothing
-	// and breaks nothing.
+	// The nft collections derive nothing from wall time, so for THEM
+	// SE_REPLAY_NOW has nothing to pin — the contract here is only that
+	// setting it changes nothing and breaks nothing. tailscale and the
+	// resolve lookup do derive against now, and their tests pin it.
 	dir := stageRuleset(t, oneChain)
 	bare := map[string]string{"SE_REPLAY_DIR": dir}
 	pinned := map[string]string{"SE_REPLAY_DIR": dir, "SE_REPLAY_NOW": "2026-08-14T12:00:00Z"}

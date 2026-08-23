@@ -19,6 +19,22 @@
     ]
   },
   "probe": "nft runs and `nft -j list ruleset` parses; an empty ruleset is a successful read and an authoritative-empty commit, never a probe failure",
+  "lookups": {
+    "route-get": {
+      "question": "Which route would the kernel choose for this destination, right now?",
+      "input": "an IPv4 or IPv6 destination address",
+      "example": "192.0.2.7",
+      "bytes": 65536,
+      "ms": 10000
+    },
+    "resolve": {
+      "question": "What does this host's own resolver say for this name — or, given an address, which names point back at it?",
+      "input": "a hostname, or an IP address for a reverse lookup; Result carries systemd-resolved's failure text verbatim, because busctl surfaces the daemon's message and not the D-Bus error name",
+      "example": "host.example.internal",
+      "bytes": 65536,
+      "ms": 30000
+    }
+  },
   "collections": [
     {
       "name": "tailscale",

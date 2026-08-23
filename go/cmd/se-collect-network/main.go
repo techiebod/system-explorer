@@ -88,10 +88,20 @@ func run(stdin io.Reader, stdout, stderr io.Writer, getenv func(string) string) 
 			return exitRequest
 		}
 		return collect(stdout, stderr, src, order, generations)
+	case "lookup":
+		// Three tokens exactly: the verb, the palette name, the input
+		// (DESIGN 18). Every token is data; an input carrying whitespace
+		// arrives as extra tokens and is refused whole rather than
+		// reassembled.
+		if len(fields) != 3 {
+			fmt.Fprintln(stderr, "lookup takes exactly '<name> <input>'")
+			return exitRequest
+		}
+		return serveLookup(stdout, stderr, src, fields[1], fields[2])
 	default:
 		// Every token is data, never an option or a command fragment (DESIGN
 		// 18) — an unknown verb is refused whole, not guessed at.
-		fmt.Fprintf(stderr, "unknown verb %q: this collector serves declare, probe and collect\n", fields[0])
+		fmt.Fprintf(stderr, "unknown verb %q: this collector serves declare, probe, collect and lookup\n", fields[0])
 		return exitRequest
 	}
 }

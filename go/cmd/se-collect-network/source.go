@@ -60,6 +60,13 @@ type source interface {
 	ipRoute4() (jsonValue, error)
 	ipRoute6() (jsonValue, error)
 	ipRule() (jsonValue, error)
+	// ipRouteGet is the route-get lookup's acquisition: the kernel's own
+	// answer for one destination. The address is VALIDATED before it gets
+	// here and travels as one argv element — a lookup input never reaches a
+	// shell and never selects which command runs (DESIGN 18). A non-zero ip
+	// exit whose answer is "no route" is a kernel ANSWER, carried in the
+	// error's text.
+	ipRouteGet(address string) (jsonValue, error)
 	// procNet is one /proc/net table's text, and whether it opened: an
 	// unreadable table is a statement the rows must carry, never an empty
 	// table — a host whose udp6 will not open has not stopped listening.
@@ -298,6 +305,39 @@ func (s *liveSource) ipJSON(args ...string) (jsonValue, error) {
 	return doc, nil
 }
 
+func (s *liveSource) ipRouteGet(address string) (jsonValue, error) {
+	// Its own runner rather than ipJSON, for one reason: the kernel's
+	// refusal text ("RTNETLINK answers: Network is unreachable") IS the
+	// answer for an unroutable destination, and ipJSON discards stderr.
+	at, err := bootClock()
+	if err != nil {
+		return jsonValue{}, err
+	}
+	s.at = at
+	tool, err := exec.LookPath("ip")
+	if err != nil {
+		return jsonValue{}, fmt.Errorf("%w: %v", errIPSilent, err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), nftTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, tool, "-j", "route", "get", address)
+	var stdout, stderrBuf bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderrBuf
+	if err := cmd.Run(); err != nil {
+		detail := strings.TrimSpace(stderrBuf.String())
+		if detail == "" {
+			detail = err.Error()
+		}
+		return jsonValue{}, fmt.Errorf("%w: %s", errIPSilent, detail)
+	}
+	raw := bytes.TrimSpace(stdout.Bytes())
+	if len(raw) == 0 {
+		return jsonValue{kind: jsonArray}, nil
+	}
+	return decodeDocument(bytes.NewReader(raw))
+}
+
 func (s *liveSource) ipRoute4() (jsonValue, error) {
 	return s.ipJSON("-4", "route", "show", "table", "all")
 }
@@ -329,7 +369,19 @@ func (s *liveSource) resolve1Call(request string) ([]byte, error) {
 	args = append(args, "--json=short")
 	out, err := exec.CommandContext(ctx, tool, args...).Output()
 	if err != nil {
-		return nil, fmt.Errorf("busctl %s: %w", resolve1Dest, errCallFailed)
+		// The daemon's own words ride the error: busctl prints them on
+		// stderr ("Call failed: 'x' not found") and surfaces no D-Bus error
+		// NAME, so this text is all the lookup verb has to report WHY a
+		// resolve failed. The collection path branches on the sentinel and
+		// never renders the text.
+		detail := err.Error()
+		var exit *exec.ExitError
+		if errors.As(err, &exit) {
+			if text := strings.TrimSpace(string(exit.Stderr)); text != "" {
+				detail = text
+			}
+		}
+		return nil, fmt.Errorf("%w: %s", errCallFailed, detail)
 	}
 	return out, nil
 }
@@ -566,6 +618,27 @@ func (r replaySource) procNet(table string) (string, bool) {
 // resolve1Call under replay reads the staged bus.json request map; the
 // value false stages "the call failed at capture" — a file-mode host's
 // resolve1 probe — distinct from a request nobody staged, which refuses.
+func (r replaySource) ipRouteGet(address string) (jsonValue, error) {
+	stem := "ip-route-get-" + strings.NewReplacer(":", "_", ".", "-").Replace(address)
+	raw, err := os.ReadFile(filepath.Join(r.dir, stem+".json"))
+	if err != nil {
+		return jsonValue{}, fmt.Errorf("%s %w: %v", stem, errUncaptured, err)
+	}
+	document, err := decodeDocument(strings.NewReader(string(raw)))
+	if err != nil {
+		return jsonValue{}, err
+	}
+	// A staged STRING is the kernel's refusal as captured — the stderr text
+	// of a non-zero `ip route get` ("RTNETLINK answers: Network is
+	// unreachable"), which live rides the error. A no-route answer has to be
+	// replayable or the KernelError arm is reachable only on a machine
+	// arranged to have no route.
+	if document.kind == jsonString {
+		return jsonValue{}, fmt.Errorf("%w: %s", errIPSilent, document.text)
+	}
+	return document, nil
+}
+
 func (r replaySource) resolve1Call(request string) ([]byte, error) {
 	raw, err := os.ReadFile(filepath.Join(r.dir, "bus.json"))
 	if err != nil {
@@ -580,7 +653,7 @@ func (r replaySource) resolve1Call(request string) ([]byte, error) {
 		return nil, fmt.Errorf("%q %w", request, errUncaptured)
 	}
 	if string(document) == "false" {
-		return nil, fmt.Errorf("%q: %w (staged at capture)", request, errCallFailed)
+		return nil, fmt.Errorf("%w: staged as failed at capture", errCallFailed)
 	}
 	return document, nil
 }

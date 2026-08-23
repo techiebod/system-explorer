@@ -410,8 +410,13 @@ REGISTER: tuple[Row, ...] = (
         "built", "R3c/R3d", lambda: _verb_landed("evidence"),
         "same probe shape and same limits as row 1."),
     Row(3, "`lookup` verb — parametrised queries, the lookup palette",
-        "owed", "R3d", lambda: _verb_landed("lookup"),
-        "same probe shape and same limit as row 1."),
+        "built", "R3d", lambda: _verb_landed("lookup"),
+        "same probe shape and same limits as row 1: it flipped when storage "
+        "and network landed their palettes (snapshots-of; route-get and "
+        "resolve, R3d) and sees the dispatch exist, not that a palette "
+        "answers well — and no probe reads the declaration-root `lookups` "
+        "member, so a collector serving the verb with no palette declared "
+        "is invisible to this row."),
     Row(4, "object `type` on the wire",
         "built", "R1", lambda: _in_file("contract/se.stream.1.json", '"type"'),
         "the probe sees the contract member; that every heterogeneous "

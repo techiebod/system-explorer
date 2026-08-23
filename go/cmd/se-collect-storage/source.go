@@ -64,6 +64,12 @@ type source interface {
 	// at all is could-not-run; a listing with no md member is the ordinary
 	// empty answer.
 	mdTree() (mdDocument, error)
+	// snapshots is the snapshots-of lookup's acquisition: one dataset's
+	// snapshot and bookmark listing, depth-limited or recursive. The
+	// dataset token is VALIDATED before it gets here and passed as one
+	// argv element, never interpolated — a lookup input never reaches a
+	// shell and never selects which command runs (DESIGN 18).
+	snapshots(dataset string, recursive bool) (*value, error)
 	// findmnt is PID 1's mount table — the host's truth, not this
 	// process's sandbox view. fellBack reports the older-util-linux
 	// fallback to our own namespace, printed to stderr rather than
@@ -290,6 +296,20 @@ func (liveSource) mdTree() (mdDocument, error) {
 			return resolved
 		},
 	}, nil
+}
+
+func (liveSource) snapshots(dataset string, recursive bool) (*value, error) {
+	if _, err := exec.LookPath("zfs"); err != nil {
+		reason := declineNoZpool
+		return nil, &reason
+	}
+	depth := []string{"-d", "1"}
+	if recursive {
+		depth = []string{"-r"}
+	}
+	argv := append([]string{"zfs", "list", "-j", "-p", "-t", "snapshot,bookmark"},
+		append(depth, "-o", "name,used,creation,referenced", dataset)...)
+	return runJSON(argv)
 }
 
 func (liveSource) zfsList() (*value, error) {
@@ -560,6 +580,24 @@ func (r replaySource) mdTree() (mdDocument, error) {
 			return pyStr(entry)
 		},
 	}, nil
+}
+
+func (r replaySource) snapshots(dataset string, recursive bool) (*value, error) {
+	// Keyed by the input, so a staged test can hold several questions; the
+	// recursive marker keeps the two askable shapes distinct.
+	stem := "zfs-snapshots-" + strings.ReplaceAll(dataset, "/", "-")
+	if recursive {
+		stem += "-r"
+	}
+	doc, err := r.payload(stem)
+	if errors.Is(err, fs.ErrNotExist) {
+		reason := declineNoZpool
+		return nil, &reason
+	}
+	if err != nil {
+		return nil, fmt.Errorf("%s %w: %v", stem, errUncaptured, err)
+	}
+	return doc, nil
 }
 
 func (r replaySource) zfsList() (*value, error) {

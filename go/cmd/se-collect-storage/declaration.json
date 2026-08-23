@@ -17,6 +17,15 @@
     ]
   },
   "probe": "zpool is installed and `zpool status -j` answers; a host carrying zpool with no imported pool still answers, and that is a reading of zero pools rather than a probe failure",
+  "lookups": {
+    "snapshots-of": {
+      "question": "Which snapshots and bookmarks exist for this dataset?",
+      "input": "a dataset name; append /* to include descendants",
+      "example": "tank/home",
+      "bytes": 1048576,
+      "ms": 15000
+    }
+  },
   "collections": [
     {
       "name": "pools",

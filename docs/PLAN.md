@@ -483,13 +483,13 @@ Every known miss, each owned or ruled. A row neither built, owned nor ruled is a
 |---|---|---|---|
 | 1 | `object` verb — object density (`LoadError`, `NRestarts`, `MainPID`, timers' `NextElapse`…) | owed by the phase-3 verb ruling, never delivered — served by units and hardware at R3c; the remaining collectors are R3d's | R3c/R3d |
 | 2 | `evidence` verb — capture-fresh raw document + digest; "the only thing that is not our interpretation" | owed by the same ruling — served by units and hardware at R3c; the remaining collectors are R3d's | R3c/R3d |
-| 3 | `lookup` verb — parametrised queries, the lookup palette | owed by the same ruling | R3d |
+| 3 | `lookup` verb — parametrised queries, the lookup palette | owed by the same ruling — landed at R3d: storage's `snapshots-of`, network's `route-get` and `resolve`, palette declared at the declaration root | R3d |
 | 4 | object `type` on the wire | built at R1 | R1 |
 | 5 | applied order preserved; trees derived from relations | built at R1 | R1 |
 | 6 | name families on `units`/`hardware` (and fleet-wide audit) | storage/vms only — hardware publishes the disk's four families at R3c; a unit has one native name and publishes none | R3c/R3d |
 | 7 | relations on `units`/`hardware` (and fleet-wide audit) | declared by neither — declared by both champions at R3c | R3c/R3d |
 | 8 | rule tables fleet-wide (restart-churn, SMART verdicts, link-rate…) | mechanism built, no first-party collector declares any — thirty-one rules across the two champions at R3c | R3c/R3d |
-| 9 | eighteen unported collections (network 8, storage 5, system 4, plex 1) | the bare-guest nine built at R3b; six remain owed in the register (nft-tables, port-exposure, tailscale, arrays, datasets, plex/requests) | R3b done / R3d |
+| 9 | eighteen unported collections (network 8, storage 5, system 4, plex 1) | the bare-guest nine built at R3b; the remaining six landed at R3d (nft-tables, port-exposure, tailscale, arrays, datasets, plex/requests) and NOT_YET_PORTED is empty | R3b done / R3d |
 | 10 | `/v1/status` roll-up (worst per collection, attention counts) | built at R3a | R3a |
 | 11 | fact filters with the 422 near-miss refusal | built at R3a | R3a |
 | 12 | pagination — limit/cursor, declared ceilings honoured on reads | built at R3a | R3a |

@@ -64,6 +64,23 @@
       "type": "string",
       "description": "Prose: what the probe verb establishes."
     },
+    "lookups": {
+      "type": "object",
+      "minProperties": 1,
+      "description": "The collector's lookup palette: every parameterised read-only question its `lookup` verb answers (DESIGN 18). Collector-level, not per-collection, because a lookup name is the collector's own vocabulary — `route-get`, `resolve`, `snapshots-of` — and the palette doubles as usage documentation: question, expected input and a worked example are how a UI and an agent alike learn what can be asked. Bounds ride each entry exactly as the per-collection verbs member carries them: single-flight, and a response that hits its bound says so on the payload.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["question", "input", "example", "bytes", "ms"],
+        "additionalProperties": false,
+        "properties": {
+          "question": { "type": "string", "minLength": 1 },
+          "input": { "type": "string", "minLength": 1 },
+          "example": { "type": "string", "minLength": 1 },
+          "bytes": { "type": "integer", "minimum": 1 },
+          "ms": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
     "collections": {
       "type": "array",
       "minItems": 1,
