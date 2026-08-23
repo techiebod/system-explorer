@@ -1,0 +1,75 @@
+[
+  {
+    "Version": "1.86.2",
+    "BackendState": "Running",
+    "MagicDNSSuffix": "tail0ab12.ts.net",
+    "Health": [
+      "update available: 1.88.1 -> run `tailscale update`"
+    ],
+    "Self": {
+      "HostName": "lab-node",
+      "DNSName": "lab-node.tail0ab12.ts.net.",
+      "OS": "linux",
+      "TailscaleIPs": [
+        "100.109.64.20",
+        "fd7a:115c:a1e0::f1c6"
+      ],
+      "Online": true,
+      "Relay": "lhr",
+      "ExitNodeOption": false,
+      "KeyExpiry": "2026-09-01T12:00:00Z",
+      "PrimaryRoutes": [
+        "192.0.2.0/24"
+      ]
+    },
+    "Peer": {
+      "nodekey:aa01": {
+        "HostName": "Fern's MacBook Air",
+        "DNSName": "ferns-macbook-air.tail0ab12.ts.net.",
+        "OS": "macOS",
+        "TailscaleIPs": [
+          "100.87.59.150"
+        ],
+        "Online": true,
+        "Relay": "lhr",
+        "CurAddr": "192.0.2.246:41641",
+        "RxBytes": 812736,
+        "TxBytes": 90412,
+        "ExitNode": false,
+        "LastSeen": "0001-01-01T00:00:00Z"
+      },
+      "nodekey:bb02": {
+        "HostName": "shed-gateway",
+        "DNSName": "shed-gateway.tail0ab12.ts.net.",
+        "OS": "linux",
+        "TailscaleIPs": [
+          "100.113.189.170",
+          "fd7a:115c:a1e0::584c"
+        ],
+        "Online": false,
+        "Relay": "",
+        "CurAddr": "",
+        "RxBytes": 0,
+        "TxBytes": 0,
+        "ExitNode": false,
+        "LastSeen": "2026-08-20T07:15:42Z",
+        "PrimaryRoutes": [
+          "192.0.2.0/24"
+        ]
+      },
+      "nodekey:cc03": {
+        "HostName": "no-dns-label",
+        "DNSName": "",
+        "OS": "linux",
+        "TailscaleIPs": [
+          "100.90.0.51"
+        ],
+        "Online": true,
+        "RxBytes": 1,
+        "TxBytes": 1,
+        "LastSeen": "0001-01-01T00:00:00Z"
+      }
+    }
+  },
+  1787468929.7088535
+]

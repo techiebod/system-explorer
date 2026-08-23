@@ -428,6 +428,19 @@ for name, attr in (("read", "_sys_read"), ("listdir", "_sys_list"),
 storage._md_scrape()
 print(json.dumps(seen.get(want, {}), indent=1, sort_keys=True))
 '
+# The tailscale snapshot travels WITH its mtime, because the facts are only
+# as fresh as the file — the SMART contract exactly. Optional: a guest
+# without the grant has no snapshot, and the collection declines on it.
+tailscale_py='
+import json, os, sys
+path = "/run/system-explorer-tailscale/status.json"
+try:
+    with open(path) as fh:
+        document = json.load(fh)
+except (OSError, ValueError):
+    sys.exit(0)
+print(json.dumps([document, os.stat(path).st_mtime]))
+'
 # hardware'"'"'s interface is a TREE, so its payload is the filesystem
 # transcribed: every file the walk opened, every directory it enumerated, every
 # link it resolved, every hwdb reply it asked for (DESIGN'"'"'s ruling of
@@ -921,6 +934,7 @@ case "$collector" in
             "ip-addr.json|ip -d -j addr show"
             "lldp.json?|networkctl lldp --json=short 2>/dev/null || true"
             "fdb.json?|sudo /usr/sbin/bridge -j fdb show 2>/dev/null || sudo bridge -j fdb show 2>/dev/null || true"
+            "tailscale.json?|python3 -c '$tailscale_py'"
             "bus.json|python3 -c '$resolver_bus_py'"
             "resolv-conf.json?|python3 -c '$resolv_conf_py'"
             "ifindex.json|python3 -c '$ifindex_py'"

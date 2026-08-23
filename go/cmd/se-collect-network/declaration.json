@@ -21,6 +21,303 @@
   "probe": "nft runs and `nft -j list ruleset` parses; an empty ruleset is a successful read and an authoritative-empty commit, never a probe failure",
   "collections": [
     {
+      "name": "tailscale",
+      "question": "who is on the tailnet, and is this node's membership healthy?",
+      "prefix": "tailscale",
+      "freshness": "5m",
+      "perishability": "sampled",
+      "answer": [
+        "TailscaleIPs",
+        "Online",
+        "Relay",
+        "CurAddr",
+        "OS",
+        "LastSeen"
+      ],
+      "ceiling": {
+        "records": 1024,
+        "bytes": 2097152
+      },
+      "facts": {
+        "HostName": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/Self/HostName, /Peer/*/HostName",
+          "sentence": "The node's self-reported display name — free text in every sense, which is why it is a fact and never the row's identity: a stock Mac calls itself \"Henry's MacBook Pro\", with the space and the typographic apostrophe."
+        },
+        "DNSName": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "location",
+          "from": "/Self/DNSName, /Peer/*/DNSName",
+          "sentence": "The tailnet's own canonical machine name, whose first label is the row's identity — the name `tailscale status` itself prints."
+        },
+        "TailscaleIPs": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "location",
+          "from": "/Self/TailscaleIPs, /Peer/*/TailscaleIPs",
+          "sentence": "The node's tailnet addresses. NEVER a join key and never dialled from facts: the coordination server reassigns them on re-enrolment."
+        },
+        "OS": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/Self/OS, /Peer/*/OS",
+          "sentence": "The operating system the node reports."
+        },
+        "Online": {
+          "type": "boolean",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/Self/Online, /Peer/*/Online",
+          "sentence": "Whether the coordination map says the node is connected right now."
+        },
+        "LastSeen": {
+          "type": "timestamp",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/Peer/*/LastSeen",
+          "sentence": "When the tailnet last saw this peer. Go stamps `never` as the year-one zero time, which is absence here — passed through raw it reads as two millennia of staleness (audit 2026-08-10)."
+        },
+        "Relay": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "location",
+          "from": "/Self/Relay, /Peer/*/Relay",
+          "sentence": "The DERP relay the node is homed on, where one is."
+        },
+        "CurAddr": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "location",
+          "from": "/Peer/*/CurAddr",
+          "sentence": "The direct path in use to this peer. tailscale reports the empty string while relayed or idle, which is absence here: no direct path is a statement, not an empty address."
+        },
+        "RxBytes": {
+          "type": "integer",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/Peer/*/RxBytes",
+          "sentence": "Bytes received from this peer since the daemon started."
+        },
+        "TxBytes": {
+          "type": "integer",
+          "temperament": "counter",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/Peer/*/TxBytes",
+          "sentence": "Bytes sent to this peer since the daemon started."
+        },
+        "ExitNode": {
+          "type": "boolean",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/Peer/*/ExitNode",
+          "sentence": "Whether this peer is currently this node's exit node."
+        },
+        "ExitNodeOption": {
+          "type": "boolean",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/Self/ExitNodeOption",
+          "sentence": "Whether this node offers itself as an exit node."
+        },
+        "KeyExpiry": {
+          "type": "timestamp",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/Self/KeyExpiry",
+          "sentence": "When this node's key expires, normalised to seconds UTC. A tagged node's key does not expire: the field is absent or Go's zero time, and either way this is absent — never a verdict."
+        },
+        "KeyExpiryDays": {
+          "type": "integer",
+          "temperament": "state",
+          "kind": "derived",
+          "derived_from": [
+            "KeyExpiry"
+          ],
+          "discloses": "nothing",
+          "from": "/Self/KeyExpiry",
+          "sentence": "Whole days until the key expires, computed at collect so the expiry rule stays clockless. Negative once expired."
+        },
+        "MagicDNSSuffix": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "location",
+          "from": "/MagicDNSSuffix",
+          "sentence": "The tailnet's MagicDNS suffix."
+        },
+        "BackendState": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/BackendState",
+          "sentence": "The daemon's own state word — Running is the healthy one. Only the self row carries it, which is what keeps the offline rule from judging peers: whether a PEER should be online is expected-state territory, not this collection's."
+        },
+        "Health": {
+          "type": "list",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/Health",
+          "sentence": "The daemon's own health messages, verbatim, present only when it says something. tailscaled uses these for advisories too, which is why their presence informs rather than warns — the messages themselves are the substance."
+        },
+        "PrimaryRoutes": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "location",
+          "from": "/Self/PrimaryRoutes, /Peer/*/PrimaryRoutes",
+          "sentence": "The subnet routes this node is primary for. If the advertisement lapses the fact disappears — exactly the goes-dark change an expected-state check needs to see (audit 2026-08-10)."
+        },
+        "TailscaleSnapshotAt": {
+          "type": "timestamp",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "the snapshot file's own mtime",
+          "sentence": "When the root collector wrote the snapshot these facts came from — the SMART contract exactly: the facts are only as fresh as the file."
+        },
+        "TailscaleSnapshotAgeSeconds": {
+          "type": "integer",
+          "temperament": "gauge",
+          "kind": "derived",
+          "derived_from": [
+            "TailscaleSnapshotAt"
+          ],
+          "discloses": "nothing",
+          "from": "the snapshot file's own mtime",
+          "sentence": "How old the snapshot is right now, computed at collect so the staleness rule stays pure."
+        }
+      },
+      "rules": [
+        {
+          "key": "key-expiry-critical",
+          "level": "critical",
+          "grounds": "threshold",
+          "when": {
+            "fact": "KeyExpiryDays",
+            "at_most": 7
+          },
+          "sentence": "The node key expires within a week, or has expired.",
+          "cites": [
+            "KeyExpiry",
+            "KeyExpiryDays"
+          ]
+        },
+        {
+          "key": "key-expiry",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "all": [
+              {
+                "fact": "KeyExpiryDays",
+                "at_most": 30
+              },
+              {
+                "not": {
+                  "fact": "KeyExpiryDays",
+                  "at_most": 7
+                }
+              }
+            ]
+          },
+          "sentence": "The node key expires within a month.",
+          "cites": [
+            "KeyExpiry",
+            "KeyExpiryDays"
+          ]
+        },
+        {
+          "key": "node-offline",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "all": [
+              {
+                "fact": "BackendState",
+                "present": true
+              },
+              {
+                "any": [
+                  {
+                    "not": {
+                      "fact": "BackendState",
+                      "equals": "Running"
+                    }
+                  },
+                  {
+                    "fact": "Online",
+                    "equals": false
+                  }
+                ]
+              }
+            ]
+          },
+          "sentence": "The node is not connected to the tailnet.",
+          "cites": [
+            "BackendState",
+            "Online"
+          ]
+        },
+        {
+          "key": "tailscale-health",
+          "level": "info",
+          "grounds": "interface",
+          "when": {
+            "fact": "Health",
+            "non_empty": true
+          },
+          "sentence": "The daemon reports health messages; they are the substance, and they are on the row.",
+          "cites": [
+            "Health"
+          ]
+        },
+        {
+          "key": "tailscale-snapshot-stale",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "fact": "TailscaleSnapshotAgeSeconds",
+            "at_least": 181
+          },
+          "sentence": "These tailscale facts are last-known, not current: the snapshot is stale, so the collector may be wedged or not running on this host.",
+          "cites": [
+            "TailscaleSnapshotAt",
+            "TailscaleSnapshotAgeSeconds"
+          ]
+        }
+      ],
+      "redaction_exemption": "the tailnet names, addresses, relays and routes are declared location or content fact by fact and handled by disclosure policy — the corpus stages a crafted snapshot, so nothing here is a real tailnet's identity. Counters, states and booleans are the daemon's own vocabulary; no key material of any kind appears in `tailscale status` output.",
+      "reference_commands": [
+        {
+          "purpose": "the snapshot this collection reads, as the collector takes it",
+          "argv": [
+            "tailscale",
+            "status",
+            "--json"
+          ]
+        }
+      ]
+    },
+    {
       "name": "port-exposure",
       "question": "which firewall rules admit each listening port, and from where?",
       "prefix": "port-exposure",

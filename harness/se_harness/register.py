@@ -64,7 +64,6 @@ DELIBERATELY_DROPPED: dict[str, str] = {
 #: product a person would notice, and the list is what stops gate 6 being
 #: reachable while they are open.
 NOT_YET_PORTED: dict[str, str] = {
-    "network/tailscale": "a discovery source membership depends on (DESIGN 23).",
     "plex/requests": "seerr requests.",
 }
 

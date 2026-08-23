@@ -207,6 +207,10 @@ func collect(stdout, stderr io.Writer, src source, order []string, generations m
 			if code := collectResolver(out, stderr, src, collection, generations[collection], &objects); code != exitOK {
 				return code
 			}
+		case "tailscale":
+			if code := collectTailscale(out, stderr, src, collection, generations[collection], &objects); code != exitOK {
+				return code
+			}
 		case collectionExposure:
 			// Both acquisitions, and the nft one decides the decline: a host
 			// with no nft has no input path to walk, and the reference

@@ -277,9 +277,11 @@ def test_the_comparator_derives_its_work_from_the_register() -> None:
         "register row 27: the derived work list is what finally drives "
         "system/identity"
     )
-    # Re-anchored three times as R3b/R3d landed collections: the pin is "an
-    # owed exclusion appears, named", not any one collection staying owed.
-    assert "owed: " in work["network"]["excluded"]["tailscale"]
+    # Re-anchored four times as R3b/R3d landed collections: the pin is "an
+    # owed exclusion appears, named", not any one collection staying owed —
+    # and plex/requests is the LAST owed name, so when it lands this pin
+    # retires to the dropped-exclusion assertion below it.
+    assert "owed: " in work["plex"]["excluded"]["requests"]
     assert work["plex"]["excluded"] == {
         "requests": "owed: " + register.NOT_YET_PORTED["plex/requests"]}
 

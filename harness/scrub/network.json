@@ -784,5 +784,101 @@
  },
  "nft:nftables.*.rule.expr.*.xt.name": {
   "discloses": "nothing"
+ },
+ "#the_tailscale_snapshot_is_a_pair": "tailscale.json is [document, mtime] — the facts are only as fresh as the file, so the write moment travels with it. The committed variant's document is CRAFTED (no real tailnet), but the classes are written for the field: names and addresses take prose so the free-text passes substitute whatever a real capture would carry — hex node keys, real hostnames handed via --hostnames, private addresses in space — while the crafted shapes (a display name with a typographic apostrophe, a documentation-space endpoint) survive to keep demonstrating the identity lessons they were crafted for.",
+ "tailscale:1": {
+  "discloses": "nothing"
+ },
+ "tailscale:0.Version": {
+  "discloses": "nothing"
+ },
+ "tailscale:0.BackendState": {
+  "discloses": "nothing"
+ },
+ "tailscale:0.MagicDNSSuffix": {
+  "discloses": "location",
+  "format": "prose"
+ },
+ "tailscale:0.Health.*": {
+  "discloses": "content",
+  "format": "prose"
+ },
+ "tailscale:0.Self.HostName": {
+  "discloses": "content",
+  "format": "prose"
+ },
+ "tailscale:0.Self.DNSName": {
+  "discloses": "location",
+  "format": "prose"
+ },
+ "tailscale:0.Self.OS": {
+  "discloses": "nothing"
+ },
+ "tailscale:0.Self.TailscaleIPs.*": {
+  "discloses": "location",
+  "format": "prose"
+ },
+ "tailscale:0.Self.Online": {
+  "discloses": "nothing"
+ },
+ "tailscale:0.Self.Relay": {
+  "discloses": "location",
+  "format": "prose"
+ },
+ "tailscale:0.Self.ExitNodeOption": {
+  "discloses": "nothing"
+ },
+ "tailscale:0.Self.KeyExpiry": {
+  "discloses": "nothing"
+ },
+ "tailscale:0.Self.PrimaryRoutes.*": {
+  "discloses": "location",
+  "format": "prose"
+ },
+ "tailscale:0.Peer.~key": {
+  "discloses": "identity",
+  "format": "prose"
+ },
+ "tailscale:0.Peer.*.HostName": {
+  "discloses": "content",
+  "format": "prose"
+ },
+ "tailscale:0.Peer.*.DNSName": {
+  "discloses": "location",
+  "format": "prose"
+ },
+ "tailscale:0.Peer.*.OS": {
+  "discloses": "nothing"
+ },
+ "tailscale:0.Peer.*.TailscaleIPs.*": {
+  "discloses": "location",
+  "format": "prose"
+ },
+ "tailscale:0.Peer.*.Online": {
+  "discloses": "nothing"
+ },
+ "tailscale:0.Peer.*.Relay": {
+  "discloses": "location",
+  "format": "prose"
+ },
+ "tailscale:0.Peer.*.CurAddr": {
+  "discloses": "location",
+  "format": "prose"
+ },
+ "tailscale:0.Peer.*.RxBytes": {
+  "discloses": "nothing"
+ },
+ "tailscale:0.Peer.*.TxBytes": {
+  "discloses": "nothing"
+ },
+ "tailscale:0.Peer.*.ExitNode": {
+  "discloses": "nothing"
+ },
+ "tailscale:0.Peer.*.LastSeen": {
+  "discloses": "nothing"
+ },
+ "tailscale:0.Peer.*.PrimaryRoutes.*": {
+  "discloses": "location",
+  "format": "prose"
  }
 }

@@ -29,6 +29,16 @@ type source interface {
 	// bootID names the boot whose clock every `at` reading belongs to;
 	// without it the readings are meaningless (DESIGN 09).
 	bootID() (string, error)
+	// tailscale is the root collector's `tailscale status --json` snapshot
+	// and the moment it was written — the SMART contract exactly: the facts
+	// are only as fresh as the file, so the mtime travels with the document
+	// and the staleness rule stays pure.
+	tailscale() (jsonValue, float64, error)
+	// now is wall-clock seconds, for the two facts derived against it: the
+	// snapshot's age, and the node key's days-to-expiry. Under replay it is
+	// the capture's own moment (SE_REPLAY_NOW), or the pair would report a
+	// different age every day it is judged.
+	now() (float64, error)
 	// timens is the CLOCK_BOOTTIME namespace offset — stated, never
 	// corrected, by whoever compares it (DESIGN 09).
 	timens() int64
@@ -136,11 +146,12 @@ var (
 
 func newSource(getenv func(string) string) source {
 	if dir := getenv("SE_REPLAY_DIR"); dir != "" {
-		// SE_REPLAY_NOW is deliberately not consulted: nothing here is
-		// derived against wall-clock now — no age, no elapsed time, no
-		// timestamp — so the pin has nothing to freeze, and reading it anyway
-		// would invent a dependency the declaration does not admit to.
-		return replaySource{dir: dir}
+		// SE_REPLAY_NOW arrived with tailscale at R3d: until then nothing
+		// here was derived against wall-clock now and the pin was
+		// deliberately unread. The snapshot's age and the key's
+		// days-to-expiry are wall-derived, so replay pins the clock to the
+		// capture's own moment.
+		return replaySource{dir: dir, pinned: getenv("SE_REPLAY_NOW")}
 	}
 	return &liveSource{started: time.Now()}
 }
@@ -150,6 +161,34 @@ func newSource(getenv func(string) string) source {
 type liveSource struct {
 	started time.Time
 	at      float64
+}
+
+// tailscaleSnapshot is where the module's grantTailscaleAccess timer writes
+// `tailscale status --json` (nix/module.nix) — the interface this collection
+// reads; tailscaled itself is never consulted.
+const tailscaleSnapshot = "/run/system-explorer-tailscale/status.json"
+
+var errTailscaleAbsent = errors.New(
+	"no tailscale snapshot (grantTailscaleAccess off, or tailscaled absent)")
+
+func (s *liveSource) tailscale() (jsonValue, float64, error) {
+	info, err := os.Stat(tailscaleSnapshot)
+	if err != nil {
+		return jsonValue{}, 0, errTailscaleAbsent
+	}
+	raw, err := os.ReadFile(tailscaleSnapshot)
+	if err != nil {
+		return jsonValue{}, 0, errTailscaleAbsent
+	}
+	doc, err := decodeDocument(strings.NewReader(string(raw)))
+	if err != nil {
+		return jsonValue{}, 0, errTailscaleAbsent
+	}
+	return doc, float64(info.ModTime().UnixNano()) / 1e9, nil
+}
+
+func (s *liveSource) now() (float64, error) {
+	return float64(time.Now().UnixNano()) / 1e9, nil
 }
 
 func (*liveSource) bootID() (string, error) {
@@ -393,7 +432,10 @@ func (s *liveSource) costs() (float64, float64) {
 // named deferral, a cross-boot live variant's to catch.
 const replayBootID = "5e000000-0000-4000-8000-000000000001"
 
-type replaySource struct{ dir string }
+type replaySource struct {
+	dir    string
+	pinned string
+}
 
 func (r replaySource) bootID() (string, error) {
 	raw, err := os.ReadFile(filepath.Join(r.dir, "boot_id"))
@@ -429,6 +471,40 @@ func (replaySource) declaration() string { return declarationDigest }
 // batch instead of declining, and it must never fall back to the live nft of
 // the workstation replaying the corpus: that seam escape once put a replaying
 // machine's own state into committed facts.
+func (r replaySource) tailscale() (jsonValue, float64, error) {
+	raw, err := os.ReadFile(filepath.Join(r.dir, "tailscale.json"))
+	if err != nil {
+		// No snapshot captured: the variant records a host without the
+		// grant, which is the live path's own absence.
+		return jsonValue{}, 0, errTailscaleAbsent
+	}
+	// The payload is [document, mtime] — the pair the acquisition IS, since
+	// the facts are only as fresh as the file.
+	doc, err := decodeDocument(strings.NewReader(string(raw)))
+	if err != nil {
+		return jsonValue{}, 0, fmt.Errorf("tailscale.json: %v", err)
+	}
+	if !doc.isArray() || len(doc.array) != 2 {
+		return jsonValue{}, 0, fmt.Errorf("tailscale.json: expected [document, mtime]")
+	}
+	mtime, err := strconv.ParseFloat(doc.array[1].number, 64)
+	if err != nil {
+		return jsonValue{}, 0, fmt.Errorf("tailscale.json: mtime: %v", err)
+	}
+	return doc.array[0], mtime, nil
+}
+
+func (r replaySource) now() (float64, error) {
+	if r.pinned == "" {
+		return float64(time.Now().UnixNano()) / 1e9, nil
+	}
+	moment, err := time.Parse(time.RFC3339Nano, strings.Replace(r.pinned, "Z", "+00:00", 1))
+	if err != nil {
+		return 0, fmt.Errorf("SE_REPLAY_NOW=%q is not an ISO-8601 moment: %v", r.pinned, err)
+	}
+	return float64(moment.UnixNano()) / 1e9, nil
+}
+
 func (r replaySource) nftRuleset() (jsonValue, error) {
 	file, err := os.Open(filepath.Join(r.dir, "nft.json"))
 	if errors.Is(err, fs.ErrNotExist) {

@@ -90,6 +90,12 @@ VALID_VARIANTS = frozenset(
         # occur on a plain guest, and the fdb's learned-MAC join is only
         # honest when a real bridge actually learned it.
         "enslaved",
+        # tailnet, added with network/tailscale's R3d port: a CRAFTED
+        # snapshot staged at the interface's own path — the adapter reads
+        # the file, never the daemon — because no lab guest joins a tailnet
+        # and a real capture would put an estate's machine names into a
+        # public corpus. The craft stages the recorded identity lessons.
+        "tailnet",
         # exposure, added with port-exposure's R3d port: a guest given the
         # ruleset that makes each closure discipline reachable from a real
         # capture — a guarded jump, an icmp-only accept, a bare-range dport,

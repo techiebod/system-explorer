@@ -82,8 +82,8 @@ func parseDeclaration(t *testing.T) map[string]declaredCollection {
 	for _, collection := range declaration.Collections {
 		out[collection.Name] = collection
 	}
-	if len(out) != 8 {
-		t.Fatalf("eight collections — the nft trio, port-exposure, routes, listening, resolver, links; got %d", len(out))
+	if len(out) != 9 {
+		t.Fatalf("nine collections — the nft trio, port-exposure, tailscale, routes, listening, resolver, links; got %d", len(out))
 	}
 	return out
 }
@@ -94,6 +94,11 @@ func parseDeclaration(t *testing.T) map[string]declaredCollection {
 func TestTheDeclarationCoversExactlyTheFactsEitherCollectionEmits(t *testing.T) {
 	declared := parseDeclaration(t)
 	emitted := map[string][]string{
+		"tailscale": {"HostName", "DNSName", "TailscaleIPs", "OS", "Online",
+			"LastSeen", "Relay", "CurAddr", "RxBytes", "TxBytes", "ExitNode",
+			"ExitNodeOption", "KeyExpiry", "KeyExpiryDays", "MagicDNSSuffix",
+			"BackendState", "Health", "PrimaryRoutes", "TailscaleSnapshotAt",
+			"TailscaleSnapshotAgeSeconds"},
 		"port-exposure": {"Protocol", "LocalAddress", "LocalPort", "Scope",
 			"PathCoverage", "AdmittingRules", "AdmittedFromCertain",
 			"AdmittedFromPossible", "ClosureGap", "ClosureGapRules"},
@@ -153,6 +158,8 @@ func TestTheDeclarationCoversExactlyTheFactsEitherCollectionEmits(t *testing.T) 
 func TestTheDeclaredFactKindsMatchTheReferences(t *testing.T) {
 	declared := parseDeclaration(t)
 	derived := map[string]map[string]bool{
+		"tailscale": {"KeyExpiryDays": true,
+			"TailscaleSnapshotAgeSeconds": true},
 		"port-exposure": {"Scope": true, "PathCoverage": true,
 			"AdmittingRules": true, "AdmittedFromCertain": true,
 			"AdmittedFromPossible": true, "ClosureGap": true,

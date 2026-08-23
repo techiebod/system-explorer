@@ -1,0 +1,50 @@
+[
+  {
+    "mac": "33:33:00:00:00:01",
+    "ifname": "ens2",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "01:00:5e:00:00:01",
+    "ifname": "ens2",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "33:33:ff:c8:59:95",
+    "ifname": "ens2",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "01:80:c2:00:00:00",
+    "ifname": "ens2",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "01:80:c2:00:00:03",
+    "ifname": "ens2",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  },
+  {
+    "mac": "01:80:c2:00:00:0e",
+    "ifname": "ens2",
+    "flags": [
+      "self"
+    ],
+    "state": "permanent"
+  }
+]

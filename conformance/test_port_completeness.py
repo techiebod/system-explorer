@@ -104,9 +104,9 @@ def test_a_stale_owed_entry_refuses_the_run() -> None:
     collection listed as owed that the port now declares must refuse until
     the register is updated."""
     ported = {k: dict(v) for k, v in NEW.items()}
-    ported["network"] = dict(ported["network"])
-    ported["network"]["tailscale"] = {"name": "tailscale", "answer": []}
-    with pytest.raises(RegisterViolation, match="network/tailscale"):
+    ported["plex"] = dict(ported["plex"])
+    ported["plex"]["requests"] = {"name": "requests", "answer": []}
+    with pytest.raises(RegisterViolation, match="plex/requests"):
         register.comparator_work(ported=ported)
 
 

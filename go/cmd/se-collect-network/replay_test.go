@@ -178,22 +178,22 @@ func TestADocumentWithoutTheNftablesKeyIsStillAnAnswer(t *testing.T) {
 }
 
 func TestAnUnservedCollectionIsDeclinedUnsupportedWithNoCommit(t *testing.T) {
-	// tailscale is the exemplar because it is still owed; nft-tables and then
-	// port-exposure held this seat until each was served at R3d, and the
-	// drill's subject moves with the register rather than staying on a name
-	// that now commits.
+	// lookups is the PERMANENT seat: it is dropped by ruling — lookup is a
+	// VERB in the new contract, not a collection — so unlike the owed names
+	// that held this seat before (nft-tables, port-exposure, tailscale), it
+	// will never be served and the drill never moves again.
 	dir := stageRuleset(t, oneChain)
-	code, stdout, stderr := runWith(t, "collect nft-chains:1 tailscale:2\n", map[string]string{"SE_REPLAY_DIR": dir})
+	code, stdout, stderr := runWith(t, "collect nft-chains:1 lookups:2\n", map[string]string{"SE_REPLAY_DIR": dir})
 	if code != exitOK {
 		t.Fatalf("a name this collector never published is declined, not crashed on; exit %d, stderr %s", code, stderr)
 	}
 	records := parseRecords(t, stdout)
 	declines := ofKind(records, "decline")
-	if len(declines) != 1 || declines[0]["collection"] != "tailscale" || declines[0]["reason"] != "unsupported" {
-		t.Fatalf("expected one unsupported decline for tailscale; got %v", declines)
+	if len(declines) != 1 || declines[0]["collection"] != "lookups" || declines[0]["reason"] != "unsupported" {
+		t.Fatalf("expected one unsupported decline for lookups; got %v", declines)
 	}
 	for _, commit := range ofKind(records, "commit") {
-		if commit["collection"] == "tailscale" {
+		if commit["collection"] == "lookups" {
 			t.Fatal("unsupported established nothing about that collection and must not commit, or prior state is retired by a batch that never looked")
 		}
 	}

@@ -1,0 +1,84 @@
+{
+ "collector": "network",
+ "collections": [
+  "tailscale"
+ ],
+ "variant": "tailnet",
+ "provenance": "captured-then-planted",
+ "os": "ubuntu",
+ "os_version": "26.04",
+ "source_version": "snapshot format of tailscale 1.86 (crafted)",
+ "captured": "2026-08-23T07:10:00Z",
+ "regenerable": true,
+ "regenerable_on": "a lab guest with the crafted status.json staged at /run/system-explorer-tailscale/ — the snapshot file IS the interface (the adapter never consults tailscaled), so the plant is the acquisition, not a stand-in for one. No lab guest joins a tailnet, and a capture from a real one would put an estate's every machine name into a public corpus.",
+ "anonymised": true,
+ "note": "network/tailscale's first committed pair, over a crafted snapshot that stages the collection's recorded lessons: a peer whose display name carries a space and a typographic apostrophe while its row is named by the tailnet's own DNS label (the 2026-08-12 identity finding); a peer the coordination map gives NO DNS label, which is skipped rather than patched into the id grammar — the commit count pins the skip; Go zero-time LastSeen read as absence rather than two millennia of staleness (the 2026-08-10 audit); an offline peer whose empty Relay and CurAddr are absences, not empty addresses; subnet routes on both self and a peer; and a self whose key expires in nine days, inside the warn band and outside the critical one. One curation, the same one corpus/network/exposure states: the resolve1 manager document is staged minus DNSSECNegativeTrustAnchors.",
+ "coverage_note": "What this variant does not reach: a stale snapshot (age 70s at the pinned moment — the staleness shapes live beside the SMART ones in unit tests), a tagged node's non-expiring key, an exit node in use, and a daemon in any BackendState but Running.",
+ "canaries": [],
+ "anchors": [
+  {
+   "collection": "tailscale",
+   "commit_objects": 3
+  },
+  {
+   "collection": "tailscale",
+   "object": "lab-node",
+   "fact": "KeyExpiryDays",
+   "value": 9
+  },
+  {
+   "collection": "tailscale",
+   "object": "lab-node",
+   "fact": "TailscaleSnapshotAgeSeconds",
+   "value": 70
+  },
+  {
+   "collection": "tailscale",
+   "object": "lab-node",
+   "fact": "BackendState",
+   "value": "Running"
+  },
+  {
+   "collection": "tailscale",
+   "object": "lab-node",
+   "fact": "PrimaryRoutes",
+   "value": [
+    "192.0.2.0/24"
+   ]
+  },
+  {
+   "collection": "tailscale",
+   "object": "ferns-macbook-air",
+   "fact": "HostName",
+   "value": "Fern's MacBook Air"
+  },
+  {
+   "collection": "tailscale",
+   "object": "ferns-macbook-air",
+   "absent_fact": "LastSeen"
+  },
+  {
+   "collection": "tailscale",
+   "object": "shed-gateway",
+   "fact": "Online",
+   "value": false
+  },
+  {
+   "collection": "tailscale",
+   "object": "shed-gateway",
+   "fact": "LastSeen",
+   "value": "2026-08-20T07:15:42Z"
+  },
+  {
+   "collection": "tailscale",
+   "object": "shed-gateway",
+   "absent_fact": "CurAddr"
+  },
+  {
+   "collection": "tailscale",
+   "object": "shed-gateway",
+   "absent_fact": "Relay"
+  }
+ ],
+ "anchors_note": "Transcribed from the staged snapshot against the pinned moment. The snapshot's mtime is 2026-08-23T07:08:49.7Z and the pin is 07:10:00Z, so the age is 70 whole seconds — inside the 180s freshness bound, so the staleness rule stays quiet. KeyExpiry 2026-09-01T12:00:00Z minus the pin is nine days and some hours, floored to 9 — at most 30 and not at most 7, so key-expiry warns and its critical sibling does not. commit_objects 3 is the self and two peers: the third peer has no DNS label and is deliberately skipped. The absent Relay and CurAddr on shed-gateway are tailscale's empty strings read as the absences they mean."
+}

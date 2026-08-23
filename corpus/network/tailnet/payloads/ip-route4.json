@@ -1,0 +1,79 @@
+[
+  {
+    "dst": "default",
+    "gateway": "192.168.122.1",
+    "dev": "ens2",
+    "protocol": "dhcp",
+    "prefsrc": "192.168.122.3",
+    "metric": 100,
+    "flags": []
+  },
+  {
+    "dst": "192.168.122.0/24",
+    "dev": "ens2",
+    "protocol": "kernel",
+    "scope": "link",
+    "prefsrc": "192.168.122.3",
+    "metric": 100,
+    "flags": []
+  },
+  {
+    "dst": "192.168.122.1",
+    "dev": "ens2",
+    "protocol": "dhcp",
+    "scope": "link",
+    "prefsrc": "192.168.122.3",
+    "metric": 100,
+    "flags": []
+  },
+  {
+    "type": "local",
+    "dst": "127.0.0.0/8",
+    "dev": "lo",
+    "table": "local",
+    "protocol": "kernel",
+    "scope": "host",
+    "prefsrc": "127.0.0.1",
+    "flags": []
+  },
+  {
+    "type": "local",
+    "dst": "127.0.0.1",
+    "dev": "lo",
+    "table": "local",
+    "protocol": "kernel",
+    "scope": "host",
+    "prefsrc": "127.0.0.1",
+    "flags": []
+  },
+  {
+    "type": "broadcast",
+    "dst": "127.255.255.255",
+    "dev": "lo",
+    "table": "local",
+    "protocol": "kernel",
+    "scope": "link",
+    "prefsrc": "127.0.0.1",
+    "flags": []
+  },
+  {
+    "type": "local",
+    "dst": "192.168.122.3",
+    "dev": "ens2",
+    "table": "local",
+    "protocol": "kernel",
+    "scope": "host",
+    "prefsrc": "192.168.122.3",
+    "flags": []
+  },
+  {
+    "type": "broadcast",
+    "dst": "192.168.122.255",
+    "dev": "ens2",
+    "table": "local",
+    "protocol": "kernel",
+    "scope": "link",
+    "prefsrc": "192.168.122.3",
+    "flags": []
+  }
+]
