@@ -1014,4 +1014,49 @@ REGISTER: tuple[Row, ...] = (
         "a real time namespace reads its own offset correctly — no lab "
         "guest runs in one, so that half is exercised only through the "
         "seam."),
+    Row(33, "two collections declare the prefix `unit`, and it cost the host "
+        "every fact",
+        "built", "R4",
+        lambda: _in_file("go/internal/collate/collate.go",
+                         "prefixIndexTolerant"),
+        "the probe asks whether the tolerant index exists. `units` and "
+        "`workloads` (resources) both declare prefix `unit`, and "
+        "`store.PrefixIndex` refuses a contested prefix — correctly, per "
+        "DESIGN: two collections declaring one prefix is refused rather "
+        "than resolved to whichever was read last. But the batch apply "
+        "RETURNED that error, so on a host running both collectors nothing "
+        "applied at all. Measured on the Debian guest 2026-08-23: 52 "
+        "collections issued, 0 objects stored, every page reading `never "
+        "read`, and every log line naming a relation problem rather than "
+        "the outage it was. Found by standing the R4 surface up and looking "
+        "at it, which is what the gate is for — no suite caught it, because "
+        "the first round of any fresh store applies before the rival "
+        "declaration is in it. The rule is unchanged and the contested kind "
+        "still resolves to nothing; the blast radius is now the one this "
+        "collator applies everywhere else — one bad thing must not cost the "
+        "host its other facts — and the refusal is recorded per batch so it "
+        "stays visible. After the fix: 34 applied, 955 objects, 28 declines "
+        "properly split 18 unavailable / 10 absent. **The underlying clash "
+        "is NOT fixed**: renaming `workloads`'s prefix moves a declaration "
+        "hash and every corpus pinning it, which is a producer change, and "
+        "so long as it stands `unit`-kind relation targets resolve to "
+        "nothing on any host running both. What the probe cannot see: that "
+        "the clash still exists, which is the half a reader most needs."),
+    Row(34, "`units` never marks `MissingRequirements` absent",
+        "owed", "R5",
+        None,
+        "no probe: whether a collector SHOULD have marked a fact absent is "
+        "a judgement about that collector's subject, and a grep for the "
+        "fact name would pass on the declaration that already names it. "
+        "Found 2026-08-23 by the R4 surface rendering it: the fact is in "
+        "`units`' `answer` list, so it is a column on every row, and the "
+        "collector emits it only for units that HAVE missing requirements. "
+        "For the other 305 it is neither sent nor declared absent, so the "
+        "page says `not stated` on every row — which is the renderer being "
+        "honest about a producer that has not said which of the two it "
+        "means. It should be `absent`: the collector looked, and this unit "
+        "has no missing requirements, which is a measured negative and "
+        "exactly what the state is for. Owed to R5 with the producer, not "
+        "fixed here, because emitting it changes what every units corpus "
+        "expects."),
 )

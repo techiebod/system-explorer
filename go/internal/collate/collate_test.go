@@ -359,3 +359,50 @@ func TestTheAdvisoryCostReachesTheReadSurfaceLabelled(t *testing.T) {
 		t.Fatalf("the advisory cost must be served, labelled: %s", body)
 	}
 }
+
+// An ambiguous prefix costs the KIND, never the host.
+//
+// The estate's own declarations contain one: `units` and `workloads`
+// both declare `unit`. Until 2026-08-23 a contested prefix returned an
+// error from applyBatch, so a guest running both collectors applied
+// NOTHING — 52 collections issued, 0 objects stored, every page reading
+// "never read". DESIGN's rule is unchanged (the kind resolves to
+// nothing, never to whichever was read last); what changed is the blast
+// radius, to the one this collator applies everywhere else.
+func TestAnAmbiguousPrefixCostsTheKindNotTheHost(t *testing.T) {
+	owner, contested := prefixIndexTolerant(map[string]string{
+		"units":         "unit",
+		"workloads":     "unit",
+		"block-devices": "block-device",
+	})
+	if len(contested) != 1 || contested[0] != "unit" {
+		t.Fatalf("the contested prefix is named: %v", contested)
+	}
+	if _, resolves := owner["unit"]; resolves {
+		t.Fatal("a contested prefix must resolve to NEITHER collection — " +
+			"picking one is resolving against whichever was read last, " +
+			"which is the thing DESIGN refuses")
+	}
+	if owner["block-device"] != "block-devices" {
+		t.Fatalf("every uncontested prefix still resolves: %v", owner)
+	}
+}
+
+func TestTheStrictIndexStaysStrict(t *testing.T) {
+	// Two questions, two answers. store.PrefixIndex asks "is this index
+	// sound"; the tolerant one asks "what can I resolve today". Folding
+	// them would make the strict caller tolerant by accident.
+	_, err := store.PrefixIndex(map[string]string{
+		"units": "unit", "workloads": "unit"})
+	if err == nil {
+		t.Fatal("the strict index must still refuse a contested prefix")
+	}
+}
+
+// The end-to-end half lives in conformance/test_contested_prefix.py,
+// not here: the prefix index is built in AcquireOnce, which needs a real
+// wire.Client, and a test calling applyCollection directly never touches
+// it. The first version of this test did exactly that and passed with
+// the whole-batch refusal restored — a guard asserting a property it had
+// never exercised, which is this estate's most repeated defect and was
+// caught here only because the plant refused to go red.

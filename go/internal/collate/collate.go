@@ -144,10 +144,33 @@ func AcquireOnce(ctx context.Context, st *store.Store, client *wire.Client) erro
 		recordFailure(st, "", "unreadable-declaration", err)
 		return err
 	}
-	byKind, err := store.PrefixIndex(prefixes)
-	if err != nil {
-		recordFailure(st, "", "ambiguous-prefix", err)
-		return err
+	// An ambiguous prefix costs the KIND, never the host.
+	//
+	// Until 2026-08-23 this returned the error, so a single contested
+	// prefix failed the whole batch — and the estate's own declarations
+	// contain one: `units` and `workloads` both declare `unit`. A guest
+	// running both collectors therefore applied NOTHING, 52 collections
+	// issued and 0 objects stored, while every page rendered "never
+	// read" and every log line named a relation problem. Found by
+	// standing the surface up on the lab guest and looking at it, which
+	// is what R4's gate is for.
+	//
+	// DESIGN's rule is kept exactly — "two collections declaring one
+	// prefix is refused rather than resolved to whichever was read last"
+	// — and the contested prefix still resolves to nothing. What changes
+	// is the blast radius, to the one this collator already applies
+	// everywhere else: one bad thing must not cost the host its other
+	// facts. The refusal is recorded so it is visible rather than
+	// silently tolerated.
+	byKind, contested := prefixIndexTolerant(prefixes)
+	for _, prefix := range contested {
+		// Recorded per batch so the condition is VISIBLE. A tolerated
+		// ambiguity nobody can see is the same defect as a refused one
+		// nobody can see, one direction over.
+		recordFailure(st, "", "ambiguous-prefix", fmt.Errorf(
+			"prefix %q is declared by more than one collection, so a "+
+				"relation target of that kind resolves against nothing; "+
+				"every other collection in this batch still applies", prefix))
 	}
 
 	// Acceptance item 7's second half, checked here because this is the tier
@@ -505,4 +528,34 @@ func hostPrefixes(st *store.Store, prefixes map[string]string) error {
 		}
 	}
 	return nil
+}
+
+// prefixIndexTolerant is store.PrefixIndex's rule with this tier's blast
+// radius: a prefix two collections declare resolves to NEITHER, and the
+// rest of the index stands.
+//
+// store.PrefixIndex keeps erroring, and deliberately: its callers are
+// asking "is this index sound", where this one is asking "what can I
+// resolve today". Two questions, two answers, and folding them would
+// make the strict caller tolerant by accident.
+func prefixIndexTolerant(prefixes map[string]string) (map[string]string, []string) {
+	owner := map[string]string{}
+	clash := map[string]bool{}
+	for collection, prefix := range prefixes {
+		if prefix == "" {
+			continue
+		}
+		if held, seen := owner[prefix]; seen && held != collection {
+			clash[prefix] = true
+			continue
+		}
+		owner[prefix] = collection
+	}
+	var contested []string
+	for prefix := range clash {
+		delete(owner, prefix)
+		contested = append(contested, prefix)
+	}
+	sort.Strings(contested)
+	return owner, contested
 }
