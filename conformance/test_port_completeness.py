@@ -346,13 +346,17 @@ def test_the_registers_known_rows_read_as_expected() -> None:
     assert by_number[5].state == "built" and "R1" in by_number[5].owner
     assert by_number[24].state == "owed" and "gate" in by_number[24].owner
     assert by_number[26].state == "built" and "R2" in by_number[26].owner
-    # Row 27 was pinned built-and-R2 until 2026-08-23, when the live
-    # comparison it names ran for the first time and failed:
-    # system/identity and the reference's identity share no fact names.
-    # It is now the owner's adjudication, and this pin says so rather
-    # than being deleted — a spot pin that follows whatever the register
-    # says would pin nothing.
-    assert by_number[27].state == "owed" and "adjudication" in by_number[27].owner
+    # Row 27 has been pinned three ways in one day, which is the point of
+    # pinning it: built-and-R2 while the comparison it names had never run;
+    # owed-and-an-adjudication when the first live run failed, because
+    # system/identity and the reference's identity share no fact names;
+    # and built again once the owner ruled the port wins. Each pin says
+    # what was true, rather than following whatever the register says —
+    # a spot pin that tracks its subject pins nothing.
+    assert by_number[27].state == "built" and "adjudication" in by_number[27].owner
+    assert "2026-08-23" in by_number[27].owner, (
+        "the adjudication carries the date it was taken: an owner-ruled row "
+        "that does not say WHEN cannot be checked against the record in PLAN")
 
 
 # ── the answer rulings (register row 26) ──────────────────────────────────

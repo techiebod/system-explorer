@@ -202,13 +202,28 @@ class CouldNotRun(Exception):
 # itself reported, under reference_emitted_accepted. A divergence on any
 # fact not listed here still fails.
 #
-# Empty, deliberately. The first case is system/identity — the port emits
-# Hostname, OsId, OsPrettyName and OsVersionId, which the reference does
-# not — and whether a port's scope MAY exceed the reference's is what §20
-# reserves for the owner. The mechanism exists so that ruling is one
-# entry rather than a change to this file; it is not a licence to widen
-# scope by editing a table.
-PORT_ONLY_DIVERGENCES: dict[str, dict] = {}
+# One entry, and it is a RULING rather than a convenience: whether a
+# port's scope may exceed the reference's is what §20 reserves for the
+# owner, and this is not a licence to widen scope by editing a table.
+PORT_ONLY_DIVERGENCES: dict[str, dict] = {
+    "system": {
+        "facts": frozenset({
+            "Hostname", "OsId", "OsPrettyName", "OsVersionId",
+        }),
+        "ruling": (
+            "Ruled 2026-08-23: the port wins. The reference had os-release "
+            "open and published none of it, so an identity object carried "
+            "neither the host's name nor which OS it is — thin enough that a "
+            "renderer has to go elsewhere for both. The facts are already "
+            "read correctly and dropping them would be deleting working data "
+            "to make a parity count come out even, which this estate has a "
+            "standing rule against. Stripped from the PORT before the diff, "
+            "never from the reference: a reference that starts emitting any "
+            "of the four is reported under reference_emitted_accepted, and a "
+            "divergence on any fact not in this set still fails."
+        ),
+    },
+}
 
 ACCEPTED_DIVERGENCES = {
     "nix": {

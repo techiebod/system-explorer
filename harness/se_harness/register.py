@@ -776,8 +776,12 @@ REGISTER: tuple[Row, ...] = (
         "declarations and requires every entry ruled; the staleness "
         "direction is the conformance test's."),
     Row(27, "`system/identity` compared (gate 3's claim was false)",
-        "owed", "the owner — an adjudication, §20",
-        # NO PROBE, and its absence is the finding.
+        "built", "the owner — an adjudication, §20, taken 2026-08-23",
+        # A probe at last, and NOT over the work list. What it asks is
+        # that the adjudication was RECORDED — the ruling's own words in
+        # the divergence table — because that is a fact this tree holds.
+        # Whether the live run is clean is still not, and never will be;
+        # the run is the evidence and PLAN carries its result with a date.
         #
         # This probed `"identity" in comparator_work()["system"]["compare"]`
         # — the WORK LIST — and read "built" through two waves while the
@@ -786,7 +790,7 @@ REGISTER: tuple[Row, ...] = (
         # is CLEAN is not a fact any file in this tree holds, and a probe
         # over the list of things to compare is exactly the shape that
         # made "compared" mean "listed for comparison".
-        None,
+        lambda: _in_file("harness/bin/se-compare", '"OsPrettyName"'),
         "the probe sees the work list drive it. **The first live run "
         "happened on 2026-08-23 and it was NOT clean**, which is what this "
         "row had never established: `system/identity` and the reference's "
@@ -813,10 +817,23 @@ REGISTER: tuple[Row, ...] = (
         "OsId, OsPrettyName and OsVersionId, which the reference does not "
         "— the port emitting MORE, which §20 reserves for the owner and "
         "which the comparator can only express in the other direction. "
-        "The whole-surface run now reads 19 of 20 at parity with nothing "
-        "unreachable, against six unreachable and three differing on the "
-        "first run. The replay-seam half stays named in NO_REPLAY_SEAM and "
-        "is row 28's."),
+        "**RULED 2026-08-23: the port wins**, recorded as the first and "
+        "only entry in PORT_ONLY_DIVERGENCES. The reference had os-release "
+        "open and published none of it, so its identity object carried "
+        "neither the host's name nor which OS it is; the facts are already "
+        "read correctly, and dropping them to make a parity count come out "
+        "even is the deletion-to-hit-a-number this estate has a standing "
+        "rule against. Stripped from the PORT before the diff and never "
+        "from the reference, so a reference that starts emitting any of "
+        "the four is itself reported. **The whole-surface run under the "
+        "ruling reads 20 of 20 clean, nothing unreachable, 957 objects on "
+        "each side** — against 19 of 20 before it, and six unreachable "
+        "with three differing on the first run ever executed. What the "
+        "probe cannot see: whether the run is still clean today. It reads "
+        "a table, not a machine, and no file in this tree can hold that "
+        "answer — which is the whole reason this row had no probe for two "
+        "waves. The replay-seam half stays named in NO_REPLAY_SEAM and is "
+        "row 28's."),
     Row(28, "the system adapter's replay seam — four collections with no "
         "reference-vs-port venue in CI",
         "owed", "R5",
