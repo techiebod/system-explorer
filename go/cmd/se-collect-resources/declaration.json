@@ -77,7 +77,8 @@
             "service",
             "scope",
             "mount",
-            "socket"
+            "socket",
+            "swap"
           ],
           "level": "warn",
           "grounds": "threshold",
@@ -96,7 +97,8 @@
             "service",
             "scope",
             "mount",
-            "socket"
+            "socket",
+            "swap"
           ],
           "level": "warn",
           "grounds": "threshold",

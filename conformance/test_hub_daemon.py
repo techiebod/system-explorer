@@ -190,3 +190,133 @@ def test_the_hubs_metadata_survives_a_restart(running, tmp_path) -> None:
         "a hub that restarts holds findings and no facts; the next fold must "
         "see an unswept estate and FREEZE rather than resolve everything")
     assert reopened.transitions.fold([KEY.rendered()])[KEY.rendered()].by == "henry"
+
+
+# --- the estate a collator actually populates ------------------------
+
+DECLARATION = json.dumps({
+    "schema": "se.declaration/1", "collector": "widgets", "version": "1",
+    "interface": {"name": "bearing", "version": "1"},
+    "collections": [{
+        "name": "widgets", "question": "are the bearings healthy?",
+        "prefix": "widget", "answer": ["Spin"],
+        "freshness": "60s", "ceiling": {"records": 10},
+        "verbs": {"object": {"bytes": 262144, "ms": 5000},
+                  "evidence": {"bytes": 1048576, "ms": 10000}},
+        "facts": {"Spin": {"type": "integer", "unit": "rpm",
+                           "temperament": "gauge", "kind": "observed",
+                           "discloses": "nothing",
+                           "sentence": "how fast the bearing turns."}},
+        "rules": [{"key": "widget-slow", "level": "warn",
+                   "grounds": "threshold",
+                   "when": {"fact": "Spin", "at_most": 100},
+                   "sentence": "Spinning below 100 rpm.", "cites": ["Spin"]}],
+    }],
+}, separators=(",", ":")).encode()
+
+
+def test_a_collator_session_populates_the_estate_and_folds_the_registry(
+        tmp_path, monkeypatch) -> None:
+    """The daemon must ACCEPT a session and fold what it learns.
+
+    It did neither. It bound two listeners over an Estate nothing could
+    populate — no session listener, and nothing in `src/` called
+    Registry.fold — so /v1/hosts answered {}, /v1/acknowledgements
+    answered {}, and a well-formed acknowledgement with a valid
+    credential was refused `no-such-finding`, because the derived set is
+    the registry's open set and the registry was never written.
+
+    Every daemon test that got past it called `hub.registry.fold(...)`
+    from OUTSIDE the process — testing a copy of what the daemon should
+    do rather than the daemon. This one drives a real collator over a
+    real socket into the daemon's own listener.
+    """
+    import hashlib
+    import os
+    import shutil
+    import socket
+    import subprocess
+
+    go = shutil.which("go")
+    if go is None:
+        pytest.skip("go toolchain not present")
+    repo = pathlib.Path(__file__).resolve().parent.parent
+    binary = tmp_path / "se-collate"
+    build = subprocess.run([go, "build", "-o", str(binary), "./cmd/se-collate"],
+                           cwd=repo / "go", capture_output=True, text=True)
+    assert build.returncode == 0, build.stderr
+
+    from collator import driver
+    fake = driver.FakeCollector(DECLARATION)
+    fake.queue(driver.render([
+        {"record": "begin", "request": "r1", "batch": "b1",
+         "declaration": "sha256:" + hashlib.sha256(DECLARATION).hexdigest(),
+         "boot_id": BOOT, "timens": 0, "instance": None,
+         "generations": {"widgets": 1}},
+        {"record": "object", "collection": "widgets", "name": "left",
+         "facts": {"Spin": 40}, "at": 10.0},
+        {"record": "commit", "collection": "widgets", "generation": 1,
+         "objects": 1, "assertions": 0, "unobservable": 0, "cpu_ms": 0.5},
+        {"record": "end", "request": "r1", "batch": "b1", "cpu_ms": 0.5,
+         "wall_ms": 1.0},
+    ]))
+
+    credential = tmp_path / "actors"
+    credential.write_text("tok-henry henry\n")
+    monkeypatch.setenv("SE_TRANSITION_ACTORS_FILE", str(credential))
+    hub = daemon.Hub(site="lab", state_dir=tmp_path / "state")
+    hub.estate = Estate(declared=("storage-1",))
+    read, write, _ = daemon.serve(("127.0.0.1", 0), ("127.0.0.1", 0), hub=hub,
+                                  session_bind=("127.0.0.1", 0))
+    threading.Thread(target=read.serve_forever, daemon=True).start()
+    threading.Thread(target=write.serve_forever, daemon=True).start()
+    time.sleep(0.15)
+    assert hub.sessions is not None, "the daemon must accept collator sessions"
+    session_port = hub.sessions.getsockname()[1]
+    base = f"http://127.0.0.1:{read.server_address[1]}"
+    wbase = f"http://127.0.0.1:{write.server_address[1]}"
+
+    try:
+        run = subprocess.run(
+            [str(binary)],
+            env={"PATH": os.environ["PATH"],
+                 "SE_STATE_DIR": str(tmp_path / "collator"),
+                 "SE_COLLECTORS": f"widgets={fake.socket_path}",
+                 "SE_ONESHOT": "1",
+                 "SE_HUB_ADDR": f"127.0.0.1:{session_port}",
+                 "SE_HOST": "storage-1", "SE_HUB_INSECURE": "1"},
+            capture_output=True, text=True, timeout=120)
+        assert run.returncode == 0, run.stderr
+        time.sleep(0.3)
+
+        # The estate the session populated, over the READ surface.
+        with urllib.request.urlopen(base + "/v1/hosts") as answer:
+            hosts = json.loads(answer.read())["hosts"]
+        # `dark` rather than `connected`, and that is the right answer:
+        # a one-shot collator promotes its checkpoint and disconnects, so
+        # "was connected, is not" is what happened. What must NOT appear
+        # is `unswept` — nobody has told us is a different claim from
+        # told us and stopped, and `unswept` is what a hub with no
+        # session listener said about every host in the estate.
+        assert hosts.get("storage-1") == "dark", hosts
+
+        # The registry was folded by the promote, not by a test.
+        assert hub.derived(), (
+            "a warn opinion the collator sent must become a finding with a "
+            "lifecycle; the derived set is what an acknowledgement attaches to")
+        finding = hub.derived()[0]
+        assert "widget-slow" in finding, finding
+
+        # And it is acknowledgeable end to end, which was refused
+        # `no-such-finding` for as long as nothing folded.
+        code, body = post(wbase, {"finding": finding, "action": "acknowledge"},
+                          "tok-henry")
+        assert code == 201, body
+        with urllib.request.urlopen(base + "/v1/acknowledgements") as answer:
+            held = json.loads(answer.read())["acknowledgements"]
+        assert held[finding]["acknowledged"] is True, held
+    finally:
+        fake.close()
+        read.shutdown()
+        write.shutdown()
+        hub.sessions.close()

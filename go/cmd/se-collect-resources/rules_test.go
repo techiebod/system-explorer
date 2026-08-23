@@ -197,3 +197,66 @@ func TestASliceIsNeverJudgedByTheWorkloadRulesOrTheReverse(t *testing.T) {
 		}
 	}
 }
+
+// Every shape this collector emits is addressed by some rule, and the
+// work list comes from the COLLECTOR rather than from the corpus.
+//
+// applies_to was first written from the types the committed corpus
+// happened to contain — service, scope, mount, socket — and the
+// collector's own vocabulary is six wide: cgroupUnitSuffixes adds
+// `.slice` and `.swap`. A `.swap` unit sits directly under `-.slice`,
+// so it is emitted with type "swap", and it silently lost BOTH workload
+// rules: the reference dispatches on one shape only (is_slice, else
+// workload) and judges a swap unit with the workload rules. A corpus
+// that happens not to contain a shape is not evidence that the shape
+// does not exist, which is the subset-guard defect sourcing a list.
+func TestEveryShapeThisCollectorEmitsIsJudgedBySomething(t *testing.T) {
+	rules, err := collate.RulesFor(string(declarationBytes), "workloads")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rules) == 0 {
+		t.Fatal("workloads declares no rules")
+	}
+	for _, suffix := range cgroupUnitSuffixes {
+		shape := strings.TrimPrefix(suffix, ".")
+		addressed := false
+		for _, rule := range rules {
+			if len(rule.AppliesTo) == 0 {
+				addressed = true // an unscoped rule judges every shape
+				break
+			}
+			for _, want := range rule.AppliesTo {
+				if want == shape {
+					addressed = true
+				}
+			}
+		}
+		if !addressed {
+			t.Errorf("this collector emits type %q and no rule addresses it; "+
+				"a shape nothing judges is a row that cannot be wrong", shape)
+		}
+	}
+}
+
+func TestASwapUnitIsJudgedAsAWorkloadNotAsASlice(t *testing.T) {
+	// The reference judges it with the workload rules — it dispatches on
+	// `is_slice` and nothing else — and this port judged it with neither.
+	rules, err := collate.RulesFor(string(declarationBytes), "workloads")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fired := collate.JudgeShaped(rules, "o", nil, "swap",
+		map[string]any{"PsiIoFullAvg60": 56.35})
+	if len(fired) != 1 || fired[0].Key != "workload-io-stall" {
+		t.Fatalf("a swap unit stalling states it: %+v", fired)
+	}
+	// And not the slice wording, which is about a container of rows.
+	for _, opinion := range collate.JudgeShaped(rules, "o", nil, "swap",
+		map[string]any{"PsiIoFullAvg60": 54.55,
+			"StallUnexplained": map[string]any{"PsiIoFullAvg60": true}}) {
+		if strings.HasPrefix(opinion.Key, "slice-") {
+			t.Fatalf("a slice rule fired on a swap unit: %+v", opinion)
+		}
+	}
+}
