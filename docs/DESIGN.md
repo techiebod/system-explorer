@@ -1800,6 +1800,41 @@ A relation is drawn as a link, and **the three states of §13 are visually disti
 
 An asserted relation styled like a confirmed one is not a cosmetic bug. It is the founding failure re-entering through layer 6 after five other layers went to considerable trouble to prevent it.
 
+### What carries an interaction, and where JavaScript's line is `[decision]`
+
+Proposed 2026-08-23, at the owner's direction that the HTML-first preference in §06 is about **using modern HTML and CSS**, not about rationing JavaScript by feel. "Prefer native" is not a pattern anybody can abide by; a table of which element carries which interaction is.
+
+**The rule that decides every row below is §27's, not a budget.** The three copies that rotted were a routing table, three severity tables and a unit guesser — every one of them the renderer *deciding what something means*. None of them was the renderer narrowing what is displayed. So the line is not how much script runs; it is what the script is allowed to know:
+
+> **Script may change what is shown. It may never decide what a thing means.**
+>
+> A filter that hides rows holds no knowledge — the same rows, the same values, the same verdicts, fewer of them. A renderer that maps a prefix to a route, a level to a colour, or a suffix to a unit holds a second copy of the producer's knowledge, and that is forbidden whether it is written in JavaScript, in CSS, or in a template.
+
+| Interaction | Carried by | Script |
+|---|---|---|
+| drill row → object → evidence | `<a href>` | none |
+| expand a tree, open an object's sections | `<details>`/`<summary>`, `name=` where the group is exclusive | none |
+| reveal a hide group | a checkbox and a `:checked ~` sibling selector; the chip is its `<label>` | none |
+| choose a facet | a radio group, the same way; or links carrying the facet in the query | none |
+| absolute timestamp beside a relative age | `popover` with `popovertarget`, placed with CSS anchor positioning | none |
+| the five render states | classes from the declared state — the em dash is generated content, never an empty cell | none |
+| a value that must never be clipped | `overflow-wrap`, and no ellipsis on load-bearing text | none |
+| keyboard: move through rows, open one | native focus order, rows that are links, `:focus-visible` | none |
+| sort a column | a link that re-asks with the sort named | none |
+| **narrow by typed text** | **nothing native exists** | **yes, and only this** |
+| freshness | a server-rendered age and a re-ask link | none by default |
+
+Four patterns follow, and they are the ones to abide by:
+
+1. **If the answer is already on the page, revealing it is a selector.** Every show/hide on this surface — hide groups, facets, trees, object sections — is state the browser already models. Reaching for script there replaces a mechanism the platform maintains with one this repository maintains.
+2. **If the control needs something the page does not hold, it re-asks.** Sorting and paging are the server's answers, not the browser's reconstruction of them.
+3. **Typed narrowing is the single exception, and it is bounded**: it may read the rendered text of rows and set their visibility. It may not read a fact's declaration, compute a severity, mint a link, or format a value.
+4. **Every page is a complete answer with script disabled.** Which is what makes the exception safe to grant: the unfiltered page is not a degraded page, it is the whole answer, and `curl` and §29's consumer without eyes get exactly what a browser gets.
+
+**One invariant stops being a matter of care.** `app.js` requires that the number beside a hide-group chip must not change when the chip is pressed — the count answers *what this group holds*, not *what is currently hidden* — and it holds that by computing counts from what the hide rules assign rather than from what is displayed. Server-rendered counts toggled by CSS cannot violate it: nothing recomputes, so there is nothing to get wrong.
+
+**And one difference to settle at the gate rather than assert away.** Facet counts in `app.js` describe what is on screen, so they answer against the revealed set. Under a CSS-only reveal they are fixed at render. Whether that is a loss or a simplification is a judgement about the screen, and it belongs in the side-by-side comparison gate R4 already requires, not in this table.
+
 ### Navigating between the two axes
 
 - **A problem domain always drills into the collector domains it was assembled from**, and names them even when it has nothing to say about one. That is the reach caveat made navigable.
