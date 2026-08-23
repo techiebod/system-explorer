@@ -117,6 +117,7 @@ func NewHandlerWithReverse(st *store.Store, now func() float64, bootID string,
 	})
 
 	registerStatus(mux, st)
+	registerViews(mux)
 	registerDictionary(mux, st)
 
 	mux.HandleFunc("GET /v1/collections", func(w http.ResponseWriter, r *http.Request) {
@@ -575,6 +576,15 @@ var publishedRoutes = []map[string]any{
 			"collection served only under a named instance is reached by " +
 			"naming it.",
 		"params": []string{"name", "since", "instance"}},
+	{"path": "/v1/views", "tool": "get_views",
+		"summary": "This deployment's operator-authored view documents " +
+			"(se.views/1), read fresh from the deployed directory — the " +
+			"operator edits a file and refreshes. Served by this tier as well " +
+			"as by the hub, because a host with no hub keeps its own surface " +
+			"in full. No directory means a deployment that made no views: an " +
+			"empty list, not an error. A CONFIGURED directory that does not " +
+			"exist is a deployment fault and is named in the envelope.",
+		"params": []string{}},
 	{"path": "/v1/collections/{name}/objects/{object}", "tool": "get_object",
 		"summary": "One object in full, asked of the collector that serves it " +
 			"over the reverse channel — every fact, not the row's declared " +

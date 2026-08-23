@@ -677,14 +677,32 @@ REGISTER: tuple[Row, ...] = (
         "state."),
     Row(20, "views route (`se.views/1` was ruled 'survives unchanged')",
         "built", "R3e",
-        lambda: _in_file("src/system_explorer/hub/routes.py", "/v1/views"),
+        lambda: (_in_file("src/system_explorer/hub/routes.py", "/v1/views")
+                 and _in_file("go/internal/collate/views.go", "/v1/views")
+                 # WIRED, not merely defined: the first version of this
+                 # probe read views.go alone, so a route defined and never
+                 # registered would have passed it. Found by planting the
+                 # removal of registerViews and watching the probe stay
+                 # green, 2026-08-23.
+                 and _in_file("go/internal/collate/rest.go", "registerViews(mux)")),
         "the probe sees the hub route by name. Flipped 2026-08-23: the "
         "rewrite hub serves /v1/views through the SAME shared loader the "
         "old hub and the MCP surface read (one loader, three servers), "
         "fresh from the deployed directory per request, with the tool "
         "generated from the route table like every other. The probe cannot "
-        "see that the documents validate or that the collator tier serves "
-        "them too — the collator's own views surface is R4's page work."),
+        "see is that the documents validate. **Corrected 2026-08-23:** this row "
+        "read built while the collator served no views at all, because the "
+        "probe read only the hub's routes file — the same one-tier probe "
+        "defect as rows 1, 2, 3 and 17, and DESIGN's §1892 ruling says "
+        "se.views/1 is \'served by both tiers like every other "
+        "projection\'. A view surface only the hub serves is one that "
+        "disappears exactly when the hub does, against the founding "
+        "invariant that a host with no hub keeps its own surface in full. "
+        "The collator now serves it, and because the two toolchains cannot "
+        "read each other\'s tree that is a SECOND implementation of one "
+        "truth — handled as tokens.css is, with a conformance test driving "
+        "both over one corpus and requiring identical verdicts, and "
+        "views.py right where they differ."),
     Row(21, "sibling reads wired to the hub surface (one hop, serving)",
         "built", "R3e",
         lambda: _in_file("src/system_explorer/hub/routes.py", "/v1/sites/"),
