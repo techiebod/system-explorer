@@ -87,6 +87,12 @@ LIVE = {
                 # must commit zero — or a host that loses nftables serves its
                 # old chains for ever.
                 "not_applicable": lambda a: shutil.which("nft") is None,
+                # The three collections that READ the ruleset. routes,
+                # listening, resolver, links, port-exposure and tailscale
+                # read iproute2, /proc/net, resolv.conf or a snapshot, and
+                # answering them "no nft on this host" is a statement
+                # about an interface they never touch.
+                "governs": ("nft-tables", "nft-chains", "nft-rules"),
                 "interface": "nft"},
     "vms": {"module": vms, "adapter": vms.Adapter,
             # The read-only socket, which is what the PORT tests and the only
@@ -153,6 +159,11 @@ LIVE = {
     # rather than living silently in a table.
     "plex": {"module": plex, "adapter": plex.Adapter,
              "receipts": lambda a: a.plex_url is None and a.seerr_url is None,
+             # `requests` is SEERR's, with its own URL. Answering it "no
+             # plex api configured" describes a service it does not use,
+             # which the first whole-surface comparator run surfaced as a
+             # difference against the port's own SE_SEERR_URL wording.
+             "receipts_govern": ("server", "libraries", "sessions"),
              # The one adjudicated per-collection receipt gap: a Plex that IS
              # addressed but holds no usable token cannot be asked for
              # libraries or sessions — guessing would only manufacture 401s —
@@ -411,13 +422,50 @@ def run(collector: str, generations: dict[str, int]) -> None:
         # Separate from the receipts bridge below and not folded into it: that
         # one is for a configuration gap, which must NOT retire anything, and
         # the two answers differ in exactly the direction that matters.
+        # The collections still to acquire. Narrowed by each applicability
+        # probe below rather than rebinding `generations`, which is read
+        # by the closure above.
+        wanted = dict(generations)
+
         not_applicable = spec.get("not_applicable")
         if not_applicable and not_applicable(adapter):
+            # **Only the collections that share the interface**, which is
+            # `governs` where a collector declares one and every
+            # collection otherwise.
+            #
+            # This declined EVERY collection on one collector-level probe
+            # until 2026-08-23, and the first comparator run over the
+            # whole surface is what found it: in a venue without `nft`,
+            # all NINE of network's collections were answered `absent` /
+            # "no nft on this host" — including links and routes, which
+            # read iproute2, and tailscale, which reads a snapshot. The
+            # port declined each with its own reason, so the comparator
+            # reported five differences that were the harness's and not
+            # the port's. A probe applied to collections that do not
+            # share its interface is this estate's own subset defect,
+            # inside the tool that exists to catch it.
+            governed = spec.get("governs")
             for collection in generations:
+                if governed is not None and collection not in governed:
+                    continue
                 out.decline(collection, "absent",
                             f"no {spec['interface']} on this host")
                 out.commit(collection, 0, 0, 0)
-            return
+            if governed is None:
+                return
+            # The rest are acquired normally: a collector whose probe
+            # governs some collections still has to answer for the others.
+            #
+            # A NEW NAME rather than rebinding `generations`: assigning to
+            # it here made it a local of this closure, so the read above
+            # raised UnboundLocalError and every collector reported
+            # reference-cannot-run. Caught by re-running the comparator,
+            # which is the only reason it did not read as twenty clean
+            # collectors.
+            wanted = {name: gen for name, gen in wanted.items()
+                      if name not in governed}
+            if not wanted:
+                return
 
         unconfigured = spec.get("receipts")
         if not gate.get("available", True) and unconfigured:
@@ -436,9 +484,20 @@ def run(collector: str, generations: dict[str, int]) -> None:
             else:
                 detail = (f"the {spec['interface']} is configured and could not"
                           " be observed on this host")
-            for collection in generations:
+            governed = spec.get("receipts_govern")
+            remaining = {}
+            for collection in wanted:
+                if governed is not None and collection not in governed:
+                    remaining[collection] = wanted[collection]
+                    continue
                 out.decline(collection, "unavailable", detail)
-            return
+            if governed is None or not remaining:
+                return
+            # A collector whose receipts gate governs only some
+            # collections still has to answer for the others: `requests`
+            # is seerr's and is acquired normally when seerr is
+            # configured, whatever plex's own state is.
+            wanted = remaining
 
         # The adapter's PER-COLLECTION statement, which the shipping agent's
         # HTTP path already honours and this driver did not.
@@ -487,7 +546,7 @@ def run(collector: str, generations: dict[str, int]) -> None:
         dark = gate.get("unavailable_collections") or {}
         skip = {}
         if gated:
-            for name in generations:
+            for name in wanted:
                 if name in dark and (reason := gated(adapter, name)):
                     skip[name] = reason
         for collection, reason in skip.items():
@@ -495,7 +554,7 @@ def run(collector: str, generations: dict[str, int]) -> None:
                         f"{collection} is not observable through the "
                         f"{spec['interface']} on this host")
 
-        for collection in generations:
+        for collection in wanted:
             if collection in skip:
                 continue  # declined above, and never acquired
             at = time.clock_gettime(time.CLOCK_BOOTTIME)
