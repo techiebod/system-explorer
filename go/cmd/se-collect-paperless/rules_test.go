@@ -3,10 +3,9 @@
 // (the champions' pattern, se-collect-hardware/rules_test.go). Cases are
 // written from agent/rules/paperless.py, which is a correspondence no machine
 // here checks.
-// COVERAGE: paperless-storage is NOT declared — its percentage is
-// arithmetic over two facts, which the closed condition vocabulary cannot
-// express, so it stays the reference evaluator's until a StorageUsedPercent
-// fact is minted on both implementations.
+// COVERAGE: the storage pair went the derived-fact route on 2026-08-23 —
+// StorageUsedPercent is minted on both implementations where the app
+// states both halves, so the bands are declared below and fired here.
 package main
 
 import (
@@ -22,6 +21,12 @@ func TestThePaperlessRulesFireOnCharacteristicReadings(t *testing.T) {
 		facts      map[string]any
 		want       map[string]string
 	}{
+		{"a filling media volume", "instance",
+			map[string]any{"DocumentCount": 38.0, "StorageUsedPercent": 92.0},
+			map[string]string{"paperless-storage": "warn"}},
+		{"a nearly full media volume", "instance",
+			map[string]any{"DocumentCount": 38.0, "StorageUsedPercent": 96.0},
+			map[string]string{"paperless-storage-critical": "critical"}},
 		{"a healthy archive is silent", "instance",
 			map[string]any{"DocumentCount": 38.0, "DatabaseStatus": "OK", "RedisStatus": "OK", "CeleryStatus": "OK", "IndexStatus": "OK", "ClassifierStatus": "OK"},
 			map[string]string{}},

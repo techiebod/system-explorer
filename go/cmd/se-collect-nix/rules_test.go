@@ -3,10 +3,9 @@
 // (the champions' pattern, se-collect-hardware/rules_test.go). Cases are
 // written from agent/rules/nix.py, which is a correspondence no machine
 // here checks.
-// COVERAGE: deployment-not-verified is NOT declared — its condition reads
-// Deployment.Outcome, a nested member the flat fact vocabulary cannot
-// reach, so it stays the reference evaluator's until a flat outcome fact is
-// minted on both implementations.
+// COVERAGE: deployment-not-verified went the derived-fact route on
+// 2026-08-23 — DeploymentOutcome is minted flat on both implementations
+// where the receipt states one, so the rule is declared and fired here.
 package main
 
 import (
@@ -31,6 +30,14 @@ func TestTheGenerationRulesFireOnCharacteristicReadings(t *testing.T) {
 		{"an unattested activation", "generations",
 			map[string]any{"Profile": false, "Current": false, "ReceiptsExpected": true},
 			map[string]string{"deployment-unattested": "warn"}},
+		{"a verified deployment is silent", "generations",
+			map[string]any{"ReceiptsExpected": true, "Deployment": []any{"stub"},
+				"DeploymentOutcome": "VERIFIED"},
+			map[string]string{}},
+		{"an unverified deployment", "generations",
+			map[string]any{"ReceiptsExpected": true, "Deployment": []any{"stub"},
+				"DeploymentOutcome": "ROLLED-BACK"},
+			map[string]string{"deployment-not-verified": "warn"}},
 		{"a receipted generation is silent", "generations",
 			map[string]any{"ReceiptsExpected": true, "Deployment": []any{"stub"}},
 			map[string]string{}},

@@ -15,6 +15,46 @@
       "name": "clients",
       "rules": [
         {
+          "key": "downloader-disk-critical",
+          "level": "critical",
+          "grounds": "threshold",
+          "when": {
+            "fact": "DiskUsedPercent",
+            "at_least": 95
+          },
+          "sentence": "The download volume the client sees is nearly full.",
+          "cites": [
+            "DiskUsedPercent",
+            "DiskTotalBytes",
+            "DiskFreeBytes"
+          ]
+        },
+        {
+          "key": "downloader-disk",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "all": [
+              {
+                "fact": "DiskUsedPercent",
+                "at_least": 90
+              },
+              {
+                "not": {
+                  "fact": "DiskUsedPercent",
+                  "at_least": 95
+                }
+              }
+            ]
+          },
+          "sentence": "The download volume the client sees is filling.",
+          "cites": [
+            "DiskUsedPercent",
+            "DiskTotalBytes",
+            "DiskFreeBytes"
+          ]
+        },
+        {
           "key": "downloader-unconfigured",
           "level": "warn",
           "grounds": "interface",
@@ -142,6 +182,18 @@
           "kind": "observed",
           "discloses": "nothing",
           "sentence": "Every torrent the client holds, seeding included."
+        },
+        "DiskUsedPercent": {
+          "type": "integer",
+          "temperament": "gauge",
+          "kind": "derived",
+          "derived_from": [
+            "DiskTotalBytes",
+            "DiskFreeBytes"
+          ],
+          "discloses": "nothing",
+          "from": "/queue/diskspacetotal1",
+          "sentence": "How full the download volume is, from the two figures the client itself states — present only where it states both, because a percentage without a stated denominator would be invented."
         },
         "DiskFreeBytes": {
           "type": "integer",

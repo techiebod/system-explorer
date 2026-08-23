@@ -87,7 +87,8 @@ var emittedFacts = map[string][]string{
 	collectionClients: {
 		"Client", "Version", "Paused", "DownloadRateBytes", "UploadRateBytes",
 		"QueueCount", "ActiveTorrentCount", "PausedTorrentCount", "TorrentCount",
-		"DiskFreeBytes", "DiskTotalBytes", "ConfigMissing", "StatusUnobservable",
+		"DiskFreeBytes", "DiskTotalBytes", "DiskUsedPercent",
+		"ConfigMissing", "StatusUnobservable",
 	},
 	collectionTransfers: {
 		"Client", "Name", "Status", "PercentDone", "RateDownloadBytes",
@@ -126,7 +127,15 @@ func TestTheDeclarationCarriesThePinnedContract(t *testing.T) {
 			if spec.Sentence == "" {
 				t.Errorf("%s/%s has no sentence, and a sentence is what a consumer renders", name, fact)
 			}
-			if spec.Kind != "observed" {
+			// One derived exception since 2026-08-23: DiskUsedPercent is
+			// arithmetic over two stated figures, minted on both
+			// implementations so a declared rule can name it (register
+			// row 8's residue). Everything else stays a stated reading.
+			if fact == "DiskUsedPercent" {
+				if spec.Kind != "derived" {
+					t.Errorf("%s/%s is %q and its figure is arithmetic over two stated ones", name, fact, spec.Kind)
+				}
+			} else if spec.Kind != "observed" {
 				t.Errorf("%s/%s is %q: every figure here is a reading the client stated, including the ones re-expressed in another unit", name, fact, spec.Kind)
 			}
 		}

@@ -205,6 +205,13 @@ func attachDeployment(src source, gen generation, facts *value) error {
 	deployment.set("Risks", anyValue(risks))
 	deployment.set("SourceRevision", anyValue(source["git_revision"]))
 	facts.set("Deployment", deployment)
+	// Minted flat on both implementations because the not-verified rule
+	// names one fact, and the closed condition vocabulary cannot reach a
+	// nested member (register row 8's residue). Only where the receipt
+	// states one.
+	if outcome, ok := activation["outcome"].(string); ok && outcome != "" {
+		facts.set("DeploymentOutcome", anyValue(outcome))
+	}
 	return nil
 }
 

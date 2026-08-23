@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
+	"strconv"
 )
 
 // row is one committed object: the native name the collator keys on, and the
@@ -165,6 +167,7 @@ func queueClientFacts(queue *value, facts *value) {
 			facts.set("QueueCount", &value{kind: jsonNumber, text: token})
 		}
 	}
+	bytesOf := map[string]int64{}
 	for _, pair := range [...]struct{ fact, member string }{
 		{"DiskFreeBytes", "diskspace1"},
 		{"DiskTotalBytes", "diskspacetotal1"},
@@ -172,7 +175,22 @@ func queueClientFacts(queue *value, facts *value) {
 		if gigabytes, ok := pythonFloat(queue.get(pair.member).stringOr("")); ok {
 			if token, ok := truncatedProduct(gigabytes, 1<<30); ok {
 				facts.set(pair.fact, &value{kind: jsonNumber, text: token})
+				if n, err := strconv.ParseInt(token, 10, 64); err == nil {
+					bytesOf[pair.fact] = n
+				}
 			}
+		}
+	}
+	// Minted on both implementations because the disk rule names one fact
+	// and a threshold, and the closed condition vocabulary cannot do the
+	// arithmetic (register row 8's residue). Only where the client states
+	// BOTH halves — rule 7 invents no percentage without a denominator the
+	// source stated. Python's round is half-even; math.RoundToEven here.
+	if total, free := bytesOf["DiskTotalBytes"], bytesOf["DiskFreeBytes"]; total > 0 {
+		if _, held := bytesOf["DiskFreeBytes"]; held {
+			percent := math.RoundToEven(float64(total-free) * 100 / float64(total))
+			facts.set("DiskUsedPercent", &value{kind: jsonNumber,
+				text: strconv.FormatInt(int64(percent), 10)})
 		}
 	}
 }

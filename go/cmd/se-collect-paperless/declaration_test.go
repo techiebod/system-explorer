@@ -114,6 +114,7 @@ func TestTheDeclarationCarriesThePinnedContract(t *testing.T) {
 		factClassifierStatus:      "state",
 		factClassifierError:       "state",
 		factStatusUnobservable:    "state",
+		"StorageUsedPercent":      "gauge",
 	}
 	if len(collection.Facts) != len(temperament) {
 		t.Fatalf("declared facts %v", collection.Facts)
@@ -137,7 +138,15 @@ func TestTheDeclarationCarriesThePinnedContract(t *testing.T) {
 		if declared.Temperament != want {
 			t.Errorf("%s is declared %q, pinned %q", fact, declared.Temperament, want)
 		}
-		if declared.Kind != "observed" {
+		// One derived exception since 2026-08-23: StorageUsedPercent is
+		// arithmetic over two stated figures, minted on both
+		// implementations so a declared rule can name it (register row
+		// 8's residue). Everything else stays a stated reading.
+		if fact == "StorageUsedPercent" {
+			if declared.Kind != "derived" {
+				t.Errorf("%s is %q and its figure is arithmetic over two stated ones", fact, declared.Kind)
+			}
+		} else if declared.Kind != "observed" {
 			t.Errorf("%s is %q: every value here is read off the archive's own API", fact, declared.Kind)
 		}
 		if declared.Sentence == "" {
@@ -187,7 +196,8 @@ func TestTheDeclarationCarriesThePinnedContract(t *testing.T) {
 	// equality treats 3 and 3.0 as two different readings.
 	for fact, declared := range collection.Facts {
 		want := "string"
-		if strings.HasSuffix(fact, "Count") || strings.HasSuffix(fact, "Bytes") {
+		if strings.HasSuffix(fact, "Count") || strings.HasSuffix(fact, "Bytes") ||
+			strings.HasSuffix(fact, "Percent") {
 			want = "integer"
 		}
 		if declared.Type != want {

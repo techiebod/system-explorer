@@ -143,6 +143,14 @@ def sab_queue_client_facts(queue: dict) -> dict:
             facts[fact] = int(float(queue[member]) * 1024 ** 3)
         except (TypeError, ValueError, KeyError):
             pass
+    # Minted on both implementations because the disk rule names one fact
+    # and a threshold, and the closed condition vocabulary cannot do the
+    # arithmetic (register row 8's residue). Only where the client states
+    # BOTH halves: transmission states free alone, and rule 7 invents no
+    # percentage without a denominator the source stated.
+    total, free = facts.get("DiskTotalBytes"), facts.get("DiskFreeBytes")
+    if isinstance(total, int) and isinstance(free, int) and total > 0:
+        facts["DiskUsedPercent"] = round((total - free) * 100 / total)
     return facts
 
 
@@ -158,6 +166,7 @@ _CLIENT_GLOSSARY = {
     "TorrentCount": "Every torrent the client holds, seeding included.",
     "DiskFreeBytes": "Free space on the download volume AS THE CLIENT SEES IT from inside its own mount — which can differ from any host row when a bind has diverged (the incident class this subsystem watches).",
     "DiskTotalBytes": "Size of that same volume from the same vantage; present only where the client states it (sabnzbd does, transmission states free alone).",
+    "DiskUsedPercent": "How full the download volume is, from the two figures the client itself states — present only where it states both, because a percentage without a stated denominator would be invented.",
     "ConfigMissing": "The receipts this client still needs before it can be observed.",
     "StatusUnobservable": "Why the client's API could not be asked, when it could not — the row stays, because a configured client that does not answer blocks every manager dispatching to it.",
 }

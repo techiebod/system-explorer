@@ -15,6 +15,46 @@
       "name": "instance",
       "rules": [
         {
+          "key": "paperless-storage-critical",
+          "level": "critical",
+          "grounds": "threshold",
+          "when": {
+            "fact": "StorageUsedPercent",
+            "at_least": 95
+          },
+          "sentence": "The media storage the app sees is nearly full.",
+          "cites": [
+            "StorageUsedPercent",
+            "StorageTotalBytes",
+            "StorageAvailableBytes"
+          ]
+        },
+        {
+          "key": "paperless-storage",
+          "level": "warn",
+          "grounds": "threshold",
+          "when": {
+            "all": [
+              {
+                "fact": "StorageUsedPercent",
+                "at_least": 90
+              },
+              {
+                "not": {
+                  "fact": "StorageUsedPercent",
+                  "at_least": 95
+                }
+              }
+            ]
+          },
+          "sentence": "The media storage the app sees is filling.",
+          "cites": [
+            "StorageUsedPercent",
+            "StorageTotalBytes",
+            "StorageAvailableBytes"
+          ]
+        },
+        {
           "key": "paperless-empty",
           "level": "critical",
           "grounds": "threshold",
@@ -180,6 +220,18 @@
           "discloses": "nothing",
           "from": "/status/pngx_version",
           "sentence": "The paperless-ngx release answering the API. It is the build that is actually serving, which is not always the image the deployment names — a pulled tag that nothing restarted leaves the two disagreeing, and this is the half answering requests."
+        },
+        "StorageUsedPercent": {
+          "type": "integer",
+          "temperament": "gauge",
+          "kind": "derived",
+          "derived_from": [
+            "StorageTotalBytes",
+            "StorageAvailableBytes"
+          ],
+          "discloses": "nothing",
+          "from": "/status/storage/total",
+          "sentence": "How full the media volume is, from the two figures the app itself states — present only where it states both, because a percentage without a stated denominator would be invented."
         },
         "StorageTotalBytes": {
           "type": "integer",

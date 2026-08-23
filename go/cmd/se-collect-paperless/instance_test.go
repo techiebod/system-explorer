@@ -18,6 +18,7 @@ func emittableFacts() []string {
 	for _, pair := range storageMembers {
 		facts = append(facts, pair.fact)
 	}
+	facts = append(facts, "StorageUsedPercent")
 	facts = append(facts, factDatabaseStatus, factDatabaseError)
 	for _, component := range taskComponents {
 		facts = append(facts, component.statusFact, component.errorFact)
@@ -48,12 +49,15 @@ func TestTheCommittedDocumentsYieldTheCommittedRow(t *testing.T) {
 		factPngxVersion:           "3.0.5",
 		factStorageTotalBytes:     63195054080.0,
 		factStorageAvailableBytes: 54911987712.0,
-		factDatabaseStatus:        "OK",
-		factRedisStatus:           "OK",
-		factCeleryStatus:          "OK",
-		factIndexStatus:           "OK",
-		factClassifierStatus:      "WARNING",
-		factClassifierError:       "No classifier training tasks found",
+		// (63195054080-54911987712)*100/63195054080 = 13.106…, half-even
+		// to 13 on both implementations.
+		"StorageUsedPercent": 13.0,
+		factDatabaseStatus:   "OK",
+		factRedisStatus:      "OK",
+		factCeleryStatus:     "OK",
+		factIndexStatus:      "OK",
+		factClassifierStatus: "WARNING",
+		factClassifierError:  "No classifier training tasks found",
 	}
 	for name, value := range want {
 		if facts[name] != value {

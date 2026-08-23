@@ -16,6 +16,20 @@
       "name": "generations",
       "rules": [
         {
+          "key": "deployment-not-verified",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "DeploymentOutcome",
+            "not_equals": "VERIFIED"
+          },
+          "sentence": "The deployment that produced this generation ended without VERIFIED: it is running, but the checks that were meant to confirm it did not pass.",
+          "cites": [
+            "DeploymentOutcome",
+            "Deployment"
+          ]
+        },
+        {
           "key": "generation-pending",
           "level": "info",
           "grounds": "interface",
@@ -177,6 +191,17 @@
           "discloses": "nothing",
           "from": "/*/se-generation.json",
           "sentence": "Whether this closure states that every deployment of it should leave a receipt. Set only where the closure's own build manifest says so AND this process can see where receipts are kept; without both the fact is omitted, because a generation built before that workflow existed is not a generation that bypassed it."
+        },
+        "DeploymentOutcome": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "derived",
+          "derived_from": [
+            "Deployment"
+          ],
+          "discloses": "nothing",
+          "from": "/activation/outcome",
+          "sentence": "How the deployment that produced this generation ended, flat off the receipt so a rule can name it: VERIFIED is the passing word, and anything else means the closure is running while the checks that were meant to confirm it did not pass."
         },
         "Deployment": {
           "type": "object",

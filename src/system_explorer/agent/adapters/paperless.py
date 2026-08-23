@@ -131,6 +131,14 @@ def status_facts(raw: dict) -> dict:
                          ("StorageAvailableBytes", "available")):
         if isinstance(storage.get(member), int):
             facts[fact] = storage[member]
+    # Minted on both implementations because the storage rule names one
+    # fact and a threshold, and the closed condition vocabulary cannot do
+    # the arithmetic (register row 8's residue). Only where the app states
+    # both halves.
+    total = facts.get("StorageTotalBytes")
+    available = facts.get("StorageAvailableBytes")
+    if isinstance(total, int) and isinstance(available, int) and total > 0:
+        facts["StorageUsedPercent"] = round((total - available) * 100 / total)
     database = raw.get("database") or {}
     if database.get("status"):
         facts["DatabaseStatus"] = database["status"]
@@ -159,6 +167,7 @@ _GLOSSARY = {
     "PngxVersion": "The paperless-ngx release answering the API.",
     "StorageTotalBytes": "Size of the media volume as the app sees it from inside its own mount, which can differ from any host row when a bind has diverged.",
     "StorageAvailableBytes": "Free space on that same media volume, from the same vantage.",
+    "StorageUsedPercent": "How full the media volume is, from the two figures the app itself states — present only where it states both, because a percentage without a stated denominator would be invented.",
     "DatabaseStatus": "The app's own database connectivity check; anything but OK means the archive cannot be trusted to answer.",
     "DatabaseError": "What the database check said when it failed, bounded.",
     "RedisStatus": "The app's broker connectivity check; ingestion and every background task stop without it.",

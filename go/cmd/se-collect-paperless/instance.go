@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
+	"strconv"
 	"strings"
 )
 
@@ -137,9 +139,24 @@ func statusFacts(doc jsonValue) (*factRow, bool) {
 	if !ok {
 		return nil, false
 	}
+	storageBytes := map[string]int64{}
 	for _, pair := range storageMembers {
 		if value := storage.get(pair.member); isPythonInt(value) {
 			facts.setValue(pair.fact, value)
+			if n, err := strconv.ParseInt(value.number, 10, 64); err == nil {
+				storageBytes[pair.fact] = n
+			}
+		}
+	}
+	// Minted on both implementations because the storage rule names one
+	// fact and a threshold, and the closed condition vocabulary cannot do
+	// the arithmetic (register row 8's residue). Only where the app states
+	// both halves; Python's round is half-even, math.RoundToEven here.
+	if total := storageBytes[factStorageTotalBytes]; total > 0 {
+		if available, held := storageBytes[factStorageAvailableBytes]; held {
+			percent := math.RoundToEven(float64(total-available) * 100 / float64(total))
+			facts.setValue("StorageUsedPercent", jsonValue{kind: jsonNumber,
+				number: strconv.FormatInt(int64(percent), 10)})
 		}
 	}
 

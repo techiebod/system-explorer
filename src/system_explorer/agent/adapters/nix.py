@@ -543,14 +543,21 @@ class Adapter:
             return {"ReceiptsExpected": True, "Deployment": None}
         activation = receipt.get("activation")
         activation = activation if isinstance(activation, dict) else {}
-        return {"ReceiptsExpected": True,
-                "Deployment": {
-                    "Mode": activation.get("mode"),
-                    "Outcome": activation.get("outcome"),
-                    "VerifiedAt": activation.get("verified_at"),
-                    "Risks": receipt.get("risks") or [],
-                    "SourceRevision": (receipt.get("source") or {}).get("git_revision"),
-                }}
+        facts = {"ReceiptsExpected": True,
+                 "Deployment": {
+                     "Mode": activation.get("mode"),
+                     "Outcome": activation.get("outcome"),
+                     "VerifiedAt": activation.get("verified_at"),
+                     "Risks": receipt.get("risks") or [],
+                     "SourceRevision": (receipt.get("source") or {}).get("git_revision"),
+                 }}
+        # Minted flat on both implementations because the not-verified rule
+        # names one fact, and the closed condition vocabulary cannot reach a
+        # nested member (register row 8's residue). Only where the receipt
+        # states one.
+        if activation.get("outcome") is not None:
+            facts["DeploymentOutcome"] = activation["outcome"]
+        return facts
 
     def _generation_items(self, detailed: bool = False) -> list[dict]:
         pointers = nx.pointers()
