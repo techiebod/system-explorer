@@ -4,11 +4,14 @@
 package collate
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/techiebod/system-explorer/go/internal/store"
+	"github.com/techiebod/system-explorer/go/internal/wire"
 )
 
 // collectionView is one row of GET /v1/collections. age_s derives from
@@ -76,7 +79,27 @@ type objectsPage struct {
 // tests inject both, the daemon passes BootNow and OwnBootID's answer.
 // Injection here is what makes items 5 and the cross-boot statement
 // assertable rather than merely intended.
+// Reverse is how the read API reaches a collector's own verbs (DESIGN
+// §06). Injected rather than constructed here so the API stays testable
+// without sockets, and nil where a deployment runs no collectors — a
+// collator with only its read API is a valid daemon, and its verb routes
+// then state that rather than dialling nothing.
+type Reverse interface {
+	Object(ctx context.Context, collection, name string, declared map[string]bool) ([]byte, error)
+	Evidence(ctx context.Context, collection, name string, declared map[string]bool) ([]byte, error)
+	Lookup(ctx context.Context, lookup, input string, declared map[string]bool) ([]byte, error)
+}
+
 func NewHandler(st *store.Store, now func() float64, bootID string) http.Handler {
+	return NewHandlerWithReverse(st, now, bootID, nil)
+}
+
+// NewHandlerWithReverse adds the collector-facing half. Kept as a second
+// constructor so every existing caller and test keeps the read-only
+// handler it already had, and the reverse channel is a deployment's
+// deliberate act.
+func NewHandlerWithReverse(st *store.Store, now func() float64, bootID string,
+	reverse map[string]Reverse) http.Handler {
 	mux := http.NewServeMux()
 
 	registerPage(mux, st, now, bootID)
@@ -331,7 +354,115 @@ func NewHandler(st *store.Store, now func() float64, bootID string) http.Handler
 		writeJSON(w, changes)
 	})
 
+	// ── the reverse channel (DESIGN §06) ────────────────────────────
+	//
+	// The three verbs travel DOWN to the collector that serves the
+	// collection, and the answer streams back untouched: evidence stays
+	// captured-fresh and stored nowhere, so nothing here writes to the
+	// store and there is deliberately no cache. A remembered evidence
+	// document is a claim about a system as it was, served as though it
+	// were now.
+	//
+	// The collection is resolved to its collector through the store's own
+	// declaration record, so a plugin's collection is reachable the day
+	// its declaration is recorded and nothing here names a first-party
+	// one.
+	serveVerb := func(verb string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			name := r.PathValue("name")
+			token := r.PathValue("object")
+			if verb == wire.VerbLookup {
+				token = r.URL.Query().Get("input")
+				if token == "" {
+					http.Error(w, "a lookup carries its input: "+
+						"?input=<value>", http.StatusBadRequest)
+					return
+				}
+			}
+			if len(reverse) == 0 {
+				// Stated, never a 404: a collator with no collectors is a
+				// valid daemon, and "this deployment runs none" is a
+				// different answer from "no such object".
+				writeJSON(w, map[string]any{
+					"refused": "no-collectors",
+					"detail": "this collator runs no collectors, so it has no " +
+						"collector to ask; the verbs are answered by the " +
+						"collector that serves the collection",
+				})
+				return
+			}
+			client, held := reverse[name]
+			if !held {
+				// Every collector, until the store can say which one owns
+				// a collection. Stated as coverage rather than guessed.
+				for _, candidate := range reverse {
+					client = candidate
+					break
+				}
+			}
+			declared, err := reachableCollections(st)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			var raw []byte
+			ctx := r.Context()
+			switch verb {
+			case wire.VerbObject:
+				raw, err = client.Object(ctx, name, token, declared)
+			case wire.VerbEvidence:
+				raw, err = client.Evidence(ctx, name, token, declared)
+			case wire.VerbLookup:
+				raw, err = client.Lookup(ctx, name, token, declared)
+			}
+			var refused *wire.Refused
+			if errors.As(err, &refused) {
+				// §06: refused AND recorded. The refusal reaches the
+				// caller and the rejections table both, because a refusal
+				// nobody can see is one nobody can act on.
+				_ = st.RecordRejection(name, "", "reverse-"+refused.Reason,
+					refused.Detail)
+				w.WriteHeader(http.StatusBadRequest)
+				writeJSON(w, map[string]any{"refused": refused.Reason,
+					"verb": refused.Verb, "detail": refused.Detail})
+				return
+			}
+			if err != nil {
+				// The type, never the message: an error's text is where a
+				// path or a token reaches an unauthenticated channel.
+				http.Error(w, verb+" failed", http.StatusBadGateway)
+				return
+			}
+			// The collector's own NDJSON, byte for byte. Re-encoding it
+			// here would make this tier a second interpreter of a stream
+			// the contract already defines.
+			w.Header().Set("Content-Type", "application/x-ndjson")
+			_, _ = w.Write(raw)
+		}
+	}
+	mux.HandleFunc("GET /v1/collections/{name}/objects/{object}",
+		serveVerb(wire.VerbObject))
+	mux.HandleFunc("GET /v1/collections/{name}/objects/{object}/evidence",
+		serveVerb(wire.VerbEvidence))
+	mux.HandleFunc("GET /v1/lookups/{name}", serveVerb(wire.VerbLookup))
+
 	return mux
+}
+
+// reachableCollections is the set §06 admits the reverse channel for:
+// "only for collections this collator's own declaration lists". Named
+// apart from dictionary.go's declaredCollections, which answers a
+// different question with a different shape.
+func reachableCollections(st *store.Store) (map[string]bool, error) {
+	states, err := st.Collections()
+	if err != nil {
+		return nil, err
+	}
+	declared := map[string]bool{}
+	for _, cs := range states {
+		declared[cs.Name] = true
+	}
+	return declared, nil
 }
 
 // relationView is one assembled edge as the API serves it. Observability is
@@ -427,6 +558,24 @@ var publishedRoutes = []map[string]any{
 			"not an empty one, and diffing against nothing would report every " +
 			"object as added.",
 		"params": []string{"name", "since"}},
+	{"path": "/v1/collections/{name}/objects/{object}", "tool": "get_object",
+		"summary": "One object in full, asked of the collector that serves it " +
+			"over the reverse channel — every fact, not the row's declared " +
+			"answer subset. Reaches a plugin's collection the day its " +
+			"declaration is recorded.",
+		"params": []string{"name", "object"}},
+	{"path": "/v1/collections/{name}/objects/{object}/evidence", "tool": "get_evidence",
+		"summary": "The raw native payload an object's facts were read from, " +
+			"captured fresh on request and stored nowhere — the only thing in " +
+			"the product that is not our interpretation. Carries its own " +
+			"digest, so a claim can say whether the document it was made from " +
+			"is still the document you are looking at.",
+		"params": []string{"name", "object"}},
+	{"path": "/v1/lookups/{name}", "tool": "lookup",
+		"summary": "A parameterised read-only question a collector declares, " +
+			"asked with ?input=<value>. The palette is the collector's own; " +
+			"nothing here names a first-party lookup.",
+		"params": []string{"name", "input"}},
 	{"path": "/v1/collections/{name}/relations", "tool": "get_relations",
 		"summary": "One collection's assembled relations, each carrying its " +
 			"observability — asserted is NOT a degraded confirmed, and an " +

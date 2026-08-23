@@ -364,14 +364,34 @@ def _in_file(relative: str, needle: str) -> bool:
 
 
 def _verb_landed(verb: str) -> bool:
-    """Whether any collector's request dispatch answers the verb; the first
-    landing flips this. The probe matches the verb inside any `case` clause,
-    not `case "<verb>":` literally — units dispatches `case "object",
-    "evidence":` as one clause, and the literal spelling sat blind to it for
-    exactly as long as it took the first verb to land (found 2026-08-21)."""
+    """Whether the verb is ANSWERABLE and REACHABLE, which is two tiers.
+
+    **The answering half** matches the verb inside any `case` clause of a
+    collector main, not `case "<verb>":` literally — units dispatches
+    `case "object", "evidence":` as one clause, and the literal spelling sat
+    blind to it for exactly as long as it took the first verb to land
+    (found 2026-08-21).
+
+    **The reaching half was missing entirely until 2026-08-23**, and its
+    absence is why this probe reported three rows built over a feature
+    nothing in the shipping product could invoke. The collector leaf
+    answered; the wire client offered `Declare` and `Collect` and no third
+    method; the collator published no route. So the verbs were reachable
+    only by a person piping a request into a collector binary by hand, and
+    a probe that greps only the leaf could not tell that from a working
+    feature. That is register row 17's defect — a probe reading one tier
+    for a responsibility DESIGN §06 places at another — found in three more
+    rows by an audit of R3's own landings.
+
+    So the probe now asks both tiers, and a verb answered by every collector
+    and reachable by nothing is not built.
+    """
     clause = re.compile(r'case [^:\n]*"' + re.escape(verb) + '"')
-    return any(clause.search(path.read_text())
-               for path in GO_CMD.glob("se-collect-*/main.go"))
+    answers = any(clause.search(path.read_text())
+                  for path in GO_CMD.glob("se-collect-*/main.go"))
+    reaches = _in_file("go/internal/wire/verbs.go", f'Verb{verb.capitalize()}')
+    serves = _in_file("go/internal/collate/rest.go", f'wire.Verb{verb.capitalize()}')
+    return answers and reaches and serves
 
 
 def _declares(collector: str, member: str) -> bool:
@@ -407,10 +427,12 @@ REGISTER: tuple[Row, ...] = (
         "somewhere, not everywhere, and not that its answer is dense. The "
         "per-collector rollout landed fleet-wide at R3d — all twenty mains "
         "dispatch both verbs — but this probe still cannot tell twenty from "
-        "one, and each collector's own verbs tests are what pin its answers."),
+        "one, and each collector's own verbs tests are what pin its answers. "
+        "**Corrected 2026-08-23:** this row read built from R3c until an audit found the verbs were answerable by every collector and reachable by NOTHING — the wire client offered Declare and Collect and no third method, and the collator published no route, so the only way to invoke one was a person piping a request into a collector binary by hand. The probe greped the collector leaf for a responsibility DESIGN 06 places at the collator, which is row 17's defect in three more rows. The reverse channel now exists — a CLOSED list of three verbs, refused before a socket is dialled and recorded when refused, admitted only for collections the collator's own store lists — and the probe asks all three tiers, so a verb answered everywhere and reachable nowhere is no longer built."),
     Row(2, "`evidence` verb — capture-fresh raw document and digest",
         "built", "R3c/R3d", lambda: _verb_landed("evidence"),
-        "same probe shape and same limits as row 1."),
+        "same probe shape and same limits as row 1. "
+        "**Corrected 2026-08-23:** this row read built from R3c until an audit found the verbs were answerable by every collector and reachable by NOTHING — the wire client offered Declare and Collect and no third method, and the collator published no route, so the only way to invoke one was a person piping a request into a collector binary by hand. The probe greped the collector leaf for a responsibility DESIGN 06 places at the collator, which is row 17's defect in three more rows. The reverse channel now exists — a CLOSED list of three verbs, refused before a socket is dialled and recorded when refused, admitted only for collections the collator's own store lists — and the probe asks all three tiers, so a verb answered everywhere and reachable nowhere is no longer built."),
     Row(3, "`lookup` verb — parametrised queries, the lookup palette",
         "built", "R3d", lambda: _verb_landed("lookup"),
         "same probe shape and same limits as row 1: it flipped when storage "
@@ -418,7 +440,8 @@ REGISTER: tuple[Row, ...] = (
         "resolve, R3d) and sees the dispatch exist, not that a palette "
         "answers well — and no probe reads the declaration-root `lookups` "
         "member, so a collector serving the verb with no palette declared "
-        "is invisible to this row."),
+        "is invisible to this row. "
+        "**Corrected 2026-08-23:** this row read built from R3c until an audit found the verbs were answerable by every collector and reachable by NOTHING — the wire client offered Declare and Collect and no third method, and the collator published no route, so the only way to invoke one was a person piping a request into a collector binary by hand. The probe greped the collector leaf for a responsibility DESIGN 06 places at the collator, which is row 17's defect in three more rows. The reverse channel now exists — a CLOSED list of three verbs, refused before a socket is dialled and recorded when refused, admitted only for collections the collator's own store lists — and the probe asks all three tiers, so a verb answered everywhere and reachable nowhere is no longer built."),
     Row(4, "object `type` on the wire",
         "built", "R1", lambda: _in_file("contract/se.stream.1.json", '"type"'),
         "the probe sees the contract member; that every heterogeneous "

@@ -456,8 +456,24 @@ func TestTheTierPublishesItsRoutes(t *testing.T) {
 		}
 		seen[route.Tool] = true
 		// Every published route must actually answer, or the table is a
-		// promise the tier does not keep.
+		// promise the tier does not keep — **asked properly**, which
+		// means every parameter the route declares is supplied.
+		//
+		// This loop used to substitute {name} and nothing else, and that
+		// cost a real defect on 2026-08-23: /v1/collections/{name}/changes
+		// answers 400 without a `since`, so a default was invented to
+		// turn this assertion green, and the default it was given
+		// compared the live set against the newest reading and answered
+		// "nothing changed" for ever. A test demanding 200 from a request
+		// that is genuinely incomplete does not prove a route answers; it
+		// pressures the route into answering wrongly. So the required
+		// parameters are supplied here, and a route is free to refuse a
+		// request that omits them.
 		path := strings.ReplaceAll(route.Path, "{name}", "identity")
+		path = strings.ReplaceAll(path, "{object}", "identity:indexer:3")
+		if query := requiredQuery(route.Path, route.Params); query != "" {
+			path += "?" + query
+		}
 		if got := get(t, NewHandler(seeded(t), func() float64 { return 26.0 },
 			fakeBootID), path); got.Code != http.StatusOK {
 			t.Fatalf("%s published and answered %d", path, got.Code)
@@ -576,4 +592,30 @@ func TestRowsServeTypedInAppliedOrder(t *testing.T) {
 				i, rows[i].ID, rows[i].Type, want.ID, want.Type)
 		}
 	}
+}
+
+// requiredQuery supplies a value for every declared parameter that is not
+// a path segment. Derived from the route's own published `params` rather
+// than from a list here, so a new route with a new parameter is asked
+// properly without this test being edited — which is the difference
+// between a guard that covers the cases its author thought of and one
+// that covers the table.
+func requiredQuery(path string, params []string) string {
+	var pairs []string
+	for _, param := range params {
+		if strings.Contains(path, "{"+param+"}") {
+			continue
+		}
+		switch param {
+		case "limit", "cursor":
+			// Optional by contract: the collection pages without them,
+			// and supplying one would test a narrower thing.
+			continue
+		case "since":
+			pairs = append(pairs, "since=2000-01-01T00:00:00Z")
+		default:
+			pairs = append(pairs, param+"=probe")
+		}
+	}
+	return strings.Join(pairs, "&")
 }
