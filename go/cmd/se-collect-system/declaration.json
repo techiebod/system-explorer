@@ -266,6 +266,16 @@
     },
     {
       "name": "overview",
+      "reference_residue": [
+        {
+          "opinion": "swap-pressure",
+          "reason": "decided under the key `swap-used`, at the same threshold and over the same fact. A rename, recorded because a rule key is part of a finding's identity and one that nothing records is a lifecycle reset nobody can find."
+        },
+        {
+          "opinion": "system-pointers",
+          "reason": "the condition compares two FACTS to each other \u2014 CurrentSystem against SystemProfile, then against BootedSystem \u2014 and the closed vocabulary tests a fact against a literal, never against another fact. Owed to a derived fact minted on both implementations, which is the route the champions took, rather than to a fourth named evaluator."
+        }
+      ],
       "verbs": {
         "object": {
           "bytes": 262144,

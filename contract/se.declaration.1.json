@@ -186,6 +186,30 @@
             "$ref": "#/$defs/fact"
           }
         },
+        "reference_residue": {
+          "type": "array",
+          "description": "Reference opinion keys this collection's rule table does NOT carry under that name, each with the reason. Required wherever the port's table is smaller than the rulebook it was written from, and checked deny-by-default against the reference — which is DESIGN 17's third property, the one that makes the named-evaluator seam a mechanism rather than an escape hatch: a reader asking why a rule table is smaller than a rulebook gets an answer from the declaration instead of inferring one from silence. Added 2026-08-23, the day an audit found that property asserted in DESIGN, in a code comment and in a test comment, and implemented nowhere — a present-tense claim naming no guard, false on the day it was written. Two dispositions matter and both are stated in the reason: a key the table genuinely does not decide, and a key decided under a DIFFERENT name. The second is not cosmetic: a rule key is part of a finding's identity and renaming one resets a lifecycle, so a rename that nothing records is a lifecycle reset nobody can find.",
+          "items": {
+            "type": "object",
+            "required": [
+              "opinion",
+              "reason"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "opinion": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The reference rulebook's key."
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Why this table does not carry it: the fact it would need and nothing emits, the condition the vocabulary cannot express, or the key it is decided under instead."
+              }
+            }
+          }
+        },
         "rules": {
           "type": "array",
           "items": {

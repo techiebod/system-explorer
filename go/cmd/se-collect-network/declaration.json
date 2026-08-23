@@ -1557,6 +1557,12 @@
     },
     {
       "name": "links",
+      "reference_residue": [
+        {
+          "opinion": "link-state",
+          "reason": "split into `link-empty-bridge`, `link-down-configured` and `link-down-unconfigured`, one row per level rather than one rule computing its own level \u2014 because a level is a declared member a reader can see and disagree with. Recorded because the reference's single key no longer appears."
+        }
+      ],
       "verbs": {
         "object": {
           "bytes": 262144,

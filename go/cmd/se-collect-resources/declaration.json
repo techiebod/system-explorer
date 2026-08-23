@@ -19,6 +19,12 @@
   "collections": [
     {
       "name": "workloads",
+      "reference_residue": [
+        {
+          "opinion": "slice-stall",
+          "reason": "the reference's fourth slice branch \u2014 the bare aggregate it states when NO attribution facts are present at all. This port always mints the attribution facts, so the branch has no input here; if that ever stops being true it needs an evaluator, because the condition reads three maps indexed by another fact's own name."
+        }
+      ],
       "rules": [
         {
           "key": "slice-stall-unexplained",
