@@ -409,11 +409,23 @@ Which side dials is a deployment choice and must be stated per pair rather than 
 >
 > One surface consequence, recorded here rather than discovered in phase 5: a mismatch renders as a row of its own, carrying both ends and its reach, and never as an error state decorating one of them.
 
+> **Acknowledgement is the product's first write, and it gets its own door `[decision]`**
+>
+> Ruled 2026-08-23. A lifecycle transition is **appended, attributed and reversible** — never a deletion, never an edit of the finding it acts on — and it never removes a finding from the roll-up or from any projection. Acknowledgement changes what is *shouted*, not what is *known*; a surface that dropped an acknowledged finding would be reporting absence where somebody had only said "I have seen this", which is the failure this whole document is organised around.
+>
+> **The write route does not share a listener with the read surface.** The read surface's licence to bind broadly is that it is read-only, and that licence stops being true the moment a write verb answers on the same socket — so the transition route listens separately, and how far that listener is exposed is a deployment statement made per site rather than a property inherited from the read bind. Attribution is what the separate door buys: an actor has to arrive from somewhere, and a route with no notion of who is calling cannot append an attributed record however carefully it is written.
+>
+> What this does **not** do is move the product up the observe→reconcile ladder. The transition annotates hub metadata and reaches no operating-system write path, so §01's property — no component here writes to the system — survives literally, and the collator still reports the underlying condition whatever the hub was told about it. The actuator's posture is a separate and larger question, and this ruling does not pre-empt it.
+
 ### The cut
 
 The replacement is a **big-bang cutover, not a strangler**. The new stack is built to completion against its own harnesses (§18), lands first on the estate's disposable canary host, and then replaces the old agent outright. No dual-mode hub, no per-host migration state machine, no findings-key mapping — that is machinery for protecting an estate this product does not yet have, and the effort goes into arriving sooner instead.
 
-Two consequences are accepted and *displayed* rather than engineered away. **The record does not cross the cut:** the old snapshot store is kept as a read-only archive, and comparisons across the cut are not offered, because law 1 re-mints every id and the old rows carry no temperament. **Findings lifecycle resets:** `first_seen` restarts at the cut and says so where it is shown, so a post-cut finding is never mistaken for a new condition. And one role survives the old stack's retirement: while the new one is being built, the old agent's envelopes on a live host are the **reference implementation** — the thing a ported collector's output is diffed against.
+Two consequences are accepted and *displayed* rather than engineered away. **The record does not cross the cut:** the old snapshot store is kept as a read-only archive, and comparisons across the cut are not offered, because law 1 re-mints every id and the old rows carry no temperament. **Findings lifecycle resets:** `first_seen` restarts at the cut and says so where it is shown, so a post-cut finding is never mistaken for a new condition.
+
+**Ruled 2026-08-23, closing the migration question appendix B left open:** change tracking begins at the cut, and *what changed* says so rather than answering from an empty baseline. No snapshot is translated forward — the id translation such a migration needs is unverifiable on exactly the axis this rewrite changed most, and a wrong translation reports a change that never happened, which is worse than the product's own §25 answer that it does not yet know. So the surface carries the cut as its own horizon: an interval that begins before it renders as a stated gap, the same `history-gap` shape a partition already produces, and for the same reason. This is the findings re-key ruling applied to the second store rather than a second decision — one rule, twice.
+
+And one role survives the old stack's retirement: while the new one is being built, the old agent's envelopes on a live host are the **reference implementation** — the thing a ported collector's output is diffed against.
 
 ### What each tier is made of
 
@@ -957,6 +969,18 @@ This is also the answer to the question the whole product failed once. **Every o
 > Roughly four fifths of opinions are expressible as data: a predicate over facts, a level, and a message template. The remaining fifth need real code — arithmetic with unit rendering, set algebra across list facts, comparisons of two independently-decaying kernel averages with a tolerance that scales.
 >
 > **Making the four fifths declarative is a portability move, not a quality move**, and it should not be done before identity is right: it would deliver a beautifully portable engine for opinions still attached to the wrong objects. It does become more attractive under three tiers, because the same predicate then evaluates at whichever tier can reach its facts — which is law 2 implemented rather than merely stated.
+
+> **And the remaining fifth is declared, not silent `[decision]`**
+>
+> Ruled 2026-08-23. Two rules in the ported fleet are the fifth this box predicted, and both were held rather than forced: a slice's stall judged against `StallExplainedBy`, which is a map indexed by another fact's *name*, and protection's target coverage, which is set arithmetic over hop lists. The flat condition vocabulary expresses neither, and it was deliberately not widened to — appendix A's budget wants a new member to delete one or name a defect it alone catches, and two rules is thin ground for either.
+>
+> So **the derivation stays in code and the opinion stays declared.** A rule row may carry a named evaluator in place of a `when`, and it keeps every other member — key, level, grounds, sentence, cites — so the surface renders it identically to a table-decided one and nothing arrives at the collator undeclared. Three properties are what make this a mechanism rather than an escape hatch:
+>
+> - **The evaluator set is closed and in-tree**, reviewed like a vocabulary. A declaration *names* an evaluator; it cannot ship one. That is the line this section's own defence of rules-as-data rests on — an expression language that could grow becomes a plugin-supplied evaluator by increments, and third-party code in the judging path — and naming a fixed in-tree function crosses none of it.
+> - **The cost is stated where it bites.** A collector this repository does not ship can express the four fifths and cannot express the fifth, because it has no way to add an evaluator. That is a real limit on plugins and it is written here rather than discovered by whoever hits it.
+> - **The declaration says which opinions the table does not decide**, so a reader asking why a rule table is smaller than a rulebook gets an answer from the declaration instead of inferring one from silence — the coverage rule applied to the rule table itself.
+>
+> What would reopen it: a third case arriving. Two rules justify a named-evaluator seam; a steady trickle of them means the vocabulary is wrong and the right fix is the one appendix A's budget asks for.
 
 ---
 
@@ -2104,11 +2128,11 @@ What lands here, and what happens to what it replaces:
 | fact dictionary rules | survives | already stated here; the endpoint contract is what is missing |
 | lookups — parameterised read-only questions | survives | a collector subcommand under the new contract, unchanged in spirit |
 | UI contract, conformance postures | survives | §28 supersedes the rendering half; the rest is still right |
-| history and what-changed | amended | counters excluded, and the migration question in §36 unanswered |
+| history and what-changed | amended | counters excluded; the migration question is ruled in §06's cut — tracking begins at the cut, nothing is translated forward, and the pre-cut interval renders as a stated gap |
 | rule 15 — the composite locator `(machine_id, container?, app?, object, opinion)` | restored | dropped by an earlier draft of law 1 and put back in §11; it is the key the findings registry is already built on |
 | rule 16 — "the mechanism is a fact" | undisposed | which package manager, which resolver. Survives in spirit and is named nowhere here |
 | conformance rule 10 — evidence redaction | rewritten | moves into the declaration (§19), because a shared Python redactor cannot follow a collector into another language |
-| §6.3 — write posture and the `unobserved` freeze | amended | the freeze is carried forward in §06 and gains `unswept`; the write posture for acknowledgement is unchanged and unrestated |
+| §6.3 — write posture and the `unobserved` freeze | amended | the freeze is carried forward in §06 and gains `unswept`; the write posture for acknowledgement is restated there — appended, attributed, reversible, on a listener of its own |
 | §6.2 — views and `se.views/1` | undisposed | §04 reframes views and no section says what happens to the schema, the directory, or the documents an estate already deploys (queued: appendix C) |
 | the `logs` subsystem | retired by implication | §14's boundary sends journal entries to journald. That is a deletion nobody has stated, and it should be stated |
 | COLLECTOR-DEPLOYMENT.md — manifest, service config, credential flow | rewritten | becomes input to unit generation: under socket activation systemd holds every credential and the collator holds none, which the box below spells out |

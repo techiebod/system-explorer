@@ -497,9 +497,9 @@ Every known miss, each owned or ruled. A row neither built, owned nor ruled is a
 | 14 | fact dictionary route + MCP tool | built at R3a | R3a |
 | 15 | host-header allowlist on the read listeners | built at R3a, both listeners | R3a |
 | 16 | cost served on the read surface (the cost chip's data) | built at R3a, labelled advisory | R3a |
-| 17 | change tracking — history, `/v1/changes`, `what_changed` | designed (§36), migration question unruled, no port | R3e, **owner ruling owed on §36** |
+| 17 | change tracking — history, `/v1/changes`, `what_changed` | designed (§36); **migration ruled 2026-08-23** — tracking begins at the cut, nothing translated forward, a pre-cut interval renders as a stated gap. Store, differ and counter exclusion still owed | R3e |
 | 18 | findings persistence (a registry that survives restart) | landed at R3e: lifecycle.Registry persists its open set, and the restart case is proven end to end — the reopened registry's first fold freezes over an unswept estate rather than resolving, which is the founding failure the persistence exists to prevent | R3e |
-| 19 | acknowledgement — appended/attributed/reversible, write posture | no route; posture undecided | R3e, **owner ruling owed** |
+| 19 | acknowledgement — appended/attributed/reversible, write posture | **posture ruled 2026-08-23** — appended, attributed, reversible, never removed from the roll-up, on a listener of its own so the read bind's read-only licence stays true. No route yet | R3e |
 | 20 | views route (`se.views/1` was ruled "survives unchanged") | landed at R3e: /v1/views on the rewrite hub through the same shared loader the old hub and MCP read, fresh from the deployed directory per request | R3e |
 | 21 | sibling reads wired to the hub surface (one hop, serving) | landed at R3e: /v1/sites/{site} asks the sibling live per request over the peer session — never stored — with both ages visible, and a mismatch surfacing its refusal naming both values | R3e |
 | 22 | NixOS module: sandboxing generated from declared `authority`, socket activation | authority declared, nothing consumes it | R5 |

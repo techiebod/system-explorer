@@ -488,12 +488,15 @@ REGISTER: tuple[Row, ...] = (
         "at all. downloader-disk, paperless-storage and nix's "
         "deployment-not-verified followed the same day — DiskUsedPercent, "
         "StorageUsedPercent and DeploymentOutcome minted on both "
-        "implementations, their bands and rule fired. Still awaiting "
-        "structural mints: resources' slice rules (a per-fact explained-by "
-        "map) and protection's target rules (set arithmetic over hop "
-        "lists), each of which would need boolean facts whose derivation "
-        "IS the rule — a mint worth doing only with the owner's reading of "
-        "how the estate's own severity ladder should carry them. What no "
+        "implementations, their bands and rule fired. The last two are ruled "
+        "2026-08-23 and NOT mints: resources' slice rules (a per-fact "
+        "explained-by map) and protection's target rules (set arithmetic "
+        "over hop lists) are the fifth §17 predicted would need real code, "
+        "so their derivation stays in code and their declaration carries "
+        "the opinion with a named evaluator in place of a condition — the "
+        "row is declared, only the test is not data. Owed, and the price "
+        "is stated: a plugin can express the four fifths and not these. "
+        "What no "
         "probe here shows is PARITY: "
         "that the declared tables reach the same judgement as the reference's "
         "evaluators on the same facts. The firing cases are written from "
@@ -553,10 +556,16 @@ REGISTER: tuple[Row, ...] = (
         "REST tests. The collator's own slice accounting — the authoritative "
         "figure DESIGN 19 names — is R5's resource measurement, not this."),
     Row(17, "change tracking — history, `/v1/changes`, `what_changed`",
-        "owed", "R3e — owner ruling owed on §36",
+        "owed", "R3e — ruled 2026-08-23, unbuilt",
         lambda: _in_file("src/system_explorer/hub/routes.py", "/v1/changes"),
-        "the probe sees the hub route; the §36 migration question is the "
-        "owner's and no probe can close it."),
+        "the probe sees the hub route, and nothing serves it yet. The "
+        "migration question is no longer what blocks this: ruled "
+        "2026-08-23 in §06's cut — tracking begins at the cut, no snapshot "
+        "is translated forward, and an interval reaching before it renders "
+        "as a stated gap rather than an answer from an empty baseline. "
+        "What the probe cannot see, and what the ruling does not supply: "
+        "the store, the differ and the counter exclusion are all still "
+        "owed work."),
     Row(18, "findings persistence (a registry that survives restart)",
         "built", "R3e",
         lambda: any(_in_file(f"src/system_explorer/hub/{m}.py", "sqlite3")
@@ -573,10 +582,17 @@ REGISTER: tuple[Row, ...] = (
         "arrive with row 19's posture ruling — and no daemon wires the "
         "store path yet, which is deployment's."),
     Row(19, "acknowledgement — appended/attributed/reversible, write posture",
-        "owed", "R3e — owner ruling owed on posture",
+        "owed", "R3e — ruled 2026-08-23, unbuilt",
         lambda: _in_file("src/system_explorer/hub/routes.py", "acknowledge"),
-        "the probe sees a route by name; posture — who may, over what bind — "
-        "is the owner's ruling and no probe can close it."),
+        "the probe sees a route by name, and no route carries one yet. The "
+        "posture is ruled 2026-08-23 in §06: a transition is appended, "
+        "attributed and reversible, it never removes a finding from the "
+        "roll-up, and it answers on a listener of its OWN — the read "
+        "surface's licence to bind broadly is that it is read-only, and a "
+        "write verb on the same socket repeals it. What the probe cannot "
+        "see: the ruling fixes the posture, not the implementation — the "
+        "transition record, the second listener and the attribution it "
+        "requires are owed."),
     Row(20, "views route (`se.views/1` was ruled 'survives unchanged')",
         "built", "R3e",
         lambda: _in_file("src/system_explorer/hub/routes.py", "/v1/views"),
