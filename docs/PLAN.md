@@ -565,6 +565,65 @@ The NixOS module consumes declared `authority` into per-collector sandboxing wit
 
 Phase 6 — the cut — follows R5, unchanged in shape, and remains unreachable while any owed list is non-empty.
 
+### The R3 audit — 2026-08-23
+
+**R3 was declared complete and it was not.** An adversarial audit of R3's
+own landings, run the same day, found twenty-two defects. Every one was
+in work that had landed that day; every one is fixed; each was proven to
+bite before it landed.
+
+The record matters more than the count, because the defects had a shape.
+
+**Four register probes read the wrong tier.** Row 17 probed the hub for a
+record §06 gives the collator. Rows 1–3 probed the collector leaf for
+verbs nothing above it could invoke — `object`, `evidence` and `lookup`
+were answerable by all twenty collectors and reachable by nothing, so the
+reverse channel §06 requires did not exist and no row owned that. Row 20
+probed the hub for a surface DESIGN says both tiers serve. A probe is a
+claim about where a thing lives, and four of them were wrong for as long
+as their rows existed.
+
+**Two lists sat outside the census.** Seven `answer` rulings were owed to
+R3d, which had closed; the seam excuse for `system` had outlived its own
+stated condition, leaving four ported collections never diffed against
+the reference anywhere CI can see. Gate R3's clause — "the register shows
+no unowned row" — was true of the register and false of the estate.
+
+**And the register's own row set was hand-transcribed**, so PLAN rule 7
+held for collections and for nothing else. Deriving the reference's MCP
+surface found `get_findings` served by no tier: the findings lifecycle
+landed at R3e and its surface did not.
+
+**Nothing had ever run the rewrite hub.** `se-hub` serves the shipping
+product; the rewrite tier had no entry point, so every hub defect the
+audit found was in code the tests exercised and no process ever started.
+The lab guest could not start it either — a hand-kept staging list broke
+on an import added that morning, and PLAN's standing rule 3 makes that
+guest the whole world until gate 5.
+
+> **The lesson, which is the reason this record exists**
+>
+> **The guards were more dangerous than the code.** Ten times in one day
+> a guard was found asserting something it had never tested: a filter
+> that deleted the evidence it existed to find; a routes test that
+> demanded 200 and got a wrong answer invented to satisfy it; a merge
+> case that could not discriminate; tests using `urllib` where the defect
+> needed a raw socket; a staging test that reproduced its subject and so
+> drifted with it; an ownership join loose enough that five unrelated
+> rows satisfied it.
+>
+> Every one was found by PLANTING — and the plants that found real
+> defects were derived from the failure mode, while the plants that stayed
+> green had been shaped to the guard. **Writing a guard and its plant
+> together biases both toward the same blind spot**, which is the
+> subset-guard defect applied to the act of checking rather than to the
+> thing checked.
+>
+> The second-order rule this settles: **a guard must test its subject,
+> never a copy of it.** Two of the day's guards embedded their own
+> reproduction of what they checked, and both went green over a real
+> defect until the work list was derived from the subject instead.
+
 ### Phase 6 — the cut (small, supervised)
 
 Exactly as the design document's §06 rules it: the canary host first, then the estate; old agent retired; snapshot stores archived read-only; findings reset displayed; SPEC.md and COLLECTOR-DEPLOYMENT.md disposed and Appendix B closed. Estate-touching and partly destructive, so it runs with the owner present, one staged review gate per boundary — state, plan, and what is *not* changing, at each step.
