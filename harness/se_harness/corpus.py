@@ -71,6 +71,21 @@ VALID_VARIANTS = frozenset(
         "empty-ruleset",
         "time-synced",
         "timesync-dark",
+        # attribution-unreadable, added 2026-08-23 with the seam's third
+        # state. A slice stalling that no member ACCOUNTS for and no
+        # member DISPROVES either, because one member's pressure could
+        # not be READ — which is a different sentence from "nothing
+        # explains this", and reporting it as that would invent the
+        # interesting finding out of a gap in the reading.
+        #
+        # It is the first variant that could not have existed before: a
+        # payload absent from a capture means NOT CAPTURED and the seam
+        # refuses it, a payload holding null means the path did not
+        # exist, and neither is a read that FAILED. So every attribution
+        # state turning on a failed read had no corpus coverage and never
+        # could have had any — the live comparator found this one once in
+        # five runs, by luck.
+        "attribution-unreadable",
         # bare-guest, added with storage's R3b collections: a machine with
         # no ZFS at all, whose capture stages the util-linux documents
         # alone. The shape a plain host actually is, and the one the old

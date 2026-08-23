@@ -1,0 +1,25 @@
+253:144 rbytes=135920640 wbytes=158498816 rios=1297 wios=310 dbytes=0 dios=0
+253:128 rbytes=12687872 wbytes=4466176 rios=618 wios=151 dbytes=0 dios=0
+253:112 rbytes=12450304 wbytes=78573056 rios=560 wios=1956 dbytes=0 dios=0
+253:96 rbytes=107866624 wbytes=50477568 rios=961 wios=2991 dbytes=0 dios=0
+253:64 rbytes=107764224 wbytes=50475520 rios=942 wios=3023 dbytes=0 dios=0
+253:48 rbytes=109113856 wbytes=50487808 rios=1033 wios=3043 dbytes=0 dios=0
+253:32 rbytes=106379264 wbytes=50485760 rios=860 wios=3010 dbytes=0 dios=0
+(unknown) 
+(unknown) 
+(unknown) 
+(unknown) 
+(unknown) 
+(unknown) 
+(unknown) 
+(unknown) 
+253:16 rbytes=288768 wbytes=0 rios=77 wios=0 dbytes=0 dios=0
+253:0 rbytes=3674040832 wbytes=7102741504 rios=77340 wios=165786 dbytes=31167311872 dios=5234
+7:7 
+7:6 
+7:5 
+7:4 
+7:3 
+7:2 
+7:1 
+7:0 rbytes=10240 wbytes=0 rios=10 wios=0 dbytes=0 dios=0

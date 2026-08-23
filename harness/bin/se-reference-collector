@@ -771,6 +771,35 @@ def fleet_specs(captured: object, payload_name: str) -> list[dict]:
             "duplicates": list(entry.get("duplicates") or []),
         })
     return specs
+# A staged READ FAILURE, which is the third state a captured tree can be in
+# and the one the corpus could not express until 2026-08-23.
+#
+# A payload absent from the capture means NOT CAPTURED and raises — the seam
+# escape rule. A payload whose value is `null` means the path did not exist,
+# which is an ordinary reading the adapter degrades through. Neither is "the
+# file was there and the read FAILED", and a whole class of state turns on
+# exactly that: resources' StallAttributionUnobservable fires when a member
+# cgroup's pressure could not be READ, and it therefore had no corpus
+# coverage and never could have had any. The live comparator found it once in
+# five runs, by luck, which is how it was noticed at all.
+#
+# The marker is an object rather than a sentinel string because a cgroup file
+# legitimately holds text: `{"read_error": "EACCES"}` cannot be confused with
+# a reading, where any string could be one.
+READ_ERROR_KEY = "read_error"
+
+ERRNOS = {"EACCES": PermissionError, "EIO": OSError, "ENODEV": OSError,
+          "ETIMEDOUT": TimeoutError}
+
+
+def staged_failure(value: object):
+    """The exception a staged read failure stands for, or None."""
+    if not isinstance(value, dict) or READ_ERROR_KEY not in value:
+        return None
+    name = str(value[READ_ERROR_KEY])
+    return ERRNOS.get(name, OSError)(f"staged read failure: {name}")
+
+
 def by_path(label: str, payload_name: str, document: object):
     """A stub that answers a TREE-shaped acquisition out of one document.
 
@@ -808,6 +837,8 @@ def by_path(label: str, payload_name: str, document: object):
                 f"(payload {payload_name!r}); the tree seam refuses to read "
                 "the filesystem of the machine replaying the corpus"
             )
+        if (failure := staged_failure(inside[member])) is not None:
+            raise failure
         return inside[member]
 
     return answer
@@ -1086,6 +1117,8 @@ def run(collector: str, generations: dict[str, int], payload_dir: Path) -> None:
                     f"in this variant; the {kind} seam refuses to read the live "
                     "interface of the machine replaying the corpus"
                 )
+            if (failure := staged_failure(payloads[name])) is not None:
+                raise failure
             return payloads[name]
 
         async def async_answer(*args, **kwargs):

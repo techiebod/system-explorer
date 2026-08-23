@@ -1,0 +1,22 @@
+{
+  "collector": "resources",
+  "variant": "attribution-unreadable",
+  "collections": [
+    "workloads"
+  ],
+  "os": "ubuntu",
+  "os_version": "26.04",
+  "source_version": "linux 7.0.0-28-generic",
+  "captured": "2026-08-23T20:30:00Z",
+  "regenerable": false,
+  "regenerable_on": "staged from the healthy capture: the condition is a member cgroup whose pressure file cannot be READ, which a healthy host does not present on demand and which no capture can be asked for",
+  "anchors": [
+    {
+      "collection": "workloads",
+      "object": "system.slice",
+      "fact": "PsiIoFullAvg60",
+      "value": 51.33
+    }
+  ],
+  "note": "A slice stalling that no member accounts for and no member disproves either, because one member's io.pressure could not be read.\n\nThe three attribution states are worded differently on purpose: an unread member is not a quiet one, and reporting it as 'nothing explains this' would invent the interesting finding out of a gap in the reading. Only this variant poses that question.\n\n**It could not be staged at all until 2026-08-23.** A payload absent from a capture means NOT CAPTURED and the seam refuses it; a payload holding null means the path did not exist. Neither is 'the file was there and the read failed', so every state turning on a failed read had no corpus coverage and never could have had any \u2014 the live comparator found this one once in five runs, by luck. The `read_error` marker is the third state, and this is the first variant to use it."
+}
