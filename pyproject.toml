@@ -62,6 +62,11 @@ test = ["pytest", "jsonschema", "httpx", "anyio", "dbus-fast"]
 se-agent = "system_explorer.cli:agent"
 se-hub = "system_explorer.cli:hub"
 se-mcp = "system_explorer.mcp.server:main"
+# The rewrite hub, while the shipping hub still owns se-hub. The cut is a
+# big bang (DESIGN 06) and this name retires at it: a temporary name is
+# honest about a temporary state, where reusing se-hub now would make
+# which product is running depend on which package was installed last.
+se-hub-next = "system_explorer.hub.daemon:main"
 
 [project.urls]
 Homepage = "https://github.com/techiebod/system-explorer"
