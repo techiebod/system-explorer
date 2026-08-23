@@ -257,3 +257,9 @@ dl.names dd { margin: 0; }
   border: 1px dashed var(--border-2); border-radius: 999px;
   color: var(--text-dim); font-size: 11px;
 }
+
+/* "Declared and never mentioned" is not "could not be read". The second
+   is the collector making a positive statement; the first is it saying
+   nothing at all, and wearing the same mark would put words in its
+   mouth. */
+.state-unstated { color: var(--text-faint); font-size: 11.5px; font-style: italic; }

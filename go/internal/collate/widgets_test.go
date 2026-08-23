@@ -326,3 +326,24 @@ func TestEveryRenderedValueIsEscaped(t *testing.T) {
 		}
 	}
 }
+
+func TestDeclaredAndNeverMentionedIsNotUnobservable(t *testing.T) {
+	// Two different claims. `unobservable` is the collector saying "I
+	// could not look, and here is why" — a positive statement. A fact
+	// declared and then omitted is the collector saying nothing at all,
+	// and giving it unobservable's mark puts words in its mouth: a
+	// reader takes it for a reported failure to read.
+	unstated := Cell(FactDecl{Type: "string"}, nil, StateValue, "",
+		Siblings{}, false)
+	unobservable := Cell(FactDecl{Type: "string"}, nil, StateUnobservable,
+		"EACCES", Siblings{}, false)
+	if classOf(unstated) == classOf(unobservable) {
+		t.Fatalf("they must not share a mark: %s vs %s", unstated, unobservable)
+	}
+	if visible(unstated) == "" {
+		t.Fatal("and neither is a blank cell")
+	}
+	if strings.Contains(visible(unstated), "could not") {
+		t.Fatalf("nothing said the collector could not read it: %s", unstated)
+	}
+}

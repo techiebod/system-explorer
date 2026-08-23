@@ -96,11 +96,21 @@ func Cell(decl FactDecl, value any, state FactState, detail string,
 			`<span class="state-unobservable">could not read: %s</span>`, esc(why))
 	}
 	if value == nil {
-		// Declared, and the producer sent no value and did not say it was
-		// absent. Stated as unknown rather than rendered as empty, because
-		// this file cannot tell which of the two it is and inventing an
-		// answer is the failure the state table exists to prevent.
-		return `<span class="state-unobservable">not stated</span>`
+		// Declared, and the producer sent no value AND did not say it was
+		// absent. This is a sixth thing, and it gets its own mark rather
+		// than borrowing `unobservable`'s: unobservable is the collector
+		// saying "I could not look, and here is why", which is a positive
+		// statement. This is the collector saying nothing at all, so
+		// wearing that mark would put words in its mouth — a reader would
+		// take it for a reported failure to read.
+		//
+		// It is a PRODUCER gap wherever it appears: a fact declared and
+		// then omitted should be `absent` when the thing genuinely has no
+		// such property, and unobservable when it could not be read.
+		// Register row 34 is one such, found by this very rendering.
+		return `<span class="state-unstated" title="declared by the ` +
+			`collector and neither sent nor declared absent — the producer ` +
+			`has not said which">not stated</span>`
 	}
 	rendered := widget(decl, value, sib, object)
 	if decl.Kind == "declared" {
