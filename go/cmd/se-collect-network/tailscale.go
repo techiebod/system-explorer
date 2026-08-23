@@ -111,8 +111,10 @@ func collectTailscale(out *emitter, stderr io.Writer, src source, collection str
 			Record:     "decline",
 			Collection: collection,
 			Reason:     "unavailable",
-			Detail: "no tailscale snapshot (grantTailscaleAccess off, or " +
-				"tailscaled absent)",
+			// errTailscaleAbsent's own text: one sentence for one
+			// condition, in one place, rather than two spellings that
+			// drift — decline detail travels to a hub and out over MCP.
+			Detail: errTailscaleAbsent.Error(),
 		})
 		return exitOK
 	}

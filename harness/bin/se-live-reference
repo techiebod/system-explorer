@@ -93,6 +93,10 @@ LIVE = {
                 # answering them "no nft on this host" is a statement
                 # about an interface they never touch.
                 "governs": ("nft-tables", "nft-chains", "nft-rules"),
+                # The adapter says tailscale is unavailable when no
+                # snapshot exists; acquiring it anyway raised RuntimeError
+                # and lost the whole collector, where the port declines it.
+                "honour_unavailable": ("tailscale",),
                 "interface": "nft"},
     "vms": {"module": vms, "adapter": vms.Adapter,
             # The read-only socket, which is what the PORT tests and the only
@@ -164,6 +168,21 @@ LIVE = {
              # which the first whole-surface comparator run surfaced as a
              # difference against the port's own SE_SEERR_URL wording.
              "receipts_govern": ("server", "libraries", "sessions"),
+             # And seerr has a gate of its own. Excluding `requests` from
+             # plex's decline without giving it one made it ACQUIRE with
+             # no URL and raise UnsupportedProtocol — a collector that
+             # could not run where it had previously declined cleanly.
+             # A per-collection gate is the shape the adapter already
+             # uses; the driver simply had one gate for the collector.
+             "receipts_per_collection": {
+                 # Spelled exactly as the port spells it
+                 # (se-collect-plex/requests.go), which is this file's own
+                 # convention for a decline detail — see the nix entry:
+                 # the string travels to a hub and out over MCP, and one
+                 # condition must not have two sentences.
+                 "requests": (lambda a: a.seerr_url is None,
+                              "SE_SEERR_URL is not configured"),
+             },
              # The one adjudicated per-collection receipt gap: a Plex that IS
              # addressed but holds no usable token cannot be asked for
              # libraries or sessions — guessing would only manufacture 401s —
@@ -499,6 +518,24 @@ def run(collector: str, generations: dict[str, int]) -> None:
             # configured, whatever plex's own state is.
             wanted = remaining
 
+        # A collection with a gate of its OWN, checked before acquisition.
+        # Without this, narrowing a collector-level gate simply moved the
+        # failure: the excluded collection acquired against an unset URL
+        # and raised, which is worse than the over-broad decline it
+        # replaced because the collector then answers for nothing.
+        per_collection = spec.get("receipts_per_collection") or {}
+        if per_collection:
+            still = {}
+            for collection, generation in wanted.items():
+                rule = per_collection.get(collection)
+                if rule and rule[0](adapter):
+                    out.decline(collection, "unavailable", rule[1])
+                    continue
+                still[collection] = generation
+            wanted = still
+            if not wanted:
+                return
+
         # The adapter's PER-COLLECTION statement, which the shipping agent's
         # HTTP path already honours and this driver did not.
         #
@@ -553,6 +590,45 @@ def run(collector: str, generations: dict[str, int]) -> None:
             out.decline(collection, reason,
                         f"{collection} is not observable through the "
                         f"{spec['interface']} on this host")
+
+        # **The adapter's own per-collection statement, honoured by
+        # default.** `unavailable_collections` was read only where a
+        # collector also declared a `gated` lambda, so for every other
+        # collector the driver ACQUIRED a collection the adapter had
+        # already said was unavailable — and network/tailscale then
+        # raised RuntimeError, losing the whole collector, where the port
+        # declined it cleanly with the adapter's own words. The driver
+        # overriding a statement the adapter made is the same shape as
+        # the collector-level probe answering for collections it never
+        # governed, one method along.
+        #
+        # The adapter's DETAIL is used verbatim, not a sentence composed
+        # here: decline detail travels to a hub and out over MCP, and two
+        # implementations answering one condition with two sentences is
+        # the defect the vms address note already records.
+        # **Opt-in per collector, and storage is why.**
+        #
+        # Honouring this for EVERY collector regressed storage from parity:
+        # its capability lists pools and datasets as unavailable when there
+        # is no zpool, so the driver declined them `unavailable` / "zpool
+        # not on PATH" — while the port says `absent` / "no zpool on this
+        # host", which is the storage ruling itself. No zpool means no
+        # imported pools: a successful reading that must commit zero, not
+        # an incident. Turning that `absent` into an `unavailable` inverts
+        # the one distinction the decline vocabulary exists for.
+        #
+        # So a collector asks for this where its adapter's statement IS
+        # the right answer — network/tailscale, where the alternative was
+        # a RuntimeError that lost the whole collector — and the
+        # collectors whose `not_applicable` already gives the better
+        # reading are left alone.
+        for collection in list(wanted):
+            if collection in skip or collection not in dark:
+                continue
+            if collection not in (spec.get("honour_unavailable") or ()):
+                continue
+            out.decline(collection, "unavailable", dark[collection])
+            skip[collection] = "unavailable"
 
         for collection in wanted:
             if collection in skip:

@@ -175,8 +175,15 @@ type liveSource struct {
 // reads; tailscaled itself is never consulted.
 const tailscaleSnapshot = "/run/system-explorer-tailscale/status.json"
 
+// The decline detail, naming the path it looked at. It omitted the path
+// until 2026-08-23, when the first live comparison of this collector
+// found the reference saying WHERE it had looked and this saying only
+// that it had. A decline that names its path is one an operator can act
+// on without reading the source; §19 asks a decline to say what could
+// not be read and why, and the where is half of that.
 var errTailscaleAbsent = errors.New(
-	"no tailscale snapshot (grantTailscaleAccess off, or tailscaled absent)")
+	"no tailscale snapshot at " + tailscaleSnapshot +
+		" (grantTailscaleAccess off, or tailscaled absent)")
 
 func (s *liveSource) tailscale() (jsonValue, float64, error) {
 	info, err := os.Stat(tailscaleSnapshot)
