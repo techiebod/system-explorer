@@ -72,13 +72,22 @@ NOT_YET_PORTED: dict[str, str] = {
 #: adapter, and one adapter has no such seam yet. An entry here is owed
 #: work, never a decision.
 NO_REPLAY_SEAM: dict[str, str] = {
-    "system": "no payload-staging seam was ever written for the system "
+    "system": "OWNER:R5 — no payload-staging seam was ever written for the system "
               "adapter, so the corpus venues replay its captures through the "
               "PORT only — time landed at R3b on captured-then-scrubbed "
-              "guest payloads without one. Live comparison runs since R2 "
-              "(register row 27) and is system's only reference-vs-port "
-              "venue; the Python seam stays owed while its collections "
-              "port.",
+              "guest payloads without one. **Re-owned to R5 on 2026-08-23**, "
+              "after an audit found this excuse had outlived its own "
+              "condition: it read 'the Python seam stays owed while its "
+              "collections port', and all four ported — identity at R2, "
+              "time, boot and overview at R3b, which PLAN declares done. So "
+              "four landed collections have never been diffed against the "
+              "reference anywhere a merge can see, and the guard could not "
+              "notice because it asserted the excuse EXISTS rather than that "
+              "it still holds. `se-compare` is their only venue and needs a "
+              "live Linux host, which is why this is R5's deployment work "
+              "rather than something a corpus run can close. Row 28 owns it, "
+              "so it is counted rather than sitting in a second list the "
+              "27-row census never reached.",
 }
 
 
@@ -353,7 +362,7 @@ def answer_divergences(
     return out
 
 
-# ── the 27-row gap register (PLAN, the re-baseline) ───────────────────────
+# ── the gap register (PLAN, the re-baseline) ──────────────────────────────
 
 
 @dataclass(frozen=True)
@@ -756,4 +765,20 @@ REGISTER: tuple[Row, ...] = (
         "the probe sees the work list drive it; the first clean live run is "
         "gate R3's to show, and the replay-seam half stays named in "
         "NO_REPLAY_SEAM until R3b."),
+    Row(28, "the system adapter's replay seam — four collections with no "
+        "reference-vs-port venue in CI",
+        "owed", "R5",
+        lambda: _in_file("harness/bin/se-reference-collector", '"system": {'),
+        "OWNS-SEAM:system — the probe asks whether se-reference-collector "
+        "stages the system adapter at all. Added 2026-08-23 by an audit, because this work "
+        "had no row: NO_REPLAY_SEAM is a second list the 27-row census "
+        "never reached, so 'the register shows no unowned row' was true of "
+        "the register and false of the estate. The system adapter reads "
+        "through nx.read and a handful of direct Path reads, so the seam is "
+        "the path-acquisition shape storage already uses — but the captures "
+        "have to come from a live Linux host, which is why it is R5's "
+        "rather than a corpus run's. What the probe cannot see: whether the "
+        "staged set matches what the register compares, which "
+        "test_the_replay_seam_stages_what_the_register_compares asserts "
+        "once a seam exists."),
 )

@@ -22,7 +22,7 @@ in BOTH directions:
 * the served/ported/registered accounting (``comparator_work`` raises on
   any unregistered gap, stale entry, or frozen-capability breach — and
   the drills below feed it worlds wrong in exactly one way each);
-* the 27-row gap register from PLAN's re-baseline — every row built,
+* the gap register from PLAN's re-baseline — every row built,
   owed or ruled, with a probe wherever the tree can attest it, checked
   in the "claims built and is not" direction AND the "claims owed and
   was built" direction, because the second is how a hole gets forgotten
@@ -224,14 +224,91 @@ def test_the_replay_seam_stages_what_the_register_compares() -> None:
         )
 
 
-# ── the gap register: 27 rows, probed in both directions ──────────────────
+def test_every_seam_excuse_is_owned_by_a_register_row() -> None:
+    """NO_REPLAY_SEAM is a SECOND list, and the census never reached it.
+
+    Gate R3's clause is "the register shows no unowned row" — and it was
+    true of the register while `system`'s missing replay seam sat in this
+    other mapping, owned by nothing the count could see. So the two lists
+    are joined here: every excused collector must be named by a register
+    row, which is what makes deleting that row fail rather than quietly
+    taking its owed work with it.
+
+    Written after a plant proved the alternative did not hold: pinning
+    the register's length caught a row vanishing only while the number
+    was hard-coded, and a hard-coded census is a second place the
+    register's size lives. Owning the work is the property that matters,
+    not counting the rows.
+    """
+    for collector in sorted(NO_REPLAY_SEAM):
+        # An EXPLICIT marker, not a substring. "system" appears
+        # incidentally in five rows' prose, so a substring join was
+        # satisfied by rows that own none of this work — the plant that
+        # deleted the owning row stayed green over it, which is the same
+        # loose-match defect one layer up.
+        owned = [row.number for row in REGISTER
+                 if f"OWNS-SEAM:{collector}" in row.coverage]
+        assert owned, (
+            f"{collector} has no replay seam and no register row names it, "
+            f"so the work is owed by nobody — which is exactly what 'the "
+            f"register shows no unowned row' would have missed")
+
+
+def test_no_seam_excuse_has_outlived_its_own_condition() -> None:
+    """An excuse is owed work, never a decision — so it must expire.
+
+    The guard above holds only that the excuse still EXISTS: it asserts
+    `missing == set(NO_REPLAY_SEAM)`, which is satisfied for as long as
+    the entry is there, whatever it says. So `system`'s excuse — "the
+    Python seam stays owed while its collections port" — survived every
+    one of its collections porting, and four collections that have landed
+    have never been diffed against the reference anywhere CI can see.
+    `se-compare` is their only venue and it needs a live Linux host.
+
+    Found by an audit on 2026-08-23. An excuse whose condition names a
+    phase must name an OPEN one, for the same reason a ruling must: a
+    promise that outlived its phase is owned by nobody.
+    """
+    closed = closed_phases()
+    assert closed, "no phase in PLAN is marked done; the pattern must match"
+    expired = {}
+    for collector, excuse in sorted(NO_REPLAY_SEAM.items()):
+        # The OWNER is stated explicitly rather than parsed out of the
+        # prose. An excuse legitimately cites closed phases as history —
+        # "time landed at R3b" is a fact about the past — and a guard
+        # that read the narrative would fire on the history instead of on
+        # the ownership, which is the wrong sentence to fail.
+        owner = re.search(r"OWNER:(R[0-9]\w*)", excuse)
+        assert owner, (
+            f"{collector}: a seam excuse names the phase that owes the "
+            f"work, as OWNER:R<n> — an excuse nobody owns is a decision "
+            f"wearing a deferral's clothes")
+        if owner.group(1) in closed:
+            expired[collector] = [owner.group(1)]
+    assert not expired, (
+        f"a replay-seam excuse names a phase that has closed, so the work "
+        f"it defers is owned by nobody: {expired}. Build the seam, or "
+        f"re-own the excuse to an open phase and say so in the register.")
+
+
+# ── the gap register, probed in both directions ───────────────────────────
 
 
 def test_the_register_is_fully_encoded() -> None:
-    """Anti-vacuity for the register itself: 27 rows, numbered without gap
-    or duplicate, every row owned, every probe-less row saying why."""
+    """Anti-vacuity for the register itself: numbered without gap or
+    duplicate, every row owned, every probe-less row saying why.
+
+    The count is derived rather than written: it was `range(1, 28)`, so
+    adding the row that finally owned the system replay seam failed here
+    rather than in the register. A hard-coded census is a second place
+    the register's size lives, and the thing that matters is that the
+    numbering has no gap and no repeat — which is what a row silently
+    vanishing would break."""
     numbers = [row.number for row in REGISTER]
-    assert numbers == list(range(1, 28)), numbers
+    assert numbers == list(range(1, len(numbers) + 1)), numbers
+    assert len(numbers) >= 27, (
+        f"the register has shrunk to {len(numbers)} rows; a row that "
+        f"disappears takes its owed work with it")
     for row in REGISTER:
         assert row.state in ("built", "owed"), (row.number, row.state)
         assert row.owner.strip(), row.number
