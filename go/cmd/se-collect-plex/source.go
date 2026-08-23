@@ -75,6 +75,18 @@ type source interface {
 	ready() error
 	// stamp is `at` for the i-th emitted object.
 	stamp(i int) float64
+	// seerr is one GET against the seerr API — the requests collection's
+	// whole interface, a different application over a different credential
+	// from the Plex the rest of this collector reads. The query rides live
+	// requests only; replay keys documents on the path alone, exactly as
+	// `document` does, which is what lets one staged page answer the
+	// paged walk the live side makes.
+	seerr(path, query string) (fetched, error)
+	// seerrConfigured is the receipts reading for that second application:
+	// (url configured, key configured). Read before any request, because
+	// "nobody named a seerr" and "a seerr named with no key" are different
+	// statements and only the second is a deployment gap.
+	seerrConfigured() (bool, bool)
 	// costs are end's advisory self-report (DESIGN 19): bounded by the judge,
 	// authenticated only by the collator's own slice accounting.
 	costs() (cpuMS, wallMS float64)
@@ -282,6 +294,11 @@ func newSource(getenv func(string) string) source {
 		// slash addresses the same server, and `<url>//library/sections` is a
 		// path Plex does not serve.
 		url: strings.TrimRight(getenv(urlVariable), "/"),
+		// The requests collection's own pair — a second application over a
+		// second credential, which is exactly why its receipts are read
+		// separately from Plex's.
+		seerrURL: strings.TrimRight(getenv("SE_SEERR_URL"), "/"),
+		seerrKey: getenv("SE_SEERR_API_KEY"),
 		client: &http.Client{
 			Timeout: requestTimeout,
 			// httpx does not follow redirects unless told to, and neither does
@@ -324,6 +341,8 @@ type liveSource struct {
 	url          string
 	token        string
 	tokenProblem string
+	seerrURL     string
+	seerrKey     string
 	client       *http.Client
 	at           float64
 	stamped      bool
@@ -390,6 +409,41 @@ func (s *liveSource) ready() error {
 }
 
 func (s *liveSource) document(path string) (fetched, error) { return s.get(path, "") }
+
+func (s *liveSource) seerrConfigured() (bool, bool) {
+	return s.seerrURL != "", s.seerrKey != ""
+}
+
+func (s *liveSource) seerr(path, query string) (fetched, error) {
+	address := s.seerrURL + path
+	if query != "" {
+		address += "?" + query
+	}
+	request, err := http.NewRequest(http.MethodGet, address, nil)
+	if err != nil {
+		return fetched{detail: detailNoAnswer(path)}, nil
+	}
+	request.Header.Set("X-Api-Key", s.seerrKey)
+	response, err := s.client.Do(request)
+	if err != nil {
+		return fetched{detail: detailNoAnswer(path)}, nil
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fetched{detail: fmt.Sprintf("seerr answered %d for %s",
+			response.StatusCode, path)}, nil
+	}
+	raw, err := io.ReadAll(io.LimitReader(response.Body, responseBound))
+	if err != nil {
+		return fetched{detail: detailNoAnswer(path)}, nil
+	}
+	document, err := decodeDocument(raw)
+	if err != nil {
+		return fetched{detail: fmt.Sprintf("seerr answered %s with something "+
+			"that is not a document", path)}, nil
+	}
+	return fetched{doc: document}, nil
+}
 
 func (s *liveSource) window(path string) (fetched, error) { return s.get(path, countWindow) }
 
@@ -571,6 +625,22 @@ func (r replaySource) document(path string) (fetched, error) {
 // listing answers the windowed request exactly as it answers the plain one —
 // which is what the reference's own seam does.
 func (r replaySource) window(path string) (fetched, error) { return r.document(path) }
+
+// Replay reads the seerr receipts off the CAPTURE: a variant that stages
+// the request document observed a machine with a configured seerr, and one
+// that stages none observed a machine without — the same two-state answer
+// the live env reading gives, decided by what was actually captured rather
+// than by a pin a seerr-less variant would then have to argue with.
+func (r replaySource) seerrConfigured() (bool, bool) {
+	if _, err := os.Stat(filepath.Join(r.dir, "api-v1-request.json")); err != nil {
+		return false, false
+	}
+	return true, true
+}
+
+func (r replaySource) seerr(path, _ string) (fetched, error) {
+	return r.document(path)
+}
 
 // staged is whether this variant captured ANY of the documents this collector
 // always reads. It is the replay half of the absence question, and it is asked

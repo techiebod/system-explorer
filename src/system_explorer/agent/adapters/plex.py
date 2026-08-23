@@ -347,6 +347,16 @@ class Adapter:
                 facts, name=facts.get("Title"), opinions=[], healthy=None))
         return items
 
+    async def _seerr_get(self, path: str, params: dict | None = None) -> dict:
+        """One seerr GET, as a named method for the same reason _plex_get is
+        one: the replay seam stubs it and keys the captured documents on the
+        path. The params ride live requests only — the request walk's paging
+        — which is what lets one staged page answer the paged walk."""
+        response = await self._seerr.get(f"{self.seerr_url}{path}",
+                                         params=params)
+        response.raise_for_status()
+        return response.json()
+
     async def _request_pages(self) -> list[dict]:
         """Every page of seerr's request list, walked to seerr's own
         pageInfo and bounded by MAX_REQUEST_PAGES — rows and evidence
@@ -357,12 +367,10 @@ class Adapter:
         pages: list[dict] = []
         skip = 0
         for _ in range(MAX_REQUEST_PAGES):
-            response = await self._seerr.get(
-                f"{self.seerr_url}{REQUESTS_PATH}",
+            body = await self._seerr_get(
+                REQUESTS_PATH,
                 params={"take": REQUEST_PAGE_SIZE, "skip": skip,
                         "sort": "added"})
-            response.raise_for_status()
-            body = response.json()
             pages.append(body)
             results = body.get("results") or []
             if not results:
@@ -375,14 +383,8 @@ class Adapter:
 
     async def _title_for(self, media_type: str, tmdb_id: int) -> str | None:
         # Movies answer .title, series answer .name — seerr's own shapes.
-        if media_type == "movie":
-            response = await self._seerr.get(
-                f"{self.seerr_url}{MOVIE_PATH}/{tmdb_id}")
-        else:
-            response = await self._seerr.get(
-                f"{self.seerr_url}{TV_PATH}/{tmdb_id}")
-        response.raise_for_status()
-        body = response.json()
+        path = MOVIE_PATH if media_type == "movie" else TV_PATH
+        body = await self._seerr_get(f"{path}/{tmdb_id}")
         value = body.get("title") or body.get("name")
         return str(value) if value else None
 

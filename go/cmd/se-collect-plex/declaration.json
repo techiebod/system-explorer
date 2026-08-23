@@ -224,6 +224,141 @@
           "argv": ["curl", "-s", "-H", "X-Plex-Token: $SE_PLEX_TOKEN", "-H", "Accept: application/json", "$SE_PLEX_URL/status/sessions"]
         }
       ]
+    },
+    {
+      "name": "requests",
+      "question": "who is waiting for what?",
+      "prefix": "request",
+      "freshness": "5m",
+      "perishability": "sampled",
+      "answer": [
+        "Title",
+        "Type",
+        "Status",
+        "RequestedBy",
+        "CreatedAt"
+      ],
+      "ceiling": {
+        "records": 2048,
+        "bytes": 2097152
+      },
+      "facts": {
+        "Status": {
+          "type": "enum",
+          "values": [
+            "pending",
+            "approved",
+            "declined",
+            "failed",
+            "completed"
+          ],
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/api/v1/request results[].status",
+          "sentence": "Where the request sits in seerr's own flow: pending awaits a person, approved awaits the managers, failed means the dispatch to the managers failed — the one fault-shaped state. seerr numbers these; the words are its own documented meanings, and an unknown number passes through as its digits rather than a guess."
+        },
+        "Type": {
+          "type": "enum",
+          "values": [
+            "movie",
+            "tv"
+          ],
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/api/v1/request results[].type",
+          "sentence": "Whether a movie or a series was asked for."
+        },
+        "Title": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/api/v1/movie/{tmdbId} title, /api/v1/tv/{tmdbId} name",
+          "sentence": "What was asked for, by name — resolved through seerr's own details lookup, because the request document itself states only ids (stock overseerr carries no title member anywhere; live recon, 2026-08-13). Lookups are bounded per run, so a row may lack this for a sweep and gain it the next."
+        },
+        "Seasons": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/api/v1/request results[].seasons",
+          "sentence": "Which season numbers were requested, for a series — exactly the ones asked for, with specials as season 0."
+        },
+        "TmdbId": {
+          "type": "integer",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/api/v1/request results[].media.tmdbId",
+          "sentence": "The TMDB id seerr filed the request under — the key its own details endpoints answer to."
+        },
+        "RequestedBy": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/api/v1/request results[].requestedBy.displayName",
+          "sentence": "Who is waiting, by their display name."
+        },
+        "CreatedAt": {
+          "type": "timestamp",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/api/v1/request results[].createdAt",
+          "sentence": "When the request was filed, so the wait a pending row represents is readable at a glance."
+        }
+      },
+      "rules": [
+        {
+          "key": "request-pending",
+          "level": "info",
+          "grounds": "interface",
+          "when": {
+            "fact": "Status",
+            "equals": "pending"
+          },
+          "sentence": "This request awaits approval. A pending request is a person waiting, which belongs on the object and off the estate attention surface — paging an operator for it would teach them to ignore the page.",
+          "cites": [
+            "Status"
+          ]
+        }
+      ],
+      "redaction_exemption": "titles and display names are what this collection exists to say and are declared content fact by fact, handled by disclosure policy; ids, status words and timestamps disclose nothing. The seerr API key rides a request HEADER and appears in no document this collection reads.",
+      "reference_commands": [
+        {
+          "purpose": "the request queue these rows carry, first page",
+          "argv": [
+            "curl",
+            "-s",
+            "-H",
+            "X-Api-Key: $SE_SEERR_API_KEY",
+            "$SE_SEERR_URL/api/v1/request?take=100&skip=0&sort=added"
+          ]
+        },
+        {
+          "purpose": "one movie title, from seerr's own TMDB cache",
+          "argv": [
+            "curl",
+            "-s",
+            "-H",
+            "X-Api-Key: $SE_SEERR_API_KEY",
+            "$SE_SEERR_URL/api/v1/movie/<tmdbId>"
+          ]
+        },
+        {
+          "purpose": "one series title — the TV endpoint takes the TMDB id too",
+          "argv": [
+            "curl",
+            "-s",
+            "-H",
+            "X-Api-Key: $SE_SEERR_API_KEY",
+            "$SE_SEERR_URL/api/v1/tv/<tmdbId>"
+          ]
+        }
+      ]
     }
   ]
 }

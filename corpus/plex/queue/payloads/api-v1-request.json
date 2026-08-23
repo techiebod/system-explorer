@@ -1,0 +1,52 @@
+{
+ "pageInfo": {
+  "pages": 1,
+  "pageSize": 100,
+  "results": 3,
+  "page": 1
+ },
+ "results": [
+  {
+   "id": 41,
+   "status": 1,
+   "type": "movie",
+   "createdAt": "2026-08-20T19:04:11.000Z",
+   "requestedBy": {
+    "displayName": "fern"
+   },
+   "media": {
+    "tmdbId": 603
+   }
+  },
+  {
+   "id": 42,
+   "status": 2,
+   "type": "tv",
+   "createdAt": "2026-08-21T08:30:00.000Z",
+   "requestedBy": {
+    "displayName": "arno"
+   },
+   "media": {
+    "tmdbId": 1399
+   },
+   "seasons": [
+    {
+     "seasonNumber": 0
+    },
+    {
+     "seasonNumber": 1
+    }
+   ]
+  },
+  {
+   "id": 43,
+   "status": 4,
+   "type": "movie",
+   "createdAt": "2026-08-22T21:15:45.000Z",
+   "requestedBy": {
+    "displayName": "fern"
+   },
+   "media": {}
+  }
+ ]
+}

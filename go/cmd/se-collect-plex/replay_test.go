@@ -468,8 +468,16 @@ func TestAnUnconfiguredServerIsTheSameAbsentReadingAsAnEmptyCapture(t *testing.T
 			if !errors.As(err, &refused) {
 				t.Fatalf("%s/%s: %v is not a decline at all", label, name, err)
 			}
-			if *refused != declineNoServer {
-				t.Fatalf("%s/%s: reached %v, and the shared constant is %v", label, name, *refused, declineNoServer)
+			// requests fronts a SECOND application with its own receipts,
+			// so its absence names the seerr pair rather than the plex one
+			// — the distinction is the whole reason the receipts are read
+			// separately.
+			want := declineNoServer
+			if name == "requests" {
+				want = declineNoSeerr
+			}
+			if *refused != want {
+				t.Fatalf("%s/%s: reached %v, and the shared constant is %v", label, name, *refused, want)
 			}
 		}
 	}

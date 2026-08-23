@@ -90,6 +90,12 @@ VALID_VARIANTS = frozenset(
         # occur on a plain guest, and the fdb's learned-MAC join is only
         # honest when a real bridge actually learned it.
         "enslaved",
+        # queue, added with plex/requests' R3d port: a CRAFTED seerr
+        # response set — seerr's first-run setup authenticates against a
+        # Plex account, which a test may not touch, so no real one can be
+        # stood up for a capture. The craft stages the pending, the
+        # specials-as-season-0 and the titleless shapes.
+        "queue",
         # tailnet, added with network/tailscale's R3d port: a CRAFTED
         # snapshot staged at the interface's own path — the adapter reads
         # the file, never the daemon — because no lab guest joins a tailnet

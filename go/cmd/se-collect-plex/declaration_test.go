@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -115,12 +116,15 @@ func decodeDeclaration(t *testing.T) map[string]declaredCollection {
 			t.Fatalf("%s is served and not declared", name)
 		}
 	}
-	// seerr's collection is neither served nor declared, and that is a ruling
-	// rather than an omission: it is a second application reached with a second
-	// credential, no corpus variant can stage one, and a declaration carrying it
-	// would promise facts this binary has never been able to read.
-	if _, declared := out["requests"]; declared {
-		t.Fatal("requests is seerr's collection; this collector must neither serve nor declare it")
+	// requests joined at R3d, reversing the ruling that stood here: the old
+	// guard refused it because the seerr reads had no seam and no corpus
+	// variant could stage one — a declaration carrying it would have promised
+	// facts this binary had never been able to read. The seam exists now and
+	// the crafted pair stages it, so the promise is tested; what remains
+	// pinned is that it is DECLARED, or the served table would outrun the
+	// contract again in the other direction.
+	if _, declared := out["requests"]; !declared {
+		t.Fatal("requests is served since R3d and must be declared")
 	}
 	return out
 }
@@ -142,8 +146,16 @@ func emittedFacts(t *testing.T) map[string]map[string]bool {
 		}
 	}
 
-	for _, dir := range []string{stageHealthy(t), stageBusy(t)} {
-		code, stdout, stderr := runWith(t, wholeBatch, map[string]string{"SE_REPLAY_DIR": dir})
+	for _, run := range []struct{ dir, batch string }{
+		{stageHealthy(t), wholeBatch},
+		{stageBusy(t), wholeBatch},
+		// requests replays the committed crafted pair — its fixture IS the
+		// corpus, so the facts this guard derives are the ones the pair
+		// exercises, titleless row included.
+		{filepath.Join("..", "..", "..", "corpus", "plex", "queue", "payloads"),
+			"collect requests:11\n"},
+	} {
+		code, stdout, stderr := runWith(t, run.batch, map[string]string{"SE_REPLAY_DIR": run.dir})
 		if code != exitOK {
 			t.Fatalf("exit %d, stderr: %s", code, stderr)
 		}

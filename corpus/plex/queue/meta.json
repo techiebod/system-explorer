@@ -1,0 +1,73 @@
+{
+ "collector": "plex",
+ "collections": [
+  "requests"
+ ],
+ "variant": "queue",
+ "provenance": "planted",
+ "os": "n/a",
+ "os_version": "n/a",
+ "source_version": "overseerr api v1 shapes (crafted)",
+ "captured": "2026-08-23T15:00:00Z",
+ "regenerable": false,
+ "anonymised": true,
+ "note": "plex/requests' first committed pair, over a CRAFTED response set — provenance planted, and the reason is the one the old seam ruling stated: seerr's first-run setup authenticates against a Plex ACCOUNT, and the estate's account is exactly what a test may not touch, so no seerr can be stood up for a capture the way the unclaimed Plex was. The craft stages the collection's own recorded shapes: a pending request (the one rule, info by design — a person waiting belongs off the attention surface), an approved series asking for specials as season 0, and a FAILED request whose media carries no tmdbId — so it has no title lookup, no Title and no TmdbId, the titleless shape rule 7 makes legitimate. The request document itself states only ids (stock overseerr carries no title member anywhere — live recon, 2026-08-13), which is why the two title documents exist.",
+ "coverage_note": "What this pair does not reach: a second page (the fixture fits one, and the paging walk's bounds are the collector's own tests), a title lookup that 404s (memoised-miss is unit territory), and seerr going dark mid-walk.",
+ "canaries": [],
+ "anchors": [
+  {
+   "collection": "requests",
+   "commit_objects": 3
+  },
+  {
+   "collection": "requests",
+   "object": "41",
+   "fact": "Status",
+   "value": "pending"
+  },
+  {
+   "collection": "requests",
+   "object": "41",
+   "fact": "Title",
+   "value": "The Matrix"
+  },
+  {
+   "collection": "requests",
+   "object": "41",
+   "fact": "RequestedBy",
+   "value": "fern"
+  },
+  {
+   "collection": "requests",
+   "object": "42",
+   "fact": "Title",
+   "value": "Game of Thrones"
+  },
+  {
+   "collection": "requests",
+   "object": "42",
+   "fact": "Seasons",
+   "value": [
+    0,
+    1
+   ]
+  },
+  {
+   "collection": "requests",
+   "object": "43",
+   "fact": "Status",
+   "value": "failed"
+  },
+  {
+   "collection": "requests",
+   "object": "43",
+   "absent_fact": "Title"
+  },
+  {
+   "collection": "requests",
+   "object": "43",
+   "absent_fact": "TmdbId"
+  }
+ ],
+ "anchors_note": "Asserted from the craft itself, which is the staging: three requests, row-named by seerr's own ids. 41 is pending with a movie title from the movie endpoint; 42 carries specials-as-season-0 beside season 1, exactly the ones asked for; 43 is the fault-shaped failed status AND the titleless shape — its media has no tmdbId, so no lookup runs and both Title and TmdbId are honestly absent rather than invented."
+}

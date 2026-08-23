@@ -85,21 +85,39 @@ func TestOnlyTheFirstLineIsARequest(t *testing.T) {
 // with a second application's credential, and this binary has never read it: a
 // port that answered it — emptily or otherwise — would be answering for an
 // interface nothing in this repository has ever opened.
-func TestTheRequestsCollectionIsDeclinedUnsupportedAndNotCommitted(t *testing.T) {
+func TestAnUnpublishedCollectionIsDeclinedUnsupportedAndNotCommitted(t *testing.T) {
+	// requests held this drill's seat while it was seerr's unserved
+	// collection; it is served since R3d, so the seat passes to a name this
+	// collector has never published and never will.
 	env := map[string]string{"SE_REPLAY_DIR": stageHealthy(t)}
-	code, stdout, stderr := runWith(t, "collect requests:11 server:12\n", env)
+	code, stdout, stderr := runWith(t, "collect watchlists:11 server:12\n", env)
 	if code != exitOK {
 		t.Fatalf("exit %d, stderr: %s", code, stderr)
 	}
 	records := parseRecords(t, stdout)
 	declines := ofKind(records, "decline")
-	if len(declines) != 1 || declines[0]["collection"] != "requests" || declines[0]["reason"] != "unsupported" {
-		t.Fatalf("expected one unsupported decline for requests, got %v", declines)
+	if len(declines) != 1 || declines[0]["collection"] != "watchlists" || declines[0]["reason"] != "unsupported" {
+		t.Fatalf("expected one unsupported decline for watchlists, got %v", declines)
 	}
 	for _, commit := range ofKind(records, "commit") {
-		if commit["collection"] == "requests" {
+		if commit["collection"] == "watchlists" {
 			t.Fatal("an unsupported decline established nothing and must not commit")
 		}
+	}
+	// On a variant staging no seerr documents, the served requests
+	// collection reads the capture's own receipts: unavailable, the second
+	// application's absence, prior state standing.
+	code, stdout, stderr = runWith(t, "collect requests:13\n", env)
+	if code != exitOK {
+		t.Fatalf("exit %d, stderr: %s", code, stderr)
+	}
+	records = parseRecords(t, stdout)
+	decline := ofKind(records, "decline")[0]
+	if decline["reason"] != "unavailable" {
+		t.Fatalf("%+v", decline)
+	}
+	if len(ofKind(records, "commit")) != 0 {
+		t.Fatal("unavailable establishes nothing and must not commit")
 	}
 }
 

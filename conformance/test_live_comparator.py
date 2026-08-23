@@ -277,13 +277,13 @@ def test_the_comparator_derives_its_work_from_the_register() -> None:
         "register row 27: the derived work list is what finally drives "
         "system/identity"
     )
-    # Re-anchored four times as R3b/R3d landed collections: the pin is "an
-    # owed exclusion appears, named", not any one collection staying owed —
-    # and plex/requests is the LAST owed name, so when it lands this pin
-    # retires to the dropped-exclusion assertion below it.
-    assert "owed: " in work["plex"]["excluded"]["requests"]
-    assert work["plex"]["excluded"] == {
-        "requests": "owed: " + register.NOT_YET_PORTED["plex/requests"]}
+    # The owed-exclusion pin lived here through five re-anchorings; the owed
+    # list emptied on 2026-08-23 when plex/requests landed, so the pin
+    # retired as its own comment said it would. What remains asserted is the
+    # DROPPED exclusion shape — a ruling, not a debt — and that plex now
+    # excludes nothing.
+    assert work["plex"]["excluded"] == {}
+    assert "dropped: " in work["network"]["excluded"]["lookups"]
 
     rendered = compare.render({
         "collector": "network",

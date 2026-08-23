@@ -64,7 +64,6 @@ DELIBERATELY_DROPPED: dict[str, str] = {
 #: product a person would notice, and the list is what stops gate 6 being
 #: reachable while they are open.
 NOT_YET_PORTED: dict[str, str] = {
-    "plex/requests": "seerr requests.",
 }
 
 #: Collectors the CORPUS venues cannot drive through the Python reference,
@@ -456,9 +455,13 @@ REGISTER: tuple[Row, ...] = (
         "correspondence no machine checks. That half is the owner's to judge "
         "at acceptance."),
     Row(9, "the unported collections (network, storage, system, plex)",
-        "owed", "R3b/R3d", lambda: not NOT_YET_PORTED,
-        "the probe is the register's own owed list emptying; that each entry "
-        "matches reality is the completeness tests' both-directions check."),
+        "built", "R3b/R3d", lambda: not NOT_YET_PORTED,
+        "the probe is the register's own owed list emptying, which it did on "
+        "2026-08-23 when plex/requests — the last of the six R3d owed — "
+        "landed; that each entry matched reality on the way was the "
+        "completeness tests' both-directions check, and the drills that used "
+        "owed names as their seats moved to permanent ones as the list "
+        "drained."),
     Row(10, "`/v1/status` roll-up (worst per collection, attention counts)",
         "built", "R3a",
         lambda: _in_file("go/internal/collate/rest.go", "/v1/status"),

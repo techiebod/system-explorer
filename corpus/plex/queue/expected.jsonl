@@ -1,0 +1,6 @@
+{"record":"begin","request":"replay","batch":"replay","declaration":"sha256:c9e6c09a453700b7f7491eb36e7a11211ae5fbeef478f742a770e3e430456587","boot_id":"5e000000-0000-4000-8000-000000000001","timens":0,"instance":null,"generations":{"requests":78950}}
+{"record":"object","collection":"requests","name":"41","type":"media-request","facts":{"Status":"pending","Type":"movie","RequestedBy":"fern","CreatedAt":"2026-08-20T19:04:11.000Z","TmdbId":603,"Title":"The Matrix"},"at":1}
+{"record":"object","collection":"requests","name":"42","type":"media-request","facts":{"Status":"approved","Type":"tv","RequestedBy":"arno","CreatedAt":"2026-08-21T08:30:00.000Z","TmdbId":1399,"Seasons":[0,1],"Title":"Game of Thrones"},"at":1.001}
+{"record":"object","collection":"requests","name":"43","type":"media-request","facts":{"Status":"failed","Type":"movie","RequestedBy":"fern","CreatedAt":"2026-08-22T21:15:45.000Z"},"at":1.002}
+{"record":"commit","collection":"requests","generation":78950,"objects":3,"assertions":0,"unobservable":0}
+{"record":"end","request":"replay","batch":"replay","cpu_ms":0.5,"wall_ms":1}

@@ -276,30 +276,26 @@ SEAM = {
         "module": plex,
         "adapter": plex.Adapter,
         "interface": "plex api",
-        # THREE collections, not the adapter's four. `requests` is seerr's,
-        # and seerr cannot be stood up in the lab: its first-run setup
-        # authenticates against a Plex ACCOUNT, and the estate's account is
-        # exactly what a test may not touch. Leaving it out of this list is
-        # what stops `collect requests:1` reaching the live seerr of whichever
-        # machine replays; the gap itself is carried in NAMED_RESIDUALS rather
-        # than by this silence, because a collection nobody could ask about
-        # must not render the same as one that had nothing to say.
-        "collections": ["server", "libraries", "sessions"],
-        # _plex_get(path, params) — dispatched on the path, which is what
-        # decides the document; params carry only the zero-size container
-        # window and would key five files onto one name. The seerr half of
-        # this adapter reads through `self._seerr` DIRECTLY rather than
-        # through a method, so it has no seam here at all — another reason
-        # `requests` is not in the list above.
-        "methods": ["_plex_get"],
-        # seerr_url pinned to None so `requests` declines as unavailable for
-        # the stated reason rather than dialling anything, and the token
-        # members pinned for the same reason as paperless's: capability()
-        # reads them before any fetch.
+        # All four collections since R3d: `requests` joined once the seerr
+        # reads had a seam (_seerr_get, the _plex_get precedent), and its
+        # committed pair is a CRAFTED response set — seerr's first-run setup
+        # authenticates against a Plex ACCOUNT, which a test may not touch,
+        # so no capture can stage a real one and the variant's meta states
+        # the plant.
+        "collections": ["server", "libraries", "sessions", "requests"],
+        # Both dispatched on the path, which is what decides the document;
+        # _plex_get's params carry only the zero-size container window and
+        # _seerr_get's the request walk's paging, and either would key five
+        # files onto one name.
+        "methods": ["_plex_get", "_seerr_get"],
+        # The receipts pinned as configured on both applications, so a
+        # variant that stages either half replays it and a replaying host
+        # cannot decide a committed row; capability() reads them before any
+        # fetch.
         "instance": {"plex_url": "http://replay.invalid",
-                     "seerr_url": None,
+                     "seerr_url": "http://replay.invalid",
                      "_plex_token_set": True, "_plex_problem": None,
-                     "_seerr_key_set": False},
+                     "_seerr_key_set": True},
     },
     "unbound": {
         "module": unbound,

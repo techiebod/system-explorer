@@ -601,7 +601,7 @@ def test_an_exemption_still_matches_something_the_module_reads(key):
 # Calls that reach an API. An explicit reviewed table, the FILESYSTEM_READS
 # reasoning: matching any callable named `get` would sweep every dict lookup
 # in every adapter. Matched as self.<name> or bare, nothing dotted deeper.
-API_FETCHERS = {"_get", "_get_list", "_plex_get", "_sab", "_rpc", "_command"}
+API_FETCHERS = {"_get", "_get_list", "_plex_get", "_seerr_get", "_sab", "_rpc", "_command"}
 # httpx verbs on any one- or two-dotted receiver in a module that imports
 # httpx: self._seerr.get, a locally-aliased client.get, an AsyncClient
 # constructed in a with-block — the transports inside the helpers included,

@@ -88,6 +88,7 @@ var collectionTypes = map[string]string{
 	"libraries": "plex-library",
 	"server":    "plex-server",
 	"sessions":  "plex-session",
+	"requests":  "media-request",
 }
 
 func newEmitter(w io.Writer) *emitter {
@@ -122,21 +123,22 @@ const serverName = "plex"
 // and the declaration's collection list — and a switch is where those three drift
 // apart.
 //
-// `requests` is not here, and its absence is a ruling rather than an omission. It
-// is seerr's collection, not Plex's: it is read from a different application over
-// a different credential, seerr's first-run setup authenticates against a Plex
-// ACCOUNT, and no corpus variant can stage one — so the replay seam does not
-// serve it, the live reference does not compare it, and a port that answered it
-// would be answering for an interface nothing here has ever read.
+// `requests` joined at R3d, once the seerr reads had a seam of their own:
+// it is seerr's collection, not Plex's — a different application over a
+// different credential — and until the seam existed no corpus variant could
+// stage one, so serving it would have answered for an interface nothing had
+// ever read. The committed variant stages a crafted response set at the
+// seam, provenance stated in its meta.
 var served = map[string]func(source) ([]row, error){
 	"server":    serverRows,
 	"libraries": libraryRows,
 	"sessions":  sessionRows,
+	"requests":  requestRows,
 }
 
 // The prose the unsupported decline carries, spelled once so it cannot drift from
 // the table above.
-const servedNames = "this collector serves server, libraries and sessions only"
+const servedNames = "this collector serves server, libraries, sessions and requests only"
 
 // collect runs one batch: begin, each requested collection under its issued
 // generation, end. The collection order is the request line's, and `at` advances

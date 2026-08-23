@@ -99,15 +99,17 @@ def test_an_unregistered_gap_refuses_the_run() -> None:
         register.comparator_work(reference=reference)
 
 
-def test_a_stale_owed_entry_refuses_the_run() -> None:
+def test_a_stale_owed_entry_refuses_the_run(monkeypatch) -> None:
     """The drill for the direction that lets a hole be forgotten twice: a
     collection listed as owed that the port now declares must refuse until
-    the register is updated."""
-    ported = {k: dict(v) for k, v in NEW.items()}
-    ported["plex"] = dict(ported["plex"])
-    ported["plex"]["requests"] = {"name": "requests", "answer": []}
+    the register is updated. The owed list emptied when plex/requests landed
+    (register row 9), so the drill plants BOTH halves now — a synthetic owed
+    entry and its declared twin — which is also the honest shape: the guard's
+    subject is the disagreement, not any particular name."""
+    monkeypatch.setitem(register.NOT_YET_PORTED, "plex/requests",
+                        "planted: the drill's synthetic owed entry")
     with pytest.raises(RegisterViolation, match="plex/requests"):
-        register.comparator_work(ported=ported)
+        register.comparator_work()
 
 
 def test_a_port_only_collection_refuses_the_run() -> None:
