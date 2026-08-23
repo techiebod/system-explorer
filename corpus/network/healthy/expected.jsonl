@@ -1,4 +1,4 @@
-{"record":"begin","request":"replay","batch":"replay","declaration":"sha256:50eb5dff413ef72db79566505094fa9386cda75ec2f98137f9f3171b2db0887f","boot_id":"5e000000-0000-4000-8000-000000000001","timens":0,"instance":null,"generations":{"nft-chains":75138}}
+{"record":"begin","request":"replay","batch":"replay","declaration":"sha256:7a409ed7665d46daab5a1a3d659a9ffe8f92505e7b689718afdd077f487b693c","boot_id":"5e000000-0000-4000-8000-000000000001","timens":0,"instance":null,"generations":{"nft-chains":75138,"nft-tables":75155}}
 {"record":"object","collection":"nft-chains","name":"ip filter INPUT","type":"chain","facts":{"BaseChain":true,"Family":"ip","Handle":20,"Hook":"input","Name":"INPUT","Policy":"accept","Priority":0,"RuleCount":1,"Table":"filter","Type":"filter"},"at":1}
 {"record":"relation_assertion","collection":"nft-chains","name":"ip filter INPUT","type":"member-of","vantage":"nft-chains","target":{"kind":"nft-table","name":"ip filter"}}
 {"record":"object","collection":"nft-chains","name":"ip filter FORWARD","type":"chain","facts":{"BaseChain":true,"Family":"ip","Handle":27,"Hook":"forward","Name":"FORWARD","Policy":"accept","Priority":0,"RuleCount":1,"Table":"filter","Type":"filter"},"at":1.001}
@@ -40,4 +40,12 @@
 {"record":"object","collection":"nft-chains","name":"inet nixos-fw input-allow","type":"chain","facts":{"BaseChain":false,"Family":"inet","Handle":4,"JumpedFrom":["input"],"Name":"input-allow","RuleCount":6,"Table":"nixos-fw"},"at":1.019}
 {"record":"relation_assertion","collection":"nft-chains","name":"inet nixos-fw input-allow","type":"member-of","vantage":"nft-chains","target":{"kind":"nft-table","name":"inet nixos-fw"}}
 {"record":"commit","collection":"nft-chains","generation":75138,"objects":20,"assertions":20,"unobservable":0}
+{"record":"object","collection":"nft-tables","name":"ip filter","type":"table","facts":{"ChainCount":4,"Chains":["INPUT (accept)","FORWARD (accept)","ts-forward","ts-input"],"Family":"ip","RuleCount":11},"at":1.02}
+{"record":"object","collection":"nft-tables","name":"ip6 filter","type":"table","facts":{"ChainCount":4,"Chains":["INPUT (accept)","FORWARD (accept)","ts-forward","ts-input"],"Family":"ip6","RuleCount":8},"at":1.021}
+{"record":"object","collection":"nft-tables","name":"ip mangle","type":"table","facts":{"ChainCount":2,"Chains":["PREROUTING (accept)","OUTPUT (accept)"],"Family":"ip","RuleCount":2},"at":1.022}
+{"record":"object","collection":"nft-tables","name":"ip6 mangle","type":"table","facts":{"ChainCount":2,"Chains":["PREROUTING (accept)","OUTPUT (accept)"],"Family":"ip6","RuleCount":2},"at":1.023}
+{"record":"object","collection":"nft-tables","name":"ip nat","type":"table","facts":{"ChainCount":2,"Chains":["POSTROUTING (accept)","ts-postrouting"],"Family":"ip","RuleCount":2},"at":1.024}
+{"record":"object","collection":"nft-tables","name":"ip6 nat","type":"table","facts":{"ChainCount":2,"Chains":["POSTROUTING (accept)","ts-postrouting"],"Family":"ip6","RuleCount":2},"at":1.025}
+{"record":"object","collection":"nft-tables","name":"inet nixos-fw","type":"table","facts":{"ChainCount":4,"Chains":["rpfilter (drop)","rpfilter-allow","input (drop)","input-allow"],"Family":"inet","RuleCount":12},"at":1.026}
+{"record":"commit","collection":"nft-tables","generation":75155,"objects":7,"assertions":0,"unobservable":0}
 {"record":"end","request":"replay","batch":"replay","cpu_ms":0.5,"wall_ms":1}

@@ -1,22 +1,53 @@
 {
-  "collector": "network",
-  "collections": ["nft-chains"],
-  "variant": "named-map",
-  "provenance": "captured",
-  "os": "ubuntu",
-  "os_version": "24.04",
-  "source_version": "nftables-1.0.9",
-  "captured": "2026-08-16T22:10:00Z",
-  "regenerable": true,
-  "canaries": [],
-  "anonymised": true,
-  "note": "The chain `landing` is reached through `meta l4proto vmap @dispatch`, where `dispatch` is a NAMED verdict map. The rule that dispatches carries the string \"@dispatch\" and nothing else; the jump itself lives in the top-level map object's `elem` list, which no rule expression contains. So a reachability walk that reads rule expressions — even one that descends the whole expression tree, which is what the inline-vmap defect taught this product to do — still publishes `landing` as {RuleCount: 1, Unreferenced: true}. Answering needs the join: which rules consult which named object, against what that object's elements do.\n\nThe map's second element routes udp to `drop`, so the specimen also pins that a verdict map's elements are not all jumps, and the map is consulted by a rule in the base chain, which is what makes its targets count at all — a jump inside a map no rule uses is latent, not reachability.\n\nOne table, two chains, one map: the smallest ruleset in which the join can be got wrong.",
-  "anchors": [
-    {"collection": "nft-chains", "object": "inet maplab landing",
-     "fact": "JumpedFrom", "value": ["input"]},
-    {"collection": "nft-chains", "object": "inet maplab landing",
-     "absent_fact": "Unreferenced"},
-    {"collection": "nft-chains", "commit_objects": 2}
-  ],
-  "anchors_note": "Staged truth from the loaded ruleset: the map `dispatch` was created with elements tcp -> jump landing and udp -> drop, and the base chain `input` was given the one rule that consults it. Control therefore leaves `input`, passes through the map and lands in `landing` — so `landing` is reached from `input`, and Unreferenced must not appear on it. commit_objects is 2 because a map is not a chain: two chains were staged, and a subject that published the map as a third object would be inventing one."
+ "collector": "network",
+ "collections": [
+  "nft-chains",
+  "nft-tables"
+ ],
+ "variant": "named-map",
+ "provenance": "captured",
+ "os": "ubuntu",
+ "os_version": "24.04",
+ "source_version": "nftables-1.0.9",
+ "captured": "2026-08-16T22:10:00Z",
+ "regenerable": true,
+ "canaries": [],
+ "anonymised": true,
+ "note": "The chain `landing` is reached through `meta l4proto vmap @dispatch`, where `dispatch` is a NAMED verdict map. The rule that dispatches carries the string \"@dispatch\" and nothing else; the jump itself lives in the top-level map object's `elem` list, which no rule expression contains. So a reachability walk that reads rule expressions — even one that descends the whole expression tree, which is what the inline-vmap defect taught this product to do — still publishes `landing` as {RuleCount: 1, Unreferenced: true}. Answering needs the join: which rules consult which named object, against what that object's elements do.\n\nThe map's second element routes udp to `drop`, so the specimen also pins that a verdict map's elements are not all jumps, and the map is consulted by a rule in the base chain, which is what makes its targets count at all — a jump inside a map no rule uses is latent, not reachability.\n\nOne table, two chains, one map: the smallest ruleset in which the join can be got wrong.",
+ "anchors": [
+  {
+   "collection": "nft-chains",
+   "object": "inet maplab landing",
+   "fact": "JumpedFrom",
+   "value": [
+    "input"
+   ]
+  },
+  {
+   "collection": "nft-chains",
+   "object": "inet maplab landing",
+   "absent_fact": "Unreferenced"
+  },
+  {
+   "collection": "nft-chains",
+   "commit_objects": 2
+  },
+  {
+   "collection": "nft-tables",
+   "commit_objects": 1
+  },
+  {
+   "collection": "nft-tables",
+   "object": "inet maplab",
+   "fact": "RuleCount",
+   "value": 3
+  },
+  {
+   "collection": "nft-tables",
+   "object": "inet maplab",
+   "fact": "ChainCount",
+   "value": 2
+  }
+ ],
+ "anchors_note": "Staged truth from the loaded ruleset: the map `dispatch` was created with elements tcp -> jump landing and udp -> drop, and the base chain `input` was given the one rule that consults it. Control therefore leaves `input`, passes through the map and lands in `landing` — so `landing` is reached from `input`, and Unreferenced must not appear on it. commit_objects is 2 because a map is not a chain: two chains were staged, and a subject that published the map as a third object would be inventing one. nft-tables added 2026-08-23 with the R3d port, over the same staged ruleset: 1 table(s), counted by hand off nft.json's own entries — a table entry opens a row, chains label it, rules count into it."
 }

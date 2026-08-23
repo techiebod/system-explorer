@@ -1,22 +1,53 @@
 {
-  "collector": "network",
-  "collections": ["nft-chains"],
-  "variant": "goto",
-  "provenance": "captured",
-  "os": "ubuntu",
-  "os_version": "24.04",
-  "source_version": "nftables-1.0.9",
-  "captured": "2026-08-16T22:10:00Z",
-  "regenerable": true,
-  "canaries": [],
-  "anonymised": true,
-  "note": "A ruleset staged so that the word `jump` appears nowhere in it. The regular chain `dispatch` is reached only by `goto`, from the base chain `input`, and a collector that builds JumpedFrom from `jump` alone must therefore publish `dispatch` as {RuleCount: 2, Unreferenced: true} — a chain nothing can reach, holding the two rules that admit ssh and https.\n\nKills the goto-ignoring port (fleet round a5, defect N1, fixtures/adversaries/a5_hardcoded_healthy.py). The distinction is real and narrow: goto differs from jump in where control RETURNS, never in whether it arrives, so the two verbs are one fact for reachability and reading only one of them inverts the single answer here somebody acts on. Unreferenced is the fact an operator deletes a chain on the strength of.\n\nSmall on purpose. network/healthy is the seven-table specimen that exercises reading every rule in every table; this one exists to isolate one verb, so nothing else in it can be what makes a subject pass or fail.",
-  "anchors": [
-    {"collection": "nft-chains", "object": "inet gotolab dispatch",
-     "fact": "JumpedFrom", "value": ["input"]},
-    {"collection": "nft-chains", "object": "inet gotolab dispatch",
-     "absent_fact": "Unreferenced"},
-    {"collection": "nft-chains", "commit_objects": 2}
-  ],
-  "anchors_note": "Staged truth, written at load time from the ruleset that was fed to `nft -f`: two chains were created and no more (commit_objects), `dispatch` was given no hook and two rules, and the only statement anywhere that names it is `ip protocol tcp goto dispatch` in `input` — so `dispatch` is reached from `input` and from nothing else, and Unreferenced must not appear on it. The two anchors are the two halves of one claim, deliberately: a subject that emitted JumpedFrom AND Unreferenced together would satisfy the first alone."
+ "collector": "network",
+ "collections": [
+  "nft-chains",
+  "nft-tables"
+ ],
+ "variant": "goto",
+ "provenance": "captured",
+ "os": "ubuntu",
+ "os_version": "24.04",
+ "source_version": "nftables-1.0.9",
+ "captured": "2026-08-16T22:10:00Z",
+ "regenerable": true,
+ "canaries": [],
+ "anonymised": true,
+ "note": "A ruleset staged so that the word `jump` appears nowhere in it. The regular chain `dispatch` is reached only by `goto`, from the base chain `input`, and a collector that builds JumpedFrom from `jump` alone must therefore publish `dispatch` as {RuleCount: 2, Unreferenced: true} — a chain nothing can reach, holding the two rules that admit ssh and https.\n\nKills the goto-ignoring port (fleet round a5, defect N1, fixtures/adversaries/a5_hardcoded_healthy.py). The distinction is real and narrow: goto differs from jump in where control RETURNS, never in whether it arrives, so the two verbs are one fact for reachability and reading only one of them inverts the single answer here somebody acts on. Unreferenced is the fact an operator deletes a chain on the strength of.\n\nSmall on purpose. network/healthy is the seven-table specimen that exercises reading every rule in every table; this one exists to isolate one verb, so nothing else in it can be what makes a subject pass or fail.",
+ "anchors": [
+  {
+   "collection": "nft-chains",
+   "object": "inet gotolab dispatch",
+   "fact": "JumpedFrom",
+   "value": [
+    "input"
+   ]
+  },
+  {
+   "collection": "nft-chains",
+   "object": "inet gotolab dispatch",
+   "absent_fact": "Unreferenced"
+  },
+  {
+   "collection": "nft-chains",
+   "commit_objects": 2
+  },
+  {
+   "collection": "nft-tables",
+   "commit_objects": 1
+  },
+  {
+   "collection": "nft-tables",
+   "object": "inet gotolab",
+   "fact": "RuleCount",
+   "value": 4
+  },
+  {
+   "collection": "nft-tables",
+   "object": "inet gotolab",
+   "fact": "ChainCount",
+   "value": 2
+  }
+ ],
+ "anchors_note": "Staged truth, written at load time from the ruleset that was fed to `nft -f`: two chains were created and no more (commit_objects), `dispatch` was given no hook and two rules, and the only statement anywhere that names it is `ip protocol tcp goto dispatch` in `input` — so `dispatch` is reached from `input` and from nothing else, and Unreferenced must not appear on it. The two anchors are the two halves of one claim, deliberately: a subject that emitted JumpedFrom AND Unreferenced together would satisfy the first alone. nft-tables added 2026-08-23 with the R3d port, over the same staged ruleset: 1 table(s), counted by hand off nft.json's own entries — a table entry opens a row, chains label it, rules count into it."
 }

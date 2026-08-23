@@ -2031,8 +2031,15 @@ class Adapter:
         for key, t in tables.items():
             facts = {"Family": t["Family"], "Chains": t["Chains"],
                      "ChainCount": len(t["Chains"]), "RuleCount": t["RuleCount"]}
+            # The native name is two parts with a SPACE — the spelling every
+            # chain row's member-of target already uses — while the id keeps
+            # its slash for the old UI's deep links. R3b respelled the chain
+            # rows this way; the table rows kept the slash only because the
+            # collection was owed, and a tree whose two ends spell one name
+            # differently never joins at the collator.
             items.append(env.item_summary(
-                f"nft-table:{key}", "table", key, facts))
+                f"nft-table:{key}", "table",
+                f"{t['Family']} {key.split('/', 1)[1]}", facts))
         return items
 
     # ── nftables chains ──────────────────────────────────────

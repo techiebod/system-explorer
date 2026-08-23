@@ -1,23 +1,55 @@
 {
-  "collector": "network",
-  "collections": ["nft-chains"],
-  "variant": "healthy",
-  "provenance": "captured",
-  "os": "nixos",
-  "os_version": "25.11",
-  "source_version": "nftables-1.1.6",
-  "captured": "2026-08-16T09:00:00Z",
-  "regenerable": false,
-  "canaries": [],
-  "anonymised": true,
-  "note": "A real seven-table ruleset — ip/ip6 filter, mangle and nat plus the distribution's own inet table — with twenty chains and thirty-nine rules, captured live and not re-stageable by a lab guest. This is the shape the collection was built for: JumpedFrom needs every rule in every table read to answer what runs a chain, and a single-table fixture cannot exercise that. The nft payload also serves nft-rules, and a two-collection request over it replays deterministically — but the round-a5 fixtures are chains-only ports judged over every network pair, so widening this request waits on those subjects or on scoping the before/after machinery by served collections; until then every committed pair opens one collection and the issuance stride rides on no pair.",
-  "anchors": [
-    {"collection": "nft-chains", "object": "inet nixos-fw input-allow",
-     "fact": "JumpedFrom", "value": ["input"]},
-    {"collection": "nft-chains", "object": "inet nixos-fw input-allow",
-     "absent_fact": "Unreferenced"},
-    {"collection": "nft-chains", "object": "inet nixos-fw input-allow",
-     "fact": "RuleCount", "value": 6}
-  ],
-  "anchors_note": "Staged truth read from the payload by hand: input-allow holds six rules (handles 16, 18, 19, 20, 22, 23) and is reached from `input` alone — through the ct-state verdict map's data, two levels below the rule's top-level statements. That nesting is exactly where the reachability walk once went blind and the wrong Unreferenced answer was committed as expected (DESIGN 20), so the anchors pin the correct answer independently of any implementation."
+ "collector": "network",
+ "collections": [
+  "nft-chains",
+  "nft-tables"
+ ],
+ "variant": "healthy",
+ "provenance": "captured",
+ "os": "nixos",
+ "os_version": "25.11",
+ "source_version": "nftables-1.1.6",
+ "captured": "2026-08-16T09:00:00Z",
+ "regenerable": false,
+ "canaries": [],
+ "anonymised": true,
+ "note": "A real seven-table ruleset — ip/ip6 filter, mangle and nat plus the distribution's own inet table — with twenty chains and thirty-nine rules, captured live and not re-stageable by a lab guest. This is the shape the collection was built for: JumpedFrom needs every rule in every table read to answer what runs a chain, and a single-table fixture cannot exercise that. The nft payload also serves nft-rules, and a two-collection request over it replays deterministically — but the round-a5 fixtures are chains-only ports judged over every network pair, so widening this request waits on those subjects or on scoping the before/after machinery by served collections; until then every committed pair opens one collection and the issuance stride rides on no pair.",
+ "anchors": [
+  {
+   "collection": "nft-chains",
+   "object": "inet nixos-fw input-allow",
+   "fact": "JumpedFrom",
+   "value": [
+    "input"
+   ]
+  },
+  {
+   "collection": "nft-chains",
+   "object": "inet nixos-fw input-allow",
+   "absent_fact": "Unreferenced"
+  },
+  {
+   "collection": "nft-chains",
+   "object": "inet nixos-fw input-allow",
+   "fact": "RuleCount",
+   "value": 6
+  },
+  {
+   "collection": "nft-tables",
+   "commit_objects": 7
+  },
+  {
+   "collection": "nft-tables",
+   "object": "inet nixos-fw",
+   "fact": "RuleCount",
+   "value": 12
+  },
+  {
+   "collection": "nft-tables",
+   "object": "inet nixos-fw",
+   "fact": "ChainCount",
+   "value": 4
+  }
+ ],
+ "anchors_note": "Staged truth read from the payload by hand: input-allow holds six rules (handles 16, 18, 19, 20, 22, 23) and is reached from `input` alone — through the ct-state verdict map's data, two levels below the rule's top-level statements. That nesting is exactly where the reachability walk once went blind and the wrong Unreferenced answer was committed as expected (DESIGN 20), so the anchors pin the correct answer independently of any implementation. nft-tables added 2026-08-23 with the R3d port, over the same staged ruleset: 7 table(s), counted by hand off nft.json's own entries — a table entry opens a row, chains label it, rules count into it."
 }

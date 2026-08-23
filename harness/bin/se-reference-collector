@@ -600,15 +600,16 @@ SEAM = {
         "module": network,
         "adapter": network.Adapter,
         "interface": "nft",
-        # One payload, two collections: nft-chains and nft-rules are both
-        # derived from the same `nft -j list ruleset` document, and a request
-        # naming both replays them from this single redirect, deterministically
-        # — test_reference_honesty drives that request and holds each commit
-        # to its own issued generation. corpus/network/rules is the committed
-        # pair, which is what closed the named residual that stood here while
-        # the round-a5 chains-only fixtures were the only subjects.
-        "collections": ["nft-chains", "nft-rules", "routes", "listening",
-                        "resolver", "links"],
+        # One payload, three collections: nft-tables, nft-chains and nft-rules
+        # are all derived from the same `nft -j list ruleset` document, and a
+        # request naming them replays from this single redirect,
+        # deterministically — test_reference_honesty drives that request and
+        # holds each commit to its own issued generation. corpus/network/rules
+        # is the committed pair, which is what closed the named residual that
+        # stood here while the round-a5 chains-only fixtures were the only
+        # subjects; nft-tables joined it at R3d.
+        "collections": ["nft-tables", "nft-chains", "nft-rules", "routes",
+                        "listening", "resolver", "links"],
         "acquisitions": {"_nft_json": "nft",
                          "_ip_route4": "ip-route4", "_ip_route6": "ip-route6",
                          "_ip_rule": "ip-rule", "_ip_addr": "ip-addr"},

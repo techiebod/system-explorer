@@ -1,7 +1,9 @@
-{"record":"begin","request":"replay","batch":"replay","declaration":"sha256:50eb5dff413ef72db79566505094fa9386cda75ec2f98137f9f3171b2db0887f","boot_id":"5e000000-0000-4000-8000-000000000001","timens":0,"instance":null,"generations":{"nft-chains":41153}}
+{"record":"begin","request":"replay","batch":"replay","declaration":"sha256:7a409ed7665d46daab5a1a3d659a9ffe8f92505e7b689718afdd077f487b693c","boot_id":"5e000000-0000-4000-8000-000000000001","timens":0,"instance":null,"generations":{"nft-chains":41153,"nft-tables":41170}}
 {"record":"object","collection":"nft-chains","name":"inet gotolab dispatch","type":"chain","facts":{"BaseChain":false,"Family":"inet","Handle":1,"JumpedFrom":["input"],"Name":"dispatch","RuleCount":2,"Table":"gotolab"},"at":1}
 {"record":"relation_assertion","collection":"nft-chains","name":"inet gotolab dispatch","type":"member-of","vantage":"nft-chains","target":{"kind":"nft-table","name":"inet gotolab"}}
 {"record":"object","collection":"nft-chains","name":"inet gotolab input","type":"chain","facts":{"BaseChain":true,"Family":"inet","Handle":2,"Hook":"input","Name":"input","Policy":"drop","Priority":0,"RuleCount":2,"Table":"gotolab","Type":"filter"},"at":1.001}
 {"record":"relation_assertion","collection":"nft-chains","name":"inet gotolab input","type":"member-of","vantage":"nft-chains","target":{"kind":"nft-table","name":"inet gotolab"}}
 {"record":"commit","collection":"nft-chains","generation":41153,"objects":2,"assertions":2,"unobservable":0}
+{"record":"object","collection":"nft-tables","name":"inet gotolab","type":"table","facts":{"ChainCount":2,"Chains":["dispatch","input (drop)"],"Family":"inet","RuleCount":4},"at":1.002}
+{"record":"commit","collection":"nft-tables","generation":41170,"objects":1,"assertions":0,"unobservable":0}
 {"record":"end","request":"replay","batch":"replay","cpu_ms":0.5,"wall_ms":1}

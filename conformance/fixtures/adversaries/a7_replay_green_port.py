@@ -122,6 +122,43 @@ def _map_references(node) -> list[str]:
     return found
 
 
+def nft_tables(document: dict) -> list[dict]:
+    """One row per table, correct: family-keyed, chains labelled with their
+    policies in document order, rules counted. Added when nft-tables joined
+    the corpus at R3d, because every judged variant now requests it."""
+    order: list[tuple] = []
+    chain_labels: dict[tuple, list] = {}
+    rule_counts: dict[tuple, int] = {}
+    for entry in document.get("nftables", []):
+        if "table" in entry:
+            t = entry["table"]
+            key = (t.get("family"), t.get("name"))
+            if key not in chain_labels:
+                order.append(key)
+                chain_labels[key] = []
+                rule_counts[key] = 0
+        elif "chain" in entry:
+            c = entry["chain"]
+            key = (c.get("family"), c.get("table"))
+            if key in chain_labels:
+                label = c.get("name") or ""
+                if c.get("policy"):
+                    label += f" ({c['policy']})"
+                chain_labels[key].append(label)
+        elif "rule" in entry:
+            r = entry["rule"]
+            key = (r.get("family"), r.get("table"))
+            if key in rule_counts:
+                rule_counts[key] += 1
+    return [
+        {"native_id": f"{family} {name}", "type": "table",
+         "facts": {"Family": family, "Chains": chain_labels[(family, name)],
+                   "ChainCount": len(chain_labels[(family, name)]),
+                   "RuleCount": rule_counts[(family, name)]}}
+        for family, name in order
+    ]
+
+
 def nft_chains(doc: dict) -> list[dict]:
     chains: dict[tuple, dict] = {}
     rule_counts: dict[tuple, int] = {}
@@ -546,7 +583,13 @@ def main() -> None:
         return
 
     for collection in generations:
-        if collector == "network":
+        if collector == "network" and collection == "nft-tables":
+            # A correct tables serving: this subject's defects are the
+            # numbered envelope ones, and answering a collection it never
+            # read with chain rows would be a second, scope-shaped wrongness
+            # — the lie the a5 fixtures' own history names.
+            items = nft_tables(payloads["nft"])
+        elif collector == "network":
             items = nft_chains(payloads["nft"])
         else:
             items = pools(

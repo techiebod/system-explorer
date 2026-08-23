@@ -163,6 +163,45 @@ def chains(document: dict) -> list[tuple[str, dict]]:
     return items
 
 
+def tables(document: dict) -> list[tuple[str, dict]]:
+    """A correct nft-tables serving, so the staged defect stays the ONLY
+    difference from a correct subject. nft-tables joined the corpus at R3d,
+    and a subject that declined it was red for scope on every extended
+    variant — a second wrongness that would stop the red on the staged
+    variant being attributable to the defect."""
+    order: list[tuple] = []
+    chain_labels: dict[tuple, list] = {}
+    rule_counts: dict[tuple, int] = {}
+    for entry in document.get("nftables", []):
+        if "table" in entry:
+            t = entry["table"]
+            key = (t.get("family"), t.get("name"))
+            if key not in chain_labels:
+                order.append(key)
+                chain_labels[key] = []
+                rule_counts[key] = 0
+        elif "chain" in entry:
+            c = entry["chain"]
+            key = (c.get("family"), c.get("table"))
+            if key in chain_labels:
+                label = c.get("name") or ""
+                if c.get("policy"):
+                    label += f" ({c['policy']})"
+                chain_labels[key].append(label)
+        elif "rule" in entry:
+            r = entry["rule"]
+            key = (r.get("family"), r.get("table"))
+            if key in rule_counts:
+                rule_counts[key] += 1
+    return [
+        (f"{family} {name}",
+         {"Family": family, "Chains": chain_labels[(family, name)],
+          "ChainCount": len(chain_labels[(family, name)]),
+          "RuleCount": rule_counts[(family, name)]})
+        for family, name in order
+    ]
+
+
 def parse_generations(tokens: list[str]) -> dict[str, int]:
     if not tokens:
         fail("empty collect: the request line is 'collect <collection>:<generation>…'")
@@ -180,7 +219,7 @@ def main() -> None:
     if not directory.is_dir():
         fail("SE_REPLAY_DIR must name a payload directory")
     if os.environ.get("SE_REFERENCE_COLLECTOR") != "network":
-        fail("this subject collects nft-chains only")
+        fail("this subject collects nft-chains and nft-tables only")
 
     line = sys.stdin.readline().strip().split()
     if not line or line[0] != "collect":
@@ -194,6 +233,24 @@ def main() -> None:
     payload = directory / "nft.json"
     emitted = 0
     for collection, generation in generations.items():
+        if collection == "nft-tables":
+            if not payload.exists():
+                emit({"record": "decline", "collection": collection,
+                      "reason": "absent", "detail": "no nft on this host"})
+                emit({"record": "commit", "collection": collection,
+                      "generation": generation, "objects": 0, "assertions": 0,
+                      "unobservable": 0})
+                continue
+            rows = tables(json.loads(payload.read_text()))
+            for name, facts in rows:
+                emit({"record": "object", "collection": collection,
+                      "type": "table", "name": name, "facts": facts,
+                      "at": round(1.0 + 0.001 * emitted, 3)})
+                emitted += 1
+            emit({"record": "commit", "collection": collection,
+                  "generation": generation, "objects": len(rows),
+                  "assertions": 0, "unobservable": 0})
+            continue
         if collection != "nft-chains":
             # This subject is a chains-only port, and a collector asked for a
             # collection it does not serve declines `unsupported` and does not
@@ -205,7 +262,7 @@ def main() -> None:
             # that only a multi-collection request could expose.
             emit({"record": "decline", "collection": collection,
                   "reason": "unsupported",
-                  "detail": "this subject serves nft-chains only"})
+                  "detail": "this subject serves nft-chains and nft-tables only"})
             continue
         if not payload.exists():
             emit({"record": "decline", "collection": collection,

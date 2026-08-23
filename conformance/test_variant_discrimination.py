@@ -84,7 +84,7 @@ CASES = (
         unique="the only ruleset in which the word `jump` never appears, so it "
         "is the only one where reading one verb and reading both give "
         "different answers",
-        serves=frozenset({"nft-chains"}),
+        serves=frozenset({"nft-chains", "nft-tables"}),
     ),
     Case(
         variant="network/asymmetric",
@@ -94,7 +94,7 @@ CASES = (
         unique="the only ruleset carrying one chain name in two families with "
         "the jump in only one of them, so it is the only one where a "
         "name-keyed walk and a (family, table, name)-keyed walk differ",
-        serves=frozenset({"nft-chains"}),
+        serves=frozenset({"nft-chains", "nft-tables"}),
     ),
     Case(
         variant="network/named-map",
@@ -104,7 +104,7 @@ CASES = (
         unique="the only ruleset containing a named verdict map, so it is the "
         "only one where a jump is written somewhere no rule expression "
         "reaches and the rule-to-map join is load-bearing",
-        serves=frozenset({"nft-chains"}),
+        serves=frozenset({"nft-chains", "nft-tables"}),
     ),
     Case(
         variant="storage/degraded",

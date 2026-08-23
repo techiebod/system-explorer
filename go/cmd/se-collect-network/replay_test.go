@@ -178,18 +178,21 @@ func TestADocumentWithoutTheNftablesKeyIsStillAnAnswer(t *testing.T) {
 }
 
 func TestAnUnservedCollectionIsDeclinedUnsupportedWithNoCommit(t *testing.T) {
+	// port-exposure is the exemplar because it is still owed; nft-tables held
+	// this seat until it was served at R3d, and the drill's subject moved with
+	// the register rather than staying on a name that now commits.
 	dir := stageRuleset(t, oneChain)
-	code, stdout, stderr := runWith(t, "collect nft-chains:1 nft-tables:2\n", map[string]string{"SE_REPLAY_DIR": dir})
+	code, stdout, stderr := runWith(t, "collect nft-chains:1 port-exposure:2\n", map[string]string{"SE_REPLAY_DIR": dir})
 	if code != exitOK {
 		t.Fatalf("a name this collector never published is declined, not crashed on; exit %d, stderr %s", code, stderr)
 	}
 	records := parseRecords(t, stdout)
 	declines := ofKind(records, "decline")
-	if len(declines) != 1 || declines[0]["collection"] != "nft-tables" || declines[0]["reason"] != "unsupported" {
-		t.Fatalf("expected one unsupported decline for nft-tables; got %v", declines)
+	if len(declines) != 1 || declines[0]["collection"] != "port-exposure" || declines[0]["reason"] != "unsupported" {
+		t.Fatalf("expected one unsupported decline for port-exposure; got %v", declines)
 	}
 	for _, commit := range ofKind(records, "commit") {
-		if commit["collection"] == "nft-tables" {
+		if commit["collection"] == "port-exposure" {
 			t.Fatal("unsupported established nothing about that collection and must not commit, or prior state is retired by a batch that never looked")
 		}
 	}

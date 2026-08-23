@@ -1,18 +1,28 @@
 {
-  "collector": "network",
-  "collections": ["nft-chains"],
-  "variant": "empty-ruleset",
-  "provenance": "captured",
-  "os": "fedora",
-  "os_version": "44",
-  "source_version": "nftables-1.1.6",
-  "captured": "2026-08-16T09:30:00Z",
-  "regenerable": true,
-  "canaries": [],
-  "anonymised": true,
-  "note": "nft is installed and answers, and the ruleset is empty. Captured from a lab guest, and it is the middle case of the batch-authority rule: NOT a decline, because the interface was read successfully — an authoritative-empty commit that must be able to retire chains a previous batch published.",
-  "anchors": [
-    {"collection": "nft-chains", "commit_objects": 0}
-  ],
-  "anchors_note": "Staged truth: the guest's ruleset held nothing but metainfo, so the one correct answer is a commit of zero objects — a decline here would mark prior state stale instead of retiring it."
+ "collector": "network",
+ "collections": [
+  "nft-chains",
+  "nft-tables"
+ ],
+ "variant": "empty-ruleset",
+ "provenance": "captured",
+ "os": "fedora",
+ "os_version": "44",
+ "source_version": "nftables-1.1.6",
+ "captured": "2026-08-16T09:30:00Z",
+ "regenerable": true,
+ "canaries": [],
+ "anonymised": true,
+ "note": "nft is installed and answers, and the ruleset is empty. Captured from a lab guest, and it is the middle case of the batch-authority rule: NOT a decline, because the interface was read successfully — an authoritative-empty commit that must be able to retire chains a previous batch published.",
+ "anchors": [
+  {
+   "collection": "nft-chains",
+   "commit_objects": 0
+  },
+  {
+   "collection": "nft-tables",
+   "commit_objects": 0
+  }
+ ],
+ "anchors_note": "Staged truth: the guest's ruleset held nothing but metainfo, so the one correct answer is a commit of zero objects — a decline here would mark prior state stale instead of retiring it. nft-tables added 2026-08-23 with the R3d port, over the same staged ruleset: 0 table(s), counted by hand off nft.json's own entries — a table entry opens a row, chains label it, rules count into it."
 }

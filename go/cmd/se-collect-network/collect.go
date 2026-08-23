@@ -110,6 +110,7 @@ func (e *emitter) emit(record any) {
 }
 
 const (
+	collectionTables = "nft-tables"
 	collectionChains = "nft-chains"
 	collectionRules  = "nft-rules"
 )
@@ -151,7 +152,8 @@ func collect(stdout, stderr io.Writer, src source, order []string, generations m
 	var doc jsonValue
 	var acqErr error
 	for _, collection := range order {
-		if collection == collectionChains || collection == collectionRules {
+		if collection == collectionTables || collection == collectionChains ||
+			collection == collectionRules {
 			doc, acqErr = src.nftRuleset()
 			break
 		}
@@ -204,15 +206,18 @@ func collect(stdout, stderr io.Writer, src source, order []string, generations m
 			if code := collectResolver(out, stderr, src, collection, generations[collection], &objects); code != exitOK {
 				return code
 			}
-		case collectionChains, collectionRules:
+		case collectionTables, collectionChains, collectionRules:
 			if acqErr != nil {
 				declineAcquisition(out, collection, generations[collection], acqErr)
 				continue
 			}
 			var rows, edges int
-			if collection == collectionChains {
+			switch collection {
+			case collectionTables:
+				rows = emitTables(out, src, collection, doc, &objects)
+			case collectionChains:
 				rows, edges = emitChains(out, src, collection, doc, &objects)
-			} else {
+			default:
 				rows, edges = emitRules(out, src, collection, doc, &objects)
 			}
 			out.emit(commitRecord{
@@ -245,6 +250,24 @@ func collect(stdout, stderr io.Writer, src source, order []string, generations m
 		return exitRuntime
 	}
 	return exitOK
+}
+
+func emitTables(out *emitter, src source, collection string, doc jsonValue, objects *int) int {
+	rows := nftTables(doc)
+	for _, row := range rows {
+		out.emit(objectRecord{
+			Record:     "object",
+			Collection: collection,
+			Type:       "table",
+			// The two-part native name, a space between — the spelling every
+			// chain row's member-of target already uses, so the tree joins.
+			Name:  row.name,
+			Facts: row.facts,
+			At:    src.stamp(*objects),
+		})
+		*objects++
+	}
+	return len(rows)
 }
 
 func emitChains(out *emitter, src source, collection string, doc jsonValue, objects *int) (int, int) {

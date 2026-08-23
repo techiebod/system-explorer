@@ -21,6 +21,87 @@
   "probe": "nft runs and `nft -j list ruleset` parses; an empty ruleset is a successful read and an authoritative-empty commit, never a probe failure",
   "collections": [
     {
+      "name": "nft-tables",
+      "question": "which firewall tables exist, and how much does each hold?",
+      "prefix": "nft-table",
+      "freshness": "5m",
+      "perishability": "reconstructible",
+      "answer": [
+        "Family",
+        "ChainCount",
+        "RuleCount",
+        "Chains"
+      ],
+      "ceiling": {
+        "records": 1024,
+        "bytes": 1048576
+      },
+      "facts": {
+        "Family": {
+          "type": "enum",
+          "values": [
+            "ip",
+            "ip6",
+            "inet",
+            "arp",
+            "bridge",
+            "netdev"
+          ],
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/nftables/*/table/family",
+          "sentence": "The address family this table filters. The same table name in ip and ip6 is two tables, which is why the family is in the row's own name."
+        },
+        "Chains": {
+          "type": "list",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "content",
+          "from": "/nftables/*/chain",
+          "sentence": "The table's chains by name, each with its policy where one is declared, in the ruleset's own order. Chain names are words somebody chose."
+        },
+        "ChainCount": {
+          "type": "integer",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": [
+            "Chains"
+          ],
+          "discloses": "nothing",
+          "from": "/nftables/*/chain",
+          "sentence": "How many chains the table holds."
+        },
+        "RuleCount": {
+          "type": "integer",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/nftables/*/rule",
+          "sentence": "How many rules the table holds — COUNTED, never read. No fact on this row says what any rule matches or permits, so a ruleset that admits one port from one interface and one that admits everything are indistinguishable here: deleting the single rule that admits sshd moves this from 25 to 24 and changes nothing else on this page. The rules themselves are the nft-rules collection and this collection's evidence."
+        }
+      },
+      "redaction_exemption": "a family, a count, and a list of chain names with their policies. Table and chain names are distribution conventions or operator-chosen words and are declared content; no rule body and no comment is read by this collection at all.",
+      "reference_commands": [
+        {
+          "purpose": "the tables this collection rows, by hand",
+          "argv": [
+            "nft",
+            "list",
+            "tables"
+          ]
+        },
+        {
+          "purpose": "the full ruleset — every match, port, interface and verdict these rows deliberately do not read",
+          "argv": [
+            "nft",
+            "list",
+            "ruleset"
+          ]
+        }
+      ]
+    },
+    {
       "name": "nft-chains",
       "question": "where does the kernel enter this ruleset, and what runs what?",
       "prefix": "nft-chain",
