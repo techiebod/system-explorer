@@ -41,7 +41,7 @@ func TestAnEnumIsAChipAndIsNeverColouredByThisFile(t *testing.T) {
 	// that directly cannot be evaded by choosing a different word.
 	var classes []string
 	for _, value := range []string{"failed", "active", "some-member-nobody-declared"} {
-		out := Cell(decl, value, StateValue, "", nil, false)
+		out := Cell(decl, value, StateValue, "", Siblings{}, false)
 		if !strings.Contains(out, "chip") || !strings.Contains(out, value) {
 			t.Fatalf("%s: %s", value, out)
 		}
@@ -65,8 +65,8 @@ func TestABooleanRendersItsDeclaredLabelsAndNeverATickOrACross(t *testing.T) {
 	// in miniature.
 	decl := FactDecl{Type: "boolean",
 		Labels: []string{"synthesised from the mount table", "declared in a unit file"}}
-	on := Cell(decl, true, StateValue, "", nil, false)
-	off := Cell(decl, false, StateValue, "", nil, false)
+	on := Cell(decl, true, StateValue, "", Siblings{}, false)
+	off := Cell(decl, false, StateValue, "", Siblings{}, false)
 	if !strings.Contains(on, "synthesised from the mount table") {
 		t.Fatalf("true takes the first label: %s", on)
 	}
@@ -86,7 +86,7 @@ func TestAnUnderDeclaredBooleanIsMarkedRatherThanGuessedAt(t *testing.T) {
 	// Twenty booleans in the tree declare no labels. The raw word is
 	// rendered and marked; inventing "yes"/"no" would be this file
 	// supplying a vocabulary the producer never declared.
-	out := Cell(FactDecl{Type: "boolean"}, true, StateValue, "", nil, false)
+	out := Cell(FactDecl{Type: "boolean"}, true, StateValue, "", Siblings{}, false)
 	if !strings.Contains(out, "under-declared") {
 		t.Fatalf("an under-declared boolean says so: %s", out)
 	}
@@ -105,7 +105,7 @@ func TestBytesUseOneLadderProductWide(t *testing.T) {
 		512: "512 B", 1024: "1 KiB", 1536: "1.5 KiB",
 		1048576: "1 MiB", 1073741824: "1 GiB",
 	} {
-		out := Cell(decl, value, StateValue, "", nil, false)
+		out := Cell(decl, value, StateValue, "", Siblings{}, false)
 		if !strings.Contains(out, want) {
 			t.Fatalf("%v: want %q, got %s", value, want, out)
 		}
@@ -118,7 +118,7 @@ func TestTheMicrosecondFactTheUnitGuesserCouldNotSee(t *testing.T) {
 	// bare integer "to this day". Seven facts declare the unit, so this
 	// renders from the declaration and the class of bug cannot recur.
 	out := Cell(FactDecl{Type: "integer", Unit: "microseconds"},
-		2_500_000.0, StateValue, "", nil, false)
+		2_500_000.0, StateValue, "", Siblings{}, false)
 	if !strings.Contains(out, "2.5 s") {
 		t.Fatalf("a declared microsecond fact is not a bare integer: %s", out)
 	}
@@ -130,7 +130,7 @@ func TestACounterIsMarkedCumulativeAndNoRateIsInvented(t *testing.T) {
 	// marked cumulative. The window belongs to the producer (§12) and a
 	// rate computed here would be the fourth copy.
 	out := Cell(FactDecl{Type: "integer", Temperament: "counter", Unit: "count"},
-		98765.0, StateValue, "", nil, false)
+		98765.0, StateValue, "", Siblings{}, false)
 	if !strings.Contains(out, "counter") || !strings.Contains(out, "98765") {
 		t.Fatalf("%s", out)
 	}
@@ -151,7 +151,8 @@ func TestAPercentageCarriesItsDenominator(t *testing.T) {
 	// rather than guessed at from the sibling names.
 	decl := FactDecl{Type: "number", Unit: "percent", Denominator: "SizeBytes"}
 	out := Cell(decl, 82.5, StateValue, "",
-		map[string]any{"SizeBytes": 2199023255552.0}, false)
+		Siblings{Values: map[string]any{"SizeBytes": 2199023255552.0},
+			Decls: map[string]FactDecl{"SizeBytes": {Type: "integer", Unit: "bytes"}}}, false)
 	if !strings.Contains(out, "82.5%") {
 		t.Fatalf("%s", out)
 	}
@@ -164,7 +165,7 @@ func TestAPercentageWhoseDenominatorIsNotOnTheRowSaysSo(t *testing.T) {
 	// Stated, not silently dropped: a reader must be able to tell "no
 	// denominator was declared" from "the declared one is not here".
 	decl := FactDecl{Type: "number", Unit: "percent", Denominator: "SizeBytes"}
-	out := Cell(decl, 82.5, StateValue, "", map[string]any{}, false)
+	out := Cell(decl, 82.5, StateValue, "", Siblings{Values: map[string]any{}}, false)
 	if !strings.Contains(out, "not on this row") {
 		t.Fatalf("%s", out)
 	}
@@ -175,16 +176,16 @@ func TestAGaugeGetsABarOnlyWhereItsBoundIsKnown(t *testing.T) {
 	decl := FactDecl{Type: "integer", Unit: "bytes", Temperament: "gauge",
 		Bound: "DiskTotalBytes"}
 	bounded := Cell(decl, 250.0, StateValue, "",
-		map[string]any{"DiskTotalBytes": 1000.0}, false)
+		Siblings{Values: map[string]any{"DiskTotalBytes": 1000.0}}, false)
 	if !strings.Contains(bounded, "bar") || !strings.Contains(bounded, "--fill:25.0%") {
 		t.Fatalf("%s", bounded)
 	}
-	unbounded := Cell(decl, 250.0, StateValue, "", map[string]any{}, false)
+	unbounded := Cell(decl, 250.0, StateValue, "", Siblings{Values: map[string]any{}}, false)
 	if strings.Contains(unbounded, "bar") {
 		t.Fatalf("no bound, no bar: %s", unbounded)
 	}
 	unboundedDecl := Cell(FactDecl{Type: "integer", Temperament: "gauge"},
-		250.0, StateValue, "", nil, false)
+		250.0, StateValue, "", Siblings{}, false)
 	if strings.Contains(unboundedDecl, "bar") {
 		t.Fatalf("a gauge declaring no bound gets no bar: %s", unboundedDecl)
 	}
@@ -193,14 +194,14 @@ func TestAGaugeGetsABarOnlyWhereItsBoundIsKnown(t *testing.T) {
 func TestAListOfScalarsIsChipsAndAListOfObjectsIsATable(t *testing.T) {
 	// A structured value earns structure; comma-joining it destroys it.
 	chips := Cell(FactDecl{Type: "list"},
-		[]any{"one", "two", "three"}, StateValue, "", nil, false)
+		[]any{"one", "two", "three"}, StateValue, "", Siblings{}, false)
 	if strings.Count(chips, "chip item") != 3 {
 		t.Fatalf("%s", chips)
 	}
 	table := Cell(FactDecl{Type: "list"}, []any{
 		map[string]any{"name": "a", "state": "up"},
 		map[string]any{"name": "b", "state": "down"},
-	}, StateValue, "", nil, false)
+	}, StateValue, "", Siblings{}, false)
 	if !strings.Contains(table, "<table class=\"nested\"") {
 		t.Fatalf("a list of uniform objects is a nested table: %s", table)
 	}
@@ -212,7 +213,7 @@ func TestAListOfScalarsIsChipsAndAListOfObjectsIsATable(t *testing.T) {
 func TestAnEmptyListIsMeasuredEmptinessNotAbsence(t *testing.T) {
 	// The producer looked and found no members. Borrowing absent's em
 	// dash would collapse a measured negative into an epistemic one.
-	out := Cell(FactDecl{Type: "list"}, []any{}, StateValue, "", nil, false)
+	out := Cell(FactDecl{Type: "list"}, []any{}, StateValue, "", Siblings{}, false)
 	if strings.Contains(out, "—") {
 		t.Fatalf("an empty list is not an absent property: %s", out)
 	}
@@ -227,7 +228,7 @@ func TestProseIsVerbatimAndCarriesNoTruncation(t *testing.T) {
 	// clipped to `tcp dport 22 counter accept` is a rule confining sshd to
 	// one interface rendered as one admitting it from anywhere.
 	rule := "meta iifname tailscale0 tcp dport 22 counter accept"
-	out := Cell(FactDecl{Type: "string"}, rule, StateValue, "", nil, false)
+	out := Cell(FactDecl{Type: "string"}, rule, StateValue, "", Siblings{}, false)
 	if !strings.Contains(out, "iifname tailscale0") {
 		t.Fatal("the interface clause is what the truncation destroyed")
 	}
@@ -240,9 +241,9 @@ func TestTheFiveStatesDoNotRenderAlike(t *testing.T) {
 	// "The most common rendering bug in this product's history is
 	// collapsing these into a blank cell."
 	decl := FactDecl{Type: "string"}
-	value := Cell(decl, "running", StateValue, "", nil, false)
-	absent := Cell(decl, nil, StateAbsent, "", nil, false)
-	unobs := Cell(decl, nil, StateUnobservable, "EACCES on /proc/1/environ", nil, false)
+	value := Cell(decl, "running", StateValue, "", Siblings{}, false)
+	absent := Cell(decl, nil, StateAbsent, "", Siblings{}, false)
+	unobs := Cell(decl, nil, StateUnobservable, "EACCES on /proc/1/environ", Siblings{}, false)
 	seen := map[string]string{"value": value, "absent": absent, "unobservable": unobs}
 	for name, out := range seen {
 		if strings.TrimSpace(out) == "" {
@@ -270,7 +271,7 @@ func TestTheAbsentDashIsContentNotAStylesheet(t *testing.T) {
 	// A CSS-generated dash is a blank cell wearing a dash: a stylesheet
 	// that did not load takes the state with it, and the founding
 	// rendering bug returns through the door §28 shut.
-	out := Cell(FactDecl{Type: "string"}, nil, StateAbsent, "", nil, false)
+	out := Cell(FactDecl{Type: "string"}, nil, StateAbsent, "", Siblings{}, false)
 	if !strings.Contains(out, ">—<") {
 		t.Fatalf("the dash must be in the markup: %s", out)
 	}
@@ -279,7 +280,7 @@ func TestTheAbsentDashIsContentNotAStylesheet(t *testing.T) {
 func TestADeclaredFactIsMarkedWhereverItAppears(t *testing.T) {
 	// A reader forming a belief should know it rests on an assertion.
 	out := Cell(FactDecl{Type: "string", Kind: "declared"}, "offsite-vault",
-		StateValue, "", nil, false)
+		StateValue, "", Siblings{}, false)
 	if !strings.Contains(out, "mark-declared") {
 		t.Fatalf("%s", out)
 	}
@@ -303,10 +304,10 @@ func TestEveryRenderedValueIsEscaped(t *testing.T) {
 	// mechanism.
 	hostile := `<script>alert(1)</script>`
 	for _, out := range []string{
-		Cell(FactDecl{Type: "string"}, hostile, StateValue, "", nil, false),
-		Cell(FactDecl{Type: "enum"}, hostile, StateValue, "", nil, false),
-		Cell(FactDecl{Type: "list"}, []any{hostile}, StateValue, "", nil, false),
-		Cell(FactDecl{Type: "string"}, nil, StateUnobservable, hostile, nil, false),
+		Cell(FactDecl{Type: "string"}, hostile, StateValue, "", Siblings{}, false),
+		Cell(FactDecl{Type: "enum"}, hostile, StateValue, "", Siblings{}, false),
+		Cell(FactDecl{Type: "list"}, []any{hostile}, StateValue, "", Siblings{}, false),
+		Cell(FactDecl{Type: "string"}, nil, StateUnobservable, hostile, Siblings{}, false),
 		Undeclared(hostile),
 	} {
 		if strings.Contains(out, "<script>") {

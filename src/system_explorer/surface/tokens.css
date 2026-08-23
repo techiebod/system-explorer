@@ -117,3 +117,94 @@ td.num { font-variant-numeric: tabular-nums; text-align: right; }
 .reach { display: flex; flex-wrap: wrap; gap: .4rem; margin: .5rem 0; }
 .answer { font-size: 1.05rem; margin: .25rem 0 .75rem; }
 footer { margin-top: 2rem; color: var(--text-faint); font-size: 11.5px; }
+
+/* ── DESIGN §28's five render states ────────────────────────────────────
+   Each is visually distinct, and none of them is a blank cell. The
+   em dash for `absent` is CONTENT in the markup, not generated here — a
+   stylesheet that fails to load must not take a render state with it. */
+.state-absent { color: var(--text-faint); }
+.state-unobservable {
+  color: var(--warn); font-size: 11.5px; font-style: italic;
+}
+.stale-banner {
+  border-left: 3px solid var(--warn); padding: .5rem .75rem;
+  background: var(--panel-2); color: var(--text); margin: .75rem 0;
+}
+.panel.declined { border-left: 3px solid var(--border-2); }
+.panel.declined h2 { color: var(--text-dim); }
+.empty-state p { color: var(--text-dim); max-width: 62ch; }
+.question { color: var(--text-dim); max-width: 72ch; margin: .25rem 0 1rem; }
+.detail { color: var(--text); }
+
+/* Load-bearing text is never clipped. The shipped defect this prevents:
+   a firewall rule truncated at the column edge turned `meta iifname
+   tailscale0 tcp dport 22 counter accept` into `tcp dport 22 counter
+   accept` — a rule confining sshd to one interface rendered as one
+   admitting it from anywhere. No ellipsis, no nowrap, no fixed width. */
+.prose { overflow-wrap: anywhere; white-space: pre-wrap; }
+.factname { white-space: nowrap; color: var(--text-dim); font-weight: 500; }
+.sentence {
+  color: var(--text-faint); font-size: 11.5px; max-width: 72ch;
+  margin-top: .2rem;
+}
+
+/* Chips wrap; a list item is never cut mid-item. */
+.chips { display: inline-flex; flex-wrap: wrap; gap: .25rem; }
+.chip.item { font-family: var(--mono, ui-monospace, monospace); }
+.chip.enum { font-variant: none; }
+.chip.bool.under-declared { border-style: dashed; }
+.chip.instance { border-color: var(--border-2); }
+.chip.muted { color: var(--text-faint); }
+.empty-list { color: var(--text-dim); font-style: italic; }
+.undeclared {
+  border-bottom: 1px dotted var(--border-2); color: var(--text-dim);
+}
+.mark-declared {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--text-faint);
+}
+
+/* A bar only where a bound was declared: an unbounded bar invents a
+   scale. The fill is a custom property because the value is data. */
+.bar {
+  display: inline-block; width: 4rem; height: .45rem; margin-left: .4rem;
+  background: var(--panel-2); border: 1px solid var(--border-2);
+  border-radius: 999px; overflow: hidden; vertical-align: middle;
+}
+.bar::after {
+  content: ""; display: block; height: 100%; width: var(--fill, 0%);
+  background: var(--text-dim);
+}
+.of { color: var(--text-faint); font-size: 11.5px; }
+.counter { border-bottom: 1px dotted var(--border-2); }
+
+/* A structured value earns structure. */
+table.nested { width: auto; font-size: 11.5px; margin: .2rem 0; }
+table.nested th, table.nested td { padding: .2rem .4rem; }
+dl.nested-object { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: .1rem .6rem; }
+dl.nested-object dt { color: var(--text-dim); font-size: 11.5px; }
+dl.nested-object dd { margin: 0; }
+
+/* ── Relations, whose three states must never render alike ──────────────
+   An asserted relation styled like a confirmed one is the founding
+   failure re-entering through layer 6. Each carries its own WORDS as
+   well as its own form, because a class alone is a stylesheet away from
+   being nothing. */
+ul.relations { list-style: none; padding: 0; margin: .5rem 0; }
+.rel { padding: .35rem 0; border-bottom: 1px solid var(--border); }
+.rel-type {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--text-dim);
+}
+.rel-state { font-size: 11.5px; }
+.rel.confirmed { border-left: 3px solid var(--ok); padding-left: .6rem; }
+.rel.confirmed .rel-state { color: var(--text-faint); }
+.rel.asserted { border-left: 3px dashed var(--warn); padding-left: .6rem; }
+.rel.asserted .rel-state { color: var(--warn); }
+.rel.contradicted { border-left: 3px double var(--crit); padding-left: .6rem; }
+.rel.contradicted .rel-state { color: var(--crit); }
+
+/* Sections expand with <details>, so opening one runs no script and the
+   page is a complete answer with script disabled. */
+details.panel > summary { cursor: pointer; list-style: revert; }
+details.panel > summary h2 { display: inline-block; margin: 0; }

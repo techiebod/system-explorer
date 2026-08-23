@@ -64,6 +64,12 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 		"<th>freshness</th><th>age</th></tr></thead><tbody>")
 	for _, cs := range states {
 		freshness := chip("current", "ok")
+		if cs.Decline != nil && cs.Decline.Reason == "absent" {
+			// Absent COMMITS, so it is neither stale nor an incident —
+			// and with 0 objects its row was indistinguishable from a
+			// collection that answered and holds nothing.
+			freshness = chip("absent here", "muted")
+		}
 		if cs.Stale {
 			reason := ""
 			if cs.StaleReason != nil {
@@ -83,10 +89,13 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 				age = `<span class="faint">clock domain mismatch</span>`
 			}
 		}
+		// The drill starts here: row → collection → object → evidence,
+		// every step an <a href> and no script anywhere in it.
 		body.WriteString(fmt.Sprintf(
-			`<tr><td class="ident">%s</td><td class="num">%d</td><td class="num">%d</td>`+
+			`<tr><td class="ident"><a href="/collections/%s">%s</a></td>`+
+				`<td class="num">%d</td><td class="num">%d</td>`+
 				`<td>%s</td><td>%s</td></tr>`,
-			esc(cs.Name), cs.Generation, cs.ObjectCount, freshness, age))
+			esc(cs.Name), esc(cs.Name), cs.Generation, cs.ObjectCount, freshness, age))
 	}
 	body.WriteString("</tbody></table></div></section>")
 
@@ -173,6 +182,32 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 }
 
 func registerPage(mux *http.ServeMux, st *store.Store, now func() float64, bootID string) {
+	mux.HandleFunc("GET /collections/{name}", func(w http.ResponseWriter, r *http.Request) {
+		out, code, err := collectionPage(st, r.PathValue("name"), now, bootID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if code != http.StatusOK {
+			http.NotFound(w, r)
+			return
+		}
+		serveHTML(w, out)
+	})
+	mux.HandleFunc("GET /collections/{name}/objects/{object}",
+		func(w http.ResponseWriter, r *http.Request) {
+			out, code, err := objectPage(st, r.PathValue("name"),
+				r.PathValue("object"), now, bootID)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if code != http.StatusOK {
+				http.NotFound(w, r)
+				return
+			}
+			serveHTML(w, out)
+		})
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
@@ -183,10 +218,21 @@ func registerPage(mux *http.ServeMux, st *store.Store, now func() float64, bootI
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		// No script anywhere on this page, and the header says so rather
-		// than relying on there being none today.
-		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
-		fmt.Fprint(w, out)
+		serveHTML(w, out)
 	})
+}
+
+// serveHTML is the one place this tier's pages are sent, so the policy is
+// a property of the SURFACE rather than of whoever remembered it.
+//
+// §28's ruling: the collator's host page keeps the absolute header and
+// gets no typed filter. It is the page that must answer when everything
+// else is down, and the property that it cannot execute anything is worth
+// more there than incremental narrowing. A host page that needs a filter
+// is a host page with too much on it.
+func serveHTML(w http.ResponseWriter, out string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Security-Policy",
+		"default-src 'none'; style-src 'unsafe-inline'")
+	fmt.Fprint(w, out)
 }

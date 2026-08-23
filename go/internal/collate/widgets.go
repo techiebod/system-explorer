@@ -71,12 +71,15 @@ const (
 
 // Cell renders one fact at one density.
 //
-// `others` supplies the sibling facts a declaration REFERS to — a
-// percentage's denominator, a gauge's bound. Passing the row rather than
-// the value alone is what lets those rules be honoured without this file
-// guessing which fact is the denominator.
+// `sib` supplies the rest of the row — the sibling VALUES and their
+// DECLARATIONS. A percentage's denominator and a gauge's bound are named
+// by the declaration, so passing the row is what lets those rules be
+// honoured without this file guessing which fact is which; and passing
+// the sibling declarations too is what lets a denominator be formatted in
+// ITS OWN unit rather than in the numerator's, which for a percentage is
+// never right.
 func Cell(decl FactDecl, value any, state FactState, detail string,
-	others map[string]any, object bool) string {
+	sib Siblings, object bool) string {
 	switch state {
 	case StateAbsent:
 		// The em dash is CONTENT, so it survives a stylesheet that did
@@ -99,7 +102,7 @@ func Cell(decl FactDecl, value any, state FactState, detail string,
 		// answer is the failure the state table exists to prevent.
 		return `<span class="state-unobservable">not stated</span>`
 	}
-	rendered := widget(decl, value, others, object)
+	rendered := widget(decl, value, sib, object)
 	if decl.Kind == "declared" {
 		// A reader forming a belief should know it rests on an assertion.
 		rendered += ` <span class="mark-declared" title="declared, not observed">declared</span>`
@@ -115,7 +118,16 @@ func Undeclared(value any) string {
 			`shown raw">%s</span>`, esc(scalar(value)))
 }
 
-func widget(decl FactDecl, value any, others map[string]any, object bool) string {
+// Siblings is the rest of the row: the other facts' values, and their
+// declarations. Both are needed and neither substitutes for the other —
+// a value without its declaration cannot be formatted, and a declaration
+// without its value has nothing to format.
+type Siblings struct {
+	Values map[string]any
+	Decls  map[string]FactDecl
+}
+
+func widget(decl FactDecl, value any, sib Siblings, object bool) string {
 	switch decl.Type {
 	case "enum":
 		// A chip, and DELIBERATELY UNCOLOURED. §28 allows colour only
@@ -136,7 +148,7 @@ func widget(decl FactDecl, value any, others map[string]any, object bool) string
 	case "object":
 		return nested(value)
 	case "integer", "number":
-		return numeric(decl, value, others)
+		return numeric(decl, value, sib)
 	case "duration":
 		return fmt.Sprintf(`<span class="num">%s</span>`, esc(scalar(value)))
 	}
@@ -277,7 +289,7 @@ func nested(value any) string {
 	return b.String()
 }
 
-func numeric(decl FactDecl, value any, others map[string]any) string {
+func numeric(decl FactDecl, value any, sib Siblings) string {
 	n, ok := number(value)
 	if !ok {
 		return fmt.Sprintf(`<span class="prose">%s</span>`, esc(scalar(value)))
@@ -299,10 +311,13 @@ func numeric(decl FactDecl, value any, others map[string]any) string {
 		// an answer. The denominator is NAMED by the declaration, so this
 		// file looks it up rather than guessing which sibling it is.
 		if decl.Denominator != "" {
-			if against, ok := number(others[decl.Denominator]); ok {
+			if against, ok := number(sib.Values[decl.Denominator]); ok {
+				// In the DENOMINATOR'S own unit, read off its own
+				// declaration. Formatting it in the numerator's unit would
+				// print a byte count as a percentage.
 				return fmt.Sprintf(
 					`<span class="num">%s</span> <span class="of">of %s</span>`,
-					figure, esc(formatted(unitOf(decl.Denominator), against)))
+					figure, esc(formatted(sib.Decls[decl.Denominator].Unit, against)))
 			}
 			return fmt.Sprintf(
 				`<span class="num">%s</span> <span class="of faint">of %s, `+
@@ -315,7 +330,7 @@ func numeric(decl FactDecl, value any, others map[string]any) string {
 		// A bar only where the bound is KNOWN — an unbounded bar invents
 		// a scale. The width is a style attribute rather than a class,
 		// because the value is data.
-		if bound, ok := number(others[decl.Bound]); ok && bound > 0 {
+		if bound, ok := number(sib.Values[decl.Bound]); ok && bound > 0 {
 			pct := n / bound * 100
 			if pct < 0 {
 				pct = 0
@@ -331,12 +346,6 @@ func numeric(decl FactDecl, value any, others map[string]any) string {
 	}
 	return fmt.Sprintf(`<span class="num">%s</span>`, figure)
 }
-
-// unitOf is the one place this file would have to GUESS, and it does not:
-// a denominator's own unit is not reachable from the numerator's
-// declaration, so the value is rendered unitless rather than assumed to
-// share the numerator's unit — which for a percentage is never right.
-func unitOf(string) string { return "" }
 
 // formatted turns a number into text under its DECLARED unit. One ladder
 // product-wide, and it is IEC: the disagreement between two tables is
