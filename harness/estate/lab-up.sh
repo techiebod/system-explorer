@@ -76,17 +76,50 @@ trap 'rm -rf "${STAGE}"' EXIT
   done )
 
 # The hub is stdlib-only, so a guest needs no dependencies at all.
+#
+# **Every module, not a list.** This copied thirteen modules by name and
+# rewrote exactly one parent import with a sed. Both were hand-kept, so
+# the day the hub grew a module or an import the guest stopped starting —
+# and it did: `from ..views import load_views` landed in http.py on
+# 2026-08-23 and `lab-serve.py hub` died with "attempted relative import
+# beyond top-level package" before binding anything. A deploy-time crash
+# rather than a missing route, which is a different debugging session
+# from the one anybody would expect.
+#
+# So the whole package is staged and the parent imports are rewritten
+# GENERICALLY. A hand-maintained list of a package's own modules is the
+# guard-that-checks-a-subset defect wearing a shell script, and PLAN's
+# standing rule 3 makes this guest the whole world until gate 5 — so
+# when it breaks, nothing in the hub can be seen running at all.
 mkdir -p "${STAGE}/sehub"
-cp "${REPO}"/src/system_explorer/hub/{checkpoint,session,rollup,intent,answer,listener,federation,resolution,lifecycle,routes,http,mqtt,mcp_surface}.py "${STAGE}/sehub/"
+cp "${REPO}"/src/system_explorer/hub/*.py "${STAGE}/sehub/"
+# server.py is the SHIPPING hub: it needs FastAPI, which a guest does not
+# have, and the guest runs the rewrite. Removed by NAME with the reason
+# stated, which is the opposite shape from the inclusion list this
+# replaced — an exclusion a reader can check beats an inclusion a reader
+# must trust, and conformance asserts every exclusion carries a reason.
+rm -f "${STAGE}/sehub/server.py"
 mkdir -p "${STAGE}/sehub/surface"
 cp "${REPO}"/src/system_explorer/surface/{__init__,render}.py "${STAGE}/sehub/surface/"
 cp "${REPO}/src/system_explorer/surface/tokens.css" "${STAGE}/sehub/surface/"
+# Sibling modules the hub imports from the parent package. Flattened
+# into the same directory, which is what makes the rewrite below a
+# one-line substitution rather than a package layout to maintain.
+cp "${REPO}"/src/system_explorer/{views,text,paths}.py "${STAGE}/sehub/" 2>/dev/null || true
 printf '"""The rewrite hub, as a guest runs it."""\n' > "${STAGE}/sehub/__init__.py"
-# render.py imports ..surface; on a guest the package is flat, so the
-# import is rewritten here rather than the module being made aware of a
-# deployment shape it should not know about.
-sed -i.bak 's/^from \.\.surface import render$/from .surface import render/' "${STAGE}/sehub/http.py"
-rm -f "${STAGE}/sehub/http.py.bak"
+# On a guest the package is flat, so `from ..x import y` becomes
+# `from .x import y` for every module rather than for one named one.
+# The modules stay unaware of a deployment shape they should not know
+# about, and a new parent import needs no edit here.
+for module in "${STAGE}"/sehub/*.py; do
+  sed -i.bak -E 's/^from \.\.([a-z_]+) import /from .\1 import /' "${module}"
+  rm -f "${module}.bak"
+done
+# server.py is the SHIPPING hub and needs FastAPI, which a guest does not
+# have; it is staged for completeness and never imported by lab-serve.
+# Stated rather than silently excluded, because a module absent from a
+# staging is indistinguishable from one nobody noticed.
+:
 cp "${REPO}/harness/estate/lab-serve.py" "${STAGE}/"
 
 cat > "${STAGE}/intent.json" <<JSON
