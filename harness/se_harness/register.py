@@ -436,16 +436,32 @@ REGISTER: tuple[Row, ...] = (
         "an answer: a systemd unit HAS one native name, so units publishes no "
         "family and never will, where a disk is reachable by wwid, by-id "
         "spelling, serial and kernel path and publishes all four. The probe "
-        "reads the champion's declaration only; whether a collection that "
-        "should declare a family has forgotten one is the fleet audit, this "
-        "row's R3d half."),
+        "reads the champion's declaration only. The R3d fleet audit "
+        "(2026-08-23) found five collections carrying a family — hardware's "
+        "two, pools, domains, generations — and three whose native names "
+        "churn while a stable identity sits on the row as a fact only: "
+        "block-devices (kname moves across boots; by-id does not), arrays "
+        "(md numbering moves; the md uuid does not) and tailscale (a DNS "
+        "label is renameable; the node key is not). Each is a stream change "
+        "with collator-keying and corpus consequences, so all three are OWED "
+        "as their own landings rather than folded into an audit commit — and "
+        "this probe would not notice them either way."),
     Row(7, "relations on `units`/`hardware` (fleet-wide audit follows)",
         "built", "R3c/R3d",
         lambda: (_declares_somewhere("units", "relations")
                  and _declares_somewhere("hardware", "relations")),
         "same scope and same limit as row 6, and the same reason for the "
         "weaker test: a PCI inventory row relates to nothing, so requiring "
-        "every collection would make the probe drive the port."),
+        "every collection would make the probe drive the port. The R3d fleet "
+        "audit (2026-08-23) found one live defect — the journal object verb "
+        "asserting member-of with no declared palette, which the collator "
+        "rejects; fixed and pinned in that package the same day — and three "
+        "object-level edges the reference mints that no port does yet: "
+        "docker's plumbed-onto, vms' owns, units' runs-to-machine-scope. "
+        "OWED as verb-response work, each needing its palette declared with "
+        "it. kea's lease-to-reservation edge stays deliberately unported "
+        "(the collect.go ruling: it belongs to a collection nothing there "
+        "serves)."),
     Row(8, "rule tables fleet-wide (restart-churn, SMART verdicts, link-rate…)",
         "built", "R3c/R3d",
         lambda: (_declares_somewhere("units", "rules")

@@ -16,6 +16,15 @@
   "collections": [
     {
       "name": "journal",
+      "relations": [
+        {
+          "type": "member-of",
+          "carries_facts": false,
+          "discriminator": [],
+          "inverse_observable": false,
+          "confirmed_by": ""
+        }
+      ],
       "rules": [
         {
           "key": "journal-priority",

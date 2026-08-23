@@ -96,6 +96,36 @@ func TestObjectOpensTheEntryAndMintsItsEdge(t *testing.T) {
 	}
 }
 
+// Every relation type a verb asserts must be in the collection's declared
+// palette: the collator REJECTS an assertion whose type its declaration
+// does not carry (collate.go, relation-assembly), and this verb shipped its
+// member-of edge with no palette at all — a latent rejection found by the
+// R3d relations audit, one day after the edge landed.
+func TestTheAssertedEdgeTypeIsDeclared(t *testing.T) {
+	var declaration struct {
+		Collections []struct {
+			Name      string `json:"name"`
+			Relations []struct {
+				Type string `json:"type"`
+			} `json:"relations"`
+		} `json:"collections"`
+	}
+	if err := json.Unmarshal(declarationBytes, &declaration); err != nil {
+		t.Fatal(err)
+	}
+	declared := map[string]bool{}
+	for _, collection := range declaration.Collections {
+		if collection.Name == "journal" {
+			for _, relation := range collection.Relations {
+				declared[relation.Type] = true
+			}
+		}
+	}
+	if !declared["member-of"] {
+		t.Fatal("the object verb asserts member-of and the declaration does not carry it; the collator rejects undeclared types")
+	}
+}
+
 func TestEvidenceServesTheRecordAndTheDigestChecks(t *testing.T) {
 	code, stdout, stderr := runVerb(t, "evidence journal "+corpusCursor)
 	if code != exitOK {
