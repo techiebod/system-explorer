@@ -83,7 +83,8 @@ def render_opinions(state: Any) -> dict[str, Any]:
 def table(view_of: Callable[[], Any],
           views_of: Callable[[], Any] | None = None,
           sibling_of: Callable[[str], Any] | None = None,
-          acks_of: Callable[[], Any] | None = None) -> tuple[Route, ...]:
+          acks_of: Callable[[], Any] | None = None,
+          findings_of: Callable[[], Any] | None = None) -> tuple[Route, ...]:
     """Build the route table over a callable returning the current view.
 
     `view_of` is passed rather than a view, because the hub's answer is
@@ -96,6 +97,14 @@ def table(view_of: Callable[[], Any],
     by the same shared loader both old servers use. Optional because a
     deployment that made no views is an empty list, not an error, and a
     caller that passes nothing gets exactly that.
+
+    `findings_of` returns the lifecycle registry's OPEN SET. It is the
+    one surface that answers "what needs attention, and how long has it
+    been true" — the question the shipping product's own attention page
+    answers and which had no route at either tier until 2026-08-23: the
+    lifecycle landed at R3e and its surface did not. `get_opinions` is
+    not it, because an opinion has no lifecycle; a finding is an opinion
+    at warn or above WITH one.
 
     `acks_of` folds the transition log into a per-finding acknowledgement
     state. It DECORATES and never filters: no route here consults it to
@@ -171,6 +180,20 @@ def table(view_of: Callable[[], Any],
             return {"acknowledgements": {}}
         return acks_of()
 
+    def findings() -> Any:
+        if findings_of is None:
+            # No registry wired. NOT an empty finding list: "nothing is
+            # wrong" and "nobody is keeping the lifecycle" are the two
+            # readings this product exists to keep apart, and a bare
+            # empty list here would be absence rendered as health on the
+            # one surface whose whole subject is attention.
+            return {"findings": None,
+                    "unanswered": "no findings registry is wired to this hub, "
+                                  "so what is open cannot be stated. This is "
+                                  "not a report that nothing is open."}
+        held = findings_of()
+        return {"findings": held, "count": len(held)}
+
     def intent() -> Any:
         state = view_of()
         # The HASH and the revision, never the document: intent is an
@@ -226,6 +249,17 @@ def table(view_of: Callable[[], Any],
               "known: an acknowledged finding is still in every other body on "
               "this surface. Written on the hub's write listener, never here.",
               (), acknowledgements),
+        Route("/v1/findings", "get_findings",
+              "What needs attention, and how long it has been true: every "
+              "OPEN finding with its first-seen, its last-seen and its "
+              "verdict. A finding is an opinion at warn or above with a "
+              "lifecycle — `get_opinions` serves the opinions and has no "
+              "lifecycle, so it cannot answer this. Where a finding's "
+              "first-seen is the post-cut reset rather than the condition's "
+              "own age, the row says so rather than claiming an age it does "
+              "not have. An acknowledged finding is still here: "
+              "acknowledgement changes what is shouted, never what is "
+              "known.", (), findings),
         Route("/v1/intent", "get_intent",
               "The intent hash and revision this hub holds — what a sibling "
               "compares against. Never the document itself.", (), intent),

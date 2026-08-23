@@ -505,11 +505,11 @@ Every known miss, each owned or ruled. A row neither built, owned nor ruled is a
 | 22 | NixOS module: sandboxing generated from declared `authority`, socket activation | authority declared, nothing consumes it | R5 |
 | 23 | root SMART snapshot arrangement (grantDiskAccess) | unaddressed | R5 |
 | 24 | resource measurement — the stated objective of the rewrite | never measured | R5, in the gate |
-| 25 | §27/§28 surface + hide-group invariants carried from app.js | reopened gate 5's table | R4 |
+| 25 | §27/§28 surface + hide-group invariants carried from app.js | built 2026-08-23 across five waves; the pages' quality is the gate's own question | R4 |
 | 26 | `answer`-list divergences vs the argued column presets (3 same / 14 differ / 14 absent) | each ruled or owed in `ANSWER_RULINGS`, guarded both directions | done at R2 |
 | 27 | `system/identity` never compared (gate 3's "no second implementation" claim was false) | the comparator drives it since R2; its replay seam owed | R2 done / R3b |
 | 28 | the system adapter's replay seam — four collections with no fixture | landed at R3b | R3b |
-| 29 | the findings surface — `get_findings` has no port tool at either tier | owed: the lifecycle landed at R3e and its surface did not | R4 |
+| 29 | the findings surface — `get_findings` has no port tool at either tier | built 2026-08-23: /v1/findings serves the registry's open set, and an unwired registry says so rather than answering like a quiet estate | R4 |
 | 30 | decline reasons carried, cleared and served | landed 2026-08-23: the detail reaches the store and the wire, `absent` is recorded though it commits, and a commit clears the decline | R3 |
 | 31 | the rejection record has no read surface | owed: `Store.Rejections()` is called by tests and nothing else, so a refused batch is invisible from outside the process. Not built — DESIGN §2288 defers the surface as a contract change | R4 |
 | 32 | the time-namespace comparison | landed 2026-08-23: every collector reported `timens` and no tier read it. The skew is measured against the collator's own offset, stated and never corrected, and the age withheld — `clock_domain_mismatch` previously fired only when the skew drove an age negative | R3 |

@@ -764,10 +764,42 @@ REGISTER: tuple[Row, ...] = (
         "the probe accepts any dated resource record under docs/history; "
         "whether the numbers answer the objective is the gate's judgement."),
     Row(25, "§27/§28 surface + hide-group invariants carried from app.js",
-        "owed", "R4", None,
-        "no probe: whether a page implements its specification is the "
-        "owner's judgement at gate R4, and a grep for it would be the "
-        "subset-guard shape wearing a test's clothes."),
+        "built", "R4",
+        # The probe asks whether the MECHANISMS are in the tree, and
+        # nothing more. Whether the pages are good is the owner's at gate
+        # R4 and no grep can stand in for it — but "built" with NO probe
+        # is what row 27 carried through two waves while the thing it
+        # named had never been executed, so the half that IS checkable
+        # gets checked.
+        lambda: all(_in_file("go/internal/collate/widgets.go", marker)
+                    for marker in ("StateAbsent", "StateUnobservable"))
+        and _in_file("go/internal/collate/hide_groups.go", 'json:"hide_groups"')
+        and _in_file("go/internal/collate/collection_page.go", "mark-unjudged"),
+        "the probe asks only whether the mechanisms exist: the five render "
+        "states in the widget layer, the DECLARED hide-group member, and the "
+        "absent-severity mark. Built 2026-08-23 across five waves — the "
+        "widget table as a function of the declaration, the row → object → "
+        "evidence drill, the four empty states separated where a person can "
+        "see them, trees from the producer's own edges with indentation "
+        "disabled under sort, cross-subsystem links through the shared "
+        "prefix index, the identity chain, facets as links, and the "
+        "hide-group mechanism with its four invariants. Two rules of §28 "
+        "are UNDELIVERABLE from today's declarations and are rendered "
+        "honestly rather than approximated: no declaration ships a "
+        "counter's companion rate gauge, so a counter is marked cumulative "
+        "and no rate is computed; and twenty booleans declare no labels, so "
+        "the raw word is shown and marked rather than drawn as a tick and a "
+        "cross. The hide-group half is probed by the JSON TAG, not the word: "
+        "asking for `hide_groups` passed with the member renamed to "
+        "`hide_groups_x`, the fourth substring probe in one day to read a "
+        "near-miss as the thing itself. **What the probe cannot see, and "
+        "it is most of the row**: "
+        "whether the pages are a REPLACEMENT rather than a summary, which "
+        "is the gate's own question and the owner's alone. Nor can it see "
+        "that no shipped declaration declares a hide group — the mechanism "
+        "is generic and untriggered, because adding the member moves a "
+        "declaration hash and every corpus pinning it, and this repository "
+        "has no regeneration switch on purpose."),
     Row(26, "`answer`-list divergences each an explicit ruling",
         "built", "R2",
         lambda: (set(answer_divergences()) <= set(ANSWER_RULINGS)
@@ -852,7 +884,7 @@ REGISTER: tuple[Row, ...] = (
         "once a seam exists."),
     Row(29, "the findings surface — `get_findings` has no port tool at "
         "either tier",
-        "owed", "R4",
+        "built", "R4",
         lambda: (_in_file("src/system_explorer/hub/routes.py", "/v1/findings")
                  or _in_file("go/internal/collate/rest.go", '"get_findings"')),
         "the probe asks whether either tier publishes it. Added 2026-08-23 "
@@ -866,9 +898,22 @@ REGISTER: tuple[Row, ...] = (
         "landed at R3e and its surface did not, and the one question the "
         "reference's attention surface answers — what needs attention, and "
         "how long it has been true — has no tool. Held to R4 because it is "
-        "a page as much as a route. What the probe cannot see: whether the "
-        "surface carries the reset marker post-cut findings must display, "
-        "which is acceptance item 12's."),
+        "a page as much as a route. **Built 2026-08-23 at R4**: /v1/findings "
+        "on the hub's read surface, serving the lifecycle registry's open "
+        "set with first_seen, last_seen and the verdict. The reset marker "
+        "the earlier text worried about IS carried — `age_is_the_conditions` "
+        "rides on the finding rather than being computed by whatever draws "
+        "it, so every surface says the same thing instead of each deciding, "
+        "and a post-cut reset is never shown as the condition's own age. An "
+        "UNWIRED registry answers `findings: null` with a stated "
+        "`unanswered`, never an empty list: 'nothing is open' and 'nobody "
+        "is keeping the lifecycle' are the two readings this product exists "
+        "to separate, and collapsing them on the attention surface is the "
+        "founding failure at its loudest. Two plants: the unwired case "
+        "answering like a quiet estate, and the route removed. What the "
+        "probe cannot see: whether a PAGE renders the open set — the route "
+        "and its tool exist, and the hub's estate page does not yet list "
+        "findings."),
     Row(30, "decline reasons carried, cleared and served — the four empty "
         "states kept apart below the renderer",
         "built", "R3",

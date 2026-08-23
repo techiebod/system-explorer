@@ -182,6 +182,31 @@ class Hub:
         """
         return render(self.transitions.fold(self.registry.open()))
 
+    def open_findings(self) -> list[dict]:
+        """The registry's open set, as the read surface serves it.
+
+        Rendered here rather than in the route so the shape is the
+        registry's own vocabulary: a finding carries `reset`, and a
+        surface that dropped it would show the post-cut reset as the
+        condition's own age — claiming an age the estate does not have.
+        """
+        return [
+            {"finding": key,
+             "scope": found.key.scope,
+             "object": found.key.object_id,
+             "opinion": found.key.opinion,
+             "instance": found.key.instance,
+             "first_seen": found.first_seen,
+             "last_seen": found.last_seen,
+             "verdict": found.verdict.value,
+             # True while first_seen is the RESET rather than the
+             # condition's own age. Carried so every surface says the
+             # same thing rather than each deciding.
+             "age_is_the_conditions": found.age_is_the_conditions(),
+             "blind": list(found.blind)}
+            for key, found in sorted(self.registry.open().items())
+        ]
+
     def derived(self) -> list[str]:
         """The findings a transition may attach to. A transition filed
         against an identity nobody has observed would sit in the log
@@ -230,7 +255,9 @@ def serve(read_bind: tuple[str, int] | None = None,
     read_bind = read_bind or (
         os.environ.get("SE_HUB_HOST", "127.0.0.1"),
         int(os.environ.get("SE_HUB_PORT", "8096")))
-    read = read_surface.serve(read_bind, site.reading, acks_of=site.acknowledgements)
+    read = read_surface.serve(read_bind, site.reading,
+                              acks_of=site.acknowledgements,
+                              findings_of=site.open_findings)
 
     # The session listener. Without it the hub serves an estate nothing
     # can populate — which is what it did until 2026-08-23: two listeners
