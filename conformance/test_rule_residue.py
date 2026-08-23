@@ -39,6 +39,37 @@ RULES = REPO / "src" / "system_explorer" / "agent" / "rules"
 DECLARATIONS = REPO / "go" / "cmd"
 
 
+#: Keys a rulebook BUILDS rather than writes, by module and by the
+#: source text of the construction. Deny-by-default: a construction not
+#: named here fails, so the extraction's blind spot is what goes red
+#: rather than the coverage it stops measuring.
+#:
+#: Each entry is read off the rulebook once. It is a hand-kept map and
+#: that is the honest boundary — the alternative is an extraction that
+#: guesses, and a guessed key is worse than a stated one because nothing
+#: says which keys were invented.
+DYNAMIC_KEYS: dict[str, dict[str, tuple[str, ...]]] = {
+    # _component(key, ...) is called with a literal at each site.
+    "paperless": {"key": ("paperless-database", "paperless-redis",
+                          "paperless-celery", "paperless-index",
+                          "paperless-classifier")},
+    # _ingress_opinions(kind, ...) over routers and services.
+    "traefik": {"f'{kind}-error'": ("router-error", "service-error"),
+                "f'{kind}-warning'": ("router-warning", "service-warning"),
+                "f'{kind}-disabled'": ("router-disabled", "service-disabled")},
+    # a nested judge(key, ...) for the two link comparisons.
+    "hardware": {"key": ("link-degraded", "link-width-degraded",
+                         "link-slot-capped", "link-width-slot-capped")},
+    # _capacity_opinion(prefix, ...) over pools, datasets and mounts.
+    # _capacity_opinion(key, ...) over pools, datasets and mounts. The
+    # f-string forms first written here were guesses and the staleness
+    # guard caught them: storage passes a `key` parameter like the others.
+    "storage": {"key": ("pool-capacity", "pool-capacity-critical",
+                        "dataset-capacity", "dataset-capacity-critical",
+                        "mount-capacity", "mount-capacity-critical")},
+}
+
+
 def reference_opinions() -> dict[str, set[str]]:
     """Every opinion key each shipping rulebook emits, by module.
 
@@ -46,22 +77,60 @@ def reference_opinions() -> dict[str, set[str]]:
     that fires only on a shape no fixture has still exists, and a work
     list built from what happened to execute would be the port shaping
     the reference's own list.
+
+    **Keys built rather than written are the hard half.** Four rulebooks
+    construct them — paperless and hardware hand a `key` parameter to a
+    helper, traefik and storage build one with an f-string — and taking
+    only the literal calls silently shrank this deny-by-default work list
+    to the calls the extraction happened to understand. That is the
+    subset-guard defect inside the guard written to enforce coverage.
+
+    An unresolvable construction is REPORTED, not skipped: it must be
+    named in DYNAMIC_KEYS with the keys it produces, and a construction
+    nobody has accounted for fails. So the extraction's own blind spot is
+    the thing that goes red, rather than the coverage it silently stops
+    measuring.
     """
     found: dict[str, set[str]] = {}
     for path in sorted(RULES.glob("*.py")):
         if path.name.startswith("_"):
             continue
-        keys = set()
+        keys: set[str] = set()
         for node in ast.walk(ast.parse(path.read_text())):
             if not isinstance(node, ast.Call) or not node.args:
                 continue
             name = getattr(node.func, "attr", None) or getattr(node.func, "id", None)
-            if name == "opinion" and isinstance(node.args[0], ast.Constant) \
-                    and isinstance(node.args[0].value, str):
-                keys.add(node.args[0].value)
+            if name != "opinion":
+                continue
+            first = node.args[0]
+            if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                keys.add(first.value)
+            else:
+                keys |= set(DYNAMIC_KEYS.get(path.stem, {}).get(
+                    ast.unparse(first), ()))
         if keys:
             found[path.stem] = keys
     return found
+
+
+def unresolvable() -> dict[str, list[str]]:
+    """Every `opinion(...)` whose key this extraction cannot read, by
+    module and by source text."""
+    out: dict[str, list[str]] = {}
+    for path in sorted(RULES.glob("*.py")):
+        if path.name.startswith("_"):
+            continue
+        for node in ast.walk(ast.parse(path.read_text())):
+            if not isinstance(node, ast.Call) or not node.args:
+                continue
+            name = getattr(node.func, "attr", None) or getattr(node.func, "id", None)
+            if name != "opinion":
+                continue
+            first = node.args[0]
+            if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                continue
+            out.setdefault(path.stem, []).append(ast.unparse(first))
+    return out
 
 
 def ported() -> dict[str, tuple[set[str], dict[str, str]]]:
@@ -155,3 +224,39 @@ def test_every_residue_reason_says_something() -> None:
                 thin.setdefault(collector, []).append(key)
     assert not thin, (
         f"residue reasons that leave the reader where the silence did: {thin}")
+
+
+def test_every_built_key_is_accounted_for() -> None:
+    """The extraction's own blind spot, made to fail rather than to
+    quietly shrink the work list.
+
+    Taking only literal `opinion("key", ...)` calls dropped four
+    rulebooks' worth of keys — paperless, traefik, hardware and storage
+    all build them — so the deny-by-default guard above was measuring
+    coverage against a list that silently omitted them.
+    """
+    unread = unresolvable()
+    unaccounted = {}
+    for module, constructions in sorted(unread.items()):
+        for construction in constructions:
+            if construction not in DYNAMIC_KEYS.get(module, {}):
+                unaccounted.setdefault(module, []).append(construction)
+    assert not unaccounted, (
+        f"opinion keys this extraction cannot read and DYNAMIC_KEYS does "
+        f"not name: {json.dumps(unaccounted, indent=2)}. Add the keys the "
+        f"construction produces — an unread construction silently shrinks "
+        f"the work list every other test here is measured against.")
+
+
+def test_dynamic_keys_names_no_construction_that_has_gone() -> None:
+    """Staleness the other way: an entry for a construction no rulebook
+    still has is prose about something that is not there, and it would
+    keep a real key alive in the work list after its rule was deleted."""
+    unread = unresolvable()
+    stale = {}
+    for module, table in sorted(DYNAMIC_KEYS.items()):
+        gone = sorted(set(table) - set(unread.get(module, [])))
+        if gone:
+            stale[module] = gone
+    assert not stale, (
+        f"DYNAMIC_KEYS names constructions no rulebook has: {stale}")

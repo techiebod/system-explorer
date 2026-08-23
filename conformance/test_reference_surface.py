@@ -70,6 +70,40 @@ TOOL_DISPOSITIONS: dict[str, str] = {
 }
 
 
+#: What answers each reference ROUTE, or why nothing does. Every route
+#: the reference serves must appear; deny-by-default, so a route added
+#: there and never considered here fails.
+ROUTE_SUBJECTS: dict[str, dict[str, object]] = {
+    "/": {"tool": None,
+          "why": "the shipping agent's own HTML page. Both tiers of the "
+                 "rewrite render their own — page.go and surface/render.py "
+                 "— and neither is an MCP tool, so there is nothing for a "
+                 "tool table to name."},
+    "/health": {"tool": "host_health",
+                "why": "served by the collator under this name."},
+    "/v1/capabilities": {"tool": "host_capabilities", "why": "served."},
+    "/v1/facts": {"tool": "fact_dictionary", "why": "served, renamed."},
+    "/v1/status": {"tool": "host_status", "why": "served, renamed."},
+    "/v1/changes": {"tool": "what_changed",
+                    "why": "served at the collator, which is the tier §06 "
+                           "gives the record to."},
+    "/v1/findings": {"tool": None,
+                     "why": "OWED — see get_findings in TOOL_DISPOSITIONS. "
+                            "The lifecycle landed at R3e and its surface did "
+                            "not, so the one question the attention surface "
+                            "answers has no tool at either tier."},
+    "/v1/evidence/{subsystem}/{collection}/{object_id:path}": {
+        "tool": "get_evidence",
+        "why": "served at the collator over the reverse channel, captured "
+               "fresh and stored nowhere."},
+    "/v1/{subsystem}/{collection}": {"tool": "get_collection",
+                                     "why": "served at both tiers."},
+    "/v1/{subsystem}/{collection}/{object_id:path}": {
+        "tool": "get_object",
+        "why": "served at the collator over the reverse channel."},
+}
+
+
 def reference_tools() -> set[str]:
     source = (REPO / "src" / "system_explorer" / "mcp" / "server.py").read_text()
     return set(re.findall(r"@mcp\.tool\(\)\s*\n\s*(?:async\s+)?def\s+(\w+)", source))
@@ -177,19 +211,35 @@ def test_the_reference_route_set_is_reachable_by_some_tier() -> None:
     holds the one property that survives the reshape: the reference
     serves no route whose whole subject has vanished.
     """
-    subjects = {
-        "/v1/capabilities": "host_capabilities",
-        "/v1/facts": "fact_dictionary",
-        "/v1/status": "host_status",
-        "/v1/changes": "what_changed",
-        "/v1/findings": None,  # owed, see get_findings above
-    }
+    # DERIVED from the reference, which is the whole point and was not
+    # true of this test until 2026-08-23: `subjects` was a literal of
+    # five paths and `reference_routes()` was computed and read only by
+    # the anti-vacuity check, so five of the reference's ten routes were
+    # in no work list at all. A hand-written map inside a test whose
+    # subject is "derive the work list from the reference" is the defect
+    # it exists to catch, wearing the test's own clothes.
     published = port_tools()
-    missing = {route: tool for route, tool in subjects.items()
-               if tool is not None and tool not in published}
-    assert not missing, (
-        f"reference routes whose subject no tier serves: {missing}")
+    unaccounted = []
+    for route in sorted(reference_routes()):
+        disposition = ROUTE_SUBJECTS.get(route)
+        if disposition is None:
+            unaccounted.append(route)
+            continue
+        if disposition["tool"] is not None and disposition["tool"] not in published:
+            unaccounted.append(f"{route} (claims {disposition['tool']}, "
+                               f"which no tier publishes)")
+    assert not unaccounted, (
+        f"reference routes with no stated subject, or claiming a tool no "
+        f"tier serves: {unaccounted}. Every route the reference serves is "
+        f"either answered somewhere or owed, and a route in neither list "
+        f"is one nobody has looked at.")
     # And the owed one is owed in the table rather than merely absent
     # here, so it cannot be forgotten by being left out of this map.
     assert TOOL_DISPOSITIONS["get_findings"].startswith("owed"), (
         "the findings surface is owed and must say so in the tool table")
+
+
+def test_no_route_subject_describes_a_route_the_reference_dropped() -> None:
+    invented = sorted(set(ROUTE_SUBJECTS) - reference_routes())
+    assert not invented, (
+        f"subjects for routes the reference does not serve: {invented}")

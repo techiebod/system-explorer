@@ -306,9 +306,13 @@ def test_the_register_is_fully_encoded() -> None:
     vanishing would break."""
     numbers = [row.number for row in REGISTER]
     assert numbers == list(range(1, len(numbers) + 1)), numbers
-    assert len(numbers) >= 27, (
+    assert len(numbers) >= 29, (
         f"the register has shrunk to {len(numbers)} rows; a row that "
-        f"disappears takes its owed work with it")
+        f"disappears takes its owed work with it. The floor was 27 while "
+        f"the register held 29, so the last two could vanish silently — "
+        f"including row 29, the get_findings hole an audit had just "
+        f"found. A floor below the current count is a floor that is not "
+        f"holding anything; raise it with the register.")
     for row in REGISTER:
         assert row.state in ("built", "owed"), (row.number, row.state)
         assert row.owner.strip(), row.number
@@ -414,7 +418,43 @@ def closed_phases() -> set[str]:
     exactly the direction that hides this defect.
     """
     plan = (REPO / "docs" / "PLAN.md").read_text()
-    return set(re.findall(r"\*\*(R[0-9]\w*)[^*]*\*\*\s*—\s*\*\*done", plan))
+    # `[^*]*` could not cross a parenthetical, so R3a — written
+    # `**R3a — the read API reaches parity** (register 10–16) — **done`
+    # — never matched, and the guard written to catch work owed to a
+    # closed phase was blind to one. Proven by re-owning a ruling to R3a
+    # and watching the file stay green. The bold marker and the done
+    # marker are now matched independently, with anything between them.
+    marked = set(re.findall(r"\*\*(R[0-9]\w*)\b[^*]*\*\*", plan))
+    return {phase for phase in marked
+            if re.search(r"\*\*" + phase + r"\b[^*]*\*\*[^\n]*?\*\*done", plan)}
+
+
+def test_closed_phases_sees_every_phase_plan_marks_done() -> None:
+    """The corpus of the two guards above, asserted rather than trusted.
+
+    `[^*]*` could not cross the parenthetical in PLAN's R3a line, so that
+    phase never matched and both guards were blind to work owed to it —
+    re-owning a ruling to R3a left the file green. A guard whose work
+    list silently omits a member is the defect these guards exist to
+    catch, one level up.
+    """
+    plan = (REPO / "docs" / "PLAN.md").read_text()
+    # Every phase PLAN marks done, found the crude way: the line carries
+    # the phase name and the word done in bold.
+    on_lines = set()
+    for line in plan.splitlines():
+        if "**done" not in line:
+            continue
+        found = re.search(r"\*\*(R[0-9]\w*)\b", line)
+        if found:
+            on_lines.add(found.group(1))
+    seen = closed_phases()
+    assert on_lines, "no line in PLAN marks a phase done"
+    missing = sorted(on_lines - seen)
+    assert not missing, (
+        f"PLAN marks these done and closed_phases() cannot see them: "
+        f"{missing}. Every guard that asks whether work is owed to a "
+        f"closed phase is blind to exactly these.")
 
 
 def test_no_ruling_is_owed_to_a_phase_that_has_closed() -> None:

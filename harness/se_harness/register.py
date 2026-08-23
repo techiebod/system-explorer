@@ -419,7 +419,15 @@ def _verb_landed(verb: str) -> bool:
     answers = any(clause.search(path.read_text())
                   for path in GO_CMD.glob("se-collect-*/main.go"))
     reaches = _in_file("go/internal/wire/verbs.go", f'Verb{verb.capitalize()}')
-    serves = _in_file("go/internal/collate/rest.go", f'wire.Verb{verb.capitalize()}')
+    # The REGISTRATION, not the identifier. Each of wire.VerbObject,
+    # wire.VerbEvidence and wire.VerbLookup occurs twice in rest.go —
+    # once in the dispatch switch and once in the mux registration — so
+    # removing every route registration left the identifier behind and
+    # the probe still read "built". Found by review the same day the
+    # probe was widened, which is the third time this row's probe has
+    # been satisfied by something adjacent to the thing it claims.
+    serves = _in_file("go/internal/collate/rest.go",
+                      f'serveVerb(wire.Verb{verb.capitalize()})')
     # **And WIRED.** The three tiers above were each a grep, so a channel
     # that existed and was never handed to the running daemon satisfied
     # all of them: NewHandlerWithReverse had one caller, NewHandler,
