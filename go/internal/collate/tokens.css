@@ -226,3 +226,13 @@ input.reveal:focus-visible + .hide-chip {
 }
 input.reveal:checked + .hide-chip { border-color: var(--text-dim); color: var(--text); }
 .hide-chip .count { font-variant-numeric: tabular-nums; color: var(--text-faint); }
+
+/* A tree's indentation is DATA — how deep a row sits is a fact of the
+   producer's edges — so the depth arrives as a custom property rather
+   than as one of a fixed set of classes. */
+td.ident { padding-left: calc(.6rem + var(--depth, 0) * 1.1rem); }
+a.sort { color: inherit; text-decoration: none; }
+a.sort:hover, a.sort:focus-visible { text-decoration: underline; }
+dl.names { display: grid; grid-template-columns: auto 1fr; gap: .25rem .8rem; margin: .5rem 0; }
+dl.names dt { color: var(--text-dim); font-size: 11.5px; white-space: nowrap; }
+dl.names dd { margin: 0; }

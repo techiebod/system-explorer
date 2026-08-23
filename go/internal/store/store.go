@@ -794,7 +794,16 @@ type ObjectRow struct {
 	// every consumer was blind to the one state this product exists to
 	// stop rendering as health. Added 2026-08-23.
 	Absent []string
-	At     float64
+	// Names is every name family the collector published for this object
+	// — a disk's /dev/disk/by-id path, its kernel name, its WWN. Written
+	// and hashed into content identity since the store existed and read
+	// back by nothing until 2026-08-23, which made the identity chain
+	// unrenderable: a page could show only the name it was reached by,
+	// leaving an operator holding one of the others unable to tell
+	// whether they had the right disk. The sixth column found this day
+	// to be written by one tier and read by none.
+	Names json.RawMessage
+	At    float64
 	// Scope is the instance the object was published under, HostNative
 	// for an instance-less batch. It is part of the row and not merely
 	// part of the primary key: two instances mint the SAME id string,
@@ -821,7 +830,7 @@ type ObjectRow struct {
 // answered that its object had been ADDED. Found by review 2026-08-23.
 func (s *Store) ObjectsInScope(collection, scope string) ([]ObjectRow, error) {
 	rows, err := s.db.Query(`
-		SELECT id, name, type, facts, absent, at, scope FROM objects
+		SELECT id, name, type, facts, absent, names, at, scope FROM objects
 		WHERE collection = ? AND scope = ? ORDER BY seq, id`, collection, scope)
 	if err != nil {
 		return nil, err
@@ -832,7 +841,7 @@ func (s *Store) ObjectsInScope(collection, scope string) ([]ObjectRow, error) {
 
 func (s *Store) Objects(collection string) ([]ObjectRow, error) {
 	rows, err := s.db.Query(`
-		SELECT id, name, type, facts, absent, at, scope FROM objects
+		SELECT id, name, type, facts, absent, names, at, scope FROM objects
 		WHERE collection = ? ORDER BY scope, seq, id`, collection)
 	if err != nil {
 		return nil, err
@@ -848,10 +857,13 @@ func scanObjectRows(rows *sql.Rows) ([]ObjectRow, error) {
 	for rows.Next() {
 		var o ObjectRow
 		var facts string
-		var objectType, absent sql.NullString
+		var objectType, absent, names sql.NullString
 		if err := rows.Scan(&o.ID, &o.Name, &objectType, &facts, &absent,
-			&o.At, &o.Scope); err != nil {
+			&names, &o.At, &o.Scope); err != nil {
 			return nil, err
+		}
+		if names.Valid && names.String != "" {
+			o.Names = json.RawMessage(names.String)
 		}
 		if objectType.Valid {
 			o.Type = objectType.String

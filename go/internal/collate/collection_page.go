@@ -27,12 +27,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/techiebod/system-explorer/go/internal/store"
 )
 
-func collectionPage(st *store.Store, name string, now func() float64,
+func collectionPage(st *store.Store, name, sortBy string, now func() float64,
 	bootID string) (string, int, error) {
 	states, err := st.Collections()
 	if err != nil {
@@ -124,8 +125,14 @@ func collectionPage(st *store.Store, name string, now func() float64,
 	// enforced at assignment rather than inside any group's condition.
 	worst := worstPerObject(st, document, name, rows)
 
+	// The nesting relation, and the rows' parents, from the producer's own
+	// assertions. A collection asserting none renders a flat table, which
+	// is what most of them are.
+	parentOf, nestedBy := parentsFrom(st, name)
+
 	body.WriteString(freshnessNote(self, now, bootID))
-	body.WriteString(objectsTable(name, render, rows, could, groups, worst))
+	body.WriteString(objectsTable(name, render, rows, could, groups, worst,
+		parentOf, nestedBy, sortBy))
 	return wrap(name, body.String()), http.StatusOK, nil
 }
 
@@ -240,9 +247,36 @@ func worstPerObject(st *store.Store, document, collection string,
 	return out
 }
 
+// parentsFrom reads the nesting edges a collection asserted: child name
+// → parent name, and the relation type that produced them.
+//
+// `member-of` and `enslaved-to` are the two the acceptance item names —
+// the units slice tree and the links bridge tree — and they are read
+// from the RELATIONS the producer asserted rather than from any shape
+// declared here. A collection that asserts neither nests nothing.
+func parentsFrom(st *store.Store, collection string) (map[string]string, string) {
+	all, err := st.Relations(collection)
+	if err != nil {
+		return nil, ""
+	}
+	for _, nesting := range []string{"member-of", "enslaved-to"} {
+		parents := map[string]string{}
+		for _, rel := range all {
+			if rel.Type == nesting {
+				parents[rel.SourceName] = rel.TargetName
+			}
+		}
+		if len(parents) > 0 {
+			return parents, nesting
+		}
+	}
+	return nil, ""
+}
+
 func objectsTable(collection string, render *CollectionRender,
 	rows []store.ObjectRow, could map[string]map[string]store.Unobserved,
-	groups []HideGroup, worst map[string]string) string {
+	groups []HideGroup, worst map[string]string,
+	parentOf map[string]string, nestedBy, sortBy string) string {
 	// Columns come from the producer's `answer`, in the producer's order.
 	var columns []string
 	if render != nil {
@@ -277,8 +311,47 @@ func objectsTable(collection string, render *CollectionRender,
 		assigned[i] = assign(groups, facts, worst[row.ID])
 	}
 
+	// The display order, and the depth each row is drawn at.
+	//
+	// INDENTATION IS DISABLED UNDER SORT. Indentation claims a parent is
+	// directly above its child; once the rows are reordered that claim is
+	// false, and a tree drawn over a reordered list tells the reader
+	// something the data does not say. So a sorted table is flat, and the
+	// page says why rather than silently dropping the shape.
+	order := make([]int, len(rows))
+	for i := range rows {
+		order[i] = i
+	}
+	depth := map[int]int{}
+	cyclic := false
+	sorted := sortBy != ""
+	if sorted {
+		order = sortedOrder(rows, render, sortBy)
+	} else if nestedBy != "" && len(parentOf) > 0 {
+		order, depth, cyclic = nest(rows, parentOf)
+	}
+
 	var b strings.Builder
 	b.WriteString(`<section class="panel">`)
+	if nestedBy != "" && len(parentOf) > 0 {
+		if sorted {
+			b.WriteString(fmt.Sprintf(
+				`<p class="dim">Sorted by %s, so the <code>%s</code> tree is `+
+					`not drawn: indentation would claim a parent sits directly `+
+					`above its child, which a reordered list does not say.</p>`,
+				esc(sortBy), esc(nestedBy)))
+		} else {
+			b.WriteString(fmt.Sprintf(
+				`<p class="dim">Nested by <code>%s</code>, as this collection `+
+					`asserted it.</p>`, esc(nestedBy)))
+		}
+	}
+	if cyclic {
+		b.WriteString(`<p class="stale-banner">Some rows form a cycle in the ` +
+			`nesting relation and are drawn at the top level. They are shown ` +
+			`rather than dropped: a row omitted because its shape surprised ` +
+			`the renderer is a row nobody can find.</p>`)
+	}
 	b.WriteString(hideControls(Chips(groups, assigned)))
 	b.WriteString(`<div class="scroll"><table>`)
 	b.WriteString(`<thead><tr><th>object</th>`)
@@ -292,11 +365,18 @@ func objectsTable(collection string, render *CollectionRender,
 				title = fmt.Sprintf(` title="%s"`, esc(decl.Sentence))
 			}
 		}
-		b.WriteString(fmt.Sprintf(`<th%s>%s</th>`, title, esc(name)))
+		// Sorting is a link that RE-ASKS, not a reordering in the
+		// browser: pattern 2 of §28's table — if the control needs
+		// something the page does not hold, it re-asks. The server's
+		// answer is the answer.
+		b.WriteString(fmt.Sprintf(
+			`<th%s><a class="sort" href="/collections/%s?sort=%s">%s</a></th>`,
+			title, esc(collection), esc(name), esc(name)))
 	}
 	b.WriteString(`</tr></thead><tbody>`)
 
-	for i, row := range rows {
+	for _, i := range order {
+		row := rows[i]
 		var facts map[string]any
 		if json.Unmarshal(row.Facts, &facts) != nil {
 			facts = map[string]any{}
@@ -314,9 +394,17 @@ func objectsTable(collection string, render *CollectionRender,
 		} else {
 			b.WriteString(`<tr>`)
 		}
+		// Depth is a style property because it is DATA — how deep this
+		// row sits is a fact of the producer's edges, not a class this
+		// file chose from a fixed set.
+		indent := ""
+		if d := depth[i]; d > 0 {
+			indent = fmt.Sprintf(` style="--depth:%d"`, d)
+		}
 		b.WriteString(fmt.Sprintf(
-			`<td class="ident"><a href="/collections/%s/objects/%s">%s</a>%s</td>`,
-			esc(collection), esc(row.Name), esc(row.Name), scopeMark(row.Scope)))
+			`<td class="ident"%s><a href="/collections/%s/objects/%s">%s</a>%s</td>`,
+			indent, esc(collection), esc(row.Name), esc(row.Name),
+			scopeMark(row.Scope)))
 		for _, name := range columns {
 			b.WriteString("<td>" + cellFor(render, name, facts, absent,
 				could[row.ID], false) + "</td>")
@@ -393,4 +481,39 @@ func wrap(title, body string) string {
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
 		"<title>" + esc(title) + "</title><style>" + tokensCSS +
 		"</style></head><body><main>" + body + "</main></body></html>\n"
+}
+
+// sortedOrder ranks rows by one fact's rendered VALUE.
+//
+// Ordering on the value the producer sent, compared as text unless both
+// sides are numbers — never on the formatted string, which would sort
+// "1 GiB" before "512 B" and present a wrong answer confidently.
+func sortedOrder(rows []store.ObjectRow, render *CollectionRender, by string) []int {
+	order := make([]int, len(rows))
+	values := make([]any, len(rows))
+	for i, row := range rows {
+		order[i] = i
+		var facts map[string]any
+		if json.Unmarshal(row.Facts, &facts) == nil {
+			values[i] = facts[by]
+		}
+	}
+	sort.SliceStable(order, func(a, b int) bool {
+		x, y := values[order[a]], values[order[b]]
+		if x == nil {
+			// A row with no value sorts last whichever way the column
+			// goes: it is not the smallest, it is unanswered.
+			return false
+		}
+		if y == nil {
+			return true
+		}
+		if nx, ok := number(x); ok {
+			if ny, ok := number(y); ok {
+				return nx < ny
+			}
+		}
+		return scalar(x) < scalar(y)
+	})
+	return order
 }

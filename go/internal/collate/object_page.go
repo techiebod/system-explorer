@@ -82,6 +82,16 @@ func objectPage(st *store.Store, collection, object string, now func() float64,
 			chip(self.Type, "type"), scopeMark(self.Scope)))
 	}
 
+	var families map[string][]string
+	if len(self.Names) > 0 {
+		// A malformed name map is not treated as "no names": the identity
+		// chain would then silently show one name, which is the state it
+		// exists to prevent.
+		if json.Unmarshal(self.Names, &families) != nil {
+			families = nil
+		}
+	}
+	body.WriteString(nameFamilies(families))
 	body.WriteString(factsSection(render, facts, absent, could))
 	body.WriteString(opinionsSection(st, document, collection, self, facts))
 	body.WriteString(relationsSection(st, collection, self))
@@ -191,6 +201,12 @@ func opinionsSection(st *store.Store, document, collection string,
 }
 
 func relationsSection(st *store.Store, collection string, row *store.ObjectRow) string {
+	// A contested prefix returns an error and no index, so every target
+	// degrades to a stated non-link rather than to a guess.
+	owner, err := collectionOfPrefix(st)
+	if err != nil {
+		owner = map[string]string{}
+	}
 	all, err := st.Relations(collection)
 	if err != nil {
 		return `<details class="panel"><summary><h2>Relations</h2></summary>` +
@@ -211,7 +227,7 @@ func relationsSection(st *store.Store, collection string, row *store.ObjectRow) 
 	b.WriteString(`<details open class="panel"><summary><h2>Relations</h2></summary>` +
 		`<ul class="relations">`)
 	for _, rel := range mine {
-		b.WriteString(relationItem(collection, rel))
+		b.WriteString(relationItem(owner, rel))
 	}
 	b.WriteString(`</ul></details>`)
 	return b.String()
@@ -221,19 +237,13 @@ func relationsSection(st *store.Store, collection string, row *store.ObjectRow) 
 // in CLASS and in WORDS, because a class alone is a stylesheet away from
 // being nothing at all — and this is the exact rendering whose collapse
 // §28 calls the founding failure re-entering through layer 6.
-func relationItem(collection string, rel store.Relation) string {
-	target := rel.TargetName
-	link := target
-	if rel.Resolved && rel.TargetID != "" {
-		// The link is minted from the resolution the COLLATOR made, never
-		// from a prefix table in the renderer — §27's first rotted copy
-		// was such a table, 31 prefixes deep, with the whole application
-		// tier missing so every app-tier link rendered as dead text.
-		link = fmt.Sprintf(`<a href="/collections/%s/objects/%s">%s</a>`,
-			esc(collection), esc(target), esc(target))
-	} else {
-		link = esc(target)
-	}
+func relationItem(owner map[string]string, rel store.Relation) string {
+	// CROSS-SUBSYSTEM, which is an acceptance item: a zpool device links
+	// through to its hardware disk, a veth to its container. The target
+	// almost never lives in the source's own collection, so the link is
+	// resolved through the prefix index assembled from every declaration
+	// this host holds — the producers' knowledge, read, not copied.
+	link := targetLink(owner, rel)
 	switch rel.Observability {
 	case store.Confirmed:
 		return fmt.Sprintf(
