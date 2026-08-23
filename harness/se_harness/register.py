@@ -66,7 +66,6 @@ DELIBERATELY_DROPPED: dict[str, str] = {
 NOT_YET_PORTED: dict[str, str] = {
     "network/tailscale": "a discovery source membership depends on (DESIGN 23).",
     "storage/arrays": "md arrays.",
-    "storage/datasets": "ZFS datasets — the level protection joins against.",
     "plex/requests": "seerr requests.",
 }
 
