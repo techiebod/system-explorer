@@ -38,6 +38,16 @@
   "collections": [
     {
       "name": "tailscale",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "who is on the tailnet, and is this node's membership healthy?",
       "prefix": "tailscale",
       "freshness": "5m",
@@ -335,6 +345,16 @@
     },
     {
       "name": "port-exposure",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "which firewall rules admit each listening port, and from where?",
       "prefix": "port-exposure",
       "freshness": "5m",
@@ -489,6 +509,16 @@
     },
     {
       "name": "nft-tables",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "which firewall tables exist, and how much does each hold?",
       "prefix": "nft-table",
       "freshness": "5m",
@@ -570,6 +600,16 @@
     },
     {
       "name": "nft-chains",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "where does the kernel enter this ruleset, and what runs what?",
       "prefix": "nft-chain",
       "freshness": "5m",
@@ -730,6 +770,16 @@
     },
     {
       "name": "nft-rules",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what does each rule in this ruleset actually say?",
       "prefix": "nft-rule",
       "freshness": "5m",
@@ -947,6 +997,16 @@
     },
     {
       "name": "routes",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "where does this host send traffic, in every table the kernel consults \u2014 and does anything outrank its own connected routes?",
       "prefix": "route",
       "freshness": "60s",
@@ -1107,6 +1167,16 @@
     },
     {
       "name": "listening",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what is this host accepting traffic on, and from how far away can it be reached?",
       "prefix": "socket",
       "freshness": "60s",
@@ -1217,6 +1287,16 @@
     },
     {
       "name": "resolver",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "which mechanism answers this host's lookups, and where do they actually go?",
       "prefix": "resolver",
       "freshness": "5m",
@@ -1471,6 +1551,16 @@
     },
     {
       "name": "links",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what interfaces does this host have, what is each one really, and is anything that should carry traffic down?",
       "prefix": "link",
       "freshness": "60s",

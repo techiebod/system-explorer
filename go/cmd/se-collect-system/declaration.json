@@ -31,6 +31,16 @@
   "collections": [
     {
       "name": "identity",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what machine is this, and what operating system is it running?",
       "prefix": "host",
       "freshness": "1h",
@@ -96,6 +106,16 @@
     },
     {
       "name": "time",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "is this machine's clock synchronised, and through what?",
       "prefix": "time",
       "freshness": "5m",
@@ -246,6 +266,16 @@
     },
     {
       "name": "overview",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "how loaded is this host right now, and is anything actually stalling?",
       "prefix": "overview",
       "freshness": "60s",
@@ -732,6 +762,16 @@
     },
     {
       "name": "boot",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what boot is this, did systemd finish it cleanly, and what would the firmware boot next time?",
       "prefix": "boot",
       "freshness": "5m",

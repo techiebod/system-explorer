@@ -34,13 +34,12 @@ func TestMalformedRequestsExitTwoWithAStderrLine(t *testing.T) {
 		"one collection, two gens":      "collect server:1 server:2\n",
 		"declare with arguments":        "declare now\n",
 		"probe with arguments":          "probe hard\n",
-		// The three verbs this collector does not serve yet. They are refused as
-		// unknown rather than answered emptily: phase 3 owes object, evidence and
-		// lookup, and a collector that answered them with nothing would be
-		// serving a contract it does not implement (appendix C).
-		"the object verb":   "object libraries 1\n",
-		"the evidence verb": "evidence libraries 1\n",
-		"the lookup verb":   "lookup library Movies\n",
+		// object and evidence are served since the R3d rollout; lookup is
+		// the one verb this collector still does not serve, refused as
+		// unknown rather than answered emptily — a collector that answered
+		// it with nothing would be serving a contract it does not implement
+		// (appendix C).
+		"the lookup verb": "lookup watching now\n",
 	}
 	for label, request := range cases {
 		code, stdout, stderr := runWith(t, request, nil)

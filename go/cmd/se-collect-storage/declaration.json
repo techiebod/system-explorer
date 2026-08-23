@@ -29,6 +29,16 @@
   "collections": [
     {
       "name": "pools",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "are my pools healthy, what does each one survive losing, and when was one last scrubbed?",
       "prefix": "pool",
       "freshness": "60s",
@@ -285,6 +295,16 @@
     },
     {
       "name": "block-devices",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what disks does this host actually have, and what is carved out of or assembled from them?",
       "prefix": "block-device",
       "freshness": "5m",
@@ -388,6 +408,16 @@
     },
     {
       "name": "datasets",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "how full is each dataset, and how is it mounted?",
       "prefix": "dataset",
       "freshness": "5m",
@@ -580,6 +610,16 @@
     },
     {
       "name": "arrays",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "is each md array whole, and is its redundancy established?",
       "prefix": "array",
       "freshness": "5m",
@@ -797,6 +837,16 @@
     },
     {
       "name": "mounts",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what is mounted where, and is any filesystem running out of space?",
       "prefix": "mount",
       "freshness": "60s",

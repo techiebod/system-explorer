@@ -481,8 +481,8 @@ Every known miss, each owned or ruled. A row neither built, owned nor ruled is a
 
 | # | Item | State today | Owner |
 |---|---|---|---|
-| 1 | `object` verb — object density (`LoadError`, `NRestarts`, `MainPID`, timers' `NextElapse`…) | owed by the phase-3 verb ruling, never delivered — served by units and hardware at R3c; the remaining collectors are R3d's | R3c/R3d |
-| 2 | `evidence` verb — capture-fresh raw document + digest; "the only thing that is not our interpretation" | owed by the same ruling — served by units and hardware at R3c; the remaining collectors are R3d's | R3c/R3d |
+| 1 | `object` verb — object density (`LoadError`, `NRestarts`, `MainPID`, timers' `NextElapse`…) | owed by the phase-3 verb ruling, never delivered — served by units and hardware at R3c; the rest of the fleet landed at R3d, twenty of twenty | R3c/R3d |
+| 2 | `evidence` verb — capture-fresh raw document + digest; "the only thing that is not our interpretation" | owed by the same ruling — served by units and hardware at R3c; the rest of the fleet landed at R3d, twenty of twenty | R3c/R3d |
 | 3 | `lookup` verb — parametrised queries, the lookup palette | owed by the same ruling — landed at R3d: storage's `snapshots-of`, network's `route-get` and `resolve`, palette declared at the declaration root | R3d |
 | 4 | object `type` on the wire | built at R1 | R1 |
 | 5 | applied order preserved; trees derived from relations | built at R1 | R1 |

@@ -15,6 +15,16 @@
   "collections": [
     {
       "name": "targets",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what does the estate promise to protect, is each promise actually built, and has anything ever been restored from it?",
       "prefix": "target",
       "freshness": "300s",
@@ -199,6 +209,16 @@
     },
     {
       "name": "jobs",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "did the protection actually run, and when did it last succeed?",
       "prefix": "job",
       "freshness": "60s",
@@ -388,6 +408,16 @@
     },
     {
       "name": "destinations",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "where do copies land, who may delete them, and what protects history from a compromised source?",
       "prefix": "destination",
       "freshness": "300s",

@@ -95,15 +95,25 @@ func run(stdin io.Reader, stdout, stderr io.Writer, getenv func(string) string) 
 			return exitRequest
 		}
 		if fields[0] == "object" {
-			return serveObject(stdout, stderr, src, fields[1], fields[2])
+			return serveObject(stdout, stderr, src, fields[1], decodeNameToken(fields[2]))
 		}
-		return serveEvidence(stdout, stderr, src, fields[1], fields[2])
+		return serveEvidence(stdout, stderr, src, fields[1], decodeNameToken(fields[2]))
 	default:
 		// Every token is data, never an option or a command fragment
 		// (DESIGN 18) — an unknown verb is refused whole, not guessed at.
 		fmt.Fprintf(stderr, "unknown verb %q: this collector serves declare, probe, collect, object and evidence\n", fields[0])
 		return exitRequest
 	}
+}
+
+// decodeNameToken is the request line's declared whitespace encoding
+// (DESIGN 18): a name token travels with each space as %20 and each literal
+// percent as %25, so the line stays a fixed whitespace-split token count
+// while names carrying spaces — an nft table's "inet filter", a mount point
+// under /media — stay addressable. Exactly those two sequences, in this
+// order, and nothing else: this is not URL decoding.
+func decodeNameToken(token string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(token, "%20", " "), "%25", "%")
 }
 
 // requestLine reads exactly one line, bounded. Everything after the first

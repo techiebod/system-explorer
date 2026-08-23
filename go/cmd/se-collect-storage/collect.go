@@ -152,15 +152,8 @@ func collect(stdout, stderr io.Writer, src source, order []string, generations m
 	})
 
 	objects := 0
-	served := map[string]func(*emitter, io.Writer, source, string, uint64, *int) int{
-		"pools":         collectPools,
-		"block-devices": collectBlockDevices,
-		"mounts":        collectMounts,
-		"datasets":      collectDatasets,
-		"arrays":        collectArrays,
-	}
 	for _, collection := range order {
-		serve, known := served[collection]
+		serve, known := collections[collection]
 		if !known {
 			// A name this collector never published is declined, not
 			// sanitised and not crashed on (DESIGN 18). unsupported —

@@ -127,12 +127,6 @@ func collect(stdout, stderr io.Writer, src source, order []string, generations m
 		Generations: generations,
 	})
 
-	served := map[string]func(*emitter, io.Writer, source, string, uint64, *int) int{
-		"identity": collectIdentity,
-		"time":     collectTime,
-		"overview": collectOverview,
-		"boot":     collectBoot,
-	}
 	objects := 0
 	for _, collection := range order {
 		serve, known := served[collection]
@@ -171,6 +165,16 @@ var identityFacts = [...]struct{ fact, key string }{
 	{"OsId", "ID"},
 	{"OsVersionId", "VERSION_ID"},
 	{"OsPrettyName", "PRETTY_NAME"},
+}
+
+// served binds each collection to the function that emits it — package-level
+// so the collect walk and the verbs answer from ONE table rather than two
+// that drift.
+var served = map[string]func(*emitter, io.Writer, source, string, uint64, *int) int{
+	"identity": collectIdentity,
+	"time":     collectTime,
+	"overview": collectOverview,
+	"boot":     collectBoot,
 }
 
 func collectIdentity(out *emitter, stderr io.Writer, src source, collection string, generation uint64, objects *int) int {

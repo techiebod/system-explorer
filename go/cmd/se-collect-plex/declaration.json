@@ -13,6 +13,16 @@
   "collections": [
     {
       "name": "server",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "is the thing every stream in the house depends on up, and which release is answering?",
       "prefix": "server",
       "freshness": "60s",
@@ -82,6 +92,16 @@
     },
     {
       "name": "libraries",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "does each library section still hold what it held, and when was it last scanned?",
       "prefix": "library",
       "freshness": "300s",
@@ -161,6 +181,16 @@
     },
     {
       "name": "sessions",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what is playing right now, by whom, and is the server transcoding it?",
       "prefix": "session",
       "freshness": "30s",
@@ -227,6 +257,16 @@
     },
     {
       "name": "requests",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "who is waiting for what?",
       "prefix": "request",
       "freshness": "5m",

@@ -404,8 +404,10 @@ REGISTER: tuple[Row, ...] = (
         "built", "R3c/R3d", lambda: _verb_landed("object"),
         "the probe reads the request dispatch of every collector main and "
         "flips on the FIRST landing (units, R3c); it sees the verb exist "
-        "somewhere, not everywhere, and not that its answer is dense — the "
-        "per-collector rollout is R3d's."),
+        "somewhere, not everywhere, and not that its answer is dense. The "
+        "per-collector rollout landed fleet-wide at R3d — all twenty mains "
+        "dispatch both verbs — but this probe still cannot tell twenty from "
+        "one, and each collector's own verbs tests are what pin its answers."),
     Row(2, "`evidence` verb — capture-fresh raw document and digest",
         "built", "R3c/R3d", lambda: _verb_landed("evidence"),
         "same probe shape and same limits as row 1."),
