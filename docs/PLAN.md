@@ -549,6 +549,20 @@ The 29-row register above is encoded with a probe wherever the tree can attest a
 
 **Gate R3 (owner):** the inverted comparator is clean over the whole reference surface, and the register shows no unowned row.
 
+> **The comparator ran for the first time on 2026-08-23, and clause 1 does not hold**
+>
+> Clause 2 holds: 29 rows, every built row's probe passing, every owed row owned, and the two lists that used to sit outside the census joined to it.
+>
+> Clause 1 does not, and the reason is substantive. On a real systemd host the run is **17 collectors at parity, 2 the reference cannot run there** (`network/port-exposure`, and `plex/requests` for want of a seerr) **and one differing: `system`.**
+>
+> **`system/identity` and the reference's identity share no fact names at all.** The reference reads `hostname1` over D-Bus — Architecture, Chassis, HardwareModel, HardwareVendor, KernelName, KernelRelease, MachineID, OperatingSystemPrettyName, StaticHostname, Virtualization. The port folds os-release and the kernel hostname — Hostname, OsId, OsPrettyName, OsVersionId. Not one name is on both sides, so MachineID, Virtualization, HardwareVendor and Chassis — the facts that answer *what this machine is* — are absent from the port. The collector's source states the deviation, but states it as an **evidence** decision about which document to show; it is a **scope** decision about which facts exist.
+>
+> This is row 28's prediction arriving: `system` has no replay seam, `se-compare` is its only venue, and that comparison had never been executed. Row 27 claimed it was compared and its probe read the WORK LIST — so "compared" meant "listed for comparison" through two waves.
+>
+> **Owed to the owner as an adjudication under §20, not patched.** Losing ten facts is a scope ruling rather than a defect, and the reference has lost three times before.
+>
+> One more finding, recorded rather than counted: `resources` reported a `StallAttributionUnobservable` divergence once and was clean in four further runs. That fact records that a member's pressure could not be READ, so the live comparator catches the class by luck. It belongs in the corpus as a staged variant.
+
 > **The three acceptance items moved to gate R4, ruled 2026-08-23.** This line asked for them here, and they cannot be answered here: **every one of them names a page.** "One object, one page, every name on it." "The units page renders its slice tree." "Indentation disabled under sort or filter." Those are §27/§28 surfaces, which is R4's work — so until a UI exists there is nothing for the owner to look at, and an item judged by looking cannot be judged by reading a test that says the edges were minted.
 >
 > The material underneath them is built and is what R3 actually owes: `member-of` and `enslaved-to` are declared and asserted, the zpool-device-to-disk join is minted and keyed, and the identity families ride the object. What is missing is the rendering, and rendering is the gate they now sit at.

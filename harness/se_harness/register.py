@@ -776,11 +776,34 @@ REGISTER: tuple[Row, ...] = (
         "declarations and requires every entry ruled; the staleness "
         "direction is the conformance test's."),
     Row(27, "`system/identity` compared (gate 3's claim was false)",
-        "built", "R2 (live); replay seam owed R3b",
-        lambda: "identity" in comparator_work()["system"]["compare"],
-        "the probe sees the work list drive it; the first clean live run is "
-        "gate R3's to show, and the replay-seam half stays named in "
-        "NO_REPLAY_SEAM until R3b."),
+        "owed", "the owner — an adjudication, §20",
+        # NO PROBE, and its absence is the finding.
+        #
+        # This probed `"identity" in comparator_work()["system"]["compare"]`
+        # — the WORK LIST — and read "built" through two waves while the
+        # comparison it names had never been executed once. When it was
+        # finally run, on 2026-08-23, it failed. Whether a live comparison
+        # is CLEAN is not a fact any file in this tree holds, and a probe
+        # over the list of things to compare is exactly the shape that
+        # made "compared" mean "listed for comparison".
+        None,
+        "the probe sees the work list drive it. **The first live run "
+        "happened on 2026-08-23 and it was NOT clean**, which is what this "
+        "row had never established: `system/identity` and the reference's "
+        "identity share ZERO fact names. The reference reads hostname1 over "
+        "D-Bus and emits Architecture, Chassis, HardwareModel, "
+        "HardwareVendor, KernelName, KernelRelease, MachineID, "
+        "OperatingSystemPrettyName, StaticHostname and Virtualization; the "
+        "port folds os-release and the kernel hostname into Hostname, OsId, "
+        "OsPrettyName and OsVersionId. Not one name is on both sides, so "
+        "MachineID, Virtualization, HardwareVendor and Chassis — the facts "
+        "that answer what this machine IS — are absent from the port. The "
+        "collector's own source states the deviation, but states it as an "
+        "EVIDENCE decision about which document to show; it is a scope "
+        "decision about which facts exist. Owed to the owner as an "
+        "adjudication under §20, not patched here, because losing ten facts "
+        "is a scope ruling rather than a defect. The replay-seam half stays "
+        "named in NO_REPLAY_SEAM and is row 28's."),
     Row(28, "the system adapter's replay seam — four collections with no "
         "reference-vs-port venue in CI",
         "owed", "R5",
