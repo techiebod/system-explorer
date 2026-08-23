@@ -511,6 +511,7 @@ Every known miss, each owned or ruled. A row neither built, owned nor ruled is a
 | 28 | the system adapter's replay seam — four collections with no fixture | landed at R3b | R3b |
 | 29 | the findings surface — `get_findings` has no port tool at either tier | owed: the lifecycle landed at R3e and its surface did not | R4 |
 | 30 | decline reasons carried, cleared and served | landed 2026-08-23: the detail reaches the store and the wire, `absent` is recorded though it commits, and a commit clears the decline | R3 |
+| 31 | the rejection record has no read surface | owed: `Store.Rejections()` is called by tests and nothing else, so a refused batch is invisible from outside the process. Not built — DESIGN §2288 defers the surface as a contract change | R4 |
 
 #### R1 — structure on the wire (small) — **GATE R1 OPEN, 2026-08-21**
 
@@ -552,13 +553,15 @@ The 29-row register above is encoded with a probe wherever the tree can attest a
 
   **Three producer gaps were found behind that last line and all three are closed.** Each was the same shape and it is worth naming, because the shape is not "a feature is missing" — it is **a tier writing something no tier reads**, which passes every test the writer has and is invisible from the surface. The absent list had been written and hashed since the store existed and served no reader, so a fact moving between value and absent — the change most worth seeing — was invisible to the diff. The per-fact unobservables were validated against the declaration and then dropped on the floor, so a fact the collector could not read rendered exactly like a fact it never had. And the decline stored the enum word while `wire.Decline.Detail` was parsed and discarded, with the `absent` decline storing nothing at all: absent COMMITS, so it is not stale and holds no objects, and its row was byte-identical to a collection that answered and honestly holds nothing. That is two of §28's four empty states collapsed **one tier below the renderer**, where no amount of R4 care could recover the difference.
 
+  **A fourth was found by sweeping for the shape rather than waiting for it**, and is register row 31 rather than a fix: `Store.Rejections()` is called by four tests and by nothing else, so a batch refused for naming an undeclared fact and a clean acquisition are indistinguishable from outside the process — and one of those tests asserts that a held collection "is not silent", which is precisely what it is to every reader that is not a test. It is left owed on purpose. DESIGN §2288 defers the surface as a contract change, since a rejection is not one of the four decline reasons and `stale_reason` cannot carry it without the authority table ceasing to be closed, and PLAN rule 5 makes silence in the design a blocker rather than a licence to guess.
+
   The third gap needed a third part nobody asked for: **a commit clears the decline**, because the columns are otherwise write-only and a collection that declined `unauthorised` once reads as declined for ever — the stale-confident-claim failure, in the store. Five plants seen red: detail discarded, absent silent, commit not clearing, stored-but-not-served, and served-on-every-row, that last one because a decline member on an answering row would cost the member its meaning. **A sixth plant stayed green and was the register's own probe**: it asked for the Go type name `declineView`, and renaming it to `declineViewX` left the probe passing, because a substring test cannot see a rename that only appends. Repointed at the JSON member, which is what actually reaches a reader. That is the day's lesson recurring one more time — the guard was more dangerous than the code — and it is why the probe is proven to discriminate rather than merely to pass.
 
 **Gate R3 (owner):** the inverted comparator is clean over the whole reference surface, and the register shows no unowned row.
 
 > **The comparator ran for the first time on 2026-08-23, and clause 1 does not hold**
 >
-> Clause 2 holds: 30 rows, every built row's probe passing, every owed row owned, and the two lists that used to sit outside the census joined to it.
+> Clause 2 holds: 31 rows, every built row's probe passing, every owed row owned, and the two lists that used to sit outside the census joined to it.
 >
 > Clause 1 does not, and the reason is substantive. On a real systemd host the run is **17 collectors at parity, 2 the reference cannot run there** (`network/port-exposure`, and `plex/requests` for want of a seerr) **and one differing: `system`.**
 >

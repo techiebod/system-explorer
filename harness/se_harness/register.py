@@ -883,4 +883,37 @@ REGISTER: tuple[Row, ...] = (
         "whether the RENDERER distinguishes the states the store now "
         "separates — that is R4's, and the probe reads a file, not a "
         "page."),
+    Row(31, "the rejection record has no read surface — refusals are written "
+        "and queryable only by opening the store",
+        "owed", "R4",
+        lambda: (_in_file("go/internal/collate/rest.go", "/v1/rejections")
+                 or _in_file("src/system_explorer/hub/routes.py",
+                             "/v1/rejections")),
+        "the probe asks whether EITHER tier serves the record; today "
+        "neither does. `Store.Rejections()` exists and its only callers are "
+        "tests — four of them, one asserting that a held collection 'is not "
+        "silent', which is exactly what it is to every reader that is not a "
+        "test. So a batch refused for an undeclared fact, a batch held "
+        "under an unknown declaration hash, and a clean acquisition are "
+        "indistinguishable from outside the process. DESIGN 2293 already "
+        "records the half of this that is about exit status and calls the "
+        "durable rejection 'a better channel — queryable, attributable to a "
+        "batch, and survives the process'; queryable is true of the Go "
+        "method and false of the product, because nothing calls it. Found "
+        "2026-08-23 by sweeping for the shape that had already produced "
+        "three defects that day — a tier writing what no tier reads — "
+        "rather than by transcription, which is PLAN rule 7 applied to the "
+        "register itself. NOT built here, deliberately: DESIGN 2288 defers "
+        "the surface as a contract change (a rejection is not one of the "
+        "four decline reasons, so `stale_reason` cannot carry it without "
+        "the authority table ceasing to be closed), and PLAN rule 5 makes "
+        "silence in the design a blocker rather than a licence to guess. "
+        "The probe asks for the ROUTE PATH, not the word: the first "
+        "spelling matched `rejections` and passed on a COMMENT in rest.go "
+        "that mentions the table. Second time in one file that a substring "
+        "probe read prose as a product. What the probe cannot see: whether "
+        "a surface that DID appear "
+        "carries `at_wall`, which the existing reader drops — a refusal "
+        "with no time reads the same whether it happened once at boot or "
+        "is still happening."),
 )
