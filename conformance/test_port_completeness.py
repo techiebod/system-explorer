@@ -329,6 +329,47 @@ def test_every_answer_ruling_is_ruled_or_owed() -> None:
             )
 
 
+def closed_phases() -> set[str]:
+    """The phases docs/PLAN.md declares finished.
+
+    Derived from PLAN rather than listed here: a hand-kept list of closed
+    phases is a second place the truth lives, and it would go stale in
+    exactly the direction that hides this defect.
+    """
+    plan = (REPO / "docs" / "PLAN.md").read_text()
+    return set(re.findall(r"\*\*(R[0-9]\w*)[^*]*\*\*\s*—\s*\*\*done", plan))
+
+
+def test_no_ruling_is_owed_to_a_phase_that_has_closed() -> None:
+    """A follow-up promise that outlived its phase is owned by nobody.
+
+    Gate R3's own clause is "the register shows no unowned row". Seven of
+    the fourteen answer rulings said `owed: R3d` while PLAN declared R3d
+    done — so seven divergences between the port's `answer` lists and the
+    argued column presets were owned by nothing, and row 26 rendered them
+    as ruled and read "built" over the lot.
+
+    The guard above is why it survived: it asserts a phase is NAMED and
+    never that the phase is still open, which is this estate's most
+    repeated defect wearing a regular expression. Found by an audit,
+    2026-08-23.
+    """
+    closed = closed_phases()
+    assert closed, (
+        "no phase in PLAN is marked done, so this guard would pass over "
+        "everything — the pattern must match PLAN's own wording")
+    stale = {}
+    for route, text in sorted(ANSWER_RULINGS.items()):
+        if not text.startswith("owed: "):
+            continue
+        named = set(re.findall(r"R[0-9]\w*", text)) & closed
+        if named:
+            stale[route] = sorted(named)
+    assert not stale, (
+        f"owed to a phase that has closed, so owned by nobody: {stale}. "
+        f"Re-own each to an open phase or rule it.")
+
+
 def test_an_agreeing_preset_exists() -> None:
     """Anti-vacuity for the divergence computation: if NO route matches its
     preset exactly, the comparison is producing garbage (a parse artefact

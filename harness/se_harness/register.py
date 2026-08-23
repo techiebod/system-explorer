@@ -212,6 +212,26 @@ def comparator_work(
 # declarations and holds this table to it in both directions, so neither a
 # new divergence nor a healed one can pass silently.
 
+# **Seven rulings were re-owned from R3d to R4 on 2026-08-23.** They were
+# owed to R3d, R3d closed with them unanswered, and a follow-up promise
+# that outlives its phase is owned by nobody — while row 26 rendered them
+# as ruled and read "built" over the lot. Gate R3's own clause is "the
+# register shows no unowned row", so this was that clause failing
+# silently.
+#
+# R4 is the honest home rather than a convenient one: an `answer` list IS
+# the row density §27 defines — which facts ride a row — and that is
+# judged by looking at the row. It is the same reasoning that moved the
+# three acceptance items, taken by the owner the same day: an item that
+# names a page is judged where pages exist. storage/pools is the sharpest
+# of the seven, because a collection whose row cannot answer its own
+# declared question ("when was one last scrubbed?", with ScanFunction no
+# longer on the row) is a defect the page makes obvious and a table does
+# not.
+#
+# `test_no_ruling_is_owed_to_a_phase_that_has_closed` now catches this
+# class. The guard that let it through asserted a phase was NAMED and
+# never that the phase was still open.
 ANSWER_RULINGS: dict[str, str] = {
     "units/units": "ruled: additive — the reference's three columns survive "
                    "verbatim and in order, and the port appends "
@@ -239,22 +259,22 @@ ANSWER_RULINGS: dict[str, str] = {
                            "survive as an ordered subsequence; the port adds "
                            "the depth, throttle and stall-attribution facts "
                            "the old UI never had.",
-    "docker/containers": "owed: R3d — Status (docker's own 'Up 3 hours' "
+    "docker/containers": "owed: R4 — Status (docker's own 'Up 3 hours' "
                          "reading) was dropped and Ports added; keep-or-"
                          "replace is re-judged at the docker retrofit.",
-    "docker/volumes": "owed: R3d — ComposeProject, the join the estate "
+    "docker/volumes": "owed: R4 — ComposeProject, the join the estate "
                       "actually reads, was dropped from the preset.",
-    "docker/networks": "owed: R3d — Internal was dropped from the preset.",
-    "storage/pools": "owed: R3d — the port answers UnhealthyVdevs where the "
+    "docker/networks": "owed: R4 — Internal was dropped from the preset.",
+    "storage/pools": "owed: R4 — the port answers UnhealthyVdevs where the "
                      "reference answered DeviceFailuresTolerated/ScanFunction/"
                      "Errors; no design section grounds the swap, and the "
                      "declared question still asks 'when was one last "
                      "scrubbed?' while the answer no longer carries "
                      "ScanFunction.",
-    "nix/generations": "owed: R3d — Kernel/ConfigurationRevision/Changed/"
+    "nix/generations": "owed: R4 — Kernel/ConfigurationRevision/Changed/"
                        "Deployed/Created left the preset (the facts are still "
                        "emitted and compared; only the answer narrowed).",
-    "packages/packages": "owed: R3d — Architecture and StorePath left the "
+    "packages/packages": "owed: R4 — Architecture and StorePath left the "
                          "preset; the facts are still emitted and compared.",
     "hardware/platform": "ruled: at R3c — SysVendor stays added — vendor and "
                          "product are the machine's identity pair, and a bare "
@@ -277,7 +297,7 @@ ANSWER_RULINGS: dict[str, str] = {
                      "number as a fact. SmartPercentUsed stays added: rated "
                      "write life is the NVMe health headline the old UI "
                      "never had.",
-    "vms/domains": "owed: R3d — Autostart left the preset.",
+    "vms/domains": "owed: R4 — Autostart left the preset.",
 }
 
 
