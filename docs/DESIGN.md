@@ -1833,6 +1833,13 @@ Four patterns follow, and they are the ones to abide by:
 3. **Typed narrowing is the single exception, and it is bounded**: it may read the rendered text of rows and set their visibility. It may not read a fact's declaration, compute a severity, mint a link, or format a value.
 4. **Every page is a complete answer with script disabled.** Which is what makes the exception safe to grant: the unfiltered page is not a degraded page, it is the whole answer, and `curl` and §29's consumer without eyes get exactly what a browser gets.
 
+**And rule 4 is already a HEADER, not a habit.** Both tiers serve `default-src 'none'; style-src 'unsafe-inline'` — `page.go` at the collator, `http.py` at the hub — so script cannot run on either surface today whatever a template contains. That is a stronger guarantee than a pattern somebody has to remember, and it changes where the one exception can land:
+
+- **The collator's host page keeps the absolute header and gets no typed filter.** It is the page that must answer when everything else is down, and the property that it cannot execute anything is worth more there than incremental narrowing. A host page that needs a filter is a host page with too much on it.
+- **The hub's surface is where the exception may be spent**, and spending it means naming the script in the policy — a `script-src` with the one hash — rather than widening the header to `'self'` or `'unsafe-inline'`. A relaxation that admits any script admits the three copies §27 records as having rotted; a hash admits exactly one reviewed file.
+
+So the boundary is not "JavaScript is discouraged". It is: **one tier cannot run script at all, and the other names the single script it runs.** That is checkable by reading two headers, which is what makes it a pattern rather than an intention.
+
 **One invariant stops being a matter of care.** `app.js` requires that the number beside a hide-group chip must not change when the chip is pressed — the count answers *what this group holds*, not *what is currently hidden* — and it holds that by computing counts from what the hide rules assign rather than from what is displayed. Server-rendered counts toggled by CSS cannot violate it: nothing recomputes, so there is nothing to get wrong.
 
 **And one difference to settle at the gate rather than assert away.** Facet counts in `app.js` describe what is on screen, so they answer against the revealed set. Under a CSS-only reveal they are fixed at render. Whether that is a loss or a simplification is a judgement about the screen, and it belongs in the side-by-side comparison gate R4 already requires, not in this table.
