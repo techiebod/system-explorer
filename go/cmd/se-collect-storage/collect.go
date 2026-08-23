@@ -157,6 +157,7 @@ func collect(stdout, stderr io.Writer, src source, order []string, generations m
 		"block-devices": collectBlockDevices,
 		"mounts":        collectMounts,
 		"datasets":      collectDatasets,
+		"arrays":        collectArrays,
 	}
 	for _, collection := range order {
 		serve, known := served[collection]

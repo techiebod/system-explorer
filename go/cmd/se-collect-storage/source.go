@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -57,6 +58,12 @@ type source interface {
 	// three-state shape as zpool: a document, a host-with-no-zfs decline
 	// (absent, authoritative-empty), or could-not-run.
 	zfsList() (*value, error)
+	// mdTree is the arrays walk's sysfs tree in one reading: the contents,
+	// listings and link targets of /sys/block/*/md, transcribed (the
+	// 2026-08-19 tree-interface ruling). A host with no /sys/block listing
+	// at all is could-not-run; a listing with no md member is the ordinary
+	// empty answer.
+	mdTree() (mdDocument, error)
 	// findmnt is PID 1's mount table — the host's truth, not this
 	// process's sandbox view. fellBack reports the older-util-linux
 	// fallback to our own namespace, printed to stderr rather than
@@ -243,6 +250,47 @@ var findmntOwn = []string{"findmnt", "-J", "--real", "-b",
 	"-o", "TARGET,SOURCE,FSTYPE,OPTIONS,SIZE,USED,AVAIL,USE%"}
 
 func (liveSource) lsblk() (*value, error) { return runJSON(lsblkArgv) }
+
+// mdDocument is the transcribed tree: three maps keyed the way the payloads
+// are — container path, then member — so the live walk and the replayed one
+// read through identical shapes.
+type mdDocument struct {
+	read     func(path string) (string, bool)
+	listdir  func(path string) []string
+	realpath func(path string) string
+}
+
+func (liveSource) mdTree() (mdDocument, error) {
+	return mdDocument{
+		read: func(p string) (string, bool) {
+			raw, err := os.ReadFile(p)
+			if err != nil {
+				return "", false
+			}
+			text := strings.TrimSpace(string(raw))
+			return text, text != ""
+		},
+		listdir: func(p string) []string {
+			entries, err := os.ReadDir(p)
+			if err != nil {
+				return nil
+			}
+			names := make([]string, 0, len(entries))
+			for _, entry := range entries {
+				names = append(names, entry.Name())
+			}
+			sort.Strings(names)
+			return names
+		},
+		realpath: func(p string) string {
+			resolved, err := filepath.EvalSymlinks(p)
+			if err != nil {
+				return p
+			}
+			return resolved
+		},
+	}, nil
+}
 
 func (liveSource) zfsList() (*value, error) {
 	if _, err := exec.LookPath("zfs"); err != nil {
@@ -436,6 +484,82 @@ func (r replaySource) payload(stem string) (*value, error) {
 		return nil, err
 	}
 	return decodeDocument(raw)
+}
+
+func (r replaySource) mdTree() (mdDocument, error) {
+	load := func(stem string) (map[string]map[string]*value, error) {
+		doc, err := r.payload(stem)
+		if errors.Is(err, fs.ErrNotExist) {
+			// A capture that predates the arrays walk staged no tree at
+			// all; every read against it must refuse rather than reading
+			// the replaying machine.
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		out := map[string]map[string]*value{}
+		object := doc.object()
+		for _, container := range keysOf(object) {
+			inner := object.byKey[container].object()
+			members := map[string]*value{}
+			for _, member := range keysOf(inner) {
+				members[member] = inner.byKey[member]
+			}
+			out[container] = members
+		}
+		return out, nil
+	}
+	reads, err := load("md-read")
+	if err != nil {
+		return mdDocument{}, err
+	}
+	listings, err := load("md-listdir")
+	if err != nil {
+		return mdDocument{}, err
+	}
+	targets, err := load("md-realpath")
+	if err != nil {
+		return mdDocument{}, err
+	}
+	split := func(p string) (string, string) {
+		i := strings.LastIndexByte(p, '/')
+		if i < 0 {
+			return "", p
+		}
+		return p[:i], p[i+1:]
+	}
+	return mdDocument{
+		read: func(p string) (string, bool) {
+			container, member := split(p)
+			entry, ok := reads[container][member]
+			if !ok || isNone(entry) {
+				return "", false
+			}
+			text := pyStr(entry)
+			return text, text != ""
+		},
+		listdir: func(p string) []string {
+			container, member := split(p)
+			entry, ok := listings[container][member]
+			if !ok || isNone(entry) {
+				return nil
+			}
+			var names []string
+			for _, item := range entry.items {
+				names = append(names, pyStr(item))
+			}
+			return names
+		},
+		realpath: func(p string) string {
+			container, member := split(p)
+			entry, ok := targets[container][member]
+			if !ok || isNone(entry) {
+				return p
+			}
+			return pyStr(entry)
+		},
+	}, nil
 }
 
 func (r replaySource) zfsList() (*value, error) {

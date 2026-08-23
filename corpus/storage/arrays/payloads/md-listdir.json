@@ -1,0 +1,145 @@
+{
+  "/sys": {
+    "block": [
+      "loop0",
+      "loop1",
+      "loop2",
+      "loop3",
+      "loop4",
+      "loop5",
+      "loop6",
+      "loop7",
+      "md126",
+      "md127",
+      "nvme0n1",
+      "sda",
+      "vda",
+      "vdb"
+    ]
+  },
+  "/sys/block/loop0": {
+    "md": []
+  },
+  "/sys/block/loop1": {
+    "md": []
+  },
+  "/sys/block/loop2": {
+    "md": []
+  },
+  "/sys/block/loop3": {
+    "md": []
+  },
+  "/sys/block/loop4": {
+    "md": []
+  },
+  "/sys/block/loop5": {
+    "md": []
+  },
+  "/sys/block/loop6": {
+    "md": []
+  },
+  "/sys/block/loop7": {
+    "md": []
+  },
+  "/sys/block/md126": {
+    "md": [
+      "array_size",
+      "array_state",
+      "bitmap",
+      "bitmap_set_bits",
+      "bitmap_type",
+      "chunk_size",
+      "component_size",
+      "consistency_policy",
+      "degraded",
+      "dev-loop2",
+      "fail_last_dev",
+      "last_sync_action",
+      "layout",
+      "level",
+      "logical_block_size",
+      "max_read_errors",
+      "metadata_version",
+      "mismatch_cnt",
+      "new_dev",
+      "new_level",
+      "raid_disks",
+      "rd0",
+      "reshape_direction",
+      "reshape_position",
+      "resync_start",
+      "safe_mode_delay",
+      "serialize_policy",
+      "suspend_hi",
+      "suspend_lo",
+      "sync_action",
+      "sync_completed",
+      "sync_force_parallel",
+      "sync_io_depth",
+      "sync_max",
+      "sync_min",
+      "sync_speed",
+      "sync_speed_max",
+      "sync_speed_min",
+      "uuid"
+    ]
+  },
+  "/sys/block/md127": {
+    "md": [
+      "array_size",
+      "array_state",
+      "bitmap",
+      "bitmap_set_bits",
+      "bitmap_type",
+      "chunk_size",
+      "component_size",
+      "consistency_policy",
+      "degraded",
+      "dev-loop0",
+      "dev-loop1",
+      "dev-loop4",
+      "fail_last_dev",
+      "last_sync_action",
+      "layout",
+      "level",
+      "logical_block_size",
+      "max_read_errors",
+      "metadata_version",
+      "mismatch_cnt",
+      "new_dev",
+      "new_level",
+      "raid_disks",
+      "rd0",
+      "rd1",
+      "reshape_direction",
+      "reshape_position",
+      "resync_start",
+      "safe_mode_delay",
+      "serialize_policy",
+      "suspend_hi",
+      "suspend_lo",
+      "sync_action",
+      "sync_completed",
+      "sync_force_parallel",
+      "sync_io_depth",
+      "sync_max",
+      "sync_min",
+      "sync_speed",
+      "sync_speed_max",
+      "sync_speed_min",
+      "uuid"
+    ]
+  },
+  "/sys/block/nvme0n1": {
+    "md": []
+  },
+  "/sys/block/sda": {
+    "md": []
+  },
+  "/sys/block/vda": {
+    "md": []
+  },
+  "/sys/block/vdb": {
+    "md": []
+  }
+}

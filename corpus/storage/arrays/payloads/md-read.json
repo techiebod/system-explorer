@@ -1,0 +1,48 @@
+{
+  "/sys/block/md126": {
+    "size": "129024"
+  },
+  "/sys/block/md126/md": {
+    "array_state": "clean",
+    "degraded": "1",
+    "level": "raid1",
+    "metadata_version": "1.2",
+    "raid_disks": "2",
+    "sync_action": "idle",
+    "sync_completed": "none",
+    "uuid": "5cb0837b-ab01-e619-f98a-2c72fb0684fc"
+  },
+  "/sys/block/md126/md/dev-loop2": {
+    "errors": "0",
+    "slot": "0",
+    "state": "in_sync"
+  },
+  "/sys/block/md127": {
+    "size": "129024"
+  },
+  "/sys/block/md127/md": {
+    "array_state": "clean",
+    "degraded": "0",
+    "level": "raid1",
+    "metadata_version": "1.2",
+    "raid_disks": "2",
+    "sync_action": "idle",
+    "sync_completed": "none",
+    "uuid": "5cb01cc0-ddbb-8b9d-38d9-ca42ca0cdeb1"
+  },
+  "/sys/block/md127/md/dev-loop0": {
+    "errors": "0",
+    "slot": "0",
+    "state": "in_sync"
+  },
+  "/sys/block/md127/md/dev-loop1": {
+    "errors": "0",
+    "slot": "1",
+    "state": "in_sync"
+  },
+  "/sys/block/md127/md/dev-loop4": {
+    "errors": "0",
+    "slot": "none",
+    "state": "spare"
+  }
+}

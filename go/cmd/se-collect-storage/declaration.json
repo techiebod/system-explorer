@@ -570,6 +570,223 @@
       ]
     },
     {
+      "name": "arrays",
+      "question": "is each md array whole, and is its redundancy established?",
+      "prefix": "array",
+      "freshness": "5m",
+      "perishability": "sampled",
+      "answer": [
+        "Status",
+        "Level",
+        "SyncPercent",
+        "RaidDisks",
+        "SizeBytes"
+      ],
+      "ceiling": {
+        "records": 256,
+        "bytes": 1048576
+      },
+      "facts": {
+        "Status": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "derived",
+          "derived_from": [
+            "ArrayState",
+            "SyncAction"
+          ],
+          "discloses": "nothing",
+          "from": "/sys/block/*/md/{array_state,sync_action}",
+          "sentence": "The state an operator means: the sync action while one runs, else the array state — because array_state stays `clean` during a resync, tracking only superblock dirtiness."
+        },
+        "Level": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/sys/block/*/md/level",
+          "sentence": "The raid level, in the kernel's own word. Also the row's type."
+        },
+        "ArrayState": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/sys/block/*/md/array_state",
+          "sentence": "The kernel's array_state verbatim, beside the derived Status."
+        },
+        "Degraded": {
+          "type": "integer",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/sys/block/*/md/degraded",
+          "sentence": "How many member devices are missing or failed — the kernel's own count, and the array-degraded rule's whole reading."
+        },
+        "RaidDisks": {
+          "type": "integer",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/sys/block/*/md/raid_disks",
+          "sentence": "How many devices the layout wants."
+        },
+        "MetadataVersion": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/sys/block/*/md/metadata_version",
+          "sentence": "The superblock format version."
+        },
+        "UUID": {
+          "type": "string",
+          "temperament": "configuration",
+          "kind": "observed",
+          "discloses": "identity",
+          "from": "/sys/block/*/md/uuid",
+          "sentence": "The array's uuid — the identity that survives a rename and the value udev mints md-uuid-… by-id links from, so it correlates an array across captures and is declared the identity it is."
+        },
+        "SyncAction": {
+          "type": "string",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "nothing",
+          "from": "/sys/block/*/md/sync_action",
+          "sentence": "What the sync thread is doing — idle, resync, recover, check, repair, reshape. The array-sync rules read it: recover warns because redundancy is not established until it finishes; the rest inform."
+        },
+        "SyncPercent": {
+          "type": "number",
+          "temperament": "gauge",
+          "kind": "derived",
+          "derived_from": [
+            "SyncAction"
+          ],
+          "discloses": "nothing",
+          "from": "/sys/block/*/md/sync_completed",
+          "sentence": "Progress of the running sync, one decimal, from the kernel's done/total sector pair. Absent while idle — sync_completed spells `none`, which is not a number and not zero progress."
+        },
+        "SizeBytes": {
+          "type": "integer",
+          "temperament": "configuration",
+          "kind": "derived",
+          "derived_from": [
+            "RaidDisks"
+          ],
+          "discloses": "nothing",
+          "from": "/sys/block/*/size",
+          "sentence": "The array's usable size: the kernel's 512-byte sector count, multiplied out."
+        },
+        "Members": {
+          "type": "list",
+          "temperament": "state",
+          "kind": "observed",
+          "discloses": "identity",
+          "from": "/sys/block/*/md/dev-*",
+          "sentence": "Every member device: the block device it is, its state, its slot, and its error counter — each attribute sysfs did not yield left off the member rather than carried as null."
+        },
+        "MembersWithErrors": {
+          "type": "list",
+          "temperament": "state",
+          "kind": "derived",
+          "derived_from": [
+            "Members"
+          ],
+          "discloses": "identity",
+          "from": "/sys/block/*/md/dev-*/errors",
+          "sentence": "The members whose error counters are non-zero. Minted because a rule condition names one fact and a literal — a predicate inside a list of objects is not something the closed vocabulary can say — and [] is a reading: every counter was read and none was set."
+        }
+      },
+      "rules": [
+        {
+          "key": "array-degraded",
+          "level": "critical",
+          "grounds": "interface",
+          "when": {
+            "fact": "Degraded",
+            "at_least": 1
+          },
+          "sentence": "Member devices are missing or failed.",
+          "cites": [
+            "Degraded",
+            "RaidDisks",
+            "Members"
+          ]
+        },
+        {
+          "key": "array-member-errors",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "MembersWithErrors",
+            "non_empty": true
+          },
+          "sentence": "Member devices have recorded errors.",
+          "cites": [
+            "MembersWithErrors",
+            "Members"
+          ]
+        },
+        {
+          "key": "array-sync-recover",
+          "level": "warn",
+          "grounds": "interface",
+          "when": {
+            "fact": "SyncAction",
+            "equals": "recover"
+          },
+          "sentence": "A rebuild is in progress; redundancy is not established until it finishes.",
+          "cites": [
+            "SyncAction",
+            "SyncPercent"
+          ]
+        },
+        {
+          "key": "array-sync",
+          "level": "info",
+          "grounds": "interface",
+          "when": {
+            "fact": "SyncAction",
+            "in": [
+              "resync",
+              "check",
+              "repair",
+              "reshape"
+            ]
+          },
+          "sentence": "A sync operation is in progress; redundancy is not fully established until it finishes.",
+          "cites": [
+            "SyncAction",
+            "SyncPercent"
+          ]
+        }
+      ],
+      "redaction_exemption": "kernel states, counts, levels and sector sizes, identical on every machine running that layout. The two identity carriers — the array uuid, and the member device references — are declared so on their facts and handled by disclosure policy; no attribute this walk reads is operator-chosen text or a credential.",
+      "reference_commands": [
+        {
+          "purpose": "the arrays and their members, by hand",
+          "argv": [
+            "cat",
+            "/proc/mdstat"
+          ]
+        },
+        {
+          "purpose": "the sysfs attributes these rows carry",
+          "argv": [
+            "cat",
+            "/sys/block/<md>/md/{level,array_state,degraded,raid_disks,metadata_version,uuid,sync_action,sync_completed}"
+          ]
+        },
+        {
+          "purpose": "one member's attributes",
+          "argv": [
+            "cat",
+            "/sys/block/<md>/md/dev-*/{state,slot,errors}"
+          ]
+        }
+      ]
+    },
+    {
       "name": "mounts",
       "question": "what is mounted where, and is any filesystem running out of space?",
       "prefix": "mount",

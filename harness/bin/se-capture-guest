@@ -392,6 +392,42 @@ async def main():
     return "transmission " + str(session.get("version")) + " + sabnzbd " + str(queue.get("version"))
 print(asyncio.run(main()))
 '
+# storage'"'"'s md walk is a TREE read like hardware'"'"'s whole interface: the
+# payload is the filesystem transcribed — every file read, every directory
+# listed, every link resolved — keyed directory-then-name. Nulls are captured
+# answers; the walk is deterministic on a quiescent guest, so three runs
+# record the same calls. A resyncing array is NOT quiescent, which is why the
+# staging captures arrays idle and the sync shapes live in the collector'"'"'s
+# staged tests instead.
+storage_md_py='
+import importlib, json, sys, types
+sys.path.insert(0, "/tmp/secmp/src")
+importlib.import_module("system_explorer.agent")
+PKG = "system_explorer.agent.adapters"
+if PKG not in sys.modules:
+    stub = types.ModuleType(PKG)
+    stub.__path__ = ["/tmp/secmp/src/system_explorer/agent/adapters"]
+    sys.modules[PKG] = stub
+from system_explorer.agent.adapters import storage
+
+want = sys.argv[1]
+seen = {}
+
+def record(name, fn):
+    def call(argument):
+        answer = fn(argument)
+        container, _, member = str(argument).rpartition("/")
+        seen.setdefault(name, {}).setdefault(container, {})[member] = answer
+        return answer
+    return call
+
+for name, attr in (("read", "_sys_read"), ("listdir", "_sys_list"),
+                   ("realpath", "_sys_realpath")):
+    setattr(storage, attr, record(name, getattr(storage, attr)))
+
+storage._md_scrape()
+print(json.dumps(seen.get(want, {}), indent=1, sort_keys=True))
+'
 # hardware'"'"'s interface is a TREE, so its payload is the filesystem
 # transcribed: every file the walk opened, every directory it enumerated, every
 # link it resolved, every hwdb reply it asked for (DESIGN'"'"'s ruling of
@@ -857,8 +893,14 @@ case "$collector" in
         # The zpool documents are optional since R3b: a guest with no ZFS
         # still has block devices and mounts, and its capture stages the
         # util-linux documents alone — the variant's collections say which
-        # halves it carries.
+        # halves it carries. The md payloads are the arrays walk's sysfs
+        # tree transcribed (the 2026-08-19 tree-interface ruling), captured
+        # by instrumenting the walk exactly as hardware's is; a guest with
+        # no md device records empty maps, which is the reading.
         acquisitions=(
+            "md-read.json|python3 -c '$storage_md_py' read"
+            "md-listdir.json|python3 -c '$storage_md_py' listdir"
+            "md-realpath.json|python3 -c '$storage_md_py' realpath"
             "status.json?|zpool status -j --json-int 2>/dev/null || true"
             "list.json?|zpool list -j -p -v -o name,size,alloc,free,cap,frag,health 2>/dev/null || true"
             "zfs-list.json?|zfs list -j -p -o name,used,avail,usedbysnapshots,mountpoint,canmount,readonly,mounted 2>/dev/null || sudo zfs list -j -p -o name,used,avail,usedbysnapshots,mountpoint,canmount,readonly,mounted 2>/dev/null || true"

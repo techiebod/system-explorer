@@ -247,18 +247,19 @@ func TestAResolvedLeafCarriesItsDeviceAndKernelName(t *testing.T) {
 }
 
 func TestACollectionThisCollectorNeverDeclaredIsDeclinedUnsupported(t *testing.T) {
-	// arrays is the exemplar because it is still owed; datasets held this
-	// seat until it was served at R3d, and the drill's subject moves with
-	// the register rather than staying on a name that now commits.
+	// lookups is the PERMANENT seat: it is dropped by ruling — lookup is a
+	// VERB in the new contract, not a collection — so unlike the owed names
+	// that held this seat before (datasets, then arrays), it will never be
+	// served and the drill never moves again.
 	env := replayEnv(stageReplayDir(t, stagedStatus, stagedList, `{}`))
-	code, stdout, _ := runWith(t, "collect arrays:11 pools:12\n", env)
+	code, stdout, _ := runWith(t, "collect lookups:11 pools:12\n", env)
 	if code != exitOK {
 		t.Fatalf("exit %d", code)
 	}
 	records := parseRecords(t, stdout)
 	var declined map[string]any
 	for _, record := range ofKind(records, "decline") {
-		if record["collection"] == "arrays" {
+		if record["collection"] == "lookups" {
 			declined = record
 		}
 	}
@@ -266,7 +267,7 @@ func TestACollectionThisCollectorNeverDeclaredIsDeclinedUnsupported(t *testing.T
 		t.Fatalf("a name this collector did not publish is declined, not sanitised; got %v", declined)
 	}
 	for _, commit := range ofKind(records, "commit") {
-		if commit["collection"] == "arrays" {
+		if commit["collection"] == "lookups" {
 			t.Fatal("an unsupported decline established nothing and must not commit")
 		}
 	}

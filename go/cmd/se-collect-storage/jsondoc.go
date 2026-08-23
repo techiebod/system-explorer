@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"strconv"
 	"strings"
 )
 
@@ -267,6 +268,17 @@ func stringValue(s string) *value { return &value{kind: jsonString, text: s} }
 
 func intValue(n int64) *value {
 	return &value{kind: jsonNumber, text: fmt.Sprintf("%d", n)}
+}
+
+// floatValue renders the token as Python's json module would — the shortest
+// round trip, with a trailing .0 kept, so 100.0 stays a float on the wire
+// (resources' floatToken, restated here because the packages do not share).
+func floatValue(f float64) *value {
+	text := strconv.FormatFloat(f, 'f', -1, 64)
+	if !strings.ContainsAny(text, ".eE") {
+		text += ".0"
+	}
+	return &value{kind: jsonNumber, text: text}
 }
 
 func bigValue(n *big.Int) *value {

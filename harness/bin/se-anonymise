@@ -11,8 +11,8 @@ collector, as a manifest, and this tool guesses nothing:
 
   harness/scrub/<collector>.json maps payload field paths to
       {"discloses": nothing|identity|location|content|secret,
-       "format": wwn|wwid|udev_serial|guid_u64|serial|vpd_page80|mac|ipv4
-                 |ipv6|hostname|name|path|prose
+       "format": wwn|wwid|udev_serial|guid_u64|serial|vpd_page80|md_uuid
+                 |mac|ipv4|ipv6|hostname|name|path|prose
                  |unit_name|object_path,
        "payload": <payload stem this entry is scoped to, optional>}
 
@@ -162,7 +162,7 @@ from se_harness import detectors  # noqa: E402  (after the path insert above)
 
 DISCLOSES = {"nothing", "identity", "location", "content", "secret"}
 FORMATS = {"wwn", "wwid", "udev_serial", "guid_u64", "serial", "vpd_page80",
-           "mac", "ipv4", "ipv6", "hostname",
+           "md_uuid", "mac", "ipv4", "ipv6", "hostname",
            "name", "path", "prose", "unit_name", "object_path"}
 
 # The formats whose whole VALUE is the identifier. Everything here is held to
@@ -470,6 +470,25 @@ UDEV_NAA_SERIAL = re.compile(r"^([1-6])([0-9a-fA-F]{16})$")
 # matched a bare serial string, so the whole spelling walked through until the
 # evidence verb first read a controller directory (2026-08-21).
 NQN_SERIAL = re.compile(r"\b(nqn\.\d{4}-\d{2}\.[\w.\-]+:(?:[^\s:]+:)*)([A-Za-z0-9\-_]{4,})\b")
+# An md array's uuid, in the kernel's colon-quad spelling — the same value
+# udev mints `md-uuid-…` by-id link names from, so the free-text pass must
+# know the spelling or the link names walk through the scrub untouched.
+MD_UUID = re.compile(r"\b([0-9a-fA-F]{8}):([0-9a-fA-F]{8}):([0-9a-fA-F]{8}):([0-9a-fA-F]{8})\b")
+
+
+def _md_uuid_replacement(ctx: Ctx, spelled: str) -> str:
+    folded = "".join(c for c in spelled if c not in ":-").lower()
+    replaced = _hex32_replacement(ctx, folded)
+    out, i = [], 0
+    for c in spelled:
+        if c in ":-":
+            out.append(c)
+        else:
+            out.append(replaced[i])
+            i += 1
+    return "".join(out)
+
+
 NVME_WWID_IN_TEXT = re.compile(
     r"\bnvme\.([0-9a-fA-F]{4})-([0-9a-fA-F]+)-([0-9a-fA-F]+)-([0-9a-fA-F]+)\b")
 
@@ -767,6 +786,8 @@ def scrub_text(text: str, ctx: Ctx) -> str:
     # patterns below, which would otherwise chew the serial chunk in half —
     # and it must run on free text at all because the LISTING of /dev/disk/by-id
     # is where the join a reader follows actually lives.
+    text = MD_UUID.sub(lambda m: park(_md_uuid_replacement(ctx, m.group(0))), text)
+
     text = NQN_SERIAL.sub(
         lambda m: park(m.group(1) + _serial_replacement(ctx, m.group(2))), text)
 
@@ -1214,6 +1235,15 @@ def _substitute(value, fmt: str | None, path: tuple, ctx: Ctx):
             return designator.group(1) + _hex16_replacement(ctx, designator.group(2))
         replaced = scrub_text(value, ctx)
         return replaced if replaced != value else _serial_replacement(ctx, value)
+    if fmt == "md_uuid":
+        # Two native layouts of one identity: the sysfs uuid file dashes it
+        # 8-4-4-4-12, udev's by-id link name colons it 8:8:8:8. Both fold to
+        # one 32-hex key, so both spellings of one array substitute alike.
+        folded = "".join(c for c in value if c not in ":-").lower()
+        if len(folded) != 32 or any(c not in "0123456789abcdef" for c in folded):
+            ctx.problems.append(f"{_dot(path)}: declared md_uuid but is not one")
+            return value
+        return _md_uuid_replacement(ctx, value)
     if fmt == "wwid":
         # NAA first: a SCSI disk's wwid IS a WWN, and the wwn pass owns that
         # spelling. Only the NVMe form falls through.

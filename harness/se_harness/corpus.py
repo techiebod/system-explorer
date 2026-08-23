@@ -97,6 +97,11 @@ VALID_VARIANTS = frozenset(
         # residue. Every staged rule accepts, so the staging cannot cut the
         # guest's own ssh off.
         "exposure",
+        # arrays, added with storage/arrays' R3d port: two loop-backed
+        # mirrors, one whole with a spare and one genuinely degraded through
+        # mdadm --fail — the kernel's own [2/1] accounting, captured idle
+        # because a resyncing array is not quiescent.
+        "arrays",
         # datasets, added with storage/datasets' R3d port: a file-backed
         # pool staged so every property surface is a real value — a quota
         # bounding the headroom, snapshot churn, all three mountpoint

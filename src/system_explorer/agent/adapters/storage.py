@@ -214,19 +214,33 @@ def _sys_list(path: str) -> list[str]:
 # ── md arrays (sysfs) ────────────────────────────────────────
 
 
+def _sys_realpath(path: str) -> str:
+    """os.path.realpath as a named primitive, for the same reason hardware's
+    _realpath is one: the md walk reads a member's kernel name off the
+    resolved link, which makes the link graph part of the native document
+    (the 2026-08-19 tree-interface ruling) — and a bare os.path.realpath has
+    no stub point, so a replay would resolve against the tree of whichever
+    machine is replaying."""
+    return os.path.realpath(path)
+
+
 def _md_scrape() -> dict:
     """Every md array on the host, from /sys/block/*/md."""
     arrays: dict[str, dict] = {}
     for name in _sys_list("/sys/block"):
         md = f"/sys/block/{name}/md"
-        if not os.path.isdir(md):
+        # The listing is the probe: a device with no md directory lists
+        # nothing, and an md directory is never empty. os.path.isdir here
+        # answered from the REPLAYING machine's tree, which is the seam
+        # escape the tree-interface ruling closed everywhere else.
+        if not _sys_list(md):
             continue
         members: dict[str, dict] = {}
         for entry in _sys_list(md):
             if not entry.startswith("dev-"):
                 continue
             dev = f"{md}/{entry}"
-            kname = os.path.basename(os.path.realpath(f"{dev}/block"))
+            kname = os.path.basename(_sys_realpath(f"{dev}/block"))
             members[kname] = {
                 "state": _sys_read(f"{dev}/state"),
                 "slot": _sys_read(f"{dev}/slot"),
@@ -922,6 +936,14 @@ class Adapter:
                               "Errors": member["errors"]}.items()
                              if v is not None}
                             for kname, member in arr["members"].items()],
+                # Minted because a rule condition names one fact and a
+                # literal: "a member with a non-zero error counter" is a
+                # predicate inside a list of objects, which the closed
+                # vocabulary cannot say. [] is a reading — every counter was
+                # read and none was set — so it is always published.
+                "MembersWithErrors": [f"block-device:{kname}"
+                                      for kname, member in arr["members"].items()
+                                      if member["errors"]],
             }
             facts, absent = _split_absent(facts)
             item = env.item_summary(f"array:{name}", arr["level"] or "md-array",

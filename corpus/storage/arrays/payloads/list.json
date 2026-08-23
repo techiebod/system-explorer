@@ -1,0 +1,116 @@
+{
+  "output_version": {
+    "command": "zpool list",
+    "vers_major": 0,
+    "vers_minor": 1
+  },
+  "pools": {
+    "host-5797a2": {
+      "name": "host-5797a2",
+      "type": "POOL",
+      "state": "ONLINE",
+      "pool_guid": "1844070846972206408",
+      "txg": "4",
+      "spa_version": "5000",
+      "zpl_version": "5",
+      "properties": {
+        "size": {
+          "value": "1006632960",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "allocated": {
+          "value": "79188992",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "free": {
+          "value": "927443968",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "capacity": {
+          "value": "7",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "fragmentation": {
+          "value": "4",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        },
+        "health": {
+          "value": "ONLINE",
+          "source": {
+            "type": "NONE",
+            "data": "-"
+          }
+        }
+      },
+      "vdevs": {
+        "/var/tmp/host-5797a2-pool.img": {
+          "name": "/var/tmp/host-5797a2-pool.img",
+          "vdev_type": "file",
+          "guid": "1844084622588085614",
+          "path": "/var/tmp/host-5797a2-pool.img",
+          "class": "normal",
+          "state": "ONLINE",
+          "properties": {
+            "size": {
+              "value": "1073741824",
+              "source": {
+                "type": "NONE",
+                "data": "-"
+              }
+            },
+            "allocated": {
+              "value": "79188992",
+              "source": {
+                "type": "NONE",
+                "data": "-"
+              }
+            },
+            "free": {
+              "value": "927443968",
+              "source": {
+                "type": "NONE",
+                "data": "-"
+              }
+            },
+            "capacity": {
+              "value": "7",
+              "source": {
+                "type": "NONE",
+                "data": "-"
+              }
+            },
+            "fragmentation": {
+              "value": "4",
+              "source": {
+                "type": "NONE",
+                "data": "-"
+              }
+            },
+            "health": {
+              "value": "ONLINE",
+              "source": {
+                "type": "NONE",
+                "data": "-"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

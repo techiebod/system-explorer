@@ -1,0 +1,84 @@
+{
+ "collector": "storage",
+ "collections": [
+  "arrays"
+ ],
+ "variant": "arrays",
+ "provenance": "captured-then-scrubbed",
+ "os": "ubuntu",
+ "os_version": "26.04",
+ "source_version": "mdadm-4.4 linux-7.0.0-28-generic",
+ "captured": "2026-08-23T13:50:00Z",
+ "regenerable": true,
+ "regenerable_on": "a lab guest with two loop-backed raid1 arrays staged: one whole with a spare standing by (three members), and one built whole and then DEGRADED by failing and removing a member — mdadm --fail then --remove — so the kernel's own degraded count is 1 while array_state still reads clean, which is exactly why Status is derived. Both idle: a resyncing array is not quiescent, so the sync shapes live in the collector's staged tests instead of a racy capture.",
+ "anonymised": true,
+ "note": "storage/arrays' first committed pair, and the first tree-transcribed capture for this collector (the 2026-08-19 ruling): md-read, md-listdir and md-realpath are the walk's sysfs tree, taken by instrumenting the reference's own primitives — which this landing gave the walk, replacing an os.path.isdir probe and an inline realpath that would have answered from whichever machine replayed. The degraded array is a REAL kernel state, not a plant: the member was failed and removed through mdadm, so the [2/1] accounting, the remaining member's in_sync state and the absent slot are all the kernel's own.",
+ "coverage_note": "What this variant does not reach: an active sync (SyncAction stays idle and SyncPercent absent — the shapes are in the collector's staged tests, because sync_completed changes between the three instrumented runs of a resyncing array and the capture's determinism argument only holds quiescent), a member error counter above zero (nothing injects errors into a loop device; MembersWithErrors is observed as the empty reading), and a spare actively rebuilding.",
+ "canaries": [],
+ "anchors": [
+  {
+   "collection": "arrays",
+   "commit_objects": 2
+  },
+  {
+   "collection": "arrays",
+   "object": "md126",
+   "fact": "Degraded",
+   "value": 1
+  },
+  {
+   "collection": "arrays",
+   "object": "md126",
+   "fact": "Status",
+   "value": "clean"
+  },
+  {
+   "collection": "arrays",
+   "object": "md126",
+   "fact": "ArrayState",
+   "value": "clean"
+  },
+  {
+   "collection": "arrays",
+   "object": "md126",
+   "fact": "RaidDisks",
+   "value": 2
+  },
+  {
+   "collection": "arrays",
+   "object": "md126",
+   "absent_fact": "SyncPercent"
+  },
+  {
+   "collection": "arrays",
+   "object": "md127",
+   "fact": "Degraded",
+   "value": 0
+  },
+  {
+   "collection": "arrays",
+   "object": "md127",
+   "fact": "Level",
+   "value": "raid1"
+  },
+  {
+   "collection": "arrays",
+   "object": "md127",
+   "fact": "SizeBytes",
+   "value": 66060288
+  },
+  {
+   "collection": "arrays",
+   "object": "md127",
+   "fact": "MembersWithErrors",
+   "value": []
+  },
+  {
+   "collection": "arrays",
+   "object": "md127",
+   "fact": "UUID",
+   "value": "5cb01cc0-ddbb-8b9d-38d9-ca42ca0cdeb1"
+  }
+ ],
+ "anchors_note": "Transcribed from the scrubbed md payloads. md126 is the degraded mirror: the kernel counts one missing member while array_state still reads clean — the array-degraded rule fires critical off the count, and Status equals ArrayState because nothing is syncing (which the absent SyncPercent also pins: sync_completed spells `none`, not zero). md127 is whole with its spare: 64512 KiB-blocks staged, and the size file's 129024 sectors times 512 is 66060288. Its uuid is the scrubbed spelling, 5cb0-marked, and the same 32 hex fold appears colon-quadded in the devlinks payload's md-uuid link — one array, two native spellings, one substitution."
+}

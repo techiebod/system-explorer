@@ -511,6 +511,13 @@ def _check_prefix_pair(node: dict, path: str, findings: list[Finding]) -> None:
 # /proc/net's byte-swapped spelling of ::1 — four 32-bit words, host order.
 PROC_V6_LOOPBACK = "00000000000000000000000001000000"
 
+# An md uuid in the kernel's colon-quad spelling: folded it is the 32-hex
+# machine-id shape, and unfolded neither the 32-hex nor the uuid pattern
+# sees it — so an array's identity walked through until the first capture
+# with an md device. A scrubbed one folds to the 5cb0… marker.
+MD_UUID_QUADS = re.compile(
+    r"\b[0-9a-fA-F]{8}:[0-9a-fA-F]{8}:[0-9a-fA-F]{8}:[0-9a-fA-F]{8}\b")
+
 NQN_TAIL = re.compile(
     r"\b(nqn\.\d{4}-\d{2}\.[\w.\-]+:(?:[^\s:]+:)*)([A-Za-z0-9\-_]{4,})\b")
 BASE64_LEAF = re.compile(r"^[A-Za-z0-9+/]{12,}={0,2}$")
@@ -576,6 +583,14 @@ def _scan_text(
                 path, "uuid",
                 f"dashed UUID {m.group(0)} beside id-ish key {key!r} carries "
                 f"no {HEX32_MARKER}… scrub marker — a real boot/fs/partition id",
+            ))
+
+    for m in MD_UUID_QUADS.finditer(text):
+        folded = m.group(0).replace(":", "").lower()
+        if not folded.startswith(HEX32_MARKER):
+            findings.append(Finding(
+                path, "identifier",
+                f"md uuid {m.group(0)} folds to an unmarked 32-hex identity",
             ))
 
     for m in HEX32.finditer(text):

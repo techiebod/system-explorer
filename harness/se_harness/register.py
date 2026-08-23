@@ -65,7 +65,6 @@ DELIBERATELY_DROPPED: dict[str, str] = {
 #: reachable while they are open.
 NOT_YET_PORTED: dict[str, str] = {
     "network/tailscale": "a discovery source membership depends on (DESIGN 23).",
-    "storage/arrays": "md arrays.",
     "plex/requests": "seerr requests.",
 }
 

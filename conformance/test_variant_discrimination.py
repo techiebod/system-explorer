@@ -120,7 +120,7 @@ CASES = (
         # wrongness touches pools records alone — on the util-linux
         # collections it must be byte-faithful, which the before half now
         # proves over the bare-guest pair.
-        serves=frozenset({"pools", "block-devices", "datasets", "mounts"}),
+        serves=frozenset({"pools", "block-devices", "datasets", "arrays", "mounts"}),
         shared_with=frozenset({"storage/spare-engaged"}),
     ),
 )

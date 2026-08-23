@@ -117,10 +117,18 @@ SEAM = {
         "module": storage,
         "adapter": storage.Adapter,
         "interface": "zpool",
-        "collections": ["pools", "block-devices", "datasets", "mounts"],
+        "collections": ["pools", "block-devices", "datasets", "arrays",
+                        "mounts"],
         "acquisitions": {"_zpool_status": "status", "_zpool_list": "list",
                          "_zfs_list": "zfs-list",
                          "_lsblk": "lsblk", "_findmnt": "findmnt"},
+        # The md walk's sysfs tree, transcribed per the 2026-08-19 ruling —
+        # the same three primitives hardware's whole interface rides.
+        "path_acquisitions": {
+            "_sys_read": "md-read",
+            "_sys_list": "md-listdir",
+            "_sys_realpath": "md-realpath",
+        },
         "auxiliary": {"_devlinks": ("devlinks", None)},
         # The capability probe asks the host whether zpool exists. Under
         # replay the payload is the evidence that it did, on the machine the

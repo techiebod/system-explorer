@@ -1188,5 +1188,67 @@
  "pools.*.vdevs.*.path": {
   "discloses": "identity",
   "format": "path"
+ },
+ "#the_md_tree_is_transcribed": "The arrays walk's payloads are its sysfs tree transcribed (the 2026-08-19 tree-interface ruling): md-read holds every file it opened, md-listdir every directory it enumerated (kernel device names, three dot-segments always), md-realpath every link it resolved. Everything is kernel vocabulary and counters except the array uuid, which correlates an array across captures and is substituted in its own colon-quad spelling — the same value udev mints md-uuid-… by-id links from, so the two scrub through one context or the corpus stops demonstrating that join.",
+ "md-read:*.level": {
+  "discloses": "nothing"
+ },
+ "md-read:*.array_state": {
+  "discloses": "nothing"
+ },
+ "md-read:*.degraded": {
+  "discloses": "nothing"
+ },
+ "md-read:*.raid_disks": {
+  "discloses": "nothing"
+ },
+ "md-read:*.metadata_version": {
+  "discloses": "nothing"
+ },
+ "md-read:*.sync_action": {
+  "discloses": "nothing"
+ },
+ "md-read:*.sync_completed": {
+  "discloses": "nothing"
+ },
+ "md-read:*.size": {
+  "discloses": "nothing"
+ },
+ "md-read:*.state": {
+  "discloses": "nothing"
+ },
+ "md-read:*.slot": {
+  "discloses": "nothing"
+ },
+ "md-read:*.errors": {
+  "discloses": "nothing"
+ },
+ "md-read:*.uuid": {
+  "discloses": "identity",
+  "format": "md_uuid"
+ },
+ "md-listdir:*.*.*": {
+  "discloses": "nothing"
+ },
+ "md-realpath:*.*": {
+  "discloses": "nothing"
+ },
+ "md-read:~key": {
+  "discloses": "nothing"
+ },
+ "md-listdir:~key": {
+  "discloses": "nothing"
+ },
+ "md-listdir:*.~key": {
+  "discloses": "nothing"
+ },
+ "md-realpath:~key": {
+  "discloses": "nothing"
+ },
+ "md-read:*.~key": {
+  "discloses": "nothing"
+ },
+ "md-realpath:*.~key": {
+  "discloses": "nothing"
  }
 }

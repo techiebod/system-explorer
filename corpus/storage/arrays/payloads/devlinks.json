@@ -1,0 +1,15 @@
+{
+  "/dev/disk/by-id/md-name-host-77df07:limping": "md126",
+  "/dev/disk/by-id/md-name-host-77df07:steady": "md127",
+  "/dev/disk/by-id/md-uuid-5cb0837b:ab01e619:f98a2c72:fb0684fc": "md126",
+  "/dev/disk/by-id/md-uuid-5cb01cc0:ddbb8b9d:38d9ca42:ca0cdeb1": "md127",
+  "/dev/disk/by-id/nvme-QEMU_NVMe_Ctrl_ANONC38AC9AE8F0": "nvme0n1",
+  "/dev/disk/by-id/nvme-QEMU_NVMe_Ctrl_ANONC38AC9AE8F0_1": "nvme0n1",
+  "/dev/disk/by-id/nvme-nvme.1b36-414e4f4e4333384143394145384630-51454d55204e564d65204374726c-00000001": "nvme0n1",
+  "/dev/disk/by-id/scsi-330493d187fe67bfc": "sda",
+  "/dev/disk/by-id/wwn-0x30493d187fe67bfc": "sda",
+  "/dev/disk/by-partuuid/5cb0220e-16a9-967f-5c68-6fa299ab935c": "vda13",
+  "/dev/disk/by-partuuid/5cb09984-a1c1-adf2-5b95-60ef46968cef": "vda1",
+  "/dev/disk/by-partuuid/5cb0bd84-2480-a1cb-6860-4c6953b7988f": "vda15",
+  "/dev/disk/by-partuuid/5cb0232e-8f27-dd63-6236-0e08fcb9da23": "vda14"
+}

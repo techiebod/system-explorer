@@ -1,0 +1,14 @@
+{
+  "/sys/block/md126/md/dev-loop2": {
+    "block": "/sys/devices/virtual/block/loop2"
+  },
+  "/sys/block/md127/md/dev-loop0": {
+    "block": "/sys/devices/virtual/block/loop0"
+  },
+  "/sys/block/md127/md/dev-loop1": {
+    "block": "/sys/devices/virtual/block/loop1"
+  },
+  "/sys/block/md127/md/dev-loop4": {
+    "block": "/sys/devices/virtual/block/loop4"
+  }
+}
