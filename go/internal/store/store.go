@@ -130,6 +130,16 @@ func Open(path string) (*Store, error) {
 // refuses to invent a hash for those rows rather than sending one the
 // hub would fetch and fail to match.
 func migrate(db *sql.DB) error {
+	// The snapshots table gained `format` on 2026-08-23, when the
+	// diffable object gained `scope`. A store written before it carries
+	// 0, which ChangesSince refuses to compare against — a reading whose
+	// shape predates the change is not a baseline, and saying so beats
+	// reporting every object as added and removed at once.
+	if _, err := db.Exec(
+		`ALTER TABLE snapshots ADD COLUMN format INTEGER NOT NULL DEFAULT 0`,
+	); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+		return fmt.Errorf("add snapshots.format: %w", err)
+	}
 	var has bool
 	rows, err := db.Query(`SELECT name FROM pragma_table_info('collections')`)
 	if err != nil {
@@ -642,6 +652,27 @@ type ObjectRow struct {
 // attachment tree). Sorting is a consumer's choice to make and undo; the
 // producer's order is not recoverable once discarded, which this store
 // did until 2026-08-21.
+// ObjectsInScope is one collection's applied objects under ONE instance
+// scope, in applied order.
+//
+// The record needs this and Objects cannot serve it: Objects returns
+// every scope, so a snapshot keyed (collection, scope) was built from
+// whatever scopes had applied at that moment, and a question about one
+// instance was diffed against every instance's live objects. Two
+// instances applied, a snapshot taken at the first's apply, the second
+// re-applied and the first untouched — and a question about the first
+// answered that its object had been ADDED. Found by review 2026-08-23.
+func (s *Store) ObjectsInScope(collection, scope string) ([]ObjectRow, error) {
+	rows, err := s.db.Query(`
+		SELECT id, name, type, facts, at, scope FROM objects
+		WHERE collection = ? AND scope = ? ORDER BY seq, id`, collection, scope)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanObjectRows(rows)
+}
+
 func (s *Store) Objects(collection string) ([]ObjectRow, error) {
 	rows, err := s.db.Query(`
 		SELECT id, name, type, facts, at, scope FROM objects
@@ -650,6 +681,12 @@ func (s *Store) Objects(collection string) ([]ObjectRow, error) {
 		return nil, err
 	}
 	defer rows.Close()
+	return scanObjectRows(rows)
+}
+
+// scanObjectRows is the one decoder both readers use, so a column added
+// to one cannot be missing from the other.
+func scanObjectRows(rows *sql.Rows) ([]ObjectRow, error) {
 	var out []ObjectRow
 	for rows.Next() {
 		var o ObjectRow

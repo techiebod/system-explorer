@@ -40,10 +40,24 @@ CREATE TABLE IF NOT EXISTS snapshots (
   taken_at   TEXT NOT NULL,
   generation INTEGER NOT NULL,
   digest     TEXT NOT NULL,
-  objects    TEXT NOT NULL
+  objects    TEXT NOT NULL,
+  format     INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS snapshots_at ON snapshots (collection, scope, taken_at);
 `
+
+// SnapshotFormat is the shape of what `objects` holds. Bumped whenever a
+// stored reading stops being comparable with a fresh one.
+//
+// It went to 1 on 2026-08-23, when the diffable object gained `scope`:
+// rows written that morning carry objects with no scope member, so
+// unmarshalling one yields Scope="" while the live side fills it from
+// the store — and every object reads as both ADDED and REMOVED. A stored
+// reading with an older format is not a baseline this code can compare,
+// and the answer says so rather than inventing a change. There was no
+// marker at all before, which is why an incompatible shape could arrive
+// silently in the first place.
+const SnapshotFormat = 1
 
 // Snapshot is one stored reading of a collection, with the measures
 // already dropped by the caller.
@@ -55,6 +69,9 @@ type Snapshot struct {
 	Digest     string
 	// The diffable objects, as the JSON array the diff reads back.
 	Objects string
+	// Format is SnapshotFormat at the moment of writing. A reading whose
+	// format is older cannot be compared with a fresh one.
+	Format int
 }
 
 // RecordSnapshot stores one reading, or reports that it was unchanged.
@@ -79,10 +96,11 @@ func (s *Store) RecordSnapshot(snapshot Snapshot) (bool, error) {
 		return false, nil
 	}
 	_, err = s.db.Exec(`
-		INSERT INTO snapshots (collection, scope, taken_at, generation, digest, objects)
-		VALUES (?, ?, ?, ?, ?, ?)`,
+		INSERT INTO snapshots (collection, scope, taken_at, generation, digest, objects, format)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		snapshot.Collection, snapshot.Scope, snapshot.TakenAt,
-		int64(snapshot.Generation), snapshot.Digest, snapshot.Objects)
+		int64(snapshot.Generation), snapshot.Digest, snapshot.Objects,
+		SnapshotFormat)
 	if err != nil {
 		return false, fmt.Errorf("record snapshot for %s: %w", snapshot.Collection, err)
 	}
@@ -100,7 +118,7 @@ func (s *Store) RecordSnapshot(snapshot Snapshot) (bool, error) {
 // is exactly what the cut ruling forbids.
 func (s *Store) SnapshotAtOrBefore(collection, scope, at string) (*Snapshot, error) {
 	row := s.db.QueryRow(`
-		SELECT collection, scope, taken_at, generation, digest, objects
+		SELECT collection, scope, taken_at, generation, digest, objects, format
 		FROM snapshots
 		WHERE collection = ? AND scope = ? AND taken_at <= ?
 		ORDER BY taken_at DESC, seq DESC LIMIT 1`,
@@ -108,7 +126,7 @@ func (s *Store) SnapshotAtOrBefore(collection, scope, at string) (*Snapshot, err
 	var found Snapshot
 	var generation int64
 	switch err := row.Scan(&found.Collection, &found.Scope, &found.TakenAt,
-		&generation, &found.Digest, &found.Objects); err {
+		&generation, &found.Digest, &found.Objects, &found.Format); err {
 	case sql.ErrNoRows:
 		return nil, nil
 	case nil:

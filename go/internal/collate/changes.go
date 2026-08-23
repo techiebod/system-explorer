@@ -139,10 +139,21 @@ type ChangedObject struct {
 }
 
 // CollectionChanges is one collection's answer.
+// ObjectRef names one object the way the diff keys it: the id and the
+// instance scope it was published under. Added and Removed carried bare
+// ids until 2026-08-23 — so two instances of one native name appeared as
+// the same id twice, with nothing to say they were two. The scope fix
+// landed on Changed alone and the test asserted only that Added was
+// non-empty, which is why it did not notice.
+type ObjectRef struct {
+	ID    string `json:"id"`
+	Scope string `json:"scope,omitempty"`
+}
+
 type CollectionChanges struct {
 	Collection string          `json:"collection"`
-	Added      []string        `json:"added,omitempty"`
-	Removed    []string        `json:"removed,omitempty"`
+	Added      []ObjectRef     `json:"added,omitempty"`
+	Removed    []ObjectRef     `json:"removed,omitempty"`
 	Changed    []ChangedObject `json:"changed,omitempty"`
 	// The moment the baseline was taken. A caller comparing two answers
 	// needs to know they rest on the same reading.
@@ -180,12 +191,12 @@ func Compare(before, after []DiffableObject) CollectionChanges {
 	var changes CollectionChanges
 	for key, object := range afterByKey {
 		if _, held := beforeByKey[key]; !held {
-			changes.Added = append(changes.Added, object.ID)
+			changes.Added = append(changes.Added, ObjectRef{object.ID, object.Scope})
 		}
 	}
 	for key, object := range beforeByKey {
 		if _, held := afterByKey[key]; !held {
-			changes.Removed = append(changes.Removed, object.ID)
+			changes.Removed = append(changes.Removed, ObjectRef{object.ID, object.Scope})
 		}
 	}
 	for key, was := range beforeByKey {
@@ -198,8 +209,14 @@ func Compare(before, after []DiffableObject) CollectionChanges {
 				ChangedObject{ID: was.ID, Scope: was.Scope, Paths: paths})
 		}
 	}
-	sort.Strings(changes.Added)
-	sort.Strings(changes.Removed)
+	sort.Slice(changes.Added, func(i, j int) bool {
+		return changes.Added[i].Scope+"\x00"+changes.Added[i].ID <
+			changes.Added[j].Scope+"\x00"+changes.Added[j].ID
+	})
+	sort.Slice(changes.Removed, func(i, j int) bool {
+		return changes.Removed[i].Scope+"\x00"+changes.Removed[i].ID <
+			changes.Removed[j].Scope+"\x00"+changes.Removed[j].ID
+	})
 	sort.Slice(changes.Changed, func(i, j int) bool {
 		return changes.Changed[i].ID < changes.Changed[j].ID
 	})
@@ -295,11 +312,32 @@ func ChangesSince(s *store.Store, collection, scope, since string) (CollectionCh
 		return answer, nil
 	}
 
+	if baseline.Format != store.SnapshotFormat {
+		// A reading whose shape predates the current one is not a
+		// baseline. Diffing it anyway reported every object as ADDED and
+		// REMOVED at once — the pre-`scope` rows unmarshal with an empty
+		// scope while the live side fills it from the store, so nothing
+		// matches. A stated gap is the honest answer, and it is the same
+		// answer a question before the record began already gets.
+		answer.Gap = &RecordGap{
+			AskedAbout: since, Begins: begins, Reason: "format-changed",
+			Detail: fmt.Sprintf(
+				"the newest reading at or before that moment was stored in "+
+					"format %d and this collator compares format %d; the record "+
+					"resumes from the first reading taken since",
+				baseline.Format, store.SnapshotFormat),
+		}
+		return answer, nil
+	}
 	var before []DiffableObject
 	if err := json.Unmarshal([]byte(baseline.Objects), &before); err != nil {
 		return answer, fmt.Errorf("baseline for %s: %w", collection, err)
 	}
-	live, err := s.Objects(collection)
+	// Scope-narrowed. s.Objects returns EVERY scope, so a question
+	// about one instance was diffed against every instance's live
+	// objects — the merge acceptance item 1 forbids, arriving through
+	// the read even after the KEY was fixed.
+	live, err := s.ObjectsInScope(collection, scope)
 	if err != nil {
 		return answer, err
 	}
@@ -335,7 +373,10 @@ func SnapshotFor(s *store.Store, collection, scope, takenAt string, generation u
 		// wrong baseline outlives the moment that produced it.
 		return store.Snapshot{}, false, nil
 	}
-	objects, err := s.Objects(collection)
+	// The snapshot is keyed (collection, scope), so it is BUILT from
+	// that scope alone: reading every scope made the stored series hold
+	// whatever instances happened to have applied at that moment.
+	objects, err := s.ObjectsInScope(collection, scope)
 	if err != nil {
 		return store.Snapshot{}, false, err
 	}

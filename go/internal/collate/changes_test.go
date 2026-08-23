@@ -10,6 +10,7 @@
 package collate
 
 import (
+	"database/sql"
 	"encoding/json"
 	"path/filepath"
 	"testing"
@@ -130,10 +131,10 @@ func TestAddedRemovedAndRenamed(t *testing.T) {
 		recordObject("rule:2", "b-renamed", map[string]any{"Handle": 2}),
 		recordObject("rule:3", "c", map[string]any{"Handle": 3})), measures)
 	changes := Compare(before, after)
-	if len(changes.Added) != 1 || changes.Added[0] != "rule:3" {
+	if len(changes.Added) != 1 || changes.Added[0].ID != "rule:3" {
 		t.Errorf("added: %v", changes.Added)
 	}
-	if len(changes.Removed) != 1 || changes.Removed[0] != "rule:1" {
+	if len(changes.Removed) != 1 || changes.Removed[0].ID != "rule:1" {
 		t.Errorf("removed: %v", changes.Removed)
 	}
 	if len(changes.Changed) != 1 || changes.Changed[0].Paths[0] != "name" {
@@ -199,7 +200,13 @@ func reapply(t *testing.T, st *store.Store, collection string, objects []store.O
 
 func keep(t *testing.T, st *store.Store, collection, at string, gen uint64) bool {
 	t.Helper()
-	snapshot, ok, err := SnapshotFor(st, collection, store.HostNative, at, gen)
+	return keepScoped(t, st, collection, store.HostNative, at, gen)
+}
+
+func keepScoped(t *testing.T, st *store.Store, collection, scope, at string,
+	gen uint64) bool {
+	t.Helper()
+	snapshot, ok, err := SnapshotFor(st, collection, scope, at, gen)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -300,7 +307,7 @@ func TestTheDiffAnswersAgainstTheStoredBaseline(t *testing.T) {
 	if changes.Gap != nil {
 		t.Fatalf("the record reaches this question: %+v", changes.Gap)
 	}
-	if len(changes.Added) != 1 || changes.Added[0] != "rule:2" {
+	if len(changes.Added) != 1 || changes.Added[0].ID != "rule:2" {
 		t.Errorf("added: %v", changes.Added)
 	}
 	if len(changes.Changed) != 1 || changes.Changed[0].ID != "rule:1" {
@@ -552,5 +559,149 @@ func TestAnInstanceScopedRecordIsReachableAndNotDeniedAsAbsent(t *testing.T) {
 	}
 	if native.Gap == nil || native.Gap.Reason != "no-record" {
 		t.Fatalf("the host-native scope has no record of its own: %+v", native)
+	}
+}
+
+func TestAddedAndRemovedNameTheInstanceToo(t *testing.T) {
+	// The scope fix landed on Changed alone: Added and Removed appended
+	// bare ids, so two instances of one native name appeared as the same
+	// id twice with nothing to say they were two. The commit's own test
+	// asserted only that Added was non-empty, which is why it could not
+	// see this.
+	measures := map[string]bool{}
+	after, err := Diffable([]store.ObjectRow{
+		{ID: "queue:1", Name: "q", Scope: "alpha", Facts: json.RawMessage(`{}`)},
+		{ID: "queue:1", Name: "q", Scope: "beta", Facts: json.RawMessage(`{}`)},
+	}, measures)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changes := Compare(nil, after)
+	if len(changes.Added) != 2 {
+		t.Fatalf("two instances are two additions: %+v", changes.Added)
+	}
+	scopes := []string{changes.Added[0].Scope, changes.Added[1].Scope}
+	if scopes[0] == scopes[1] || scopes[0] == "" || scopes[1] == "" {
+		t.Fatalf("each addition names its instance: %+v", changes.Added)
+	}
+	// And removal, the other direction.
+	gone := Compare(after, nil)
+	if len(gone.Removed) != 2 || gone.Removed[0].Scope == gone.Removed[1].Scope {
+		t.Fatalf("%+v", gone.Removed)
+	}
+}
+
+func TestTheDiffReadsOneScopeNotEveryScope(t *testing.T) {
+	// s.Objects returns EVERY scope, so a snapshot keyed (collection,
+	// scope) was built from whatever instances had applied at that
+	// moment, and a question about one instance was diffed against every
+	// instance's live objects — a question about alpha answered that
+	// alpha's object had been ADDED when only beta had moved.
+	st := recordStore(t)
+	if _, err := st.IssueGenerations([]string{"nft-rules"}, "sha256:d"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.RecordDeclaration("sha256:d", nftDeclaration); err != nil {
+		t.Fatal(err)
+	}
+	for _, scope := range []string{"alpha", "beta"} {
+		if _, err := st.ApplyCommit("nft-rules", scope, 1, "b-"+scope, "boot",
+			[]store.Object{{ID: "rule:1", Name: "a",
+				Facts: json.RawMessage(`{"Expression":"old"}`)}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Under ALPHA. Keeping it under the host-native scope left alpha
+	// with no baseline at all, so the assertion below passed over a
+	// stated gap and the planted defect stayed green — proven
+	// 2026-08-23, which is the third time in this file that a case had
+	// to be rewritten to reach the code it names.
+	keepScoped(t, st, "nft-rules", "alpha", "2026-08-23T10:00:00Z", 1)
+
+	// Only BETA moves.
+	issued, err := st.IssueGenerations([]string{"nft-rules"}, "sha256:d")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.ApplyCommit("nft-rules", "beta", issued["nft-rules"], "b2",
+		"boot", []store.Object{{ID: "rule:1", Name: "a",
+			Facts: json.RawMessage(`{"Expression":"new"}`)}}); err != nil {
+		t.Fatal(err)
+	}
+
+	// The SNAPSHOT itself holds one scope. Asserted directly rather than
+	// through the diff: planting `s.Objects` in SnapshotFor left the
+	// diff's answer unchanged in this scenario, so a test that only read
+	// the diff could not see a baseline built from every instance — and
+	// a wrong baseline outlives the moment that produced it.
+	taken, ok, err := SnapshotFor(st, "nft-rules", "alpha",
+		"2026-08-23T13:00:00Z", 1)
+	if err != nil || !ok {
+		t.Fatalf("%v %v", ok, err)
+	}
+	var held []DiffableObject
+	if err := json.Unmarshal([]byte(taken.Objects), &held); err != nil {
+		t.Fatal(err)
+	}
+	if len(held) != 1 || held[0].Scope != "alpha" {
+		t.Fatalf("a snapshot keyed (collection, scope) holds THAT scope: %+v",
+			held)
+	}
+
+	alpha, err := ChangesSince(st, "nft-rules", "alpha", "2026-08-23T12:00:00Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if alpha.Gap != nil {
+		t.Fatalf("alpha has a baseline and the question must reach it: %+v",
+			alpha.Gap)
+	}
+	if len(alpha.Added) != 0 || len(alpha.Removed) != 0 || len(alpha.Changed) != 0 {
+		t.Fatalf("alpha did not move and its answer must say so: %+v", alpha)
+	}
+}
+
+func TestAnIncompatibleBaselineIsAStatedGapNotAWholesaleChange(t *testing.T) {
+	// A reading stored before the diffable object gained `scope`
+	// unmarshals with an empty scope while the live side fills it from
+	// the store, so nothing matches and every object reads as both added
+	// and removed. There was no format marker at all, which is why an
+	// incompatible shape could arrive silently.
+	// The legacy row is made the way one really exists: written by this
+	// binary, then downgraded in place through a second connection, which
+	// is what a store carried across an upgrade looks like. Constructing
+	// a Snapshot with Format 0 would not do it — RecordSnapshot stamps
+	// the current format unconditionally, and that is correct: no code
+	// path may WRITE an old shape.
+	path := filepath.Join(t.TempDir(), "legacy.db")
+	st, err := store.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+	seedRecord(t, st, "nft-rules", 1, []store.Object{
+		{ID: "rule:1", Name: "a", Facts: json.RawMessage(`{"Expression":"old"}`)}})
+	keep(t, st, "nft-rules", "2026-08-23T10:00:00Z", 1)
+	legacy, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := legacy.Exec(
+		`UPDATE snapshots SET format = 0,
+		 objects = '[{"id":"rule:1","name":"a","facts":{"Expression":"old"}}]'`,
+	); err != nil {
+		t.Fatal(err)
+	}
+	legacy.Close()
+	answer, err := ChangesSince(st, "nft-rules", store.HostNative,
+		"2026-08-23T12:00:00Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if answer.Gap == nil || answer.Gap.Reason != "format-changed" {
+		t.Fatalf("an unreadable baseline is a stated gap: %+v", answer)
+	}
+	if len(answer.Added) != 0 || len(answer.Removed) != 0 {
+		t.Fatalf("and never a wholesale change: %+v", answer)
 	}
 }
