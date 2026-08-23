@@ -28,12 +28,18 @@ import (
 
 // Rule is one row of a collection's declared rule table.
 type Rule struct {
-	Key      string          `json:"key"`
-	Level    string          `json:"level"`
-	Grounds  string          `json:"grounds"`
-	When     json.RawMessage `json:"when"`
-	Sentence string          `json:"sentence"`
-	Cites    []string        `json:"cites"`
+	Key     string          `json:"key"`
+	Level   string          `json:"level"`
+	Grounds string          `json:"grounds"`
+	When    json.RawMessage `json:"when"`
+	// Evaluator names an in-tree function that decides this rule instead
+	// of a condition (DESIGN 17, ruled 2026-08-23). Exactly one of When
+	// and Evaluator is carried; the contract holds that with a oneOf and
+	// RulesFor holds it here, because a rule with both is two answers to
+	// one question and a rule with neither fires on nothing.
+	Evaluator string   `json:"evaluator"`
+	Sentence  string   `json:"sentence"`
+	Cites     []string `json:"cites"`
 }
 
 // Opinion is one fired rule about one object.
@@ -98,6 +104,23 @@ func RulesFor(document, collection string) ([]Rule, error) {
 							"only cite what a reader can go and look at",
 						rule.Key, cited, collection)
 				}
+			}
+			hasWhen := len(rule.When) > 0
+			hasEvaluator := rule.Evaluator != ""
+			if hasWhen == hasEvaluator {
+				// Refused rather than resolved by precedence: a rule
+				// carrying both is two answers to one question with no
+				// stated winner, and one carrying neither is an opinion
+				// that can never fire — an operator would wait for it.
+				return nil, fmt.Errorf(
+					"rule %q in %s carries %s; a rule is decided by a condition "+
+						"or by a named evaluator, and exactly one of them",
+					rule.Key, collection,
+					map[bool]string{true: "both a condition and an evaluator",
+						false: "neither a condition nor an evaluator"}[hasWhen])
+			}
+			if hasEvaluator && !KnownEvaluator(rule.Evaluator) {
+				return nil, evaluatorRefusal(rule.Key, rule.Evaluator, collection)
 			}
 			if err := checkConditionFacts(rule.When, c.Facts, rule.Key, collection); err != nil {
 				return nil, err
@@ -164,7 +187,17 @@ func checkConditionList(raw json.RawMessage, facts map[string]json.RawMessage,
 func Judge(rules []Rule, object string, instance *string, facts map[string]any) []Opinion {
 	var out []Opinion
 	for _, rule := range rules {
-		fired, err := match(rule.When, facts)
+		var fired bool
+		var err error
+		if rule.Evaluator != "" {
+			// The declared row decides everything a reader sees; only the
+			// TEST is code. An evaluator returns no error for the same
+			// reason an unevaluable condition does not fire: "I could not
+			// decide" reads as silence, never as alarm.
+			fired = evaluate(rule.Evaluator, facts)
+		} else {
+			fired, err = match(rule.When, facts)
+		}
 		if err != nil || !fired {
 			// A condition that could not be evaluated does NOT fire. An
 			// opinion minted from a comparison that failed would be a

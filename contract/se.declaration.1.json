@@ -726,12 +726,33 @@
         "key",
         "level",
         "grounds",
-        "when",
         "sentence",
         "cites"
       ],
+      "oneOf": [
+        {
+          "required": [
+            "when"
+          ],
+          "not": {
+            "required": [
+              "evaluator"
+            ]
+          }
+        },
+        {
+          "required": [
+            "evaluator"
+          ],
+          "not": {
+            "required": [
+              "when"
+            ]
+          }
+        }
+      ],
       "additionalProperties": false,
-      "description": "One self-evident opinion, as DATA. Self-evident is not a preference here, it is what a collector can know: intent never reaches a host, so a rule that travels with a declaration cannot be intent-relative and this member holds no other kind. Intent-relative opinions are the hub's, from intent (DESIGN 17).",
+      "description": "One self-evident opinion, as DATA. Self-evident is not a preference here, it is what a collector can know: intent never reaches a host, so a rule that travels with a declaration cannot be intent-relative and this member holds no other kind. Intent-relative opinions are the hub's, from intent (DESIGN 17). A rule carries EXACTLY one of `when` and `evaluator`: both would be two answers to one question with no rule for which wins, and neither is a rule that fires on nothing.",
       "properties": {
         "key": {
           "type": "string",
@@ -763,6 +784,11 @@
             "type": "string"
           },
           "description": "The declared facts a reader can go and look at. At least one, always: an opinion citing nothing is an assertion, and every name here must be declared by this collection \u2014 which is acceptance item 7 at the rule table."
+        },
+        "evaluator": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "Names an in-tree evaluator that decides this rule, INSTEAD of a `when`. Ruled 2026-08-23 (DESIGN 17): roughly a fifth of opinions need real code \u2014 arithmetic with unit rendering, set algebra across list facts, a map indexed by another fact's own name \u2014 and the condition vocabulary was deliberately not widened to reach them, because appendix A's budget asks a new member to delete one or name a defect it alone catches, and two rules is thin ground for either. The row keeps every other member, so the opinion stays DECLARED and only the test is code: a reader asking why a rule table is smaller than a rulebook gets an answer from the declaration instead of inferring one from silence. The set is CLOSED and reviewed like a vocabulary \u2014 a declaration NAMES an evaluator and cannot ship one, which is the line that keeps third-party code out of the judging path. The price, stated where it bites: a collector this repository does not ship can express the four fifths and cannot express these. A third case reopens the decision, because a steady trickle would mean the vocabulary is wrong."
         }
       }
     },

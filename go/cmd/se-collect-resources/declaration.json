@@ -21,6 +21,42 @@
       "name": "workloads",
       "rules": [
         {
+          "key": "slice-stall-unexplained",
+          "level": "warn",
+          "grounds": "threshold",
+          "evaluator": "slice-stall-unexplained",
+          "sentence": "Tasks in this slice were stalled and no workload inside it accounts for it. A member that was the cause would read at least as high, because a slice only counts the time in which every non-idle task under it was stalled \u2014 so this belongs to the slice as a whole, and no member row states it.",
+          "cites": [
+            "PsiIoFullAvg60",
+            "PsiMemoryFullAvg60",
+            "StallUnexplained"
+          ]
+        },
+        {
+          "key": "slice-stall-unexplained-minor",
+          "level": "info",
+          "grounds": "threshold",
+          "evaluator": "slice-stall-unexplained-minor",
+          "sentence": "Tasks in this slice were stalled and no workload inside it accounts for it, below the share at which a single workload would claim attention. The number stays on the row for anyone who wants it.",
+          "cites": [
+            "PsiIoFullAvg60",
+            "PsiMemoryFullAvg60",
+            "StallUnexplained"
+          ]
+        },
+        {
+          "key": "slice-stall-unattributed",
+          "level": "info",
+          "grounds": "interface",
+          "evaluator": "slice-stall-unattributed",
+          "sentence": "Tasks in this slice were stalled, and whether a workload inside it accounts for that could not be established. Pressure that could not be read is not pressure that was absent, so this is a gap in the reading rather than a finding about the slice.",
+          "cites": [
+            "PsiIoFullAvg60",
+            "PsiMemoryFullAvg60",
+            "StallAttributionUnobservable"
+          ]
+        },
+        {
           "key": "workload-io-stall",
           "level": "warn",
           "grounds": "threshold",

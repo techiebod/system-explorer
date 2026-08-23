@@ -15,6 +15,43 @@
   "collections": [
     {
       "name": "targets",
+      "rules": [
+        {
+          "key": "protection-no-durable-copy",
+          "level": "warn",
+          "grounds": "interface",
+          "evaluator": "protection-no-durable-copy",
+          "sentence": "Irreplaceable, and every independent destination it declares is unbuilt \u2014 whatever else is green, nothing here survives losing the site.",
+          "cites": [
+            "Class",
+            "UnimplementedHops",
+            "IndependentDestinations"
+          ]
+        },
+        {
+          "key": "protection-no-durable-history",
+          "level": "info",
+          "grounds": "interface",
+          "evaluator": "protection-no-durable-history",
+          "sentence": "No independent copy of this mirror's history. The provider still holds the tree, so the data survives losing the site \u2014 what does not is the deletion history these snapshots carry: anything removed upstream exists only here.",
+          "cites": [
+            "Class",
+            "Kind",
+            "UnimplementedHops",
+            "IndependentDestinations"
+          ]
+        },
+        {
+          "key": "protection-hop-unimplemented",
+          "level": "info",
+          "grounds": "interface",
+          "evaluator": "protection-hop-unimplemented",
+          "sentence": "Declared but unbuilt. The target's other hops can read green while this one has no job behind it.",
+          "cites": [
+            "UnimplementedHops"
+          ]
+        }
+      ],
       "verbs": {
         "object": {
           "bytes": 262144,

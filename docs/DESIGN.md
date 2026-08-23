@@ -980,7 +980,9 @@ This is also the answer to the question the whole product failed once. **Every o
 > - **The cost is stated where it bites.** A collector this repository does not ship can express the four fifths and cannot express the fifth, because it has no way to add an evaluator. That is a real limit on plugins and it is written here rather than discovered by whoever hits it.
 > - **The declaration says which opinions the table does not decide**, so a reader asking why a rule table is smaller than a rulebook gets an answer from the declaration instead of inferring one from silence — the coverage rule applied to the rule table itself.
 >
-> What would reopen it: a third case arriving. Two rules justify a named-evaluator seam; a steady trickle of them means the vocabulary is wrong and the right fix is the one appendix A's budget asks for.
+> **What it cost, corrected against the estimate.** This box first said "two rules", which was the count of rule FAMILIES. Building them took **six** evaluators: the slice's stall states three different things — unexplained above the attention bar, unexplained below it, and attribution that could not be established — and protection's three are the branches of one `if/elif/else`, which must each carry their own exclusion because rules here evaluate independently and a target stating three severities of one condition teaches an operator that the severity column cannot be trusted. Six is recorded rather than smoothed over, because the reopening test below is a count.
+>
+> What would reopen it: a **seventh** evaluator, for a third rule family. Two families justify a named-evaluator seam; a steady trickle means the vocabulary is wrong and the right fix is the one appendix A's budget asks for.
 
 ---
 
