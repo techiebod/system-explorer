@@ -245,3 +245,59 @@ def test_a_claimed_host_name_answers(hub_named) -> None:
     request = urllib.request.Request(
         hub_named + "/v1/routes", headers={"Host": "Hub.Example:8080"})
     assert urllib.request.urlopen(request, timeout=10).status == 200
+
+
+def test_a_query_parameter_reaches_the_tier_rather_than_being_discarded() -> None:
+    """Every declared parameter that is not a path segment was demanded
+    of the caller and then dropped.
+
+    `call` looped over every declared parameter and substituted it into
+    the path, so a parameter with no `{placeholder}` went nowhere.
+    `what_changed` could not carry its `since`; the `lookup` tool could
+    not carry its `input` at all, so a model could supply the one value
+    the question turns on and receive an answer to a different question.
+    And the schema required them, so a caller could neither omit one nor
+    make it arrive.
+    """
+    from system_explorer.hub.mcp_surface import Tool
+
+    asked: list[str] = []
+
+    def opener(url: str) -> bytes:
+        asked.append(url)
+        return b"{}"
+
+    changes = Tool(name="what_changed", description="d",
+                   params=("name", "since", "instance"),
+                   path="/v1/collections/{name}/changes")
+    assert changes.path_params() == ("name",)
+    assert set(changes.query_params()) == {"since", "instance"}
+    # Only the path parameter is required: a route decides whether a
+    # query parameter was optional, because the route is the party that
+    # knows.
+    assert changes.schema()["required"] == ["name"]
+
+    call(changes, {"name": "units", "since": "2026-01-01T00:00:00Z",
+                   "instance": "radarr"},
+         base="http://h", opener=opener)
+    assert "since=2026-01-01T00%3A00%3A00Z" in asked[-1], asked[-1]
+    assert "instance=radarr" in asked[-1], asked[-1]
+
+    # An omitted query parameter is simply absent, never an invented one.
+    call(changes, {"name": "units"}, base="http://h", opener=opener)
+    assert "?" not in asked[-1], asked[-1]
+
+    # And a path parameter is still required.
+    with pytest.raises(ValueError):
+        call(changes, {"since": "x"}, base="http://h", opener=opener)
+
+
+def test_the_lookup_tool_carries_the_value_the_question_turns_on() -> None:
+    from system_explorer.hub.mcp_surface import Tool
+
+    asked: list[str] = []
+    lookup = Tool(name="lookup", description="d", params=("name", "input"),
+                  path="/v1/lookups/{name}")
+    call(lookup, {"name": "snapshots-of", "input": "tank/photos"},
+         base="http://h", opener=lambda url: (asked.append(url), b"{}")[1])
+    assert "input=tank%2Fphotos" in asked[-1], asked[-1]

@@ -43,11 +43,35 @@ class Tool:
     params: tuple[str, ...]
     path: str
 
+    def path_params(self) -> tuple[str, ...]:
+        """The parameters that shape the URL, and therefore the ones a
+        call cannot omit."""
+        return tuple(p for p in self.params if "{" + p + "}" in self.path)
+
+    def query_params(self) -> tuple[str, ...]:
+        """Everything else: carried as a query string.
+
+        **These were silently discarded until 2026-08-23.** `call` looped
+        over every declared parameter and substituted it into the path —
+        so a parameter that was not a path segment was demanded of the
+        caller, accepted, and then dropped. `what_changed` could not
+        carry its `since`, and the day the reverse channel landed the
+        `lookup` tool could not carry its `input` at all: a model could
+        supply the one value the question turns on and get an answer to a
+        different question. Found by an audit the same day.
+        """
+        return tuple(p for p in self.params if "{" + p + "}" not in self.path)
+
     def schema(self) -> dict[str, Any]:
         return {
             "type": "object",
             "properties": {p: {"type": "string"} for p in self.params},
-            "required": list(self.params),
+            # Only the path parameters are required: a query parameter a
+            # route treats as optional must be omittable, and one a route
+            # requires is refused by the ROUTE, which is the party that
+            # knows. Requiring them all here demanded values callers had
+            # no way to choose and could not omit.
+            "required": list(self.path_params()),
             "additionalProperties": False,
         }
 
@@ -84,8 +108,17 @@ def call(tool: Tool, arguments: dict[str, str], base: str,
     """
     fetch = opener or (lambda url: urllib.request.urlopen(url, timeout=10).read())
     path = tool.path
-    for name in tool.params:
+    for name in tool.path_params():
         if name not in arguments:
             raise ValueError(f"{tool.name} needs {name}")
         path = path.replace("{" + name + "}", urllib.parse.quote(arguments[name], safe=""))
+    # Everything the path did not consume travels as a query string. An
+    # argument that was declared and not supplied is simply absent, so
+    # the ROUTE decides whether it was optional — the collator is the
+    # validating party, and a second copy of that judgement here would be
+    # one to drift from it.
+    query = {name: arguments[name] for name in tool.query_params()
+             if name in arguments and arguments[name] is not None}
+    if query:
+        path += "?" + urllib.parse.urlencode(query)
     return json.loads(fetch(base.rstrip("/") + path))
