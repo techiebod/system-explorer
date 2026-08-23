@@ -285,16 +285,29 @@ def handler_class(log: Log,
                               "the request — a self-declared actor is a claim"},
                     body_unread=True)
                 return
-            if self.headers.get("Transfer-Encoding", "").lower() == "chunked":
-                # Read as length 0 before 2026-08-23, which answered
-                # "unknown-action" for an empty document and then parsed
-                # the chunk-size line as the next request. This handler
-                # does not decode chunked bodies, and saying so is the
-                # only honest answer.
+            if self.headers.get("Transfer-Encoding") is not None:
+                # Refused on PRESENCE, not on a value.
+                #
+                # This tested `== "chunked"` for a few hours on
+                # 2026-08-23, and that was the smuggling defect it was
+                # written to close, still open one spelling over: RFC
+                # 9112 permits a coding LIST, so `Transfer-Encoding:
+                # gzip, chunked` missed the branch, fell through to a
+                # Content-Length of 0, and the unread body was parsed as
+                # the next request — reproduced, with a transition
+                # recorded under a DIFFERENT actor's token than the one
+                # the request presented. `chunked, gzip`, a trailing
+                # space and a duplicate header did the same.
+                #
+                # The guard could not see it because it sent the one
+                # spelling the code tested. Presence is the honest test:
+                # this handler decodes NO transfer coding, so any of them
+                # means a body it cannot read.
                 self._send(411, {
                     "error": "length-required",
-                    "detail": "this listener does not decode a chunked body; "
-                              "send a transition with a Content-Length"},
+                    "detail": "this listener decodes no transfer coding; send "
+                              "a transition with a Content-Length and no "
+                              "Transfer-Encoding"},
                     body_unread=True)
                 return
             try:

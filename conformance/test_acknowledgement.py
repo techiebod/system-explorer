@@ -332,7 +332,12 @@ def _raw(port: int, request: bytes, deadline: float = 3.0) -> bytes:
     sock = socket.create_connection(("127.0.0.1", port))
     sock.settimeout(deadline)
     try:
-        sock.sendall(request)
+        try:
+            sock.sendall(request)
+        except (BrokenPipeError, ConnectionResetError):
+            # The peer refused and closed before we finished writing,
+            # which is the point of the oversized case.
+            pass
         chunks = []
         try:
             while True:
@@ -340,7 +345,11 @@ def _raw(port: int, request: bytes, deadline: float = 3.0) -> bytes:
                 if not block:
                     break
                 chunks.append(block)
-        except socket.timeout:
+        except (socket.timeout, ConnectionResetError):
+            # A reset IS a close. Refusing an oversized body without
+            # reading it means the peer stops mid-send, which surfaces as
+            # a reset on darwin and an orderly EOF elsewhere — both are
+            # the connection ending, which is what these tests assert.
             pass
         return b"".join(chunks)
     finally:
@@ -405,6 +414,119 @@ def test_a_non_ascii_token_is_refused_rather_than_killing_the_request() -> None:
         assert b"HTTP/1.1 401" in answer, (
             f"an unknown token is refused, never a dropped connection: {answer!r}")
         assert log.all() == ()
+    finally:
+        server.shutdown()
+
+
+def test_no_transfer_coding_spelling_gets_past_the_refusal() -> None:
+    """The fix for the smuggling defect had the smuggling defect.
+
+    The 411 tested `Transfer-Encoding == "chunked"`, and RFC 9112 permits
+    a coding LIST — so `gzip, chunked` missed the branch, fell through to
+    a Content-Length of 0, and the unread body was parsed as the next
+    request on the same socket. Reproduced with a transition recorded
+    under a DIFFERENT actor's token than the request presented, which is
+    the attribution property the separate door exists to buy, defeated
+    from the transport.
+
+    The guard could not see it because it sent the one spelling the code
+    tested — this repository's named recurring defect, inside the fix
+    for an instance of it. So every spelling is sent here, and the code
+    refuses on PRESENCE rather than on a value, because this handler
+    decodes no transfer coding at all.
+    """
+    for coding in ("chunked", "gzip, chunked", "chunked, gzip",
+                   "identity,chunked", "chunked ", "GZIP, CHUNKED", "gzip"):
+        log = Log()
+        server = _listener(log)
+        try:
+            smuggled = json.dumps({"finding": "SMUGGLED/o/k",
+                                   "action": ACKNOWLEDGE})
+            inner = (f"POST {writes.TRANSITIONS_PATH} HTTP/1.1\r\nHost: x\r\n"
+                     f"Authorization: Bearer tok-ada\r\n"
+                     f"Content-Length: {len(smuggled)}\r\n\r\n{smuggled}")
+            request = (f"POST {writes.TRANSITIONS_PATH} HTTP/1.1\r\nHost: x\r\n"
+                       f"Authorization: Bearer tok-ada\r\n"
+                       f"Transfer-Encoding: {coding}\r\n\r\n{inner}").encode()
+            answer = _raw(server.server_port, request)
+            assert answer.count(b"HTTP/1.1") == 1, (
+                f"{coding!r}: a second response on one socket is the "
+                f"smuggled request executing: {answer!r}")
+            assert b"411" in answer, f"{coding!r}: {answer!r}"
+            assert log.all() == (), (
+                f"{coding!r} recorded a transition: "
+                f"{[(t.finding, t.actor) for t in log.all()]}")
+        finally:
+            server.shutdown()
+
+
+def test_every_refusal_before_the_body_closes_the_connection() -> None:
+    """All SIX refusal paths, not the one the first guard happened to
+    exercise.
+
+    404, 503, 401, 411, 413 and the 500 boundary each answer without
+    reading rfile, and each must close. Only the 401 had a case, so a
+    plant that stopped the others closing stayed green — the same
+    one-case shape as the header above, one layer over.
+    """
+    body = json.dumps({"finding": FINDING, "action": ACKNOWLEDGE})
+    cases = [
+        ("404 unknown route", "tok-ada", "/v1/nope", {}, b"404"),
+        ("401 unknown token", "guessed", writes.TRANSITIONS_PATH, {}, b"401"),
+        ("411 transfer coding", "tok-ada", writes.TRANSITIONS_PATH,
+         {"Transfer-Encoding": "gzip, chunked"}, b"411"),
+        ("413 oversized body", "tok-ada", writes.TRANSITIONS_PATH,
+         {"__oversize__": "1"}, b"413"),
+    ]
+    for name, token, path, extra, expect in cases:
+        log = Log()
+        server = _listener(log)
+        try:
+            payload = body
+            headers = [f"Host: x", f"Authorization: Bearer {token}"]
+            if "__oversize__" in extra:
+                payload = json.dumps({"finding": FINDING,
+                                      "action": ACKNOWLEDGE,
+                                      "note": "x" * (writes.MAX_BODY + 10)})
+                headers.append(f"Content-Length: {len(payload)}")
+            elif "Transfer-Encoding" in extra:
+                headers.append(f"Transfer-Encoding: {extra['Transfer-Encoding']}")
+            else:
+                headers.append(f"Content-Length: {len(payload)}")
+            request = (f"POST {path} HTTP/1.1\r\n" + "\r\n".join(headers)
+                       + f"\r\n\r\n{payload}").encode()
+            answer = _raw(server.server_port, request)
+            assert expect in answer, f"{name}: {answer[:200]!r}"
+            assert b"Connection: close" in answer, (
+                f"{name}: a refusal that did not read the body must close, "
+                f"or the body becomes the next request: {answer[:250]!r}")
+        finally:
+            server.shutdown()
+
+    # The 503 path needs an unconfigured listener of its own.
+    log = Log()
+    server = _listener(log, actors="")
+    try:
+        request = (f"POST {writes.TRANSITIONS_PATH} HTTP/1.1\r\nHost: x\r\n"
+                   f"Authorization: Bearer tok-ada\r\n"
+                   f"Content-Length: {len(body)}\r\n\r\n{body}").encode()
+        answer = _raw(server.server_port, request)
+        assert b"503" in answer and b"Connection: close" in answer, answer[:250]
+    finally:
+        server.shutdown()
+
+    # And the 500 boundary, which answers after an exception.
+    class Broken(Log):
+        def append(self, transition, derived=None):
+            raise OSError("gone")
+
+    server = _listener(Broken())
+    try:
+        request = (f"POST {writes.TRANSITIONS_PATH} HTTP/1.1\r\nHost: x\r\n"
+                   f"Authorization: Bearer tok-ada\r\n"
+                   f"Content-Length: {len(body)}\r\n\r\n{body}").encode()
+        answer = _raw(server.server_port, request)
+        assert b"500" in answer and b"Connection: close" in answer, answer[:250]
     finally:
         server.shutdown()
 
