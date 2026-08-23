@@ -70,6 +70,15 @@ CREATE TABLE IF NOT EXISTS objects (
   seq        INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (collection, scope, id)
 );
+CREATE TABLE IF NOT EXISTS unobservable (
+  collection TEXT NOT NULL,
+  scope      TEXT NOT NULL,
+  object     TEXT NOT NULL,
+  fact       TEXT NOT NULL,
+  reason     TEXT NOT NULL,
+  detail     TEXT,
+  PRIMARY KEY (collection, scope, object, fact)
+);
 CREATE TABLE IF NOT EXISTS rejections (
   seq        INTEGER PRIMARY KEY AUTOINCREMENT,
   at_wall    TEXT NOT NULL,
@@ -253,6 +262,21 @@ func (s *Store) IssueGenerations(names []string, declaration string) (map[string
 	return issued, nil
 }
 
+// Unobserved is one per-fact could-not-read, as the store keeps it.
+//
+// **Parsed, counted against the commit, validated against the
+// declaration — and then dropped**, from the day the wire carried it
+// until 2026-08-23. So the `unobservable` render state had no data at
+// either tier: a fact the collector could not read rendered exactly like
+// a fact it never had, which is the distinction §28 calls the most
+// common rendering bug in this product's history.
+type Unobserved struct {
+	Object string
+	Fact   string
+	Reason string
+	Detail string
+}
+
 // Object is one applied object as the store keeps it: the minted id, the
 // native name the collector published, every name family it published,
 // and the at stamp verbatim — freshness derives from that stamp, never
@@ -333,6 +357,17 @@ const (
 // because an apply whose clock domain is unknown serves uninterpretable
 // ages — the authority must not depend on its caller's diligence.
 func (s *Store) ApplyCommit(collection, scope string, gen uint64, batch, bootID string, objects []Object) (Outcome, error) {
+	return s.ApplyCommitWith(collection, scope, gen, batch, bootID, objects, nil)
+}
+
+// ApplyCommitWith is the whole apply: objects AND the per-fact
+// could-not-reads, in one transaction.
+//
+// A second method rather than a widened signature, so every existing
+// caller and the crash suite keep the call they had — and the crash
+// suite is the reason this is one transaction at all: objects and their
+// unobservables must not be able to disagree after a mid-apply kill.
+func (s *Store) ApplyCommitWith(collection, scope string, gen uint64, batch, bootID string, objects []Object, unobserved []Unobserved) (Outcome, error) {
 	if bootID == "" {
 		return "", fmt.Errorf("collection %s: apply without a boot id", collection)
 	}
@@ -390,6 +425,24 @@ func (s *Store) ApplyCommit(collection, scope string, gen uint64, batch, bootID 
 	if _, err := tx.Exec(`DELETE FROM objects WHERE collection = ? AND scope = ?`,
 		collection, scope); err != nil {
 		return "", err
+	}
+	// The unobservables go with them, in the SAME transaction and by the
+	// same scope wipe. A separate write could leave a collection whose
+	// objects were re-applied and whose could-not-reads were the previous
+	// batch's — two statements about one reading, which is worse than
+	// either alone.
+	if _, err := tx.Exec(
+		`DELETE FROM unobservable WHERE collection = ? AND scope = ?`,
+		collection, scope); err != nil {
+		return "", err
+	}
+	for _, u := range unobserved {
+		if _, err := tx.Exec(`
+			INSERT INTO unobservable (collection, scope, object, fact, reason, detail)
+			VALUES (?, ?, ?, ?, ?, ?)`,
+			collection, scope, u.Object, u.Fact, u.Reason, u.Detail); err != nil {
+			return "", fmt.Errorf("apply unobservable %s/%s: %w", u.Object, u.Fact, err)
+		}
 	}
 	seq := 0
 	for _, o := range objects {
@@ -716,6 +769,28 @@ func scanObjectRows(rows *sql.Rows) ([]ObjectRow, error) {
 		}
 		o.Facts = json.RawMessage(facts)
 		out = append(out, o)
+	}
+	return out, rows.Err()
+}
+
+// Unobservables lists a collection's per-fact could-not-reads, every
+// scope. A fact here is one the collector LOOKED for and could not read,
+// which is a different answer from absent and from never-emitted.
+func (s *Store) Unobservables(collection string) ([]Unobserved, error) {
+	rows, err := s.db.Query(`
+		SELECT object, fact, reason, COALESCE(detail, '') FROM unobservable
+		WHERE collection = ? ORDER BY object, fact`, collection)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Unobserved
+	for rows.Next() {
+		var u Unobserved
+		if err := rows.Scan(&u.Object, &u.Fact, &u.Reason, &u.Detail); err != nil {
+			return nil, err
+		}
+		out = append(out, u)
 	}
 	return out, rows.Err()
 }

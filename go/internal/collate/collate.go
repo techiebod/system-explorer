@@ -268,7 +268,21 @@ func applyCollection(st *store.Store, name, scope string, batch *wire.Batch) err
 			At:     o.At,
 		})
 	}
-	outcome, err := st.ApplyCommit(name, scope, gen, batch.Begin.Batch, batch.Begin.BootID, objects)
+	// The per-fact could-not-reads, which were validated against the
+	// declaration a few lines up and then dropped on the floor from the
+	// day the wire carried them until 2026-08-23. A fact the collector
+	// could not read rendered exactly like a fact it never had.
+	unobserved := make([]store.Unobserved, 0, len(cs.Unobservables))
+	for _, u := range cs.Unobservables {
+		unobserved = append(unobserved, store.Unobserved{
+			Object: store.MintID(name, u.Name),
+			Fact:   u.Fact,
+			Reason: u.Reason,
+			Detail: u.Detail,
+		})
+	}
+	outcome, err := st.ApplyCommitWith(name, scope, gen, batch.Begin.Batch,
+		batch.Begin.BootID, objects, unobserved)
 	if err != nil || outcome != store.OutcomeApplied {
 		return err
 	}
