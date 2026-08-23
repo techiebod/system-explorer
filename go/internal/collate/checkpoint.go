@@ -220,7 +220,7 @@ func WriteCheckpoint(w io.Writer, st *store.Store, id, host, bootID string, gap 
 				if err := json.Unmarshal(o.Facts, &facts); err != nil {
 					continue
 				}
-				fired = append(fired, Judge(rules, o.ID, o.Instance, facts)...)
+				fired = append(fired, JudgeShaped(rules, o.ID, o.Instance, o.Type, facts)...)
 			}
 			opinions = &fired
 		}

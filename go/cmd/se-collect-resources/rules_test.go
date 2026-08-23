@@ -9,6 +9,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/techiebod/system-explorer/go/internal/collate"
@@ -45,7 +46,11 @@ func TestTheWorkloadRulesFireOnCharacteristicReadings(t *testing.T) {
 			t.Fatalf("%s declares no rules", testcase.collection)
 		}
 		fired := map[string]string{}
-		for _, opinion := range collate.Judge(rules, "object", nil, testcase.facts) {
+		// Judged AS A WORKLOAD: these rules address the leaf shapes and
+		// not slices, so the shape is part of the case rather than a
+		// detail the harness can leave unstated.
+		for _, opinion := range collate.JudgeShaped(rules, "object", nil,
+			"service", testcase.facts) {
 			fired[opinion.Key] = opinion.Level
 		}
 		if len(fired) != len(testcase.want) {
@@ -110,18 +115,25 @@ func TestTheSliceRulesAreDecidedByTheirEvaluator(t *testing.T) {
 		if err != nil {
 			t.Fatalf("rules for workloads: %v", err)
 		}
+		// Judged AS A SLICE, and compared whole.
+		//
+		// This loop used to judge with no shape and then delete every key
+		// that was not one of the three slice keys, "because the workload
+		// rules share this collection and fire on the same facts". That
+		// filter removed the evidence of a real defect: the workload
+		// stall rules were firing on slice rows, restoring the operator
+		// report of 2026-08-13 — a slice at 56.35% listed beneath the
+		// container scope that explains it, one stall reported twice with
+		// the culprit's name removed — and at warn rather than the info
+		// the reference suppresses entirely. The first case below asserts
+		// that a slice whose stall a member explains states NOTHING, and
+		// with the filter in place it passed while the collator emitted a
+		// warn on that row. A guard that deletes what it does not expect
+		// is a guard that cannot fail.
 		fired := map[string]string{}
-		for _, opinion := range collate.Judge(rules, "object", nil, testcase.facts) {
+		for _, opinion := range collate.JudgeShaped(rules, "object", nil,
+			"slice", testcase.facts) {
 			fired[opinion.Key] = opinion.Level
-		}
-		// The workload rules share this collection and fire on the same
-		// facts, so only the slice family is compared here.
-		for key := range fired {
-			if key != "slice-stall-unexplained" &&
-				key != "slice-stall-unexplained-minor" &&
-				key != "slice-stall-unattributed" {
-				delete(fired, key)
-			}
 		}
 		if len(fired) != len(testcase.want) {
 			t.Errorf("%s: fired %v, want %v", testcase.name, fired, testcase.want)
@@ -131,6 +143,57 @@ func TestTheSliceRulesAreDecidedByTheirEvaluator(t *testing.T) {
 			if fired[key] != level {
 				t.Errorf("%s: fired %v, want %v", testcase.name, fired, testcase.want)
 			}
+		}
+	}
+}
+
+// The shape split itself, which is what stops one table judging two kinds
+// of row. Written from the reference's own dispatch
+// (agent/adapters/resources.py:884 — `is_slice = name.endswith(".slice")`,
+// then slice_opinions OR workload_opinions and never both).
+func TestASliceIsNeverJudgedByTheWorkloadRulesOrTheReverse(t *testing.T) {
+	rules, err := collate.RulesFor(string(declarationBytes), "workloads")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A slice whose stall a member accounts for: the member's row carries
+	// the condition with the name on it, and the slice states nothing.
+	explained := map[string]any{
+		"PsiIoFullAvg60":   56.35,
+		"StallExplainedBy": map[string]any{"PsiIoFullAvg60": "cache-1.scope"},
+	}
+	if fired := collate.JudgeShaped(rules, "o", nil, "slice", explained); len(fired) != 0 {
+		t.Fatalf("a slice whose stall a member explains states nothing, got %+v", fired)
+	}
+	// The very same numbers on the member itself DO state the condition.
+	member := collate.JudgeShaped(rules, "o", nil, "scope",
+		map[string]any{"PsiIoFullAvg60": 56.35})
+	if len(member) != 1 || member[0].Key != "workload-io-stall" {
+		t.Fatalf("the member's own row carries it: %+v", member)
+	}
+	// And a slice never picks up the workload wording, which would put
+	// "This workload made no progress" on an object whose type is slice.
+	unexplained := map[string]any{
+		"PsiIoFullAvg60":   54.55,
+		"StallUnexplained": map[string]any{"PsiIoFullAvg60": true},
+	}
+	for _, opinion := range collate.JudgeShaped(rules, "o", nil, "slice", unexplained) {
+		if opinion.Key == "workload-io-stall" || opinion.Key == "workload-memory-stall" {
+			t.Fatalf("a workload rule fired on a slice: %+v", opinion)
+		}
+	}
+
+	// **And the other direction, which the first version of this test
+	// could not see.** A leaf workload carrying the slice attribution
+	// facts must not pick up the SLICE wording: "no workload inside it
+	// accounts for it" is a sentence about a container of other rows, and
+	// a scope has nothing inside it. Written after removing the slice
+	// rules' own applies_to left every assertion above still green —
+	// proven 2026-08-23 — because no case here had a workload-shaped row
+	// carrying facts a slice rule reads.
+	for _, opinion := range collate.JudgeShaped(rules, "o", nil, "scope", unexplained) {
+		if strings.HasPrefix(opinion.Key, "slice-") {
+			t.Fatalf("a slice rule fired on a leaf workload: %+v", opinion)
 		}
 	}
 }

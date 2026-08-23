@@ -132,7 +132,7 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 				scope := o.Scope
 				instance = &scope
 			}
-			fired = append(fired, Judge(rules, o.ID, instance, facts)...)
+			fired = append(fired, JudgeShaped(rules, o.ID, instance, o.Type, facts)...)
 		}
 	}
 	order := map[string]int{"critical": 0, "warn": 1, "info": 2}

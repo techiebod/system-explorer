@@ -37,9 +37,30 @@ type Rule struct {
 	// and Evaluator is carried; the contract holds that with a oneOf and
 	// RulesFor holds it here, because a rule with both is two answers to
 	// one question and a rule with neither fires on nothing.
-	Evaluator string   `json:"evaluator"`
+	Evaluator string `json:"evaluator"`
+	// AppliesTo names the object TYPES this rule judges, for a collection
+	// that publishes rows of more than one shape. Empty means every row.
+	// resources/workloads is the case: it carries slices and workloads
+	// together, and the reference dispatches on shape rather than judging
+	// both with one table.
+	AppliesTo []string `json:"applies_to"`
 	Sentence  string   `json:"sentence"`
 	Cites     []string `json:"cites"`
+}
+
+// judges reports whether this rule addresses an object of the given type.
+// An unstated AppliesTo judges everything, which is the ordinary case and
+// the one every collection with a single row shape wants.
+func (r Rule) judges(objectType string) bool {
+	if len(r.AppliesTo) == 0 {
+		return true
+	}
+	for _, want := range r.AppliesTo {
+		if want == objectType {
+			return true
+		}
+	}
+	return false
 }
 
 // Opinion is one fired rule about one object.
@@ -184,9 +205,27 @@ func checkConditionList(raw json.RawMessage, facts map[string]json.RawMessage,
 }
 
 // Judge applies a rule table to one object's facts.
-func Judge(rules []Rule, object string, instance *string, facts map[string]any) []Opinion {
+//
+// objectType is the object's declared shape, and a rule may address only
+// some shapes (see Rule.AppliesTo). Passing "" judges by every rule that
+// does not name a type, which is what a collection with one row shape
+// wants and what every caller did before 2026-08-23 — the day a rule
+// table addressed to a collection was found judging rows of a shape it
+// was never written for.
+// Judge is the unshaped call: every rule that does not name a type.
+// Kept for callers whose collection has one row shape.
+func Judge(rules []Rule, object string, instance *string,
+	facts map[string]any) []Opinion {
+	return JudgeShaped(rules, object, instance, "", facts)
+}
+
+func JudgeShaped(rules []Rule, object string, instance *string,
+	objectType string, facts map[string]any) []Opinion {
 	var out []Opinion
 	for _, rule := range rules {
+		if !rule.judges(objectType) {
+			continue
+		}
 		var fired bool
 		var err error
 		if rule.Evaluator != "" {

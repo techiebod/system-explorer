@@ -785,6 +785,15 @@
           },
           "description": "The declared facts a reader can go and look at. At least one, always: an opinion citing nothing is an assertion, and every name here must be declared by this collection \u2014 which is acceptance item 7 at the rule table."
         },
+        "applies_to": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "The object TYPES this rule judges, where a collection publishes rows of more than one shape. Absent means every row, which is the ordinary case. Added 2026-08-23 after a measured defect nothing else catches: resources/workloads publishes slices and workloads in one collection, the reference dispatches on row shape and calls slice_opinions OR workload_opinions and never both, and the port — one rule table per collection with no way to name a shape — fired the workload stall rules on slice rows. That restored the operator report of 2026-08-13 verbatim, a slice at 56.35% listed beneath the container scope at 65.27% that explains it, one stall reported twice with the culprit's name removed the second time; and at warn rather than the info the reference suppresses entirely, so it reached the findings surface and the estate roll-up. Every host under I/O load has -.slice and system.slice above the bar, so it fired routinely rather than in a corner. It clears appendix A's budget by naming a defect it alone catches: a collection whose rows have two shapes cannot otherwise be judged correctly by a table addressed to the collection."
+        },
         "evaluator": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9-]*$",

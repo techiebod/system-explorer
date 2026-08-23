@@ -188,7 +188,7 @@ func judgeCollection(st *store.Store, cs store.CollectionState) (string, []Opini
 			scope := o.Scope
 			instance = &scope
 		}
-		fired = append(fired, Judge(rules, o.ID, instance, facts)...)
+		fired = append(fired, JudgeShaped(rules, o.ID, instance, o.Type, facts)...)
 	}
 	return "", fired, nil
 }
