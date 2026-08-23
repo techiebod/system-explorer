@@ -637,7 +637,14 @@ type ObjectRow struct {
 	Name  string
 	Type  string // "" when the object carries none
 	Facts json.RawMessage
-	At    float64
+	// Absent is the collector's own statement that it LOOKED and the
+	// thing has no such property — a measured negative, not a gap in the
+	// reading. The column has been written and hashed into content
+	// identity since the store was written and no reader returned it, so
+	// every consumer was blind to the one state this product exists to
+	// stop rendering as health. Added 2026-08-23.
+	Absent []string
+	At     float64
 	// Scope is the instance the object was published under, HostNative
 	// for an instance-less batch. It is part of the row and not merely
 	// part of the primary key: two instances mint the SAME id string,
@@ -664,7 +671,7 @@ type ObjectRow struct {
 // answered that its object had been ADDED. Found by review 2026-08-23.
 func (s *Store) ObjectsInScope(collection, scope string) ([]ObjectRow, error) {
 	rows, err := s.db.Query(`
-		SELECT id, name, type, facts, at, scope FROM objects
+		SELECT id, name, type, facts, absent, at, scope FROM objects
 		WHERE collection = ? AND scope = ? ORDER BY seq, id`, collection, scope)
 	if err != nil {
 		return nil, err
@@ -675,7 +682,7 @@ func (s *Store) ObjectsInScope(collection, scope string) ([]ObjectRow, error) {
 
 func (s *Store) Objects(collection string) ([]ObjectRow, error) {
 	rows, err := s.db.Query(`
-		SELECT id, name, type, facts, at, scope FROM objects
+		SELECT id, name, type, facts, absent, at, scope FROM objects
 		WHERE collection = ? ORDER BY scope, seq, id`, collection)
 	if err != nil {
 		return nil, err
@@ -691,12 +698,21 @@ func scanObjectRows(rows *sql.Rows) ([]ObjectRow, error) {
 	for rows.Next() {
 		var o ObjectRow
 		var facts string
-		var objectType sql.NullString
-		if err := rows.Scan(&o.ID, &o.Name, &objectType, &facts, &o.At, &o.Scope); err != nil {
+		var objectType, absent sql.NullString
+		if err := rows.Scan(&o.ID, &o.Name, &objectType, &facts, &absent,
+			&o.At, &o.Scope); err != nil {
 			return nil, err
 		}
 		if objectType.Valid {
 			o.Type = objectType.String
+		}
+		if absent.Valid && absent.String != "" {
+			// A malformed absent list is a store this code did not write,
+			// and reading it as "nothing was absent" would turn a
+			// measured negative into silence.
+			if err := json.Unmarshal([]byte(absent.String), &o.Absent); err != nil {
+				return nil, fmt.Errorf("object %s: absent list: %w", o.ID, err)
+			}
 		}
 		o.Facts = json.RawMessage(facts)
 		out = append(out, o)

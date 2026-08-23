@@ -705,3 +705,72 @@ func TestAnIncompatibleBaselineIsAStatedGapNotAWholesaleChange(t *testing.T) {
 		t.Fatalf("and never a wholesale change: %+v", answer)
 	}
 }
+
+func TestAFactMovingToAMeasuredAbsenceIsAChange(t *testing.T) {
+	// The change most worth reporting, and the diff was blind to it: the
+	// `absent` column had been written and hashed into content identity
+	// since the store existed, and no reader returned it. A collector
+	// saying "I looked and there is no such property" is a measured
+	// negative — the state this product exists to stop rendering as
+	// health — and a diff that cannot see it reports the row unchanged.
+	measures := map[string]bool{}
+	before, err := Diffable([]store.ObjectRow{{
+		ID: "rule:1", Name: "a", Scope: store.HostNative,
+		Facts:  json.RawMessage(`{"Expression":"drop"}`),
+		Absent: nil,
+	}}, measures)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := Diffable([]store.ObjectRow{{
+		ID: "rule:1", Name: "a", Scope: store.HostNative,
+		Facts:  json.RawMessage(`{"Expression":"drop"}`),
+		Absent: []string{"Handle"},
+	}}, measures)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changes := Compare(before, after)
+	if len(changes.Changed) != 1 {
+		t.Fatalf("a fact becoming a measured absence is a change: %+v", changes)
+	}
+	if got := changes.Changed[0].Paths; len(got) != 1 || got[0] != "absent" {
+		t.Fatalf("named on its own path, not folded into a fact: %v", got)
+	}
+	// And the reverse: an absence becoming a value.
+	back := Compare(after, before)
+	if len(back.Changed) != 1 || back.Changed[0].Paths[0] != "absent" {
+		t.Fatalf("%+v", back.Changed)
+	}
+	// Order must not matter — the list is the SET of absent facts.
+	same, _ := Diffable([]store.ObjectRow{{
+		ID: "rule:1", Name: "a", Scope: store.HostNative,
+		Facts:  json.RawMessage(`{"Expression":"drop"}`),
+		Absent: []string{"Handle"},
+	}}, measures)
+	if len(Compare(after, same).Changed) != 0 {
+		t.Fatal("the same absence in a different order is not a change")
+	}
+}
+
+func TestTheStoreReturnsTheAbsentListItAlwaysWrote(t *testing.T) {
+	st := recordStore(t)
+	seedRecord(t, st, "nft-rules", 1, []store.Object{{
+		ID: "rule:1", Name: "a", Facts: json.RawMessage(`{"Expression":"drop"}`),
+		Absent: []string{"Handle", "CounterPackets"},
+	}})
+	rows, err := st.Objects("nft-rules")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || len(rows[0].Absent) != 2 {
+		t.Fatalf("the absent list round-trips: %+v", rows)
+	}
+	scoped, err := st.ObjectsInScope("nft-rules", store.HostNative)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scoped) != 1 || len(scoped[0].Absent) != 2 {
+		t.Fatalf("both readers, or one consumer stays blind: %+v", scoped)
+	}
+}

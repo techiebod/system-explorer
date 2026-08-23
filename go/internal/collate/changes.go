@@ -32,6 +32,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/techiebod/system-explorer/go/internal/store"
 )
@@ -71,13 +72,6 @@ func MeasureFacts(declarationBytes []byte, collection string) (measures map[stri
 }
 
 // DiffableObject is one object stripped to what the record compares.
-// COVERAGE: the absent list is NOT carried. store.ObjectRow does not
-// serve one — the column exists but no reader returns it — so a fact
-// moving between value and absent is invisible to this diff, which is
-// the change most worth reporting because absence is the state this
-// product exists to stop rendering as health. Stated here rather than
-// omitted silently; closing it is a reader on ObjectRow, not a change
-// to the comparison.
 type DiffableObject struct {
 	ID string `json:"id"`
 	// Scope is the instance the object was published under, and it is
@@ -93,6 +87,12 @@ type DiffableObject struct {
 	Name  string         `json:"name"`
 	Type  string         `json:"type,omitempty"`
 	Facts map[string]any `json:"facts"`
+	// Absent is the collector's own statement that it LOOKED and found no
+	// such property. Carried and compared since 2026-08-23: the column
+	// had been written and hashed since the store existed with no reader
+	// returning it, so a fact moving between a value and a measured
+	// absence — the change most worth reporting — was invisible here.
+	Absent []string `json:"absent,omitempty"`
 }
 
 // key is the identity a diff compares on: the pair, never the id.
@@ -119,9 +119,11 @@ func Diffable(objects []store.ObjectRow, measures map[string]bool) ([]DiffableOb
 				delete(facts, name)
 			}
 		}
+		absent := append([]string{}, object.Absent...)
+		sort.Strings(absent)
 		out = append(out, DiffableObject{
 			ID: object.ID, Scope: object.Scope, Name: object.Name,
-			Type: object.Type, Facts: facts,
+			Type: object.Type, Facts: facts, Absent: absent,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].key() < out[j].key() })
@@ -232,6 +234,13 @@ func changedPaths(was, now DiffableObject) []string {
 	}
 	if was.Type != now.Type {
 		paths = append(paths, "type")
+	}
+	// A fact moving between a value and a measured absence is a change in
+	// what the system HAS, not merely in what it reads — and it is the
+	// change most worth reporting, because absence is the state this
+	// product exists to stop rendering as health.
+	if strings.Join(was.Absent, "\x00") != strings.Join(now.Absent, "\x00") {
+		paths = append(paths, "absent")
 	}
 	seen := map[string]bool{}
 	for name := range was.Facts {
