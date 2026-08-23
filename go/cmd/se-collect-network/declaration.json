@@ -110,8 +110,9 @@
       "answer": [
         "BaseChain",
         "Hook",
-        "RuleCount",
-        "JumpedFrom"
+        "Policy",
+        "JumpedFrom",
+        "RuleCount"
       ],
       "ceiling": {
         "records": 4096,
@@ -269,6 +270,7 @@
       "answer": [
         "Rendered",
         "Verdict",
+        "JumpTarget",
         "Comprehension"
       ],
       "ceiling": {

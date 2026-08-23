@@ -222,14 +222,24 @@ ANSWER_RULINGS: dict[str, str] = {
                    "verbatim and in order, and the port appends "
                    "MissingRequirements, dependency health the old UI only "
                    "surfaced on the object page.",
-    "network/nft-chains": "owed: R3d — the port dropped Family/Table/Name/"
-                          "Priority/Policy; the preset's own argument (one "
-                          "chain name in ip and ip6 is two chains) is "
-                          "unanswered and is re-judged at the nft retrofit.",
-    "network/nft-rules": "owed: R3d — Position's argument (first-match-wins, "
-                         "so order is meaning) is carried by applied order "
-                         "since R1; Family/Table/Chain/JumpTarget are carried "
-                         "by nothing and are re-judged at the nft retrofit.",
+    "network/nft-chains": "ruled: at the R3d nft retrofit — the preset's own "
+                          "argument (one chain name in ip and ip6 is two "
+                          "chains) is answered by the row's NAME, which since "
+                          "R3b is the three-part 'family table name', so "
+                          "Family/Table/Name as answer columns would respell "
+                          "the name three times; all three stay declared for "
+                          "filtering. Policy returns — a base chain's policy "
+                          "is the fate of an unmatched packet, the single "
+                          "most consequential fact on the row. Priority stays "
+                          "declared and off the answer: it orders chains on a "
+                          "shared hook, which is drill-down, not headline.",
+    "network/nft-rules": "ruled: at the R3d nft retrofit — Position's argument "
+                         "(first-match-wins, so order IS meaning) is carried "
+                         "by applied order since R1, and Family/Table/Chain "
+                         "by the row's name, which leads with them. "
+                         "JumpTarget returns: where a rule dispatches is how "
+                         "a reader follows the ruleset's flow, and it was "
+                         "carried by nothing.",
     "resources/workloads": "ruled: additive — the reference's eight columns "
                            "survive as an ordered subsequence; the port adds "
                            "the depth, throttle and stall-attribution facts "
