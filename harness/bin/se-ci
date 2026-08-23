@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+# Every CI job, locally, in the order that fails fastest.
+#
+# **Derived from .github/workflows/ci.yml, and checked against it.** A
+# local runner that drifts from CI is worse than none: it buys confidence
+# for a check that is no longer the one that gates the push. The last
+# step here re-reads the workflow and fails if it names a command this
+# script does not run, so the drift is caught rather than discovered on a
+# red push.
+#
+# **What it cannot cover: the platform.** CI runs ubuntu-latest and this
+# runs wherever you are. That gap is real and this repository has already
+# paid it once — hub/federation.py records a ConnectionResetError that
+# appeared only on Linux, where darwin returned a clean EOF, and it killed
+# a serving thread. For anything touching sockets, paths, file modes or
+# timing, run the workflow itself:
+#
+#     brew install act && act push -j python
+#
+# Usage:
+#   se-ci          every job
+#   se-ci fast     the two suites only, no build or corpus (the inner loop)
+#   se-ci go       the Go job only
+set -uo pipefail
+
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "${REPO}"
+
+PY="${REPO}/.venv/bin/python"
+[ -x "${PY}" ] || PY="python3"
+
+MODE="${1:-all}"
+FAILED=()
+started=$(date +%s)
+
+step() {
+  local name="$1"; shift
+  local at; at=$(date +%s)
+  printf '\n\033[1m── %s\033[0m\n' "${name}"
+  if "$@"; then
+    printf '\033[32mok\033[0m   %s (%ss)\n' "${name}" "$(( $(date +%s) - at ))"
+  else
+    printf '\033[31mFAIL\033[0m %s (%ss)\n' "${name}" "$(( $(date +%s) - at ))"
+    FAILED+=("${name}")
+  fi
+}
+
+# ── the go job ────────────────────────────────────────────────────────
+go_vet()   { ( cd go && go vet ./... ); }
+go_test()  { ( cd go && go test ./... ); }
+# ./cmd/... rather than a named list, for the workflow's own stated
+# reason: a collector added to GO_COLLECTORS and forgotten would compile
+# only inside pytest, where the failure arrives as a fixture error.
+go_build() { ( cd go && go build ./cmd/... ); }
+
+# ── the corpus job ────────────────────────────────────────────────────
+corpus() {
+  "${PY}" - <<'PY'
+import json, sys
+sys.path.insert(0, "harness")
+from se_harness import corpus
+report = corpus.coverage(corpus.all_variants())
+assert report["variants"], "corpus is empty"
+assert len(report["operating_systems"]) >= 2, (
+    f"corpus covers {report['operating_systems']}: interface drift is what "
+    "the corpus is for, and one OS cannot show it")
+print(f"variants: {report['variants']}  "
+      f"operating systems: {len(report['operating_systems'])}")
+PY
+}
+
+# ── the conformance job ───────────────────────────────────────────────
+conformance() { "${PY}" -m pytest -q; }
+
+# ── the drift check on this script itself ─────────────────────────────
+#
+# A local runner nobody checks becomes a local runner that agrees with a
+# workflow it no longer resembles.
+drift() {
+  "${PY}" - <<'PY'
+import pathlib, re, sys
+workflow = pathlib.Path(".github/workflows/ci.yml").read_text()
+script = pathlib.Path("harness/bin/se-ci").read_text()
+# Every `- run:` command the workflow names, normalised to its verb.
+runs = re.findall(r"^\s*-\s*run:\s*(.+)$", workflow, flags=re.MULTILINE)
+wanted = set()
+for line in runs:
+    line = line.strip()
+    if line.startswith("go vet"):        wanted.add("go vet ./...")
+    elif line.startswith("go test"):     wanted.add("go test ./...")
+    elif line.startswith("go build"):    wanted.add("go build ./cmd/...")
+    elif "pytest" in line:               wanted.add("pytest")
+missing = [w for w in sorted(wanted) if w not in script]
+if missing:
+    print("this script does not run what CI runs:", missing)
+    sys.exit(1)
+# And the corpus job, which is a heredoc rather than a `- run:` verb.
+if "corpus.coverage" in workflow and "corpus.coverage" not in script:
+    print("CI checks corpus coverage and this script does not")
+    sys.exit(1)
+print("se-ci runs what ci.yml runs")
+PY
+}
+
+case "${MODE}" in
+  fast)
+    step "go test"        go_test
+    step "conformance"    conformance
+    ;;
+  go)
+    step "go vet"         go_vet
+    step "go build"       go_build
+    step "go test"        go_test
+    ;;
+  *)
+    step "workflow drift" drift
+    step "go vet"         go_vet
+    step "go build"       go_build
+    step "go test"        go_test
+    step "corpus"         corpus
+    step "conformance"    conformance
+    ;;
+esac
+
+elapsed=$(( $(date +%s) - started ))
+printf '\n'
+if [ ${#FAILED[@]} -eq 0 ]; then
+  printf '\033[32mall green\033[0m in %ss\n' "${elapsed}"
+  printf 'platform gap: CI runs ubuntu-latest, this ran on %s.\n' "$(uname -s)"
+  exit 0
+fi
+printf '\033[31mFAILED\033[0m in %ss: %s\n' "${elapsed}" "${FAILED[*]}"
+exit 1
