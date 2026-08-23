@@ -407,3 +407,97 @@ func TestTheApplyPathKeepsTheRecord(t *testing.T) {
 		t.Fatalf("a clean apply records no refusal: %v %v", rejections, err)
 	}
 }
+
+// --- the two defects an audit found in this file the day it was written ---
+
+func TestTwoInstancesWithOneNativeNameNeverMergeInTheRecord(t *testing.T) {
+	// Acceptance item 1, at the diff. store.Objects returns every scope
+	// and two instances mint the SAME id string, so a diff keyed on id
+	// alone keeps one and reports the other as neither added nor removed
+	// — the merge the whole identity model exists to prevent, done by the
+	// reader rather than by the store. store.ObjectRow says exactly this
+	// where the row is defined; changes.go was the reader that ignored it.
+	measures := map[string]bool{}
+	before, err := Diffable([]store.ObjectRow{
+		{ID: "queue:1", Name: "q", Scope: "alpha",
+			Facts: json.RawMessage(`{"Depth":1}`)},
+		{ID: "queue:1", Name: "q", Scope: "beta",
+			Facts: json.RawMessage(`{"Depth":2}`)},
+	}, measures)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(before) != 2 {
+		t.Fatalf("two instances are two rows, got %d: %+v", len(before), before)
+	}
+
+	// **ALPHA's row moves and beta's does not**, which is the case that
+	// discriminates. Under a merge the two collapse to one entry and the
+	// LAST one wins — beta, which did not change — so the diff reports
+	// nothing at all and alpha's change is lost silently.
+	//
+	// Written this way after the obvious case failed to discriminate: if
+	// beta is the one that moves, a merged diff keeps beta and still
+	// reports one change, so the assertion passed with the defect
+	// planted. Proven 2026-08-23 by keying on the bare id and watching
+	// the beta version stay green.
+	after, _ := Diffable([]store.ObjectRow{
+		{ID: "queue:1", Name: "q", Scope: "alpha",
+			Facts: json.RawMessage(`{"Depth":42}`)},
+		{ID: "queue:1", Name: "q", Scope: "beta",
+			Facts: json.RawMessage(`{"Depth":2}`)},
+	}, measures)
+	changes := Compare(before, after)
+	if len(changes.Added) != 0 || len(changes.Removed) != 0 {
+		t.Fatalf("neither instance appeared or vanished: %+v", changes)
+	}
+	if len(changes.Changed) != 1 {
+		t.Fatalf("exactly one instance changed: %+v", changes.Changed)
+	}
+	if changes.Changed[0].Scope != "alpha" {
+		t.Fatalf("a consumer handed a bare id cannot tell which instance "+
+			"changed: %+v", changes.Changed[0])
+	}
+}
+
+func TestTheDefaultBaselineIsTheRecordsBeginningNotItsNewestReading(t *testing.T) {
+	// The route defaulted `since` to now() for a few hours on 2026-08-23,
+	// which SnapshotAtOrBefore resolves to the NEWEST reading — so the
+	// answer compared the live set against the snapshot taken when it
+	// last changed and said "nothing changed" for ever, while the comment
+	// above it promised "since the record began".
+	st := recordStore(t)
+	seedRecord(t, st, "nft-rules", 1, []store.Object{
+		{ID: "rule:1", Name: "a", Facts: json.RawMessage(`{"Expression":"old"}`)}})
+	keep(t, st, "nft-rules", "2026-08-23T10:00:00Z", 1)
+	reapply(t, st, "nft-rules", []store.Object{
+		{ID: "rule:1", Name: "a", Facts: json.RawMessage(`{"Expression":"new"}`)}})
+	keep(t, st, "nft-rules", "2026-08-23T11:00:00Z", 2)
+
+	began, err := st.RecordBegins("nft-rules", store.HostNative)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fromBeginning := ChangesFrom(t, st, began)
+	if len(fromBeginning.Changed) != 1 {
+		t.Fatalf("from the record's beginning the change is visible: %+v",
+			fromBeginning)
+	}
+	// And the defect, pinned: asking from the newest reading answers
+	// nothing, which is the honest answer to THAT question and the wrong
+	// answer to the one the route documents.
+	fromNewest := ChangesFrom(t, st, "2026-08-23T11:00:00Z")
+	if len(fromNewest.Changed) != 0 {
+		t.Fatalf("from the newest reading there is nothing between: %+v",
+			fromNewest)
+	}
+}
+
+func ChangesFrom(t *testing.T, st *store.Store, since string) CollectionChanges {
+	t.Helper()
+	changes, err := ChangesSince(st, "nft-rules", store.HostNative, since)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return changes
+}

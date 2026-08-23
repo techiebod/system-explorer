@@ -32,7 +32,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"time"
 
 	"github.com/techiebod/system-explorer/go/internal/store"
 )
@@ -80,11 +79,24 @@ func MeasureFacts(declarationBytes []byte, collection string) (measures map[stri
 // omitted silently; closing it is a reader on ObjectRow, not a change
 // to the comparison.
 type DiffableObject struct {
-	ID    string         `json:"id"`
+	ID string `json:"id"`
+	// Scope is the instance the object was published under, and it is
+	// part of the diff's KEY rather than a decoration. Two instances
+	// publishing one native name mint the same id string under different
+	// scopes (store.ObjectRow says so where the row is defined), so a
+	// diff keyed on id alone silently keeps one of them and reports the
+	// other as neither added nor removed — acceptance item 1, "two
+	// instances with identical native names never merge", broken by the
+	// reader rather than by the store. Found 2026-08-23 by an audit of
+	// this file, the day it was written.
+	Scope string         `json:"scope,omitempty"`
 	Name  string         `json:"name"`
 	Type  string         `json:"type,omitempty"`
 	Facts map[string]any `json:"facts"`
 }
+
+// key is the identity a diff compares on: the pair, never the id.
+func (o DiffableObject) key() string { return o.Scope + "\x00" + o.ID }
 
 // Diffable strips the measures out of one collection's objects, producing
 // what a snapshot stores and what a diff reads.
@@ -108,16 +120,21 @@ func Diffable(objects []store.ObjectRow, measures map[string]bool) ([]DiffableOb
 			}
 		}
 		out = append(out, DiffableObject{
-			ID: object.ID, Name: object.Name, Type: object.Type, Facts: facts,
+			ID: object.ID, Scope: object.Scope, Name: object.Name,
+			Type: object.Type, Facts: facts,
 		})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	sort.Slice(out, func(i, j int) bool { return out[i].key() < out[j].key() })
 	return out, nil
 }
 
 // ChangedObject names one object and the paths that differ.
 type ChangedObject struct {
-	ID    string   `json:"id"`
+	ID string `json:"id"`
+	// Carried beside the id for the same reason the diff keys on it: two
+	// instances mint one id, and a consumer handed a bare id cannot tell
+	// which of them changed.
+	Scope string   `json:"scope,omitempty"`
 	Paths []string `json:"paths"`
 }
 
@@ -152,32 +169,33 @@ type RecordGap struct {
 // carries the diff: ids only in `after` are added, ids only in `before`
 // are removed, and objects in both are compared field by field.
 func Compare(before, after []DiffableObject) CollectionChanges {
-	beforeByID := map[string]DiffableObject{}
+	beforeByKey := map[string]DiffableObject{}
 	for _, object := range before {
-		beforeByID[object.ID] = object
+		beforeByKey[object.key()] = object
 	}
-	afterByID := map[string]DiffableObject{}
+	afterByKey := map[string]DiffableObject{}
 	for _, object := range after {
-		afterByID[object.ID] = object
+		afterByKey[object.key()] = object
 	}
 	var changes CollectionChanges
-	for id := range afterByID {
-		if _, held := beforeByID[id]; !held {
-			changes.Added = append(changes.Added, id)
+	for key, object := range afterByKey {
+		if _, held := beforeByKey[key]; !held {
+			changes.Added = append(changes.Added, object.ID)
 		}
 	}
-	for id := range beforeByID {
-		if _, held := afterByID[id]; !held {
-			changes.Removed = append(changes.Removed, id)
+	for key, object := range beforeByKey {
+		if _, held := afterByKey[key]; !held {
+			changes.Removed = append(changes.Removed, object.ID)
 		}
 	}
-	for id, was := range beforeByID {
-		now, held := afterByID[id]
+	for key, was := range beforeByKey {
+		now, held := afterByKey[key]
 		if !held {
 			continue
 		}
 		if paths := changedPaths(was, now); len(paths) > 0 {
-			changes.Changed = append(changes.Changed, ChangedObject{ID: id, Paths: paths})
+			changes.Changed = append(changes.Changed,
+				ChangedObject{ID: was.ID, Scope: was.Scope, Paths: paths})
 		}
 	}
 	sort.Strings(changes.Added)
@@ -293,14 +311,6 @@ func ChangesSince(s *store.Store, collection, scope, since string) (CollectionCh
 	changes.Collection = collection
 	changes.Since = baseline.TakenAt
 	return changes, nil
-}
-
-// nowStamp is the default baseline moment: the newest stored reading at
-// or before now, which is every reading there is. Same rendering as the
-// snapshots carry, so the lexicographic comparison in SQL stays
-// chronological.
-func nowStamp() string {
-	return time.Now().UTC().Format(time.RFC3339)
 }
 
 // digestOf is the snapshot's identity: sha256 over exactly the bytes

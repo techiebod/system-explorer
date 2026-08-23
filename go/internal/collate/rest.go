@@ -301,13 +301,27 @@ func NewHandler(st *store.Store, now func() float64, bootID string) http.Handler
 			http.Error(w, "unknown collection", http.StatusNotFound)
 			return
 		}
-		// No `since` means since the record began — a well-defined moment
-		// rather than a guess, and the answer states which reading it
-		// actually rests on, so "what changed while you have been
-		// watching" is askable without knowing when that started.
+		// No `since` means since the record BEGAN, and it is resolved
+		// from the store rather than from the clock.
+		//
+		// This defaulted to now() for a few hours on 2026-08-23 and was
+		// exactly wrong: SnapshotAtOrBefore(now) is the NEWEST reading,
+		// so the route compared the live set against the snapshot taken
+		// when it last changed and answered "nothing changed" for ever,
+		// while the comment above it promised the opposite. It was
+		// written that way to make the published-routes test — which
+		// substitutes {name} and no query — answer 200 rather than 400,
+		// which is a wrong answer bought to turn a test green.
 		since := r.URL.Query().Get("since")
 		if since == "" {
-			since = nowStamp()
+			began, err := st.RecordBegins(name, store.HostNative)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			// No record at all is not "no change": ChangesSince states
+			// that as a gap, and an empty `since` reaches it.
+			since = began
 		}
 		changes, err := ChangesSince(st, name, store.HostNative, since)
 		if err != nil {
