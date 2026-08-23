@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Callable, Mapping
 
 from .intent import Intent
@@ -196,6 +197,114 @@ class SiblingAges:
             "age_at_origin_s": self.told_own_hub_s,
             "age_in_transit_s": self.told_this_hub_s,
         }
+
+
+def _age_s(then: str, now: str) -> float:
+    """Seconds between two fixed-width UTC stamps. Arithmetic, not a
+    clock read: both stamps are this hub's own, so no cross-hub skew can
+    reach it — which is the whole reason ages travel as seconds."""
+    fmt = "%Y-%m-%dT%H:%M:%SZ"
+    delta = (datetime.strptime(now, fmt).replace(tzinfo=timezone.utc)
+             - datetime.strptime(then, fmt).replace(tzinfo=timezone.utc))
+    return delta.total_seconds()
+
+
+def site_answer(
+    view_of: Callable[[], Any],
+    own_site: str,
+    told_of: Callable[[str], str | None],
+    now_of: Callable[[], str],
+) -> Callable[[SiblingRequest], Any]:
+    """The answer a peer session serves: this hub's own site, rendered by
+    the SAME functions the local surface uses — one spelling, not a
+    second one to drift — plus the one age this hub can measure per host.
+
+    age_at_origin_s is None where nothing stamped the host's arrival:
+    an unstated age, never a zero standing in for a measurement nobody
+    took.
+    """
+    from .routes import render_hosts, render_objects, render_opinions
+
+    def answer(_request: SiblingRequest) -> Any:
+        state = view_of()
+        now = now_of()
+        ages: dict[str, float | None] = {}
+        for host in state.view.reach:
+            told = told_of(host)
+            ages[host] = _age_s(told, now) if told is not None else None
+        return {"site": own_site,
+                **render_hosts(state),
+                **render_objects(state),
+                **render_opinions(state),
+                "age_at_origin_s": ages}
+
+    return answer
+
+
+def ask(
+    stream_in,
+    stream_out,
+    local: Handshake,
+    for_site: str,
+) -> tuple[Any | None, Refusal | None]:
+    """The dial-out half of a peer session: handshake, one request, one
+    answer. BOTH sides review — a hub that accepted a mismatched sibling
+    because the sibling accepted it first would merge the worldview it
+    exists to refuse."""
+    opening = _read(stream_in)
+    if opening is None or opening.get("record") != "handshake":
+        return None, Refusal("no-handshake", "the peer did not identify itself")
+    refusal = review(local, opening)
+    if refusal is not None:
+        return None, refusal
+    _write(stream_out, {"record": "handshake", **local.as_wire()})
+    verdict = _read(stream_in)
+    if verdict is None:
+        return None, Refusal("peer-gone", "the peer closed during the handshake")
+    if verdict.get("record") == "refused":
+        return None, Refusal(verdict.get("reason", "refused"),
+                             verdict.get("detail", ""))
+    if verdict.get("record") != "agreed":
+        return None, Refusal(
+            "protocol",
+            f"expected agreed or refused, got {verdict.get('record')!r}")
+    _write(stream_out, {"record": "request",
+                        "origin_site": local.site, "for_site": for_site})
+    reply = _read(stream_in)
+    if reply is None:
+        return None, Refusal("peer-gone", "the peer closed before answering")
+    if reply.get("record") == "refused":
+        return None, Refusal(reply.get("reason", "refused"),
+                             reply.get("detail", ""))
+    return reply.get("body"), None
+
+
+def surface_reader(
+    connect: Callable[[], tuple[Any, Any] | None],
+    local: Handshake,
+    now_of: Callable[[], str],
+) -> Callable[[str], Any]:
+    """A `sibling_of` for the route table: ask the sibling LIVE per
+    request — never from a store, because replicating observations
+    between hubs is the shortcut that stays forbidden — and wrap the
+    answer with the transit half of the two ages. The body's own
+    age_at_origin_s stays the sibling's measurement, carried verbatim."""
+
+    def read(site: str) -> Any:
+        streams = connect()
+        if streams is None:
+            return {"error": "the sibling session could not be opened",
+                    "site": site}
+        stream_in, stream_out = streams
+        asked_at = now_of()
+        body, refusal = ask(stream_in, stream_out, local, site)
+        if refusal is not None:
+            return {"error": refusal.reason, "detail": refusal.detail,
+                    "site": site}
+        return {"origin": site, "asked_at": asked_at,
+                "answered_at": now_of(), "answer": body}
+
+    return read
 
 
 # --- the federation session on a socket -------------------------------

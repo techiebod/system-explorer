@@ -542,28 +542,54 @@ REGISTER: tuple[Row, ...] = (
         "the probe sees the hub route; the §36 migration question is the "
         "owner's and no probe can close it."),
     Row(18, "findings persistence (a registry that survives restart)",
-        "owed", "R3e",
+        "built", "R3e",
         lambda: any(_in_file(f"src/system_explorer/hub/{m}.py", "sqlite3")
                     for m in ("checkpoint", "session", "rollup", "resolution",
                               "lifecycle", "intent", "answer")),
         "the probe greps the rewrite hub's own modules for a store; the OLD "
         "hub's findings.db is a different product and deliberately out of "
-        "scope."),
+        "scope. Flipped 2026-08-23: lifecycle.Registry persists its open "
+        "set — first_seen, contributors, blind — and the restart case is "
+        "proven end to end: the reopened registry's first fold sees an "
+        "unswept estate and freezes rather than resolves, which is the "
+        "founding failure the persistence exists to prevent. What the probe "
+        "cannot see: transitions and acknowledgement are NOT here — they "
+        "arrive with row 19's posture ruling — and no daemon wires the "
+        "store path yet, which is deployment's."),
     Row(19, "acknowledgement — appended/attributed/reversible, write posture",
         "owed", "R3e — owner ruling owed on posture",
         lambda: _in_file("src/system_explorer/hub/routes.py", "acknowledge"),
         "the probe sees a route by name; posture — who may, over what bind — "
         "is the owner's ruling and no probe can close it."),
     Row(20, "views route (`se.views/1` was ruled 'survives unchanged')",
-        "owed", "R3e",
+        "built", "R3e",
         lambda: _in_file("src/system_explorer/hub/routes.py", "/v1/views"),
-        "the probe sees the hub route by name."),
+        "the probe sees the hub route by name. Flipped 2026-08-23: the "
+        "rewrite hub serves /v1/views through the SAME shared loader the "
+        "old hub and the MCP surface read (one loader, three servers), "
+        "fresh from the deployed directory per request, with the tool "
+        "generated from the route table like every other. The probe cannot "
+        "see that the documents validate or that the collator tier serves "
+        "them too — the collator's own views surface is R4's page work."),
     Row(21, "sibling reads wired to the hub surface (one hop, serving)",
-        "owed", "R3e", None,
-        "no probe: the handshake exists and serving does not, and no grep "
-        "can tell those apart without guessing the name of a route R3e has "
-        "not designed — a guess that matched the wrong thing would report "
-        "built about a hub that still cannot serve a sibling's rows."),
+        "built", "R3e",
+        lambda: _in_file("src/system_explorer/hub/routes.py", "/v1/sites/"),
+        "the probe sees the route R3e designed, which it could not guess "
+        "before the design existed — an unprobed owed row, so no drill "
+        "forced this flip; the tests are the forcing instead. Flipped "
+        "2026-08-23: /v1/sites/{site} asks the sibling LIVE per request "
+        "through the peer session — never from a store, because "
+        "replicating observations between hubs stays forbidden — with "
+        "both ages visible: age_at_origin_s per host, the sibling's own "
+        "measurement built on the new told_at stamp and None where "
+        "nothing stamped an arrival, and the asked/answered moments only "
+        "this hub can stamp. The answer is rendered by the same functions "
+        "the local surface uses, so the two spellings cannot drift, and a "
+        "mismatched sibling surfaces its refusal naming both values "
+        "rather than a 500. What the probe cannot see: no daemon holds a "
+        "long-lived dialled session yet — surface_reader takes a connect "
+        "callable, and wiring it to a real socket pair per deployment is "
+        "R5's."),
     Row(22, "NixOS module consumes declared `authority` into sandboxing",
         "owed", "R5",
         lambda: _in_file("nix/skeleton-module.nix", "declaration.json"),

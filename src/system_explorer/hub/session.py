@@ -37,7 +37,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Iterable, Mapping
+from typing import Callable, Any, Iterable, Mapping
 
 from .checkpoint import CheckpointRefused, Estate, HostSnapshot, Receiver
 
@@ -160,6 +160,11 @@ class Session:
     declarations: Declarations
     host: str | None = None
     phase: Phase = Phase.DECLARATIONS
+    #: Stamps each promote with when THIS hub received it — the origin
+    #: half of the two ages a sibling is served with. Optional so a
+    #: session driven without a daemon promotes unstamped, which serves
+    #: an unstated age rather than a wrong one.
+    clock: "Callable[[], str] | None" = None
     _receiver: Receiver = field(default_factory=Receiver, init=False)
     _pending: list[tuple[Mapping[str, Any], str]] = field(default_factory=list, init=False)
 
@@ -179,7 +184,8 @@ class Session:
             if snapshot is None:
                 return None
             self.phase = Phase.STREAM
-            self.estate.promote(snapshot)
+            self.estate.promote(
+                snapshot, at=self.clock() if self.clock is not None else None)
             return snapshot
         raise SessionRefused(
             "stream-unimplemented",

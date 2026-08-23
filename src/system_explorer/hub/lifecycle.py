@@ -24,7 +24,11 @@ forget what was already known. Only a RESOLVED finding closes.
 
 from __future__ import annotations
 
+import json
+import sqlite3
+from contextlib import closing
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import Iterable, Mapping
 
 from .resolution import Contributor, Judgement, Verdict, judge
@@ -70,6 +74,27 @@ class Finding:
         return not self.reset
 
 
+#: One row per open finding, whole-set replaced inside one transaction on
+#: every fold: an estate's open findings are tens, not thousands, and a
+#: replace is atomic where per-key upserts would let a crash mid-write
+#: leave a set no fold ever produced. Store idioms are the estate's
+#: settled ones (agent/history.py): stdlib sqlite3, per-call connections,
+#: WAL, fixed-width UTC ISO so lexicographic comparison is chronological.
+_TABLE = """CREATE TABLE IF NOT EXISTS findings (
+    rendered TEXT PRIMARY KEY,
+    scope TEXT NOT NULL,
+    object_id TEXT NOT NULL,
+    opinion TEXT NOT NULL,
+    instance TEXT,
+    first_seen TEXT NOT NULL,
+    last_seen TEXT NOT NULL,
+    verdict TEXT NOT NULL,
+    reset INTEGER NOT NULL,
+    blind TEXT NOT NULL,
+    contributors TEXT NOT NULL
+)"""
+
+
 @dataclass
 class Registry:
     """Every finding this hub knows, keyed the new way.
@@ -77,10 +102,70 @@ class Registry:
     `reset_at` is the moment the re-key happened. A finding first seen at
     exactly that moment has an age that is the reset's, not the
     condition's, and says so for as long as it stays open.
+
+    `store` makes the registry survive restart, which is what makes a
+    restart honest rather than the founding failure: a hub that restarts
+    holds findings and no facts, so the next fold sees an unswept estate
+    and every persisted finding FREEZES — lifecycle intact, reasons
+    stated — instead of every condition in the estate clearing at once.
+    Contributors persist with the finding because "has this been
+    re-read?" is a generation comparison, and a finding that forgot its
+    generations across a restart would take any reconnect as new
+    evidence. What persists is lifecycle metadata in the design's sense:
+    deleting the store loses first_seen and the transitions to come with
+    the acknowledgement ruling, never an observation about a host.
     """
 
     reset_at: str
+    store: Path | str | None = None
     _findings: dict[str, Finding] = field(default_factory=dict, init=False)
+
+    def __post_init__(self) -> None:
+        if self.store is None:
+            return
+        with closing(self._connect()) as db:
+            db.execute(_TABLE)
+            rows = db.execute(
+                "SELECT scope, object_id, opinion, instance, first_seen, "
+                "last_seen, verdict, reset, blind, contributors "
+                "FROM findings").fetchall()
+        for (scope, object_id, opinion, instance, first_seen, last_seen,
+             verdict, reset, blind, contributors) in rows:
+            key = Key(scope=scope, object_id=object_id, opinion=opinion,
+                      instance=instance)
+            self._findings[key.rendered()] = Finding(
+                key=key,
+                first_seen=first_seen,
+                last_seen=last_seen,
+                verdict=Verdict(verdict),
+                contributors=tuple(
+                    Contributor(host=h, collection=c, generation=g)
+                    for h, c, g in json.loads(contributors)),
+                reset=bool(reset),
+                blind=tuple(json.loads(blind)),
+            )
+
+    def _connect(self) -> sqlite3.Connection:
+        db = sqlite3.connect(self.store)
+        db.execute("PRAGMA journal_mode=WAL")
+        return db
+
+    def _persist(self) -> None:
+        if self.store is None:
+            return
+        with closing(self._connect()) as db, db:
+            db.execute(_TABLE)
+            db.execute("DELETE FROM findings")
+            db.executemany(
+                "INSERT INTO findings VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [(finding.key.rendered(), finding.key.scope,
+                  finding.key.object_id, finding.key.opinion,
+                  finding.key.instance, finding.first_seen, finding.last_seen,
+                  finding.verdict.value, int(finding.reset),
+                  json.dumps(list(finding.blind)),
+                  json.dumps([[c.host, c.collection, c.generation]
+                              for c in finding.contributors]))
+                 for finding in self._findings.values()])
 
     def fold(
         self,
@@ -133,6 +218,7 @@ class Registry:
                 contributors=contributors[rendered_key],
                 blind=_blind(judgement),
             )
+        self._persist()
         return dict(self._findings)
 
     def adopt(self, findings: Iterable[Finding]) -> None:
@@ -147,6 +233,7 @@ class Registry:
             self._findings[finding.key.rendered()] = replace(
                 finding, first_seen=self.reset_at, reset=True
             )
+        self._persist()
 
     def open(self) -> dict[str, Finding]:
         return dict(self._findings)

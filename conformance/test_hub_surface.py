@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import threading
+from pathlib import Path
 import urllib.error
 import urllib.request
 
@@ -57,7 +58,13 @@ def _hub_base(allowed_hosts=None):
         "plugins": {"widgets": {"targets": []}}})
     server = serve(("127.0.0.1", 0),
                    lambda: reading(estate, intent, declarations),
-                   allowed_hosts=allowed_hosts)
+                   allowed_hosts=allowed_hosts,
+                   # The reachability sweep visits every published route, so
+                   # the fixture wires a sibling that answers; the refusal
+                   # shapes get their own tests.
+                   sibling_of=lambda site: {"origin": site, "answer": {
+                       "site": site, "hosts": {}, "objects": [],
+                       "opinions": [], "ages_s": {}}, "fetched": "stub"})
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     base = f"http://127.0.0.1:{server.server_port}"
@@ -94,7 +101,8 @@ def test_every_route_is_reachable_and_answers(hub) -> None:
         for name in route.get("params") or ():
             path = path.replace("{" + name + "}",
                                 {"host": "storage-1", "name": "pools",
-                                 "question": "question:estate-current"}[name])
+                                 "question": "question:estate-current",
+                                 "site": "site-b"}[name])
         payload = json.loads(fetch(hub + path))
         assert isinstance(payload, dict) and "error" not in payload, (route, payload)
 
@@ -168,6 +176,53 @@ def test_the_route_table_is_the_only_place_routes_are_named() -> None:
     paths = [r.path for r in routes]
     assert len(paths) == len(set(paths))
     assert all(r.tool and r.summary for r in routes)
+
+
+def test_views_serve_the_deployed_directory_fresh(tmp_path) -> None:
+    """The ruled-unchanged surface on the rewrite hub: a real document from
+    the deployed directory, read fresh per request — the operator edits a
+    file and refreshes, no restart. The envelope is the shared loader's,
+    so the three consumers cannot drift."""
+    from system_explorer.views import load_views
+    # The example file is the ENVELOPE; the deployed directory holds one
+    # view document per file, so the fixture is the example's view.
+    example = json.loads(
+        Path("schema/examples/views-storage-simple.json").read_text())
+    (tmp_path / "storage.json").write_text(json.dumps(example["views"][0]))
+    estate = Estate(declared=("storage-1",))
+    declarations = Declarations()
+    intent = Intent.load({
+        "schema": "se.intent/1", "estate": "home", "revision": 41,
+        "reviewed": "2026-08-20", "membership": {"hosts": {"storage-1": {}}},
+        "plugins": {}})
+    server = serve(("127.0.0.1", 0),
+                   lambda: reading(estate, intent, declarations),
+                   views_of=lambda: load_views(str(tmp_path),
+                                               "2026-08-23T12:00:00Z", "site-a"))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base = f"http://127.0.0.1:{server.server_port}"
+        body = json.loads(fetch(f"{base}/v1/views"))
+        assert body["schema"] == "se.views/1"
+        assert [v["name"] for v in body["views"]] == ["storage-simple"]
+        assert body.get("errors", []) == []
+
+        # Fresh per request: a second document appears without a restart.
+        (tmp_path / "zz-broken.json").write_text("{not json")
+        again = json.loads(fetch(f"{base}/v1/views"))
+        assert len(again["errors"]) == 1, (
+            "a broken view silently dropped is how a curated projection "
+            "quietly loses a panel"
+        )
+    finally:
+        server.shutdown()
+
+
+def test_views_with_no_directory_is_an_empty_list_not_an_error(hub) -> None:
+    body = json.loads(fetch(f"{hub}/v1/views"))
+    assert body["schema"] == "se.views/1"
+    assert body["views"] == []
 
 
 def test_an_unclaimed_host_name_is_refused_as_misdirected(hub) -> None:

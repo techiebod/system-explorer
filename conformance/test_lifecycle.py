@@ -100,6 +100,61 @@ def test_a_finding_first_seen_after_the_reset_carries_its_own_age() -> None:
     assert finding.reset is False and finding.age_is_the_conditions()
 
 
+def test_the_registry_survives_restart_with_its_lifecycle_intact(tmp_path) -> None:
+    """Persistence is what makes a restart honest rather than the founding
+    failure: the reopened registry holds the finding — first_seen,
+    contributors and all — and the first fold after restart sees an
+    unswept estate, so the finding FREEZES with its reason stated instead
+    of every condition in the estate clearing at once."""
+    store = tmp_path / "lifecycle.db"
+    before = Registry(reset_at=CUT, store=store)
+    before.fold("2026-08-20T10:00:00Z",
+                {KEY: [Contributor("storage-1", "pools", 8)]}, estate_at(9))
+
+    reopened = Registry(reset_at=CUT, store=store)
+    finding = reopened.open()[KEY.rendered()]
+    assert finding.first_seen == "2026-08-20T10:00:00Z"
+    assert finding.contributors == (Contributor("storage-1", "pools", 8),), (
+        "'has this been re-read?' is a generation comparison, and a finding "
+        "that forgot its generations across a restart would take any "
+        "reconnect as new evidence"
+    )
+
+    # The restarted hub holds findings and no facts: unswept, so frozen.
+    frozen = reopened.fold("2026-08-20T12:00:00Z", {},
+                           Estate(declared=("storage-1",)))
+    assert frozen[KEY.rendered()].verdict is Verdict.FROZEN
+    assert frozen[KEY.rendered()].blind == ("unswept",)
+    assert frozen[KEY.rendered()].first_seen == "2026-08-20T10:00:00Z"
+
+
+def test_an_observed_resolution_survives_restart_as_closed(tmp_path) -> None:
+    store = tmp_path / "lifecycle.db"
+    registry = Registry(reset_at=CUT, store=store)
+    registry.fold("2026-08-20T10:00:00Z",
+                  {KEY: [Contributor("storage-1", "pools", 8)]}, estate_at(9))
+    registry.fold("2026-08-20T11:00:00Z", {}, estate_at(10))
+    assert Registry(reset_at=CUT, store=store).open() == {}, (
+        "a finding observed resolved must not rise from the store"
+    )
+
+
+def test_adoption_survives_restart_still_marked_reset(tmp_path) -> None:
+    store = tmp_path / "lifecycle.db"
+    registry = Registry(reset_at=CUT, store=store)
+    registry.adopt([Finding(key=KEY, first_seen="2026-01-01T00:00:00Z",
+                            last_seen="2026-08-19T00:00:00Z")])
+    finding = Registry(reset_at=CUT, store=store).open()[KEY.rendered()]
+    assert finding.reset is True and finding.first_seen == CUT
+
+
+def test_a_storeless_registry_still_works_in_memory() -> None:
+    registry = Registry(reset_at=CUT)
+    registry.fold("2026-08-20T10:00:00Z",
+                  {KEY: [Contributor("storage-1", "pools", 8)]}, estate_at(9))
+    assert set(registry.open()) == {KEY.rendered()}
+
+
 def test_no_old_key_is_translated() -> None:
     """Adopting rather than mapping is the decision: a wrong mapping is
     worse than a stated reset, and this product has no estate to protect

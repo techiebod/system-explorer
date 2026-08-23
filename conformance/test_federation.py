@@ -284,3 +284,162 @@ def test_a_peer_that_vanishes_mid_exchange_is_a_departure_not_a_crash() -> None:
     assert not thread.is_alive(), "the serving thread must not die on a reset"
     assert result and result[0].reason == "no-handshake"
     b.close()
+
+
+# --- serving: the sibling's site over the surface, live -----------------
+
+def _site_b_state():
+    """A real State for site-b: one host, promoted with a stamped arrival."""
+    from system_explorer.hub.checkpoint import (
+        CollectionSnapshot, Estate, HostSnapshot,
+    )
+    from system_explorer.hub.http import reading
+    from system_explorer.hub.session import Declarations
+
+    declaration = {
+        "schema": "se.declaration/1", "collector": "c", "version": "1.0.0",
+        "collections": [{
+            "name": "pools", "question": "q", "prefix": "pool",
+            "freshness": "60s", "perishability": "perishable",
+            "answer": ["State"],
+            "facts": {"State": {"type": "string", "temperament": "state",
+                                "kind": "observed", "discloses": "nothing",
+                                "sentence": "."}}}],
+    }
+    estate = Estate(declared=("storage-1",))
+    declarations = Declarations()
+    declarations.add("storage-1", declaration, "sha256:x")
+    estate.promote(HostSnapshot(
+        host="storage-1", checkpoint="cp",
+        boot_id="5e000000-0000-4000-8000-000000000001",
+        collections={"pools": CollectionSnapshot(
+            name="pools", generation=3, freshness="current",
+            stale_reason=None,
+            objects=({"id": "pools:tank", "name": "tank", "instance": None,
+                      "facts": {"State": "degraded"}},))},
+        declarations=("sha256:x",), history_gap=None),
+        at="2026-08-23T11:58:00Z")
+    intent = intent_for()
+    return estate, (lambda: reading(estate, intent, declarations))
+
+
+def test_the_site_answer_carries_the_rows_and_the_origin_age() -> None:
+    """The sibling's answer is rendered by the SAME functions the local
+    surface uses, and age_at_origin_s is the sibling's own measurement —
+    None where nothing stamped the arrival, never zero."""
+    from system_explorer.hub.federation import site_answer
+
+    estate, view_of = _site_b_state()
+    answer = site_answer(view_of, "site-b", estate.told_at,
+                         lambda: "2026-08-23T12:00:00Z")
+    body = answer(SiblingRequest(origin_site="site-a", for_site="site-b"))
+    assert body["site"] == "site-b"
+    assert body["hosts"] == {"storage-1": "connected"}
+    assert [row["id"] for row in body["objects"]] == ["storage-1/pools:tank"]
+    assert body["age_at_origin_s"] == {"storage-1": 120.0}
+
+
+def test_an_unstamped_arrival_serves_an_unstated_age() -> None:
+    from system_explorer.hub.checkpoint import Estate
+    from system_explorer.hub.federation import site_answer
+
+    estate, view_of = _site_b_state()
+    bare = Estate(declared=("storage-1",))
+    answer = site_answer(view_of, "site-b", bare.told_at,
+                         lambda: "2026-08-23T12:00:00Z")
+    body = answer(SiblingRequest(origin_site="site-a", for_site="site-b"))
+    assert body["age_at_origin_s"] == {"storage-1": None}, (
+        "an unstamped arrival is an unstated age, never a zero standing in "
+        "for a measurement nobody took"
+    )
+
+
+def test_sibling_reads_reach_the_surface_with_both_ages() -> None:
+    """End to end: hub A's /v1/sites/site-b asks hub B live over a peer
+    session — one hop, nothing stored — and the response carries both
+    ages: the sibling's own per-host measurement, and the transit moments
+    only this hub can stamp."""
+    import json as _json
+    import socket as _socket
+    import threading
+    import urllib.request
+
+    from system_explorer.hub.federation import site_answer, surface_reader
+    from system_explorer.hub.http import serve as http_serve
+
+    intent = intent_for()
+    estate_b, view_of_b = _site_b_state()
+    answer_b = site_answer(view_of_b, "site-b", estate_b.told_at,
+                           lambda: "2026-08-23T12:00:00Z")
+
+    def connect():
+        a, b = _socket.socketpair()
+        threading.Thread(
+            target=peer_session,
+            args=(b.makefile("rb"), b.makefile("wb"),
+                  offer("site-b", intent), "site-b", answer_b),
+            daemon=True).start()
+        return a.makefile("rb"), a.makefile("wb")
+
+    sibling_of = surface_reader(connect, offer("site-a", intent),
+                                lambda: "2026-08-23T12:00:01Z")
+
+    estate_a, view_of_a = _site_b_state()
+    server = http_serve(("127.0.0.1", 0), view_of_a, sibling_of=sibling_of)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base = f"http://127.0.0.1:{server.server_port}"
+        body = _json.loads(urllib.request.urlopen(
+            f"{base}/v1/sites/site-b", timeout=10).read())
+        assert body["origin"] == "site-b"
+        assert body["asked_at"] == "2026-08-23T12:00:01Z"
+        assert body["answer"]["site"] == "site-b"
+        assert body["answer"]["age_at_origin_s"] == {"storage-1": 120.0}, (
+            "the sibling's measurement, carried verbatim"
+        )
+        assert [row["id"] for row in body["answer"]["objects"]] == ["storage-1/pools:tank"]
+    finally:
+        server.shutdown()
+
+
+def test_a_mismatched_sibling_surfaces_its_refusal_not_a_500() -> None:
+    import json as _json
+    import socket as _socket
+    import threading
+    import urllib.request
+
+    from system_explorer.hub.federation import site_answer, surface_reader
+    from system_explorer.hub.http import serve as http_serve
+
+    estate_b, view_of_b = _site_b_state()
+    answer_b = site_answer(view_of_b, "site-b", estate_b.told_at,
+                           lambda: "2026-08-23T12:00:00Z")
+
+    def connect():
+        a, b = _socket.socketpair()
+        threading.Thread(
+            target=peer_session,
+            args=(b.makefile("rb"), b.makefile("wb"),
+                  offer("site-b", intent_for(42)), "site-b", answer_b),
+            daemon=True).start()
+        return a.makefile("rb"), a.makefile("wb")
+
+    sibling_of = surface_reader(connect, offer("site-a", intent_for(41)),
+                                lambda: "2026-08-23T12:00:01Z")
+    estate_a, view_of_a = _site_b_state()
+    server = http_serve(("127.0.0.1", 0), view_of_a, sibling_of=sibling_of)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base = f"http://127.0.0.1:{server.server_port}"
+        body = _json.loads(urllib.request.urlopen(
+            f"{base}/v1/sites/site-b", timeout=10).read())
+        assert body["error"] == "intent-mismatch"
+        assert "41" not in body["error"]
+        assert "site-b" == body["site"]
+        assert "the sibling holds" in body["detail"], (
+            "the refusal an operator can act on names both values"
+        )
+    finally:
+        server.shutdown()

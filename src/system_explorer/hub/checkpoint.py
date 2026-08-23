@@ -305,6 +305,11 @@ class Receiver:
 class _HostRecord:
     snapshot: HostSnapshot | None = None
     connected: bool = False
+    #: When the host last completed a checkpoint here — the first of the
+    #: two ages a sibling must see (DESIGN 06: the sibling's measurement,
+    #: carried verbatim). None where nothing stamped the promote, and an
+    #: unstamped arrival serves an UNSTATED age rather than a zero.
+    told_at: str | None = None
 
 
 @dataclass
@@ -333,17 +338,22 @@ class Estate:
     def disconnected(self, host: str) -> None:
         self._record(host).connected = False
 
-    def promote(self, snapshot: HostSnapshot) -> None:
+    def promote(self, snapshot: HostSnapshot, at: str | None = None) -> None:
         """Make a completed checkpoint visible, wholesale.
 
         Replacement rather than merge: the checkpoint is the collator's
         CURRENT state, so a collection it no longer names is one this
         host no longer has, and keeping the old row would serve a fact
         whose source has stopped claiming it.
+
+        `at` is when this hub received it — the one age that is this
+        hub's to measure, and the origin half of the pair a sibling is
+        served with.
         """
         record = self._record(snapshot.host)
         record.snapshot = snapshot
         record.connected = True
+        record.told_at = at
 
     def reach(self, host: str) -> Reach:
         record = self._hosts.get(host)
@@ -362,6 +372,12 @@ class Estate:
         """
         record = self._hosts.get(host)
         return record.snapshot if record else None
+
+    def told_at(self, host: str) -> str | None:
+        """When this host last completed a checkpoint here, or None where
+        nothing stamped it — unstated, never zero."""
+        record = self._hosts.get(host)
+        return record.told_at if record else None
 
     def hosts(self) -> tuple[str, ...]:
         return tuple(sorted(self._hosts))

@@ -104,7 +104,8 @@ def test_no_json_route_carries_the_canary(planted) -> None:
         for name in route.get("params") or ():
             path = path.replace("{" + name + "}",
                                 {"host": "storage-1", "name": "creds",
-                                 "question": "question:estate-current"}[name])
+                                 "question": "question:estate-current",
+                                 "site": "site-b"}[name])
         assert CANARY not in fetch(base + path), path
 
 
@@ -112,7 +113,7 @@ def test_no_mcp_tool_returns_the_canary(planted) -> None:
     base, *_ = planted
     for tool in discover(base):
         arguments = {"host": "storage-1", "name": "creds",
-                     "question": "question:estate-current"}
+                     "question": "question:estate-current", "site": "site-b"}
         got = call(tool, {p: arguments[p] for p in tool.params}, base)
         assert CANARY not in json.dumps(got), tool.name
 

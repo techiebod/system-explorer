@@ -25,6 +25,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Callable
 
 from ..surface import render
+from ..views import load_views
 from .answer import estate_current
 from .checkpoint import Estate
 from .intent import Intent
@@ -77,9 +78,23 @@ def _host_allowed(host_header: str, claimed: frozenset[str]) -> bool:
         return host in claimed
 
 
+def _deployed_views() -> Any:
+    """The environmental default for the views surface: the deployed
+    directory and site name, read fresh per request through the shared
+    loader (one loader, three servers — the MCP surface and the old hub
+    read the same one, so the projections cannot drift by consumer)."""
+    from datetime import datetime, timezone
+    return load_views(os.environ.get("SE_VIEWS_DIR"),
+                      datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                      os.environ.get("SE_SITE"))
+
+
 def handler_class(view_of: Callable[[], State],
-                  allowed_hosts: str | None = None) -> type[BaseHTTPRequestHandler]:
-    routes: tuple[Route, ...] = table(view_of)
+                  allowed_hosts: str | None = None,
+                  views_of: Callable[[], Any] | None = None,
+                  sibling_of: Callable[[str], Any] | None = None) -> type[BaseHTTPRequestHandler]:
+    routes: tuple[Route, ...] = table(view_of, views_of or _deployed_views,
+                                      sibling_of)
     # Injected for tests, environmental for the daemon — the same reason
     # the collator's clock is injected: the refusal must be assertable.
     claimed = frozenset(
@@ -172,5 +187,8 @@ def handler_class(view_of: Callable[[], State],
 
 
 def serve(bind: tuple[str, int], view_of: Callable[[], State],
-          allowed_hosts: str | None = None) -> ThreadingHTTPServer:
-    return ThreadingHTTPServer(bind, handler_class(view_of, allowed_hosts))
+          allowed_hosts: str | None = None,
+          views_of: Callable[[], Any] | None = None,
+          sibling_of: Callable[[str], Any] | None = None) -> ThreadingHTTPServer:
+    return ThreadingHTTPServer(
+        bind, handler_class(view_of, allowed_hosts, views_of, sibling_of))

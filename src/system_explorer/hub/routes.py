@@ -53,29 +53,53 @@ class Route:
         return bound
 
 
-def table(view_of: Callable[[], Any]) -> tuple[Route, ...]:
+def render_hosts(state: Any) -> dict[str, Any]:
+    """The hosts body — module-level so the sibling answer serves the SAME
+    spelling the local surface does, rather than a second one to drift."""
+    return {"hosts": {h: r.value for h, r in state.view.reach.items()}}
+
+
+def render_objects(state: Any) -> dict[str, Any]:
+    return {"objects": [
+        {"id": row.id, "estate_scoped": row.estate_scoped,
+         "facts": dict(row.facts), "undeclared": list(row.undeclared),
+         "withheld": list(row.withheld),
+         "members": [{"host": m.host, "collection": m.collection,
+                      "object": m.object_id, "instance": m.instance}
+                     for m in row.members]}
+        for row in state.view.rows]}
+
+
+def render_opinions(state: Any) -> dict[str, Any]:
+    return {"opinions": [
+        {"host": o.host, "collection": o.collection, "object": o.object_id,
+         "instance": o.instance, "key": o.key, "level": o.level,
+         "grounds": o.grounds, "sentence": o.sentence, "cites": list(o.cites)}
+        for o in state.opinions]}
+
+
+def table(view_of: Callable[[], Any],
+          views_of: Callable[[], Any] | None = None,
+          sibling_of: Callable[[str], Any] | None = None) -> tuple[Route, ...]:
     """Build the route table over a callable returning the current view.
 
     `view_of` is passed rather than a view, because the hub's answer is
     computed fresh on every request: the hub holds no observation of its
     own, and serving a remembered one would be exactly the last-known-good
     that belongs with findings instead.
+
+    `views_of` returns this site's se.views/1 envelope — the ruled-
+    unchanged surface, read fresh from the deployed directory per request
+    by the same shared loader both old servers use. Optional because a
+    deployment that made no views is an empty list, not an error, and a
+    caller that passes nothing gets exactly that.
     """
 
     def hosts() -> Any:
-        state = view_of()
-        return {"hosts": {h: r.value for h, r in state.view.reach.items()}}
+        return render_hosts(view_of())
 
     def objects() -> Any:
-        state = view_of()
-        return {"objects": [
-            {"id": row.id, "estate_scoped": row.estate_scoped,
-             "facts": dict(row.facts), "undeclared": list(row.undeclared),
-             "withheld": list(row.withheld),
-             "members": [{"host": m.host, "collection": m.collection,
-                          "object": m.object_id, "instance": m.instance}
-                         for m in row.members]}
-            for row in state.view.rows]}
+        return render_objects(view_of())
 
     def collection(host: str, name: str) -> Any:
         state = view_of()
@@ -86,12 +110,19 @@ def table(view_of: Callable[[], Any]) -> tuple[Route, ...]:
             for m in row.members if m.host == host and m.collection == name]}
 
     def opinions() -> Any:
-        state = view_of()
-        return {"opinions": [
-            {"host": o.host, "collection": o.collection, "object": o.object_id,
-             "instance": o.instance, "key": o.key, "level": o.level,
-             "grounds": o.grounds, "sentence": o.sentence, "cites": list(o.cites)}
-            for o in state.opinions]}
+        return render_opinions(view_of())
+
+    def sites(site: str) -> Any:
+        # Never from a store: a hub answers for a sibling's hosts only by
+        # asking the sibling, live, per request — replicating observations
+        # between hubs is the shortcut that stays forbidden outright
+        # (DESIGN 06). Unconfigured is stated, and stated differently
+        # from a sibling that is configured and not answering, which is
+        # the injected callable's to report.
+        if sibling_of is None:
+            return {"error": "no sibling session is configured for this hub",
+                    "site": site}
+        return sibling_of(site)
 
     def questions() -> Any:
         state = view_of()
@@ -114,6 +145,11 @@ def table(view_of: Callable[[], Any]) -> tuple[Route, ...]:
                 "unclassified": list(c.unclassified),
                 "sources_readable": list(c.sources_readable),
                 "sources_unreadable": list(c.sources_unreadable)}
+
+    def views() -> Any:
+        if views_of is None:
+            return {"schema": "se.views/1", "views": [], "errors": []}
+        return views_of()
 
     def intent() -> Any:
         state = view_of()
@@ -154,6 +190,16 @@ def table(view_of: Callable[[], Any]) -> tuple[Route, ...]:
               "The estate boundary as identities: declared, discovered but not "
               "declared, unclassified, and which discovery sources were "
               "readable.", (), coverage),
+        Route("/v1/sites/{site}", "get_site",
+              "A sibling site's hosts, asked from the sibling live — one hop, "
+              "never forwarded, never stored — with both ages visible: when "
+              "each host told its own hub, and when that hub answered this "
+              "one.", ("site",), sites),
+        Route("/v1/views", "get_views",
+              "This site's operator-authored view documents (se.views/1), "
+              "read fresh from the deployed directory — the operator edits a "
+              "file and refreshes. No directory means a deployment that made "
+              "no views: an empty list, not an error.", (), views),
         Route("/v1/intent", "get_intent",
               "The intent hash and revision this hub holds — what a sibling "
               "compares against. Never the document itself.", (), intent),
