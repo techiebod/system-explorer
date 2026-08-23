@@ -172,6 +172,23 @@ class CouldNotRun(Exception):
 # any of them is itself reported, under port_emitted_accepted. And a divergence
 # on any fact NOT listed here still fails, which is the property the acceptance
 # must not widen into.
+# The OTHER direction, and the comparator could not express it at all
+# until 2026-08-23: facts the PORT emits and the reference does not.
+#
+# The asymmetry is the same one inverted, and it is what keeps this from
+# becoming a hole. Removed from the PORT before the diff and never from
+# the reference, so a REFERENCE that started emitting a listed fact is
+# itself reported, under reference_emitted_accepted. A divergence on any
+# fact not listed here still fails.
+#
+# Empty, deliberately. The first case is system/identity — the port emits
+# Hostname, OsId, OsPrettyName and OsVersionId, which the reference does
+# not — and whether a port's scope MAY exceed the reference's is what §20
+# reserves for the owner. The mechanism exists so that ruling is one
+# entry rather than a change to this file; it is not a licence to widen
+# scope by editing a table.
+PORT_ONLY_DIVERGENCES: dict[str, dict] = {}
+
 ACCEPTED_DIVERGENCES = {
     "nix": {
         "facts": frozenset({
@@ -265,6 +282,17 @@ def compare(collector: str, work: dict, twice: bool) -> dict:
             for record in port
             for name in (record.get("facts") or {})
             if name in accepted["facts"]
+        })
+    port_only = PORT_ONLY_DIVERGENCES.get(collector)
+    if port_only:
+        result["port_only_divergence"] = {
+            "facts": sorted(port_only["facts"]), "ruling": port_only["ruling"]}
+        port = [_without(record, port_only["facts"]) for record in port]
+        result["reference_emitted_accepted"] = sorted({
+            name
+            for record in reference
+            for name in (record.get("facts") or {})
+            if name in port_only["facts"]
         })
     result["differences"] = replay.diff(reference, port, moving)
     # The order layer, which diff() is deliberately blind to: applied order
