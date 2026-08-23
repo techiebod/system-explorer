@@ -861,3 +861,62 @@ func TestAnAnsweringCollectionServesNoDeclineMember(t *testing.T) {
 		t.Fatalf("an answer is not a decline: %+v", rows[0])
 	}
 }
+
+// A time-namespace skew invalidates every age the collection carries,
+// and NOTHING ELSE IN THE ARITHMETIC CAN SEE IT: CLONE_NEWTIME offsets
+// CLOCK_BOOTTIME per namespace and leaves the boot id identical, so the
+// cross-boot branch does not fire and the age looks perfectly ordinary.
+// Until 2026-08-23 every collector reported `timens` in begin and no
+// tier read it — the designed defence was one half of a handshake.
+func TestAMeasuredTimeNamespaceSkewWithholdsTheAge(t *testing.T) {
+	st := seeded(t)
+	// FORWARD, so the arithmetic stays positive and plausible. This is
+	// the direction that matters: it renders a stale collection FRESH,
+	// and the negative-age route below could never catch it.
+	if err := st.RecordTimensSkew("identity", 3_600_000_000_000); err != nil {
+		t.Fatal(err)
+	}
+	rr := get(t, NewHandler(st, func() float64 { return 26.0 }, fakeBootID),
+		"/v1/collections")
+	var rows []map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &rows); err != nil {
+		t.Fatal(err)
+	}
+	row := rows[0]
+	if row["clock_domain_mismatch"] != true {
+		t.Fatalf("a skew the boot id cannot reveal must be stated: %+v", row)
+	}
+	if _, present := row["age_s"]; present {
+		t.Fatal("an age computed across two clock domains is not an age; " +
+			"serving it is the confident arithmetic this product refuses")
+	}
+	if row["timens_skew_ns"] != 3.6e12 {
+		t.Fatalf("the magnitude is what a person acts on: %+v", row)
+	}
+}
+
+// Zero is a READING — compared, and they agree — and it is the answer
+// that lets a reader trust an age. Never-compared is nil and must not
+// render the same, which is why the column is nullable.
+func TestAnAgreedClockDomainServesTheAgePlainly(t *testing.T) {
+	st := seeded(t)
+	if err := st.RecordTimensSkew("identity", 0); err != nil {
+		t.Fatal(err)
+	}
+	rr := get(t, NewHandler(st, func() float64 { return 26.0 }, fakeBootID),
+		"/v1/collections")
+	var rows []map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &rows); err != nil {
+		t.Fatal(err)
+	}
+	row := rows[0]
+	if row["age_s"] != 16.0 {
+		t.Fatalf("agreement must not cost the age: %+v", row)
+	}
+	if _, present := row["clock_domain_mismatch"]; present {
+		t.Fatalf("agreeing clocks are not a mismatch: %+v", row)
+	}
+	if _, present := row["timens_skew_ns"]; present {
+		t.Fatalf("no skew, no magnitude member: %+v", row)
+	}
+}

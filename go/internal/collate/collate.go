@@ -224,6 +224,24 @@ func applyCollection(st *store.Store, name, scope string, batch *wire.Batch) err
 	cs := batch.Collections[name]
 	gen := batch.Begin.Generations[name]
 
+	// The clock-domain comparison DESIGN §09 specifies, and it runs
+	// before anything else because it qualifies every `at` that follows.
+	// CLONE_NEWTIME offsets CLOCK_BOOTTIME per namespace, a container is
+	// the ordinary way to acquire one, and THE BOOT ID IS IDENTICAL ON
+	// BOTH SIDES — so nothing else in the arithmetic notices and the age
+	// is silently wrong. Every collector has reported `timens` in `begin`
+	// since the field existed; until 2026-08-23 no tier read it, so the
+	// designed defence was one half of a handshake.
+	//
+	// Stated, never corrected. The only case caught before this was the
+	// one where the skew happened to drive an age NEGATIVE, which the
+	// read surface calls a clock-domain mismatch — the subset that is
+	// self-evident. A forward offset makes a stale collection render
+	// FRESH, which is the direction that matters and the one nothing saw.
+	if err := st.RecordTimensSkew(name, batch.Begin.Timens-ownTimensOffset()); err != nil {
+		return err
+	}
+
 	// Issued, and then neither committed nor declined: a partial read.
 	// Held and never applied — but recorded, because a collection that
 	// silently never answers is absence wearing health's clothes. The

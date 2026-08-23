@@ -246,3 +246,65 @@ func TestAnAnsweringCollectionStopsCarryingItsDecline(t *testing.T) {
 		t.Fatalf("a commit is an answer and clears the decline: %+v", held)
 	}
 }
+
+// The comparison itself, which the surface tests cannot see because they
+// write the skew directly. This is the defect as it actually was: every
+// collector reported `timens` in begin, the wire parsed it into
+// Begin.Timens, and no tier read it — so the designed handshake had one
+// half. A guard that seeds the store proves the renderer and nothing
+// about whether anything ever compared.
+func TestTheCollatorComparesTheCollectorsClockDomainToItsOwn(t *testing.T) {
+	st := recordStore(t)
+	issued, err := st.IssueGenerations([]string{"nft-rules"}, "sha256:d")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.RecordDeclaration("sha256:d", nftDeclaration); err != nil {
+		t.Fatal(err)
+	}
+	// The collator itself inside a namespace, which is the case the
+	// platform cannot produce on a development machine: off Linux the
+	// real offset is a constant zero, so comparing against zero and
+	// comparing against our own offset are indistinguishable there.
+	const collectorOffset = 3_600_000_000_000
+	const collatorOffset = 1_000_000_000
+	restore := ownTimensOffset
+	ownTimensOffset = func() int64 { return collatorOffset }
+	t.Cleanup(func() { ownTimensOffset = restore })
+	batch := &wire.Batch{
+		Begin: wire.Begin{Batch: "b1", BootID: "boot", Generations: issued,
+			Timens: collectorOffset},
+		Collections: map[string]*wire.CollectionStream{
+			"nft-rules": {
+				Objects: []wire.Object{{Name: "filter", Type: "table",
+					Facts: []byte(`{"Family":"inet"}`), At: 1}},
+				Commit: &wire.Commit{},
+			},
+		},
+	}
+	if err := applyCollection(st, "nft-rules", store.HostNative, batch); err != nil {
+		t.Fatal(err)
+	}
+	states, err := st.Collections()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var held *int64
+	for _, cs := range states {
+		if cs.Name == "nft-rules" {
+			held = cs.TimensSkew
+		}
+	}
+	if held == nil {
+		t.Fatal("the collector reported its clock domain and nothing " +
+			"compared it — the boot ids match across a time namespace, so " +
+			"this is the only signal that the ages are not comparable")
+	}
+	// Against the collator's OWN offset, not against zero: on a host that
+	// is itself in a namespace the difference is what matters, and
+	// asserting the raw reported value would pass for the wrong reason.
+	if want := int64(collectorOffset - collatorOffset); *held != want {
+		t.Fatalf("skew is the collector's offset less the collator's: "+
+			"want %d, held %d", want, *held)
+	}
+}

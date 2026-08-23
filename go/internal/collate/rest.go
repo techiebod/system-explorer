@@ -35,9 +35,14 @@ type collectionView struct {
 	AgeS                *float64 `json:"age_s,omitempty"`
 	CrossBoot           bool     `json:"cross_boot,omitempty"`
 	ClockDomainMismatch bool     `json:"clock_domain_mismatch,omitempty"`
-	ObjectCount         int      `json:"object_count"`
-	Stale               bool     `json:"stale"`
-	StaleReason         *string  `json:"stale_reason"`
+	// The measured skew in nanoseconds when one was the cause, so a
+	// reader can act rather than only despair: it names how far out the
+	// ages would have been. Absent when the mismatch came from the
+	// negative-age route, where no magnitude was ever measured.
+	TimensSkewNs *int64  `json:"timens_skew_ns,omitempty"`
+	ObjectCount  int     `json:"object_count"`
+	Stale        bool    `json:"stale"`
+	StaleReason  *string `json:"stale_reason"`
 	// The collector's own account of the last committed acquisition,
 	// omitted when none was ever reported. Advisory by construction
 	// (DESIGN 19), and the member name says so — a reader must not take
@@ -167,6 +172,17 @@ func NewHandlerWithReverse(st *store.Store, now func() float64, bootID string,
 					// cannot occur — apply always stamps — and is refused
 					// rather than assumed). Stated, never subtracted.
 					v.CrossBoot = true
+				// A measured time-namespace skew: the boot ids MATCH —
+				// CLONE_NEWTIME does not change them — so nothing above
+				// this line can see it, and the age would be wrong by
+				// exactly the skew while looking perfectly ordinary. The
+				// negative-age case below catches only the subset that
+				// happens to be self-evident; a forward offset renders a
+				// stale collection FRESH, which is the direction that
+				// matters. Stated, never corrected (DESIGN 09).
+				case cs.TimensSkew != nil && *cs.TimensSkew != 0:
+					v.ClockDomainMismatch = true
+					v.TimensSkewNs = cs.TimensSkew
 				default:
 					age := now() - *cs.OldestAt
 					if age < 0 {

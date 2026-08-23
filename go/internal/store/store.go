@@ -146,8 +146,15 @@ func migrate(db *sql.DB) error {
 	// indistinguishable in this store from one that committed and
 	// honestly holds nothing. Two of §28's four empty states collapsed
 	// one tier below the renderer.
+	//
+	// `timens_skew` arrived the same day, and is the collator's own
+	// offset subtracted from the collector's. NULL means never compared;
+	// zero means compared and equal, which is the answer that lets a
+	// reader trust an age. They must not render alike, which is why this
+	// is a nullable column rather than an int defaulting to 0.
 	for _, column := range []string{
 		"decline_reason TEXT", "decline_detail TEXT", "declined_at TEXT",
+		"timens_skew INTEGER",
 	} {
 		if _, err := db.Exec(
 			"ALTER TABLE collections ADD COLUMN " + column,
@@ -706,6 +713,12 @@ type CollectionState struct {
 	// "the interface is not on this host" and "the interface holds
 	// nothing" are different answers and must not render alike.
 	Decline *Decline
+	// TimensSkew is the collector's CLOCK_BOOTTIME namespace offset less
+	// the collator's own, in nanoseconds, or nil when the two were never
+	// compared. Non-zero means every age derived from this collection's
+	// `at` is wrong by that much — the boot id is identical on both sides
+	// of a time namespace, so nothing else in the arithmetic notices.
+	TimensSkew *int64
 }
 
 // Collections reports every known collection. OldestAt is MIN(at) over
@@ -717,7 +730,8 @@ func (s *Store) Collections() ([]CollectionState, error) {
 		       (SELECT COUNT(*) FROM objects o WHERE o.collection = c.name),
 		       (SELECT MIN(o.at) FROM objects o WHERE o.collection = c.name),
 		       c.declaration, c.cost_cpu_ms,
-		       c.decline_reason, c.decline_detail, c.declined_at
+		       c.decline_reason, c.decline_detail, c.declined_at,
+		       c.timens_skew
 		FROM collections c ORDER BY c.name`)
 	if err != nil {
 		return nil, err
@@ -728,11 +742,12 @@ func (s *Store) Collections() ([]CollectionState, error) {
 		var cs CollectionState
 		var appliedAt, bootID, staleReason, declaration sql.NullString
 		var dReason, dDetail, dAt sql.NullString
+		var skew sql.NullInt64
 		var stale int
 		var oldest, cost sql.NullFloat64
 		if err := rows.Scan(&cs.Name, &cs.Generation, &appliedAt, &bootID, &stale,
 			&staleReason, &cs.ObjectCount, &oldest, &declaration, &cost,
-			&dReason, &dDetail, &dAt); err != nil {
+			&dReason, &dDetail, &dAt, &skew); err != nil {
 			return nil, err
 		}
 		if cost.Valid {
@@ -752,6 +767,9 @@ func (s *Store) Collections() ([]CollectionState, error) {
 		}
 		if oldest.Valid {
 			cs.OldestAt = &oldest.Float64
+		}
+		if skew.Valid {
+			cs.TimensSkew = &skew.Int64
 		}
 		if dReason.Valid && dReason.String != "" {
 			cs.Decline = &Decline{
@@ -872,6 +890,19 @@ func (s *Store) Unobservables(collection string) ([]Unobserved, error) {
 		out = append(out, u)
 	}
 	return out, rows.Err()
+}
+
+// RecordTimensSkew states the difference between the collector's
+// CLOCK_BOOTTIME namespace offset and the collator's own, in nanoseconds.
+//
+// STATED, NEVER CORRECTED (DESIGN 09): a correction we cannot verify is
+// exactly the confident arithmetic this product exists to refuse. Zero is
+// a reading — "compared, and they agree" — and is why the column is
+// nullable: never-compared must not render as agreeing.
+func (s *Store) RecordTimensSkew(collection string, skew int64) error {
+	_, err := s.db.Exec(
+		`UPDATE collections SET timens_skew = ? WHERE name = ?`, skew, collection)
+	return err
 }
 
 // DeclineFor is what a collection last said about not answering. The

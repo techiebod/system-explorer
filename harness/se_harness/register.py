@@ -916,4 +916,40 @@ REGISTER: tuple[Row, ...] = (
         "carries `at_wall`, which the existing reader drops — a refusal "
         "with no time reads the same whether it happened once at boot or "
         "is still happening."),
+    Row(32, "the time-namespace comparison — `timens` was reported by every "
+        "collector and read by no tier",
+        "built", "R3",
+        lambda: _in_file("go/internal/collate/collate.go",
+                         "batch.Begin.Timens-ownTimensOffset()"),
+        "the probe asks whether the collator performs the comparison at "
+        "all, which is where the gap was: DESIGN 09 says the collator "
+        "compares its own CLOCK_BOOTTIME namespace offset against the "
+        "collector's at handshake and states a mismatch rather than "
+        "correcting for it, and all twenty collectors have reported "
+        "`timens` in `begin` since the field existed. `wire.Begin.Timens` "
+        "was parsed and never read, so the designed defence had one half "
+        "of a handshake. It matters because CLONE_NEWTIME leaves the BOOT "
+        "ID IDENTICAL on both sides — the cross-boot branch cannot fire — "
+        "so the age is wrong by exactly the offset while looking entirely "
+        "ordinary. The only case caught before was a skew large enough to "
+        "drive the age NEGATIVE, which is the subset that is self-evident; "
+        "a forward offset renders a stale collection FRESH, which is the "
+        "direction that matters and the one nothing saw. Found 2026-08-23 "
+        "by the same sweep that found row 31. Built with the skew stated "
+        "and the age withheld, never corrected, and with zero kept "
+        "distinct from never-compared: agreement is a reading and is what "
+        "lets a person trust an age. Four plants: no comparison, skew "
+        "known but the age served anyway, agreement read as a mismatch, "
+        "and comparing against zero instead of the collator's own offset "
+        "— that last one required a seam, because off Linux the real "
+        "offset is a constant zero and the two spellings passed "
+        "identically on a development machine. The probe asks for the "
+        "COMPARISON EXPRESSION, not the writer's name: asking for "
+        "`RecordTimensSkew` passed with the call renamed to "
+        "`RecordTimensSkewX`, the third substring probe in one day to read "
+        "a near-miss as the thing itself. What the probe cannot see: "
+        "whether a RENDERER shows the skew, and whether a collator inside "
+        "a real time namespace reads its own offset correctly — no lab "
+        "guest runs in one, so that half is exercised only through the "
+        "seam."),
 )
