@@ -139,6 +139,22 @@ func Open(path string) (*Store, error) {
 // refuses to invent a hash for those rows rather than sending one the
 // hub would fetch and fail to match.
 func migrate(db *sql.DB) error {
+	// The decline's own words, added 2026-08-23. `stale_reason` held the
+	// enum alone and the DETAIL — the half a person acts on — was parsed
+	// off the wire and discarded; and an `absent` decline stored nothing
+	// at all, so a collection that reported "there are none here" was
+	// indistinguishable in this store from one that committed and
+	// honestly holds nothing. Two of §28's four empty states collapsed
+	// one tier below the renderer.
+	for _, column := range []string{
+		"decline_reason TEXT", "decline_detail TEXT", "declined_at TEXT",
+	} {
+		if _, err := db.Exec(
+			"ALTER TABLE collections ADD COLUMN " + column,
+		); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+			return fmt.Errorf("add collections.%s: %w", column, err)
+		}
+	}
 	// The snapshots table gained `format` on 2026-08-23, when the
 	// diffable object gained `scope`. A store written before it carries
 	// 0, which ChangesSince refuses to compare against — a reading whose
@@ -477,7 +493,15 @@ func (s *Store) ApplyCommitWith(collection, scope string, gen uint64, batch, boo
 	}
 	if _, err := tx.Exec(`
 		UPDATE collections
-		SET applied_gen = ?, applied_at = ?, content_hash = ?, boot_id = ?, stale = 0, stale_reason = NULL
+		SET applied_gen = ?, applied_at = ?, content_hash = ?, boot_id = ?,
+		    stale = 0, stale_reason = NULL,
+		    -- A commit is an answer, so it CLEARS the decline. Without
+		    -- this the columns are write-only: a collection that declined
+		    -- unauthorised once would read as declined for ever, which is
+		    -- the stale-confident-claim failure one tier below the
+		    -- renderer. The absent decline is re-recorded by its caller
+		    -- AFTER this apply, because absent commits too.
+		    decline_reason = NULL, decline_detail = NULL, declined_at = NULL
 		WHERE name = ?`,
 		gen, wallNow(), hash, bootID, collection); err != nil {
 		return "", err
@@ -503,10 +527,50 @@ func record(tx *sql.Tx, collection, batch, reason, detail string) error {
 // stand and are served marked stale, because nothing was established
 // (acceptance item 2). It touches neither objects nor generation.
 func (s *Store) MarkStale(collection, reason string) error {
+	return s.MarkStaleWith(collection, reason, "")
+}
+
+// MarkStaleWith records a non-absent decline: prior objects stand, marked
+// stale, WITH the collector's own words for why.
+//
+// The detail was parsed off the wire and discarded until 2026-08-23. A
+// reason says which of four kinds of not-answering this is; the detail
+// says what to do about it — "present, may not read" against "the
+// ruleset is readable only to root on this host" — and it travels to a
+// hub and out over MCP.
+func (s *Store) MarkStaleWith(collection, reason, detail string) error {
 	_, err := s.db.Exec(`
-		UPDATE collections SET stale = 1, stale_reason = ? WHERE name = ?`,
-		reason, collection)
+		UPDATE collections
+		SET stale = 1, stale_reason = ?, decline_reason = ?, decline_detail = ?,
+		    declined_at = ?
+		WHERE name = ?`,
+		reason, reason, detail, wallNow(), collection)
 	return err
+}
+
+// RecordAbsent notes the one decline that COMMITS: `absent` is a
+// successful reading — the interface is not on this host — so the
+// collection applies empty and retires prior objects, and is NOT stale.
+//
+// It stored nothing at all until 2026-08-23, which made an
+// absent-declined collection indistinguishable from one that committed
+// and honestly holds nothing. Those are different answers: "there is no
+// ZFS here" and "there are no pools" are the difference between a
+// question that does not apply and a question with an empty answer.
+func (s *Store) RecordAbsent(collection, detail string) error {
+	_, err := s.db.Exec(`
+		UPDATE collections
+		SET decline_reason = 'absent', decline_detail = ?, declined_at = ?
+		WHERE name = ?`, detail, wallNow(), collection)
+	return err
+}
+
+// Decline is what a collection last said about not answering, or the
+// zero value where it answered.
+type Decline struct {
+	Reason string
+	Detail string
+	At     string
 }
 
 // RecordRejection notes a batch or collection the authority refused to
@@ -634,6 +698,14 @@ type CollectionState struct {
 	// (DESIGN 19), and nil when no commit ever reported one: "never
 	// reported" and "cost zero" are different readings.
 	CostCPUMs *float64
+	// Decline is what this collection last said about not answering, or
+	// nil when it answered. It carries the DETAIL, which is the half a
+	// person acts on: the reason says which of four kinds of
+	// not-answering this is, the detail says what to do about it. An
+	// `absent` decline appears here despite having committed, because
+	// "the interface is not on this host" and "the interface holds
+	// nothing" are different answers and must not render alike.
+	Decline *Decline
 }
 
 // Collections reports every known collection. OldestAt is MIN(at) over
@@ -644,7 +716,8 @@ func (s *Store) Collections() ([]CollectionState, error) {
 		SELECT c.name, c.applied_gen, c.applied_at, c.boot_id, c.stale, c.stale_reason,
 		       (SELECT COUNT(*) FROM objects o WHERE o.collection = c.name),
 		       (SELECT MIN(o.at) FROM objects o WHERE o.collection = c.name),
-		       c.declaration, c.cost_cpu_ms
+		       c.declaration, c.cost_cpu_ms,
+		       c.decline_reason, c.decline_detail, c.declined_at
 		FROM collections c ORDER BY c.name`)
 	if err != nil {
 		return nil, err
@@ -654,10 +727,12 @@ func (s *Store) Collections() ([]CollectionState, error) {
 	for rows.Next() {
 		var cs CollectionState
 		var appliedAt, bootID, staleReason, declaration sql.NullString
+		var dReason, dDetail, dAt sql.NullString
 		var stale int
 		var oldest, cost sql.NullFloat64
 		if err := rows.Scan(&cs.Name, &cs.Generation, &appliedAt, &bootID, &stale,
-			&staleReason, &cs.ObjectCount, &oldest, &declaration, &cost); err != nil {
+			&staleReason, &cs.ObjectCount, &oldest, &declaration, &cost,
+			&dReason, &dDetail, &dAt); err != nil {
 			return nil, err
 		}
 		if cost.Valid {
@@ -677,6 +752,10 @@ func (s *Store) Collections() ([]CollectionState, error) {
 		}
 		if oldest.Valid {
 			cs.OldestAt = &oldest.Float64
+		}
+		if dReason.Valid && dReason.String != "" {
+			cs.Decline = &Decline{
+				Reason: dReason.String, Detail: dDetail.String, At: dAt.String}
 		}
 		cs.Stale = stale != 0
 		out = append(out, cs)
@@ -793,6 +872,24 @@ func (s *Store) Unobservables(collection string) ([]Unobserved, error) {
 		out = append(out, u)
 	}
 	return out, rows.Err()
+}
+
+// DeclineFor is what a collection last said about not answering. The
+// zero value means it answered.
+func (s *Store) DeclineFor(collection string) (Decline, error) {
+	var d Decline
+	var reason, detail, at sql.NullString
+	err := s.db.QueryRow(`
+		SELECT decline_reason, decline_detail, declined_at FROM collections
+		WHERE name = ?`, collection).Scan(&reason, &detail, &at)
+	if err == sql.ErrNoRows {
+		return d, nil
+	}
+	if err != nil {
+		return d, err
+	}
+	d.Reason, d.Detail, d.At = reason.String, detail.String, at.String
+	return d, nil
 }
 
 // HasCollection reports whether the authority knows the name at all —

@@ -508,6 +508,9 @@ Every known miss, each owned or ruled. A row neither built, owned nor ruled is a
 | 25 | §27/§28 surface + hide-group invariants carried from app.js | reopened gate 5's table | R4 |
 | 26 | `answer`-list divergences vs the argued column presets (3 same / 14 differ / 14 absent) | each ruled or owed in `ANSWER_RULINGS`, guarded both directions | done at R2 |
 | 27 | `system/identity` never compared (gate 3's "no second implementation" claim was false) | the comparator drives it since R2; its replay seam owed | R2 done / R3b |
+| 28 | the system adapter's replay seam — four collections with no fixture | landed at R3b | R3b |
+| 29 | the findings surface — `get_findings` has no port tool at either tier | owed: the lifecycle landed at R3e and its surface did not | R4 |
+| 30 | decline reasons carried, cleared and served | landed 2026-08-23: the detail reaches the store and the wire, `absent` is recorded though it commits, and a commit clears the decline | R3 |
 
 #### R1 — structure on the wire (small) — **GATE R1 OPEN, 2026-08-21**
 
@@ -545,13 +548,17 @@ The 29-row register above is encoded with a probe wherever the tree can attest a
 
   Twenty-three defects planted and seen red across the three landings, in both directions where a seam has two. **Two were test defects rather than code defects**, and both were the same shape — a guard asserting a property it had never tested: the acknowledgement ordering case stayed green under `ORDER BY at` because equal stamps tie-break by rowid anyway, and two change-tracking cases were diffing a collection nothing had changed because they re-used a generation the store refuses.
 
-  Not done, and stated: no daemon binds the write listener or wires the lifecycle store path; no scheduler calls `PruneSnapshots`; and the change diff does not read the absent list, because `store.ObjectRow` serves no reader for that column — so a fact moving between value and absent is invisible, which is the change most worth seeing.
+  Not done, and stated: no daemon binds the write listener or wires the lifecycle store path, and no scheduler calls `PruneSnapshots`.
+
+  **Three producer gaps were found behind that last line and all three are closed.** Each was the same shape and it is worth naming, because the shape is not "a feature is missing" — it is **a tier writing something no tier reads**, which passes every test the writer has and is invisible from the surface. The absent list had been written and hashed since the store existed and served no reader, so a fact moving between value and absent — the change most worth seeing — was invisible to the diff. The per-fact unobservables were validated against the declaration and then dropped on the floor, so a fact the collector could not read rendered exactly like a fact it never had. And the decline stored the enum word while `wire.Decline.Detail` was parsed and discarded, with the `absent` decline storing nothing at all: absent COMMITS, so it is not stale and holds no objects, and its row was byte-identical to a collection that answered and honestly holds nothing. That is two of §28's four empty states collapsed **one tier below the renderer**, where no amount of R4 care could recover the difference.
+
+  The third gap needed a third part nobody asked for: **a commit clears the decline**, because the columns are otherwise write-only and a collection that declined `unauthorised` once reads as declined for ever — the stale-confident-claim failure, in the store. Five plants seen red: detail discarded, absent silent, commit not clearing, stored-but-not-served, and served-on-every-row, that last one because a decline member on an answering row would cost the member its meaning. **A sixth plant stayed green and was the register's own probe**: it asked for the Go type name `declineView`, and renaming it to `declineViewX` left the probe passing, because a substring test cannot see a rename that only appends. Repointed at the JSON member, which is what actually reaches a reader. That is the day's lesson recurring one more time — the guard was more dangerous than the code — and it is why the probe is proven to discriminate rather than merely to pass.
 
 **Gate R3 (owner):** the inverted comparator is clean over the whole reference surface, and the register shows no unowned row.
 
 > **The comparator ran for the first time on 2026-08-23, and clause 1 does not hold**
 >
-> Clause 2 holds: 29 rows, every built row's probe passing, every owed row owned, and the two lists that used to sit outside the census joined to it.
+> Clause 2 holds: 30 rows, every built row's probe passing, every owed row owned, and the two lists that used to sit outside the census joined to it.
 >
 > Clause 1 does not, and the reason is substantive. On a real systemd host the run is **17 collectors at parity, 2 the reference cannot run there** (`network/port-exposure`, and `plex/requests` for want of a seerr) **and one differing: `system`.**
 >

@@ -43,6 +43,19 @@ type collectionView struct {
 	// (DESIGN 19), and the member name says so — a reader must not take
 	// a collector's self-report for the collator's accounting.
 	AdvisoryCostCPUMs *float64 `json:"advisory_cost_cpu_ms,omitempty"`
+	// What this collection last said about not answering, omitted when
+	// it answered. Distinct from stale_reason, which is only ever set on
+	// the three declines that do NOT commit: an `absent` collection
+	// commits, is not stale, and holds no objects — so without this
+	// member a reader cannot tell "the interface is not on this host"
+	// from "the interface is here and holds nothing".
+	Decline *declineView `json:"decline,omitempty"`
+}
+
+type declineView struct {
+	Reason string `json:"reason"`
+	Detail string `json:"detail,omitempty"`
+	At     string `json:"at,omitempty"`
 }
 
 // objectView is one applied object as the API serves it. Instance is a
@@ -140,6 +153,10 @@ func NewHandlerWithReverse(st *store.Store, now func() float64, bootID string,
 				Stale:             cs.Stale,
 				StaleReason:       cs.StaleReason,
 				AdvisoryCostCPUMs: cs.CostCPUMs,
+			}
+			if cs.Decline != nil {
+				v.Decline = &declineView{Reason: cs.Decline.Reason,
+					Detail: cs.Decline.Detail, At: cs.Decline.At}
 			}
 			if cs.OldestAt != nil {
 				switch {

@@ -812,3 +812,52 @@ func TestReverseForKeysCollectionsAndLookupsAlike(t *testing.T) {
 		}
 	}
 }
+
+// The four empty states, kept apart at the surface a person and MCP
+// both read. `absent` COMMITS — it is a successful reading — so it is
+// not stale, holds no objects, and its row is byte-identical to an
+// honestly-empty collection's unless the decline is served. "There is
+// no ZFS on this host" and "there are no pools" are different answers.
+func TestAbsentIsDistinguishableFromHonestlyEmpty(t *testing.T) {
+	st := seeded(t)
+	if err := st.RecordAbsent("identity", "no nftables on this host"); err != nil {
+		t.Fatal(err)
+	}
+	rr := get(t, NewHandler(st, func() float64 { return 26.0 }, fakeBootID),
+		"/v1/collections")
+	var rows []map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &rows); err != nil {
+		t.Fatal(err)
+	}
+	row := rows[0]
+	if row["stale"] != false {
+		t.Fatal("absent is a successful reading, never stale — marking it " +
+			"stale makes a question that does not apply look like one that failed")
+	}
+	decline, ok := row["decline"].(map[string]any)
+	if !ok {
+		t.Fatalf("without the decline this row is byte-identical to a "+
+			"collection that answered and holds nothing: %+v", row)
+	}
+	if decline["reason"] != "absent" {
+		t.Fatalf("%+v", decline)
+	}
+	if decline["detail"] != "no nftables on this host" {
+		t.Fatalf("the detail is the half a person acts on, and it is what "+
+			"travels out over MCP: %+v", decline)
+	}
+}
+
+// A collection that answered serves NO decline member. An empty object
+// on every row would make "declined" the default reading and cost the
+// member its meaning.
+func TestAnAnsweringCollectionServesNoDeclineMember(t *testing.T) {
+	rr := get(t, seededHandler(t), "/v1/collections")
+	var rows []map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &rows); err != nil {
+		t.Fatal(err)
+	}
+	if _, present := rows[0]["decline"]; present {
+		t.Fatalf("an answer is not a decline: %+v", rows[0])
+	}
+}

@@ -852,4 +852,35 @@ REGISTER: tuple[Row, ...] = (
         "a page as much as a route. What the probe cannot see: whether the "
         "surface carries the reset marker post-cut findings must display, "
         "which is acceptance item 12's."),
+    Row(30, "decline reasons carried, cleared and served — the four empty "
+        "states kept apart below the renderer",
+        "built", "R3",
+        lambda: (_in_file("go/internal/store/store.go", "decline_reason")
+                 and _in_file("go/internal/collate/rest.go",
+                              'json:"decline,omitempty"')),
+        "the probe asks whether the store holds the decline AND the read "
+        "surface serves it, because this gap was two halves and closing "
+        "either alone leaves the other invisible. `MarkStale` stored the "
+        "enum word and threw away `wire.Decline.Detail` — the reason says "
+        "which of four kinds of not-answering this is, the detail says what "
+        "to do about it — and an `absent` decline stored nothing at all. "
+        "Absent COMMITS, so it is not stale and holds no objects, which "
+        "made its row byte-identical to a collection that answered "
+        "honestly holding nothing: two of DESIGN 28's four empty states "
+        "collapsed one tier below the renderer, where nothing downstream "
+        "could recover the difference. Built 2026-08-23 with the clearing "
+        "rule as the third part — a commit is an answer, so it nulls the "
+        "columns, or a collection that declined once reads as declined for "
+        "ever. Five plants proved it: detail discarded, absent silent, "
+        "commit not clearing, stored-but-not-served, and served-on-every-"
+        "row, that last one because a decline member on an answering row "
+        "would cost the member its meaning. What the probe cannot see: "
+        "The serving half is probed by the JSON MEMBER NAME, not the Go "
+        "type: the first spelling asked for `declineView` and a rename to "
+        "`declineViewX` left it green, because a substring test cannot see "
+        "a rename that only appends. What reaches a reader is the wire "
+        "member, so that is the subject. Nor can it see "
+        "whether the RENDERER distinguishes the states the store now "
+        "separates — that is R4's, and the probe reads a file, not a "
+        "page."),
 )

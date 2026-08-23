@@ -242,12 +242,24 @@ func applyCollection(st *store.Store, name, scope string, batch *wire.Batch) err
 	// objects stand and are served marked stale with the reason. The
 	// wire has already proven such a collection carries no commit.
 	if cs.Decline != nil && cs.Decline.Reason != "absent" {
-		return st.MarkStale(name, cs.Decline.Reason)
+		// WITH the detail. It was parsed off the wire and discarded, so a
+		// collection said which of four kinds of not-answering this was
+		// and never said what to do about it.
+		return st.MarkStaleWith(name, cs.Decline.Reason, cs.Decline.Detail)
 	}
 
 	// Committed — including absent's zero-object commit, which applies
 	// EMPTY: prior objects retired, collection not stale, because "there
 	// are none" is a successful reading of the interface.
+	//
+	// The absent decline is RECORDED even though it commits, and recorded
+	// AFTER the apply below, because the apply clears the decline columns.
+	// It stored
+	// nothing at all until 2026-08-23, so a collection reporting "the
+	// interface is not on this host" was indistinguishable in the store
+	// from one that answered and holds nothing — and "there is no ZFS
+	// here" against "there are no pools" is the difference between a
+	// question that does not apply and a question with an empty answer.
 	if cs.Commit != nil && cs.Commit.CPUMs >= 0 {
 		// The commit's own cost account survives to the read surface
 		// (register row 16). Recorded before apply so a failed apply does
@@ -285,6 +297,11 @@ func applyCollection(st *store.Store, name, scope string, batch *wire.Batch) err
 		batch.Begin.BootID, objects, unobserved)
 	if err != nil || outcome != store.OutcomeApplied {
 		return err
+	}
+	if cs.Decline != nil && cs.Decline.Reason == "absent" {
+		if err := st.RecordAbsent(name, cs.Decline.Detail); err != nil {
+			return err
+		}
 	}
 	return recordSnapshot(st, name, scope, gen)
 }
