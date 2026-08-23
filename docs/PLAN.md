@@ -547,11 +547,17 @@ The 27-row register above is encoded with a probe wherever the tree can attest a
 
   Not done, and stated: no daemon binds the write listener or wires the lifecycle store path; no scheduler calls `PruneSnapshots`; and the change diff does not read the absent list, because `store.ObjectRow` serves no reader for that column — so a fact moving between value and absent is invisible, which is the change most worth seeing.
 
-**Gate R3 (owner):** the inverted comparator is clean over the whole reference surface, the register shows no unowned row, and the owner has seen the three acceptance items pass on the lab.
+**Gate R3 (owner):** the inverted comparator is clean over the whole reference surface, and the register shows no unowned row.
+
+> **The three acceptance items moved to gate R4, ruled 2026-08-23.** This line asked for them here, and they cannot be answered here: **every one of them names a page.** "One object, one page, every name on it." "The units page renders its slice tree." "Indentation disabled under sort or filter." Those are §27/§28 surfaces, which is R4's work — so until a UI exists there is nothing for the owner to look at, and an item judged by looking cannot be judged by reading a test that says the edges were minted.
+>
+> The material underneath them is built and is what R3 actually owes: `member-of` and `enslaved-to` are declared and asserted, the zpool-device-to-disk join is minted and keyed, and the identity families ride the object. What is missing is the rendering, and rendering is the gate they now sit at.
+>
+> **And two of them may want the estate rather than the lab**, which §36's third open question already predicted: a WWN identity chain and a `zpool status` device joining to a hardware disk want real hardware, and lab guests cannot produce a degraded pool or a twelve-bay enclosure. Where each is judged is settled at R4 with the pages in front of the owner, not guessed at now.
 
 #### R4 — the surface implements its own specification (medium)
 
-§27/§28 as written — columns from `answer`, widgets from declarations, the five render states, trees, facets, evidence one step from any fact, the four empty states, the absent-severity mark — plus the hide-group mechanism carried from `app.js` with its four invariants. One decision taken here with the owner: interactivity (filter, keyboard) on server-rendered pages. **Gate R4 (owner):** side-by-side with the shipping UI on the same guest, and the owner judges it a replacement rather than a summary of one.
+§27/§28 as written — columns from `answer`, widgets from declarations, the five render states, trees, facets, evidence one step from any fact, the four empty states, the absent-severity mark — plus the hide-group mechanism carried from `app.js` with its four invariants. One decision taken here with the owner: interactivity (filter, keyboard) on server-rendered pages. **Gate R4 (owner):** side-by-side with the shipping UI on the same guest, the owner judges it a replacement rather than a summary of one, **and the three acceptance items above are judged here** — identity chain, trees from relations, cross-subsystem matching — because each names a page and this is the gate where pages exist.
 
 #### R5 — judgement, deployment, and the number the rewrite was for (medium)
 
