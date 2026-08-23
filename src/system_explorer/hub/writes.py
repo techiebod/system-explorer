@@ -157,7 +157,18 @@ def deployed_actors() -> Actors:
 
 def handler_class(log: Log,
                   now_of: Callable[[], str],
-                  actors: Actors | None = None) -> type[BaseHTTPRequestHandler]:
+                  actors: Actors | None = None,
+                  derived_of: Callable[[], list[str]] | None = None) -> type[BaseHTTPRequestHandler]:
+    """`derived_of` returns the findings the estate currently holds.
+
+    A transition attaches to a finding the estate has actually derived,
+    never to a speculative identity: an acknowledgement filed against one
+    nobody has observed would sit in the log waiting to silence that
+    condition's first occurrence. The superseded implementation held this
+    by making its INSERT conditional on the finding existing; passing
+    None here skips the check, which is a test's shape and never a
+    deployment's.
+    """
     identities = actors if actors is not None else deployed_actors()
 
     class Handler(BaseHTTPRequestHandler):
@@ -323,7 +334,8 @@ def handler_class(log: Log,
                 at=now_of(),
                 note=str(document.get("note", "")))
             try:
-                log.append(transition)
+                log.append(transition,
+                           derived=derived_of() if derived_of else None)
             except TransitionRefused as refusal:
                 self._send(422, {"error": refusal.reason, "detail": refusal.detail})
                 return
@@ -361,7 +373,9 @@ def handler_class(log: Log,
 
 
 def serve(bind: tuple[str, int], log: Log, now_of: Callable[[], str],
-          actors: Actors | None = None) -> ThreadingHTTPServer:
+          actors: Actors | None = None,
+          derived_of: Callable[[], list[str]] | None = None) -> ThreadingHTTPServer:
     """A listener of its own. The caller supplies the bind, and that is
     the point: nothing here defaults to the read surface's."""
-    return ThreadingHTTPServer(bind, handler_class(log, now_of, actors))
+    return ThreadingHTTPServer(bind,
+                               handler_class(log, now_of, actors, derived_of))

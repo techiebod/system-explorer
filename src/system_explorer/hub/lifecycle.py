@@ -29,7 +29,7 @@ import sqlite3
 from contextlib import closing
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Iterable, Mapping
+from typing import Any, Iterable, Mapping
 
 from .resolution import Contributor, Judgement, Verdict, judge
 
@@ -118,6 +118,14 @@ class Registry:
 
     reset_at: str
     store: Path | str | None = None
+    #: The transition log, where one is kept. A resolution is recorded
+    #: there because an acknowledgement's whole meaning depends on the
+    #: finding it acted on still existing: the key carries no episode, so
+    #: the same condition clearing and recurring renders the same string,
+    #: and a log that never heard about the resolution would hand the new
+    #: occurrence somebody else's acknowledgement. Optional, because a
+    #: registry with no write plane is a complete registry.
+    transitions: Any = None
     _findings: dict[str, Finding] = field(default_factory=dict, init=False)
 
     def __post_init__(self) -> None:
@@ -192,7 +200,13 @@ class Registry:
         for rendered_key, judgement in verdicts.items():
             existing = self._findings.get(rendered_key)
             if judgement.verdict is Verdict.RESOLVED:
-                # Observed resolution closes it. Nothing else does.
+                # Observed resolution closes it. Nothing else does — and
+                # the transition log is TOLD, because an acknowledgement
+                # that outlived its finding would pre-silence the next
+                # occurrence of the same identity, attributed to somebody
+                # who never saw it.
+                if existing is not None and self.transitions is not None:
+                    self.transitions.observe_resolution(rendered_key, now)
                 self._findings.pop(rendered_key, None)
                 continue
             if existing is None:

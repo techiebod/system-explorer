@@ -24,6 +24,21 @@ transition of its own, so the record still shows that somebody
 acknowledged and then changed their mind. A reversal that deleted its
 target would make the log agree with a history that did not happen.
 
+**An acknowledgement dies with the finding it acted on.** A finding's
+key is scope/instance/object/opinion and carries no episode, so the same
+condition clearing and recurring six weeks later renders the same string
+— and a log keyed on that string alone would hand the new occurrence an
+acknowledgement made by somebody who never saw it, with a stale note
+telling the next person it is handled. That is suppression created by
+the acknowledgement plane with nobody acknowledging anything, which is
+the failure this whole product is organised against and the ruling's own
+clause arriving inverted. So the registry records the resolution it
+OBSERVED, `fold` treats it as ending the episode, and the history still
+shows every transition. The superseded implementation guarded the same
+hazard by making its INSERT conditional on the finding existing
+(findings.py `append_transition`, whose docstring names it exactly); the
+rewrite dropped the guard and an audit found it the day after.
+
 **And the property the ruling exists to protect: acknowledgement changes
 what is SHOUTED, not what is known.** Nothing here removes a finding from
 anything. `fold` reports an acknowledgement state to sit beside a finding;
@@ -52,6 +67,15 @@ from typing import Iterable, Mapping
 ACKNOWLEDGE = "acknowledge"
 UNACKNOWLEDGE = "unacknowledge"
 ACTIONS = (ACKNOWLEDGE, UNACKNOWLEDGE)
+
+#: Recorded when the registry OBSERVES a finding resolve. Deliberately
+#: not in ACTIONS: an operator may not declare it, and the write listener
+#: validates against ACTIONS, so this action is unreachable from the
+#: route. Recording an observation is not declaring one — the registry
+#: saw a source that could look stop deriving the finding, and the log
+#: keeps that fact because the acknowledgement's whole meaning depends on
+#: it.
+RESOLVED = "resolved"
 
 
 class TransitionRefused(Exception):
@@ -164,13 +188,30 @@ class Log:
         db.execute("PRAGMA journal_mode=WAL")
         return db
 
-    def append(self, transition: Transition) -> Transition:
+    def append(self, transition: Transition,
+               derived: Iterable[str] | None = None) -> Transition:
         """Record one transition, or refuse it whole.
 
         Validation is here rather than at the listener because this is
         the party that stores: a rule enforced only at one caller is a
         rule the second caller does not have.
+
+        `derived` is the set of findings the estate currently holds. A
+        transition attaches to a finding the estate has actually derived,
+        never to a speculative identity — otherwise an acknowledgement
+        can be filed against a condition nobody has ever seen and sit
+        waiting to silence its first occurrence. Passing None skips the
+        check and is for callers that have no registry to consult; the
+        write listener always passes one.
         """
+        if transition.action == RESOLVED:
+            raise TransitionRefused(
+                "not-declarable",
+                "resolution is OBSERVED, never declared: this action is "
+                "recorded by the registry when a source that could look "
+                "stopped deriving the finding, and a caller that could "
+                "declare it would be the one write that makes the product lie "
+                "about the system rather than about its own noise")
         if transition.action not in ACTIONS:
             raise TransitionRefused(
                 "unknown-action",
@@ -189,6 +230,17 @@ class Log:
         if not transition.at.strip():
             raise TransitionRefused(
                 "unstamped", "a transition carries the moment it was made")
+        if derived is not None and transition.finding not in set(derived):
+            raise TransitionRefused(
+                "no-such-finding",
+                f"no open finding is rendered {transition.finding!r}; a "
+                "transition attaches to a finding the estate has derived, "
+                "never to an identity nobody has observed — an "
+                "acknowledgement filed against one would sit waiting to "
+                "silence its first occurrence")
+        return self._store(transition)
+
+    def _store(self, transition: Transition) -> Transition:
         if self._memory is not None:
             self._memory.append(transition)
             return transition
@@ -219,6 +271,19 @@ class Log:
                 "ORDER BY seq").fetchall()
         return tuple(Transition(*row) for row in rows)
 
+    def observe_resolution(self, finding: str, at: str) -> None:
+        """Record that the registry saw this finding resolve.
+
+        Appended rather than deleted, so the history still shows that
+        somebody acknowledged it and that it later cleared — and so the
+        store stays append-only, which is what makes it the record it
+        claims to be.
+        """
+        self._store(Transition(finding=finding, action=RESOLVED,
+                               actor="the registry", at=at,
+                               note="observed: no source that could look is "
+                                    "deriving this finding any more"))
+
     def fold(self, findings: Iterable[str]) -> dict[str, Acknowledgement]:
         """The acknowledgement state of each named finding.
 
@@ -238,6 +303,14 @@ class Log:
                 folded[key] = Acknowledgement(acknowledged=False)
                 continue
             last = history[-1]
+            if last.action == RESOLVED:
+                # The episode ended. A later recurrence renders the same
+                # key and must arrive unacknowledged, carrying nobody's
+                # name and nobody's note: it is a new condition, and the
+                # person who acknowledged the old one never saw it.
+                folded[key] = Acknowledgement(
+                    acknowledged=False, transitions=len(history))
+                continue
             folded[key] = Acknowledgement(
                 acknowledged=last.action == ACKNOWLEDGE,
                 by=last.actor,

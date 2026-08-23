@@ -446,7 +446,7 @@ def test_a_store_failure_answers_rather_than_dropping_the_connection(tmp_path) -
     partial failure is how the log stops being the record it claims to
     be."""
     class Broken(Log):
-        def append(self, transition):
+        def append(self, transition, derived=None):
             raise OSError("the store is gone")
 
     server = _listener(Broken())
@@ -489,3 +489,111 @@ def test_an_unreadable_credential_is_not_a_hub_that_accepts_no_writes(tmp_path) 
     assert answers["never"][1]["error"] == "no-actors-configured"
     assert answers["unreadable"][1] != answers["never"][1], (
         "a deployment fault and a deliberate posture need different fixes")
+
+
+def test_an_acknowledgement_does_not_outlive_its_findings_resolution() -> None:
+    """A second disk degrading the same pool six weeks later is a NEW
+    condition and must not arrive already acknowledged.
+
+    A finding's key is scope/instance/object/opinion and carries no
+    episode, so a condition that clears and returns renders the same
+    string. A log keyed on that string alone hands the new occurrence an
+    acknowledgement made by somebody who never saw it, with a stale note
+    telling the next person it is handled — suppression created by the
+    acknowledgement plane with nobody acknowledging anything, and the
+    ruling's own clause ("changes what is shouted, not what is known")
+    arriving inverted.
+
+    The superseded implementation guarded the same hazard deliberately:
+    findings.py's append_transition makes its INSERT conditional on the
+    finding existing, and its docstring names the reason — "so a
+    concurrent retention prune between them cannot leave an orphaned
+    transition waiting to pre-acknowledge the identity's next
+    recurrence". The rewrite dropped it; an audit found it the next day.
+    """
+    from system_explorer.hub.lifecycle import Key, Registry
+    from system_explorer.hub.resolution import Contributor
+
+    log = Log()
+    key = Key(scope="storage-1", object_id="pool:tank", opinion="zfs-degraded")
+    rendered = key.rendered()
+    registry = Registry(reset_at="2026-08-01T00:00:00Z", transitions=log)
+
+    class Estate:
+        declared = ("storage-1",)
+
+        def reach(self):
+            return {}
+
+    # Derived, then acknowledged by somebody who looked at it.
+    contributor = Contributor(host="storage-1", collection="pools", generation=1)
+    registry.fold("2026-08-20T10:00:00Z", {key: [contributor]}, _estate())
+    log.append(Transition(rendered, ACKNOWLEDGE, "ada", "2026-08-20T10:05:00Z",
+                          "known, disk on order"),
+               derived=[rendered])
+    assert log.fold([rendered])[rendered].acknowledged is True
+
+    # A later generation stops deriving it: observed resolution.
+    registry.fold("2026-08-21T10:00:00Z", {}, _estate(generation=2))
+    assert rendered not in registry.open()
+
+    # Six weeks later the same identity is derived again. It is a NEW
+    # condition, and nobody has acknowledged it.
+    registry.fold("2026-09-30T10:00:00Z",
+                  {key: [Contributor(host="storage-1", collection="pools",
+                                     generation=3)]},
+                  _estate(generation=3))
+    again = log.fold([rendered])[rendered]
+    assert again.acknowledged is False, (
+        "a new condition must not arrive already acknowledged, attributed to "
+        "somebody who never saw it")
+    assert again.by is None and again.note == "", (
+        f"nobody's name and nobody's note ride onto a new condition: {again}")
+    # And the history is intact: appended, never forgotten.
+    actions = [t.action for t in log.history(rendered)]
+    assert ACKNOWLEDGE in actions and "resolved" in actions, actions
+
+
+def test_a_transition_cannot_be_filed_against_a_finding_nobody_derived() -> None:
+    """Otherwise an acknowledgement sits in the log waiting to silence
+    that condition's first occurrence."""
+    log = Log()
+    with pytest.raises(TransitionRefused) as refusal:
+        log.append(Transition("storage-9/pool:never/zfs-degraded", ACKNOWLEDGE,
+                              "ada", at(1)),
+                   derived=["storage-1/pool:tank/zfs-degraded"])
+    assert refusal.value.reason == "no-such-finding"
+    assert log.all() == ()
+
+
+def test_resolution_is_observed_and_cannot_be_declared() -> None:
+    """The registry records what it saw. A caller that could declare it
+    would be the one write that makes the product lie about the system
+    rather than about its own noise."""
+    log = Log()
+    with pytest.raises(TransitionRefused) as refusal:
+        log.append(Transition(FINDING, "resolved", "ada", at(1)))
+    assert refusal.value.reason == "not-declarable"
+
+    server = _listener(log)
+    try:
+        code, body = _post(f"http://127.0.0.1:{server.server_port}",
+                           {"finding": FINDING, "action": "resolved"},
+                           token="tok-ada")
+        assert code == 422 and body["error"] == "not-declarable", body
+    finally:
+        server.shutdown()
+
+
+def _estate(generation: int = 1):
+    from system_explorer.hub.checkpoint import (
+        CollectionSnapshot, Estate, HostSnapshot)
+    estate = Estate(declared=("storage-1",))
+    estate.promote(HostSnapshot(
+        host="storage-1", checkpoint="cp",
+        boot_id="5e000000-0000-4000-8000-000000000001",
+        collections={"pools": CollectionSnapshot(
+            name="pools", generation=generation, freshness="current",
+            stale_reason=None, objects=())},
+        declarations=("sha256:x",), history_gap=None))
+    return estate
