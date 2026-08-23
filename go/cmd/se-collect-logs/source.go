@@ -42,6 +42,13 @@ type source interface {
 	// journal is one page of entries, newest first. Its errors carry the
 	// decline shape.
 	journal() ([]*value, error)
+	// entry is ONE record by cursor — the object and evidence verbs'
+	// acquisition, the reference's `journalctl --cursor <c> -n 1`. found is
+	// the machine's own no ("this cursor is not in my journal"), which only
+	// the live path can say: a capture stages one page, so under replay a
+	// cursor outside it is errUncaptured — a broken request, never a
+	// statement about a machine nobody asked.
+	entry(cursor string) (record *value, found bool, err error)
 	// stamp is `at` for the i-th emitted object. One journalctl read produces
 	// the whole page, so the live reading is taken once before it and shared:
 	// an acquisition stamped per row at completion would report the last entry
@@ -212,6 +219,35 @@ func (s *liveSource) journal() ([]*value, error) {
 	return decodeLines(out)
 }
 
+func (s *liveSource) entry(cursor string) (*value, bool, error) {
+	if _, err := exec.LookPath("journalctl"); err != nil {
+		return nil, false, noJournal()
+	}
+	at, err := bootClock()
+	if err != nil {
+		return nil, false, err
+	}
+	s.at = at
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	// The cursor is one argv element, after its flag: a lookup input never
+	// reaches a shell and never selects which command runs (DESIGN 18).
+	argv := append([]string{"-o", "json", "--no-pager", "-q"},
+		"--cursor", cursor, "-n", "1")
+	out, err := exec.CommandContext(ctx, "journalctl", argv...).Output()
+	if err != nil {
+		return nil, false, &declined{"unavailable", "journalctl is installed but did not answer"}
+	}
+	records, err := decodeLines(out)
+	if err != nil {
+		return nil, false, err
+	}
+	if len(records) == 0 {
+		return nil, false, nil
+	}
+	return records[0], true, nil
+}
+
 // ── replay ──────────────────────────────────────────────────────────────
 
 // A replay has no boot, so the fixed v4-shaped id — "5e" up front so no reader
@@ -313,6 +349,22 @@ func slugArgument(args []string) string {
 // that is present and unreadable is a broken capture rather than a statement
 // about a machine, so it fails the batch instead of declining, and it must
 // never fall back to the live journal of the workstation replaying the corpus.
+func (r replaySource) entry(cursor string) (*value, bool, error) {
+	records, err := r.journal()
+	if err != nil {
+		return nil, false, err
+	}
+	for _, record := range records {
+		if c := record.get(cursorField); c.isString() && c.text == cursor {
+			return record, true, nil
+		}
+	}
+	// The staged page is a WINDOW, not the whole journal: a cursor outside
+	// it was never captured, and guessing "the machine did not have it"
+	// would turn a broken capture into a confident statement.
+	return nil, false, fmt.Errorf("cursor %q %w", cursor, errUncaptured)
+}
+
 func (r replaySource) journal() ([]*value, error) {
 	raw, err := os.ReadFile(filepath.Join(r.dir, replayPayload()))
 	if errors.Is(err, fs.ErrNotExist) {

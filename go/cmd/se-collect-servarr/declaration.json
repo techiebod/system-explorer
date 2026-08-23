@@ -17,6 +17,16 @@
   "collections": [
     {
       "name": "apps",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "which media managers are configured here, and how does each one stand?",
       "prefix": "app",
       "freshness": "60s",
@@ -129,6 +139,16 @@
     },
     {
       "name": "health",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what does each app say is wrong with itself?",
       "prefix": "health",
       "freshness": "60s",
@@ -186,6 +206,16 @@
     },
     {
       "name": "queue",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what is in flight, and what does the app itself say about it?",
       "prefix": "queue",
       "freshness": "30s",
@@ -300,6 +330,16 @@
     },
     {
       "name": "history",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what was grabbed and what arrived recently, and via which client?",
       "prefix": "history",
       "freshness": "300s",

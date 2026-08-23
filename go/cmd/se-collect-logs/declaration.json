@@ -16,6 +16,16 @@
   "collections": [
     {
       "name": "journal",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what has this machine logged, newest first?",
       "prefix": "entry",
       "freshness": "60s",

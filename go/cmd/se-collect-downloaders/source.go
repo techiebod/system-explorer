@@ -90,6 +90,14 @@ const (
 	callSessionStats = "session-stats"
 	callTorrentGet   = "torrent-get"
 	callQueue        = "queue"
+	// fullstatus is EVIDENCE-only — the sab client's raw self-report, which
+	// the reference serves as that row's evidence and no fact is lifted
+	// from. Deliberately not in acquiredCalls: the acquisition-absence
+	// logic gates on what collect reads, and the healthy corpus capture
+	// predates this call (its daemons are gone, and a re-stage moves every
+	// anchor), so under replay an unstaged fullstatus is errUncaptured —
+	// a broken capture for the request, never a statement about a machine.
+	callFullStatus = "fullstatus"
 
 	transmissionVariable = "SE_TRANSMISSION_URL"
 	sabURLVariable       = "SE_SABNZBD_URL"
@@ -261,7 +269,7 @@ func (s *liveSource) document(call string) (*value, error) {
 		return s.rpc(call, "")
 	case callTorrentGet:
 		return s.rpc(call, torrentFieldsArgument)
-	case callQueue:
+	case callQueue, callFullStatus:
 		return s.sabMode(call)
 	}
 	return nil, fmt.Errorf("no acquisition named %q", call)

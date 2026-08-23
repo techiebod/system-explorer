@@ -13,6 +13,16 @@
   "collections": [
     {
       "name": "clients",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "are my download clients up, moving data, and not out of disk?",
       "prefix": "client",
       "freshness": "60s",
@@ -158,6 +168,16 @@
     },
     {
       "name": "transfers",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what is each transfer actually doing, and is anything stalled or erroring?",
       "prefix": "transfer",
       "freshness": "60s",

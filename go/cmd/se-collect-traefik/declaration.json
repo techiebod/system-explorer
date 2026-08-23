@@ -12,6 +12,16 @@
   "collections": [
     {
       "name": "overview",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what is this proxy, and is any of its configuration broken?",
       "prefix": "overview",
       "freshness": "60s",
@@ -152,6 +162,16 @@
     },
     {
       "name": "routers",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "which URL reaches which application on this host, and did traefik accept the route?",
       "prefix": "router",
       "freshness": "60s",
@@ -260,6 +280,16 @@
     },
     {
       "name": "services",
+      "verbs": {
+        "object": {
+          "bytes": 262144,
+          "ms": 5000
+        },
+        "evidence": {
+          "bytes": 1048576,
+          "ms": 10000
+        }
+      },
       "question": "what does each route actually forward to, and are those backends up?",
       "prefix": "service",
       "freshness": "60s",

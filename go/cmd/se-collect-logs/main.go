@@ -86,10 +86,22 @@ func run(stdin io.Reader, stdout, stderr io.Writer, getenv func(string) string) 
 			return exitRequest
 		}
 		return collect(stdout, stderr, src, order, generations)
+	case "object", "evidence":
+		// Three tokens exactly: the verb, the collection, the native name
+		// (DESIGN 18). A journal cursor carries no whitespace; every token
+		// is data, refused whole rather than reassembled.
+		if len(fields) != 3 {
+			fmt.Fprintf(stderr, "%s takes exactly '<collection> <name>'\n", fields[0])
+			return exitRequest
+		}
+		if fields[0] == "object" {
+			return serveObject(stdout, stderr, src, fields[1], fields[2])
+		}
+		return serveEvidence(stdout, stderr, src, fields[1], fields[2])
 	default:
 		// Every token is data, never an option or a command fragment (DESIGN
 		// 18) — an unknown verb is refused whole, not guessed at.
-		fmt.Fprintf(stderr, "unknown verb %q: this collector serves declare, probe and collect\n", fields[0])
+		fmt.Fprintf(stderr, "unknown verb %q: this collector serves declare, probe, collect, object and evidence\n", fields[0])
 		return exitRequest
 	}
 }

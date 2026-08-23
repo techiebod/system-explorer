@@ -49,11 +49,7 @@ func historyRows(src source, app instance) ([]row, error) {
 		if raw == nil || raw.kind != jsonObject {
 			continue
 		}
-		native := pythonStr(raw.get("id"))
-		if !raw.get("id").stated() {
-			native = "index-" + strconv.Itoa(index)
-		}
-		name := app.name + "/" + native
+		name := app.name + "/" + historyNative(raw, index)
 		if seen[name] {
 			continue
 		}
@@ -61,6 +57,17 @@ func historyRows(src source, app instance) ([]row, error) {
 		rows = append(rows, row{name: name, facts: historyFacts(app, raw)})
 	}
 	return rows, nil
+}
+
+// historyNative is the page's one minting rule, shared by the row walk above
+// and the evidence verb's membership so the two cannot drift: the app's own
+// id where it states one, index-N — the record's position in the page —
+// where it does not.
+func historyNative(raw *value, index int) string {
+	if raw.get("id").stated() {
+		return pythonStr(raw.get("id"))
+	}
+	return "index-" + strconv.Itoa(index)
 }
 
 // historyFacts is one event's stated members, the app's vocabulary verbatim:
