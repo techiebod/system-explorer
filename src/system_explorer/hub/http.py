@@ -92,9 +92,10 @@ def _deployed_views() -> Any:
 def handler_class(view_of: Callable[[], State],
                   allowed_hosts: str | None = None,
                   views_of: Callable[[], Any] | None = None,
-                  sibling_of: Callable[[str], Any] | None = None) -> type[BaseHTTPRequestHandler]:
+                  sibling_of: Callable[[str], Any] | None = None,
+                  acks_of: Callable[[], Any] | None = None) -> type[BaseHTTPRequestHandler]:
     routes: tuple[Route, ...] = table(view_of, views_of or _deployed_views,
-                                      sibling_of)
+                                      sibling_of, acks_of)
     # Injected for tests, environmental for the daemon — the same reason
     # the collator's clock is injected: the refusal must be assertable.
     claimed = frozenset(
@@ -189,6 +190,10 @@ def handler_class(view_of: Callable[[], State],
 def serve(bind: tuple[str, int], view_of: Callable[[], State],
           allowed_hosts: str | None = None,
           views_of: Callable[[], Any] | None = None,
-          sibling_of: Callable[[str], Any] | None = None) -> ThreadingHTTPServer:
+          sibling_of: Callable[[str], Any] | None = None,
+          acks_of: Callable[[], Any] | None = None) -> ThreadingHTTPServer:
+    """The READ listener. The write plane is `writes.serve`, on a bind of
+    its own — this signature deliberately has nowhere to put one."""
     return ThreadingHTTPServer(
-        bind, handler_class(view_of, allowed_hosts, views_of, sibling_of))
+        bind, handler_class(view_of, allowed_hosts, views_of, sibling_of,
+                            acks_of))

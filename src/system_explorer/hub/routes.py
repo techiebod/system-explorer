@@ -17,7 +17,9 @@ A tool per collection would have made every plugin a code change here.
 **Nothing on this surface is a write.** Every route is registered with a
 GET method and no other verb exists to misconfigure — read-only as a
 structural property rather than a policy, which is what lets the hub bind
-where it does.
+where it does. Acknowledgement — the product's first write — is READ
+here and written on a listener of its own (`writes.py`), which is the
+whole of why that second socket exists.
 """
 
 from __future__ import annotations
@@ -80,7 +82,8 @@ def render_opinions(state: Any) -> dict[str, Any]:
 
 def table(view_of: Callable[[], Any],
           views_of: Callable[[], Any] | None = None,
-          sibling_of: Callable[[str], Any] | None = None) -> tuple[Route, ...]:
+          sibling_of: Callable[[str], Any] | None = None,
+          acks_of: Callable[[], Any] | None = None) -> tuple[Route, ...]:
     """Build the route table over a callable returning the current view.
 
     `view_of` is passed rather than a view, because the hub's answer is
@@ -93,6 +96,13 @@ def table(view_of: Callable[[], Any],
     by the same shared loader both old servers use. Optional because a
     deployment that made no views is an empty list, not an error, and a
     caller that passes nothing gets exactly that.
+
+    `acks_of` folds the transition log into a per-finding acknowledgement
+    state. It DECORATES and never filters: no route here consults it to
+    decide what to serve, so an acknowledged finding is in every body it
+    was in before. That is the ruling's own clause — acknowledgement
+    changes what is shouted, not what is known — and it holds here by the
+    surface never asking, rather than by asking and then including.
     """
 
     def hosts() -> Any:
@@ -151,6 +161,16 @@ def table(view_of: Callable[[], Any],
             return {"schema": "se.views/1", "views": [], "errors": []}
         return views_of()
 
+    def acknowledgements() -> Any:
+        if acks_of is None:
+            # An unconfigured log is an estate where nothing has been
+            # acknowledged yet, which is a real and ordinary state — and
+            # it is stated as an empty mapping rather than an error, for
+            # the same reason a deployment with no views gets an empty
+            # list. What it must never do is suppress a finding.
+            return {"acknowledgements": {}}
+        return acks_of()
+
     def intent() -> Any:
         state = view_of()
         # The HASH and the revision, never the document: intent is an
@@ -200,6 +220,12 @@ def table(view_of: Callable[[], Any],
               "read fresh from the deployed directory — the operator edits a "
               "file and refreshes. No directory means a deployment that made "
               "no views: an empty list, not an error.", (), views),
+        Route("/v1/acknowledgements", "get_acknowledgements",
+              "Which findings somebody has said they have seen, who said so and "
+              "when. Acknowledgement changes what is shouted, never what is "
+              "known: an acknowledged finding is still in every other body on "
+              "this surface. Written on the hub's write listener, never here.",
+              (), acknowledgements),
         Route("/v1/intent", "get_intent",
               "The intent hash and revision this hub holds — what a sibling "
               "compares against. Never the document itself.", (), intent),

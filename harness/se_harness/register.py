@@ -582,17 +582,34 @@ REGISTER: tuple[Row, ...] = (
         "arrive with row 19's posture ruling — and no daemon wires the "
         "store path yet, which is deployment's."),
     Row(19, "acknowledgement — appended/attributed/reversible, write posture",
-        "owed", "R3e — ruled 2026-08-23, unbuilt",
-        lambda: _in_file("src/system_explorer/hub/routes.py", "acknowledge"),
-        "the probe sees a route by name, and no route carries one yet. The "
-        "posture is ruled 2026-08-23 in §06: a transition is appended, "
-        "attributed and reversible, it never removes a finding from the "
-        "roll-up, and it answers on a listener of its OWN — the read "
-        "surface's licence to bind broadly is that it is read-only, and a "
-        "write verb on the same socket repeals it. What the probe cannot "
-        "see: the ruling fixes the posture, not the implementation — the "
-        "transition record, the second listener and the attribution it "
-        "requires are owed."),
+        "built", "R3e",
+        lambda: (_in_file("src/system_explorer/hub/writes.py", "TRANSITIONS_PATH")
+                 and _in_file("src/system_explorer/hub/transitions.py", "UNACKNOWLEDGE")
+                 and _in_file("src/system_explorer/hub/routes.py",
+                              "/v1/acknowledgements")),
+        "the probe sees all three pieces the ruling needs — the write "
+        "listener's one path, the reversing transition, and the READ route "
+        "that serves the state — because any one alone would be a write "
+        "plane with no reader, a log with no door, or a door with no log. "
+        "Flipped 2026-08-23 on the posture ruled the same day. The store is "
+        "append-only: INSERT and nothing else, so a finding's whole "
+        "acknowledgement history survives and the current state is FOLDED "
+        "rather than stored — the log and the state cannot disagree because "
+        "only one of them exists. The actor is established at the listener "
+        "from a credential file and a body that supplies one is refused "
+        "rather than overridden, since a self-declared actor is a claim and "
+        "the two would be indistinguishable once stored. The write listener "
+        "binds separately and refuses reads, symmetric to the read "
+        "surface\'s refusal of writes, so the read bind\'s read-only "
+        "licence survives literally. Seven plants proven to bite on "
+        "2026-08-23, one of which changed a TEST rather than the code: the "
+        "same-second ordering case stayed green under `ORDER BY at`, so it "
+        "was asserting a property it never tested and was rewritten to the "
+        "case that discriminates — a later append carrying an earlier "
+        "stamp. What the probe cannot see: no daemon binds the second "
+        "listener yet, and resolution stays observed — `resolve` is not a "
+        "transition this log accepts, so nothing here can declare a system "
+        "state."),
     Row(20, "views route (`se.views/1` was ruled 'survives unchanged')",
         "built", "R3e",
         lambda: _in_file("src/system_explorer/hub/routes.py", "/v1/views"),
