@@ -565,7 +565,11 @@ The 29-row register above is encoded with a probe wherever the tree can attest a
 >
 > **What remains is one collector and it is the owner's.** `system/identity` emits `Hostname`, `OsId`, `OsPrettyName` and `OsVersionId`, which the reference does not. The port emitting MORE is what §20 reserves for the owner, and the comparator can only express an accepted divergence in the other direction — so there is no way to record "the port wins" without the ruling.
 >
-> One more finding, recorded rather than counted: `resources` reported a `StallAttributionUnobservable` divergence once and was clean in four further runs. That fact records that a member's pressure could not be READ, so the live comparator catches the class by luck. It belongs in the corpus as a staged variant.
+> One more finding, recorded rather than counted: `resources` reported a `StallAttributionUnobservable` divergence once and was clean in four further runs. That fact records that a member's pressure could not be READ, so the live comparator catches the class by luck.
+>
+> **And it cannot currently be staged, which is the sharper half.** Building the variant was attempted on 2026-08-23 and refused: a payload missing from a replay directory means *not captured* — a broken capture, which the reference correctly exits 1 over — and there is no way to stage *captured, and the read failed*. The corpus can express a document whose CONTENT cannot be parsed (network/exposure's unreadable dport clause, hardware/qemu-guest's transcribed tree) and cannot express a read that returned an error.
+>
+> So every attribution state that turns on a failed read has no corpus coverage and never could have: the live comparator is its only venue and finds it by luck. Closing it needs a seam convention — a staged marker meaning "this read failed with EACCES", distinct from an absent payload — and that is a harness feature rather than a fixture. Owed, and named here rather than left as a variant that would not build.
 
 > **The three acceptance items moved to gate R4, ruled 2026-08-23.** This line asked for them here, and they cannot be answered here: **every one of them names a page.** "One object, one page, every name on it." "The units page renders its slice tree." "Indentation disabled under sort or filter." Those are §27/§28 surfaces, which is R4's work — so until a UI exists there is nothing for the owner to look at, and an item judged by looking cannot be judged by reading a test that says the edges were minted.
 >
