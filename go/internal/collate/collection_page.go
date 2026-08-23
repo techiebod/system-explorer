@@ -115,8 +115,17 @@ func collectionPage(st *store.Store, name string, now func() float64,
 		return wrap(name, body.String()), http.StatusOK, nil
 	}
 
+	groups, err := HideGroupsFor(document, name)
+	if err != nil {
+		return "", http.StatusInternalServerError, err
+	}
+	// The worst opinion per object, needed BEFORE the table is drawn
+	// because invariant 2 — a critical row is never suppressed — is
+	// enforced at assignment rather than inside any group's condition.
+	worst := worstPerObject(st, document, name, rows)
+
 	body.WriteString(freshnessNote(self, now, bootID))
-	body.WriteString(objectsTable(name, render, rows, could))
+	body.WriteString(objectsTable(name, render, rows, could, groups, worst))
 	return wrap(name, body.String()), http.StatusOK, nil
 }
 
@@ -188,8 +197,52 @@ func freshnessNote(cs *store.CollectionState, now func() float64, bootID string)
 		`this boot, so no age is stated rather than a negative one shown.</p>`
 }
 
+// worstPerObject is the rulebook's verdict per object, which is the only
+// input to the critical exemption. Read from the declared rules rather
+// than from anything this file decides — a severity table here would be
+// the fourth copy §27 records.
+func worstPerObject(st *store.Store, document, collection string,
+	rows []store.ObjectRow) map[string]string {
+	out := map[string]string{}
+	rules, err := RulesFor(document, collection)
+	if err != nil || rules == nil {
+		// No rule table: nothing is known to be critical, so nothing is
+		// exempt and every group applies as declared. Stated here because
+		// the alternative reading — treat unjudged as critical and hide
+		// nothing — would make an unreadable declaration silently disable
+		// the whole mechanism.
+		return out
+	}
+	secrets, err := SecretFacts(document, collection)
+	if err != nil {
+		secrets = map[string]bool{}
+	}
+	rank := map[string]int{"critical": 0, "warn": 1, "info": 2}
+	for _, row := range rows {
+		var facts map[string]any
+		if json.Unmarshal(row.Facts, &facts) != nil {
+			continue
+		}
+		for name := range secrets {
+			delete(facts, name)
+		}
+		var instance *string
+		if row.Scope != store.HostNative {
+			scope := row.Scope
+			instance = &scope
+		}
+		for _, o := range JudgeShaped(rules, row.ID, instance, row.Type, facts) {
+			if held, seen := out[row.ID]; !seen || rank[o.Level] < rank[held] {
+				out[row.ID] = o.Level
+			}
+		}
+	}
+	return out
+}
+
 func objectsTable(collection string, render *CollectionRender,
-	rows []store.ObjectRow, could map[string]map[string]store.Unobserved) string {
+	rows []store.ObjectRow, could map[string]map[string]store.Unobserved,
+	groups []HideGroup, worst map[string]string) string {
 	// Columns come from the producer's `answer`, in the producer's order.
 	var columns []string
 	if render != nil {
@@ -213,8 +266,21 @@ func objectsTable(collection string, render *CollectionRender,
 		sortStrings(columns)
 	}
 
+	// Assign first, so the chips can be rendered ABOVE the table with
+	// counts that describe what each group holds.
+	assigned := make([]string, len(rows))
+	for i, row := range rows {
+		var facts map[string]any
+		if json.Unmarshal(row.Facts, &facts) != nil {
+			facts = map[string]any{}
+		}
+		assigned[i] = assign(groups, facts, worst[row.ID])
+	}
+
 	var b strings.Builder
-	b.WriteString(`<section class="panel"><div class="scroll"><table>`)
+	b.WriteString(`<section class="panel">`)
+	b.WriteString(hideControls(Chips(groups, assigned)))
+	b.WriteString(`<div class="scroll"><table>`)
 	b.WriteString(`<thead><tr><th>object</th>`)
 	for _, name := range columns {
 		title := ""
@@ -230,7 +296,7 @@ func objectsTable(collection string, render *CollectionRender,
 	}
 	b.WriteString(`</tr></thead><tbody>`)
 
-	for _, row := range rows {
+	for i, row := range rows {
 		var facts map[string]any
 		if json.Unmarshal(row.Facts, &facts) != nil {
 			facts = map[string]any{}
@@ -239,7 +305,15 @@ func objectsTable(collection string, render *CollectionRender,
 		for _, name := range row.Absent {
 			absent[name] = true
 		}
-		b.WriteString(`<tr>`)
+		if group := assigned[i]; group != "" {
+			// The row is IN THE MARKUP whatever its group — hidden by a
+			// selector, never omitted. A row the server left out is a row
+			// `curl` and §29's consumer without eyes never receive, and
+			// the page stops being a complete answer.
+			b.WriteString(fmt.Sprintf(`<tr data-group="%s">`, esc(group)))
+		} else {
+			b.WriteString(`<tr>`)
+		}
 		b.WriteString(fmt.Sprintf(
 			`<td class="ident"><a href="/collections/%s/objects/%s">%s</a>%s</td>`,
 			esc(collection), esc(row.Name), esc(row.Name), scopeMark(row.Scope)))

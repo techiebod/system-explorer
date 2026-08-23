@@ -308,3 +308,158 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+// ── hide groups, and the four invariants carried from app.js ──────────
+
+const hidingDecl = `{"schema":"se.declaration/1","collector":"t","collections":[{
+  "name":"units","freshness":"1h","question":"What is running?",
+  "prefix":"unit","answer":["ActiveState"],
+  "facts":{"ActiveState":{"type":"enum","values":["active","inactive","failed"],
+                          "temperament":"state"}},
+  "hide_groups":[{"key":"inactive","label":"inactive",
+                  "when":{"fact":"ActiveState","equals":"inactive"}}],
+  "rules":[{"key":"unit-health","level":"critical","grounds":"interface",
+            "when":{"fact":"ActiveState","equals":"failed"},
+            "sentence":"systemd reports this unit failed.","cites":["ActiveState"]}]
+  }]}`
+
+func hidingStore(t *testing.T) *store.Store {
+	t.Helper()
+	st := openStore(t)
+	mustIssue(t, st, "units", "sha256:u", hidingDecl)
+	objects := []store.Object{
+		{ID: "unit:a", Name: "a", Facts: json.RawMessage(`{"ActiveState":"active"}`), At: 10},
+		{ID: "unit:b", Name: "b", Facts: json.RawMessage(`{"ActiveState":"inactive"}`), At: 10},
+		{ID: "unit:c", Name: "c", Facts: json.RawMessage(`{"ActiveState":"inactive"}`), At: 10},
+		{ID: "unit:d", Name: "d", Facts: json.RawMessage(`{"ActiveState":"failed"}`), At: 10},
+	}
+	if _, err := st.ApplyCommit("units", store.HostNative, 1, "b1", fakeBootID,
+		objects); err != nil {
+		t.Fatal(err)
+	}
+	return st
+}
+
+func TestAHideGroupComesFromTheDeclarationNotFromTheRenderer(t *testing.T) {
+	// app.js holds these as hard-coded predicates, which is a fifth copy
+	// of producer knowledge in a renderer — the shape §27 records rotting
+	// three times. A collection declaring no groups hides nothing.
+	st := pagesStore(t) // pools: declares no hide_groups
+	out := markup(htmlOf(t, st, "/collections/pools"))
+	if strings.Contains(out, "hide-chip") {
+		t.Fatalf("a collection that declares no group must get no chips, "+
+			"or the renderer is deciding which rows are uninteresting: %s",
+			visible(out))
+	}
+}
+
+func TestACriticalRowIsNeverSuppressedWhateverTheGroupMatches(t *testing.T) {
+	// Invariant 2, and the promise the whole toggle rests on: the default
+	// view never swallows a failure. Enforced once, structurally, rather
+	// than re-derived in every predicate anyone adds later.
+	out := htmlOf(t, hidingStore(t), "/collections/units")
+	i := strings.Index(out, `>d<`)
+	if i < 0 {
+		t.Fatalf("the failed unit is missing entirely: %s", visible(out))
+	}
+	// It must not carry a group, which is what a selector would hide it by.
+	row := out[max(0, strings.LastIndex(out[:i], "<tr")):i]
+	if strings.Contains(row, "data-group") {
+		t.Fatalf("a critical row was assigned to a hide group: %s", row)
+	}
+}
+
+func TestTheExemptionIsCriticalOnlyAndNotWarn(t *testing.T) {
+	// Invariant 3. The inactive group hides a unit carrying a
+	// restart-churn warning today, and widening the exemption to warn
+	// would quietly change what that group has always meant.
+	groups := []HideGroup{{Key: "inactive", Label: "inactive",
+		When: json.RawMessage(`{"fact":"ActiveState","equals":"inactive"}`)}}
+	facts := map[string]any{"ActiveState": "inactive"}
+	if got := assign(groups, facts, "warn"); got != "inactive" {
+		t.Fatalf("a warn row is still hidden by its group: %q", got)
+	}
+	if got := assign(groups, facts, "critical"); got != "" {
+		t.Fatalf("a critical row is exempt: %q", got)
+	}
+}
+
+func TestAChipCountsWhatItsGroupHoldsAndNothingRecomputesIt(t *testing.T) {
+	// Invariant 1: the number answers WHAT THIS GROUP HOLDS, not what is
+	// hidden right now. Two inactive rows; the failed one is exempt and
+	// must not be counted, because the count promises exactly the set
+	// that pressing the chip reveals.
+	out := htmlOf(t, hidingStore(t), "/collections/units")
+	if !strings.Contains(out, `class="chip hide-chip"`) {
+		t.Fatalf("a declared group renders its chip: %s", visible(out))
+	}
+	if !strings.Contains(out, `<span class="count">2</span>`) {
+		t.Fatalf("the count is what assign() ASSIGNS — two inactive rows, "+
+			"the failed one exempt: %s", visible(out))
+	}
+	// Nothing on the page can change it: no script at all.
+	if strings.Contains(out, "<script") {
+		t.Fatal("a recomputed count is a count that can disagree with its group")
+	}
+}
+
+func TestAHiddenRowIsInTheMarkupAndOnlyHiddenBySelector(t *testing.T) {
+	// §28 rule 4: every page is a complete answer with script disabled —
+	// and, here, with CSS disabled too. A row the server left out is a
+	// row curl and the consumer without eyes never receive.
+	out := htmlOf(t, hidingStore(t), "/collections/units")
+	for _, name := range []string{">a<", ">b<", ">c<", ">d<"} {
+		if !strings.Contains(out, name) {
+			t.Fatalf("%s was omitted rather than hidden: %s", name, visible(out))
+		}
+	}
+	if !strings.Contains(out, `data-group="inactive"`) {
+		t.Fatalf("a hidden row carries its group: %s", visible(out))
+	}
+	if !strings.Contains(out, `tr[data-group]{display:none}`) {
+		t.Fatalf("hiding is a selector, not an omission: %s", out)
+	}
+}
+
+func TestTheChipIsTheControlSoThereIsNoStateToGetOutOfStep(t *testing.T) {
+	// Invariant 4: the way back is legible because the chip IS the
+	// checkbox's label — one thing, not a control and a separate count
+	// that can disagree.
+	out := htmlOf(t, hidingStore(t), "/collections/units")
+	if !strings.Contains(out, `<input type="checkbox" id="reveal-inactive"`) {
+		t.Fatalf("%s", out)
+	}
+	if !strings.Contains(out, `<label for="reveal-inactive"`) {
+		t.Fatalf("the chip is the label of the checkbox that reveals it: %s", out)
+	}
+	if !strings.Contains(out, `#reveal-inactive:checked ~ .scroll tr[data-group="inactive"]`) {
+		t.Fatalf("a checkbox and a :checked ~ sibling selector, per §28: %s", out)
+	}
+}
+
+func TestAGroupKeyCannotEscapeIntoTheStylesheet(t *testing.T) {
+	// A group key is producer text, and a selector assembled from
+	// unescaped producer text is an injection into the one place this
+	// page's CSP cannot help — the stylesheet it already permits.
+	if got := cssIdent(`x"]{}*{display:block}[a="`); strings.ContainsAny(got, `"{}[]*:`) {
+		t.Fatalf("a key reached the selector intact: %q", got)
+	}
+}
+
+func TestAGroupWhoseConditionCannotBeEvaluatedLeavesRowsVisible(t *testing.T) {
+	// The safe direction: the failure mode of a missing group is a longer
+	// page, and the failure mode of a broken one hiding rows anyway is a
+	// suppressed fault.
+	groups := []HideGroup{{Key: "broken", Label: "broken",
+		When: json.RawMessage(`{"nonsense":true}`)}}
+	if got := assign(groups, map[string]any{"ActiveState": "inactive"}, ""); got != "" {
+		t.Fatalf("an unevaluable group hid a row: %q", got)
+	}
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}

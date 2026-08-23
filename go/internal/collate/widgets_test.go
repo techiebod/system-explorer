@@ -14,6 +14,17 @@ func visible(html string) string {
 	return strings.TrimSpace(tags.ReplaceAllString(html, " "))
 }
 
+// styleBlock is why three assertions in this package have been wrong.
+// The stylesheet is EMBEDDED in every page, so a test asking whether a
+// page contains "hide-chip" or "stale-banner" finds the CSS rule that
+// styles it and passes on a page that renders nothing. Strip the style
+// blocks and ask about the markup.
+var styleBlock = regexp.MustCompile(`(?s)<style>.*?</style>`)
+
+func markup(page string) string {
+	return styleBlock.ReplaceAllString(page, "")
+}
+
 var classAttr = regexp.MustCompile(`class="([^"]*)"`)
 
 func classOf(html string) string {

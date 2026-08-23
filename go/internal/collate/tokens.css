@@ -208,3 +208,21 @@ ul.relations { list-style: none; padding: 0; margin: .5rem 0; }
    page is a complete answer with script disabled. */
 details.panel > summary { cursor: pointer; list-style: revert; }
 details.panel > summary h2 { display: inline-block; margin: 0; }
+
+/* ── Hide groups ────────────────────────────────────────────────────────
+   A checkbox and a `:checked ~` sibling selector; the chip is its label,
+   so the control and its count are one thing and there is no state to
+   get out of step. The checkbox is visually hidden but NOT removed from
+   the accessibility tree — a control taken out of it is a control
+   keyboard users do not have. */
+.hide-groups { display: flex; flex-wrap: wrap; gap: .4rem; margin: .5rem 0; }
+input.reveal {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+.hide-chip { cursor: pointer; user-select: none; }
+input.reveal:focus-visible + .hide-chip {
+  outline: 2px solid var(--text-dim); outline-offset: 2px;
+}
+input.reveal:checked + .hide-chip { border-color: var(--text-dim); color: var(--text); }
+.hide-chip .count { font-variant-numeric: tabular-nums; color: var(--text-faint); }
