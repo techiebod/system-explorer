@@ -1112,4 +1112,58 @@ REGISTER: tuple[Row, ...] = (
         "an object except from its own collection's table. Recorded rather "
         "than fixed because each needs a ruling or a producer change, and "
         "quietly carrying them is what this row exists to prevent."),
+    Row(37, "the sysadmin/UI review — 106 confirmed findings, and a "
+        "navigation rail that did not exist",
+        "built", "R4",
+        lambda: _in_file("go/internal/collate/nav.go", "func navRail("),
+        "the probe asks for the RAIL, because its absence was the owner's "
+        "first word — 'the left nav bar is lost' — and it is the one "
+        "finding whose fix is structural rather than a correction. Eight "
+        "lenses (systemd, storage, network, relationships, raw data, "
+        "information design, navigation, 3am triage) read the real "
+        "rendered pages beside the raw evidence files, so they could see "
+        "what was AVAILABLE against what the page chose to show; 107 "
+        "findings, 106 verified. Fixed here: the rail, derived from the "
+        "collector each collection was learned under and hiding nothing; "
+        "relations in BOTH directions across every collection, where the "
+        "page had shown outbound-only and an array denied edges pointing "
+        "at it; every link resolving, proven by a crawl of 2,394 and "
+        "3,549 URLs rather than by asserting an href exists; and one "
+        "contested prefix no longer blanking every link on the host. "
+        "**What the probe cannot see**: whether the pages are now DENSE "
+        "enough to work at 3am, which is the gate's question and the "
+        "owner's; and the residue in row 38, which is larger than what "
+        "was fixed."),
+    Row(38, "the sysadmin review's residue — density, producer facts, and "
+        "one data-model ruling",
+        "owed", "R5",
+        None,
+        "no probe: open defects are not a property of the tree. THE "
+        "OWNER'S RULING FIRST, because several findings hang off it: "
+        "`units` and `workloads` both declare the prefix `unit`, and both "
+        "are right — one describes what a systemd unit is doing, the "
+        "other what it is consuming, about the same objects. The collator "
+        "resolves such a target to NEITHER, so every `unit:`-kinded edge "
+        "stays `asserted` for ever and its page says 'the far end has "
+        "never been read' about objects sitting in the same store. That "
+        "sentence is false and the renderer cannot fix it. Whether two "
+        "collections may share a prefix when they describe one object "
+        "from different angles is a data-model question; renaming a "
+        "prefix would answer it by fiat and lose the modelling. "
+        "PRODUCER WORK, each item free of new collection: `LoadState` is "
+        "not in `units`' answer, so 19 units whose unit file does not "
+        "exist render as healthy stopped services and are stamped `ok` — "
+        "the founding failure, on the busiest page, and the fact costs "
+        "nothing because it arrives in the same ListUnits reply. No "
+        "declaration ships a hide group, so all 304 unit rows show; "
+        "declaring the three `app.js` already proved takes 135 off the "
+        "default view. Wide collections (`workloads` 18 answer facts, "
+        "protection's 12) need a row-density subset. No storage "
+        "collection declares a containment relation, so a filesystem "
+        "cannot be traced to its device. DENSITY, which is the renderer's: "
+        "byte counts and percentages rendered against raw digits, "
+        "structured facts dumped as literal JSON, the journal's identity "
+        "column a 120-character cursor, syslog priority a bare integer, "
+        "the host page opening with an inventory instead of a verdict, "
+        "and no way to sort or filter by verdict at all."),
 )

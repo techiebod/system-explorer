@@ -517,6 +517,8 @@ Every known miss, each owned or ruled. A row neither built, owned nor ruled is a
 | 34 | `units` never marks `MissingRequirements` absent | owed: the fact is a column on every row, sent only where non-empty, never declared absent — so 305 rows read `not stated` | R5 |
 | 35 | the R4 surface audit — 71 confirmed defects in the rendered pages | 14 fixed 2026-08-24, each planted. The coherence guard that was missing is the one that explains the rest | R4 |
 | 36 | the R4 audit's residue | owed: hub answer defects, two producer gaps, and product questions — each needs a ruling or a producer change | R5 |
+| 37 | the sysadmin/UI review — 106 confirmed findings | the rail, both-direction relations, every link resolving, one prefix clash no longer blanking the host | R4 |
+| 38 | that review's residue | owed: one data-model ruling (two collections sharing a prefix), producer facts (`LoadState`, hide groups, storage containment), and density | R5 |
 
 #### R1 — structure on the wire (small) — **GATE R1 OPEN, 2026-08-21**
 
