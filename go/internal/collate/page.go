@@ -350,7 +350,8 @@ func registerPage(mux *http.ServeMux, st *store.Store, now func() float64, bootI
 	mux.HandleFunc("GET /collections/{name}", func(w http.ResponseWriter, r *http.Request) {
 		out, code, err := collectionPage(st, r.PathValue("name"),
 			r.URL.Query().Get("sort"), r.URL.Query().Get("facet"),
-			r.URL.Query().Get("attention"), now, bootID)
+			r.URL.Query().Get("attention"), r.URL.Query().Get("dir"),
+			now, bootID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

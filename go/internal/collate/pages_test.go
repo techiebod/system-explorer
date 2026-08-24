@@ -606,7 +606,7 @@ func TestIndentationIsDisabledUnderSort(t *testing.T) {
 	}
 	// Sorted, the page uses sortedOrder and never calls nest, so no row
 	// carries a depth at all.
-	order := sortedOrder(rows, nil, "ActiveState")
+	order := sortedOrder(rows, nil, "ActiveState", false)
 	if len(order) != 2 {
 		t.Fatalf("%v", order)
 	}
@@ -1185,22 +1185,60 @@ func TestEveryControlCarriesEveryOtherControlsState(t *testing.T) {
 	}
 }
 
-func TestTheSortedColumnIsMarkedAndClearsTheSort(t *testing.T) {
+func TestTheSortedColumnIsMarkedAndTheCycleReturnsToTheTree(t *testing.T) {
 	// Before this, a sorted page told the reader its tree was not drawn
-	// and offered no route back to the page where it is — and no column
-	// showed which one was sorted, so the head looked identical to an
+	// and offered no route back to the page where it is, and no column
+	// showed which one was sorted — the head looked identical to an
 	// unsorted table.
-	page := markup(htmlOf(t, typedStore(t), "/collections/things?sort=State"))
-	if !strings.Contains(page, `aria-sort=`) {
-		t.Fatalf("the sorted column is announced: %s", page)
+	//
+	// Three states, cycling: unsorted → ascending → descending →
+	// unsorted. Ascending-only made a sysadmin sorting by size or age
+	// scroll to the bottom for the number they wanted.
+	asc := markup(htmlOf(t, typedStore(t), "/collections/things?sort=State"))
+	if !strings.Contains(asc, `aria-sort="ascending"`) {
+		t.Fatalf("the sorted column is announced: %s", asc)
 	}
-	if !strings.Contains(page, "sorted-mark") {
-		t.Fatalf("and marked visually: %s", page)
+	if !strings.Contains(asc, "sorted-mark") {
+		t.Fatalf("and marked visually: %s", asc)
 	}
-	// The current column's own link clears the sort — the way back.
-	if !strings.Contains(page, `class="sort current" href="/collections/things"`) {
-		t.Fatalf("the sorted column links back to the unsorted page, which is "+
-			"the only route back to the tree: %s", page)
+	// From ascending, the column's own link goes to DESCENDING.
+	if !strings.Contains(asc, "sort=State&amp;dir=desc") &&
+		!strings.Contains(asc, "sort=State&dir=desc") {
+		t.Fatalf("ascending cycles to descending: %s", asc)
+	}
+
+	desc := markup(htmlOf(t, typedStore(t), "/collections/things?sort=State&dir=desc"))
+	if !strings.Contains(desc, `aria-sort="descending"`) {
+		t.Fatalf("descending is announced too: %s", desc)
+	}
+	// And from descending, back to unsorted — the only route to the tree.
+	if !strings.Contains(desc, `class="sort current" href="/collections/things"`) {
+		t.Fatalf("descending cycles back to unsorted, which is the way back "+
+			"to the tree a sorted page says it withheld: %s", desc)
+	}
+}
+
+func TestDescendingReversesTheOrderButNotTheUnansweredRows(t *testing.T) {
+	// A row with no value sorts LAST whichever way the column goes: it is
+	// not the smallest, it is unanswered. Reversing must not float every
+	// unanswered row to the top, which is what treating nil as a value
+	// would do.
+	rows := []store.ObjectRow{
+		{Name: "b", Facts: json.RawMessage(`{"N":2}`)},
+		{Name: "missing", Facts: json.RawMessage(`{}`)},
+		{Name: "a", Facts: json.RawMessage(`{"N":1}`)},
+	}
+	up := sortedOrder(rows, nil, "N", false)
+	down := sortedOrder(rows, nil, "N", true)
+	if rows[up[0]].Name != "a" || rows[up[1]].Name != "b" {
+		t.Fatalf("ascending: %v", up)
+	}
+	if rows[down[0]].Name != "b" || rows[down[1]].Name != "a" {
+		t.Fatalf("descending reverses the values: %v", down)
+	}
+	if rows[up[2]].Name != "missing" || rows[down[2]].Name != "missing" {
+		t.Fatalf("the unanswered row sorts last BOTH ways: up=%v down=%v",
+			up, down)
 	}
 }
 

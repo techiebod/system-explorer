@@ -34,8 +34,12 @@ import (
 	"github.com/techiebod/system-explorer/go/internal/store"
 )
 
-func collectionPage(st *store.Store, name, sortBy, facet, attention string,
+func collectionPage(st *store.Store, name, sortBy, facet, attention, dir string,
 	now func() float64, bootID string) (string, int, error) {
+	// Three states per column, cycling: unsorted → ascending →
+	// descending → unsorted. The third is the way back to the tree,
+	// which a sorted page says it withheld.
+	descending := dir == "desc"
 	states, err := st.Collections()
 	if err != nil {
 		return "", http.StatusInternalServerError, err
@@ -157,7 +161,7 @@ func collectionPage(st *store.Store, name, sortBy, facet, attention string,
 		undecidable = undecidableAtRowDensity(rules, render)
 	}
 	body.WriteString(objectsTable(name, render, rows, could, groups, worst,
-		parentOf, nestedBy, sortBy, facet, attention, undecidable))
+		parentOf, nestedBy, sortBy, facet, attention, descending, undecidable))
 	// The script rides only where there are rows to narrow.
 	return wrapWith(name, navRail(st, states, name), body.String(), true),
 		http.StatusOK, nil
@@ -416,7 +420,7 @@ func objectsTable(collection string, render *CollectionRender,
 	rows []store.ObjectRow, could map[string]map[string]store.Unobserved,
 	groups []HideGroup, worst map[string]string,
 	parentOf map[string]string, nestedBy, sortBy, facet, attention string,
-	undecidable []string) string {
+	descending bool, undecidable []string) string {
 	// Columns come from the producer's `answer`, in the producer's order.
 	var columns []string
 	if render != nil {
@@ -475,7 +479,7 @@ func objectsTable(collection string, render *CollectionRender,
 	sorted := sortBy != ""
 	narrowed := facet != ""
 	if sorted {
-		order = sortedOrder(rows, render, sortBy)
+		order = sortedOrder(rows, render, sortBy, descending)
 	} else if !narrowed && nestedBy != "" && len(parentOf) > 0 {
 		order, depth, cyclic = nest(rows, parentOf)
 	}
@@ -583,15 +587,20 @@ func objectsTable(collection string, render *CollectionRender,
 		// is also the only way back to the tree — before this, a sorted
 		// page told the reader its tree was not drawn and offered no route
 		// to the page where it is.
+		// unsorted → ascending → descending → unsorted. A sysadmin
+		// sorting by size or age wants the largest first, and ascending
+		// only made them scroll to the bottom for it.
 		current := name == sortBy
-		mark, cls, target := "", "sort", "sort="+name
-		if current {
-			mark = ` <span class="sorted-mark" aria-hidden="true">▾</span>`
+		mark, cls, target, aria := "", "sort", "sort="+name, ""
+		switch {
+		case current && descending:
+			mark = ` <span class="sorted-mark" aria-hidden="true">▲</span>`
+			cls, target = "sort current", ""
+			aria = ` aria-sort="descending"`
+		case current:
+			mark = ` <span class="sorted-mark" aria-hidden="true">▼</span>`
 			cls = "sort current"
-			target = ""
-		}
-		aria := ""
-		if current {
+			target = "sort=" + name + "&dir=desc"
 			aria = ` aria-sort="ascending"`
 		}
 		// The column's DECLARED type rides on the cell, so the stylesheet
@@ -821,7 +830,8 @@ func wrapWith(title, rail, body string, script bool) string {
 // Ordering on the value the producer sent, compared as text unless both
 // sides are numbers — never on the formatted string, which would sort
 // "1 GiB" before "512 B" and present a wrong answer confidently.
-func sortedOrder(rows []store.ObjectRow, render *CollectionRender, by string) []int {
+func sortedOrder(rows []store.ObjectRow, render *CollectionRender, by string,
+	descending bool) []int {
 	order := make([]int, len(rows))
 	values := make([]any, len(rows))
 	for i, row := range rows {
@@ -833,20 +843,26 @@ func sortedOrder(rows []store.ObjectRow, render *CollectionRender, by string) []
 	}
 	sort.SliceStable(order, func(a, b int) bool {
 		x, y := values[order[a]], values[order[b]]
+		// A row with no value sorts LAST whichever way the column goes.
+		// It is not the smallest, it is unanswered — and reversing the
+		// direction must not float every unanswered row to the top,
+		// which is what treating nil as a value would do.
 		if x == nil {
-			// A row with no value sorts last whichever way the column
-			// goes: it is not the smallest, it is unanswered.
 			return false
 		}
 		if y == nil {
 			return true
 		}
+		less := scalar(x) < scalar(y)
 		if nx, ok := number(x); ok {
 			if ny, ok := number(y); ok {
-				return nx < ny
+				less = nx < ny
 			}
 		}
-		return scalar(x) < scalar(y)
+		if descending {
+			return !less
+		}
+		return less
 	})
 	return order
 }
