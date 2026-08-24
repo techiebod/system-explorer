@@ -179,3 +179,75 @@ def test_a_collection_that_answers_again_stops_carrying_its_decline():
     assert "decline" not in row, (
         f"a commit is an answer and clears the decline: {row}"
     )
+
+
+def test_an_overdue_collection_says_so_over_real_http():
+    """Standing rule 8 applied to the §15 promise check: proven on the
+    wire, from outside the process.
+
+    The fixture's boot id differs from the daemon's real one, so this
+    exercises the previous-boot branch — the reading predates the
+    daemon's boot, uptime is an honest lower bound on its age, and a 1s
+    declared promise is certainly two windows gone. Before the verdict
+    existed this row served `stale: false` and rendered `current`: the
+    founding failure, live (register row 45).
+    """
+    decl = json.dumps({
+        "schema": "se.declaration/1", "collector": "fixture",
+        "collections": [{"name": "pools", "freshness": "1s",
+                         "facts": {"Health": {"type": "string",
+                                              "temperament": "state"}}}],
+    }, separators=(",", ":")).encode()
+    digest = "sha256:" + hashlib.sha256(decl).hexdigest()
+    records = [
+        {"record": "begin", "request": "b1", "batch": "b1",
+         "declaration": digest, "boot_id": BOOT, "timens": 0,
+         "instance": None, "generations": {"pools": 1}},
+        {"record": "object", "collection": "pools", "name": "tank",
+         "facts": {"Health": "ONLINE"}, "at": 10.5},
+        {"record": "commit", "collection": "pools", "generation": 1,
+         "objects": 1, "assertions": 0, "unobservable": 0, "cpu_ms": 0.5},
+        {"record": "end", "request": "b1", "batch": "b1",
+         "cpu_ms": 0.5, "wall_ms": 1.0},
+    ]
+    payload = b"".join(json.dumps(r).encode() + b"\n" for r in records)
+    binary = driver.collate_binary()
+    with tempfile.TemporaryDirectory() as state:
+        fake = driver.FakeCollector(decl)
+        try:
+            fake.queue(payload)
+            run = driver.run_oneshot(binary, state, {"pools": fake.socket_path})
+            assert run.returncode == 0, run.stderr[-800:]
+            fake.queue(payload)  # the daemon's own round re-delivers; refused as dup, harmless
+            port = driver.free_port()
+            proc = driver.spawn_daemon(binary, state, {"pools": fake.socket_path},
+                                       f"127.0.0.1:{port}")
+            try:
+                deadline = time.monotonic() + 20
+                rows = None
+                while time.monotonic() < deadline:
+                    try:
+                        with urllib.request.urlopen(
+                            f"http://127.0.0.1:{port}/v1/collections",
+                            timeout=5,
+                        ) as answer:
+                            rows = json.load(answer)
+                        break
+                    except (urllib.error.URLError, OSError):
+                        time.sleep(0.2)
+                assert rows is not None, "the daemon never served"
+            finally:
+                proc.terminate()
+                proc.wait(timeout=10)
+        finally:
+            fake.close()
+    row = [r for r in rows if r["name"] == "pools"][0]
+    assert row.get("freshness") == "overdue", (
+        "a reading two promise-windows old must not serve as current: "
+        f"{row}")
+    assert "declared promise of 1s" in row.get("freshness_detail", ""), (
+        "the detail carries the measured facts: " + str(row))
+    # And /v1/status names it in the roll-up.
+    # (Served by the same handler table; asserted via a fresh daemon would
+    # repeat the dance — the Go suite covers the wiring; the wire evidence
+    # for the row itself is above.)

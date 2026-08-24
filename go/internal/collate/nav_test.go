@@ -79,7 +79,7 @@ func TestACollectionNothingEverReadStillAppearsInTheRail(t *testing.T) {
 	// dropped them would be absence rendering as non-existence in the
 	// navigation itself.
 	st, states := railStore(t)
-	rail := markup(navRail(st, states, ""))
+	rail := markup(navRail(st, states, "", freshnessMap(st, states, 26.0, fakeBootID)))
 	for _, name := range []string{"tailscale", "pools", "arrays"} {
 		if !strings.Contains(rail, ">"+name+"<") {
 			t.Fatalf("%s never applied and is missing from the rail: %s",
@@ -97,7 +97,7 @@ func TestTheRailNeverHidesACollection(t *testing.T) {
 	// the same file records what that produced: "a nav that shrank under
 	// the pointer".
 	st, states := railStore(t)
-	rail := markup(navRail(st, states, ""))
+	rail := markup(navRail(st, states, "", freshnessMap(st, states, 26.0, fakeBootID)))
 	for _, cs := range states {
 		if !strings.Contains(rail, collectionHref(cs.Name)) {
 			t.Fatalf("%s is missing from the rail", cs.Name)
@@ -107,7 +107,7 @@ func TestTheRailNeverHidesACollection(t *testing.T) {
 
 func TestTheRailMarksWhereYouAre(t *testing.T) {
 	st, states := railStore(t)
-	rail := navRail(st, states, "links")
+	rail := navRail(st, states, "links", freshnessMap(st, states, 26.0, fakeBootID))
 	if strings.Count(rail, `aria-current="page"`) != 1 {
 		t.Fatalf("exactly one current entry: %s", rail)
 	}
@@ -128,7 +128,7 @@ func TestACollectionWhoseDeclarationCannotBeReadGetsItsOwnGroup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rail := markup(navRail(st, states, ""))
+	rail := markup(navRail(st, states, "", freshnessMap(st, states, 26.0, fakeBootID)))
 	if !strings.Contains(rail, "collector not recorded") {
 		t.Fatalf("%s", visible(rail))
 	}

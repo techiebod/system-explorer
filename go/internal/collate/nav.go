@@ -138,7 +138,8 @@ func navGroups(st *store.Store, states []store.CollectionState) []navGroup {
 
 // navRail renders the rail. `current` is the collection being viewed, or
 // "" on the host page.
-func navRail(st *store.Store, states []store.CollectionState, current string) string {
+func navRail(st *store.Store, states []store.CollectionState, current string,
+	promises map[string]FreshnessVerdict) string {
 	byName := map[string]store.CollectionState{}
 	for _, cs := range states {
 		byName[cs.Name] = cs
@@ -160,7 +161,7 @@ func navRail(st *store.Store, states []store.CollectionState, current string) st
 			esc(heading)))
 		for _, name := range group.Collections {
 			cs := byName[name]
-			mark, count := railState(cs)
+			mark, count := railState(cs, promises[cs.Name])
 			aria := ""
 			cls := "rail-item"
 			if name == current {
@@ -192,7 +193,7 @@ func navRail(st *store.Store, states []store.CollectionState, current string) st
 // process" — nobody told the collector where to look. That is a gap
 // somebody can close. `absent` is the interface not being on the host at
 // all, and nothing is wrong. They must not wear the same mark.
-func railState(cs store.CollectionState) (mark, count string) {
+func railState(cs store.CollectionState, fv FreshnessVerdict) (mark, count string) {
 	count = fmt.Sprintf(`<span class="num">%d</span>`, cs.ObjectCount)
 	switch {
 	case cs.Generation == 0:
@@ -200,5 +201,5 @@ func railState(cs store.CollectionState) (mark, count string) {
 	case cs.ObjectCount == 0:
 		count = `<span class="rail-none">0</span>`
 	}
-	return `<span class="rail-state">` + freshnessChip(cs) + `</span>`, count
+	return `<span class="rail-state">` + freshnessChip(cs, fv) + `</span>`, count
 }

@@ -106,7 +106,8 @@ func objectPage(st *store.Store, collection, object string, now func() float64,
 		states = nil
 	}
 	return wrapWithNav(self.Name+" · "+collection,
-		navRail(st, states, collection), body.String()), http.StatusOK, nil
+		navRail(st, states, collection, freshnessMap(st, states, now(), bootID)),
+		body.String()), http.StatusOK, nil
 }
 
 func factsSection(render *CollectionRender, facts map[string]any,

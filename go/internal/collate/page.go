@@ -125,8 +125,9 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 	table.WriteString(`<section class="panel"><h2>Collections</h2><div class="scroll"><table>` +
 		"<thead><tr><th>collection</th><th>generation</th><th>objects</th>" +
 		"<th>freshness</th><th>age</th></tr></thead><tbody>")
+	promises := freshnessMap(st, states, now(), bootID)
 	for _, cs := range states {
-		freshness := freshnessChip(cs)
+		freshness := freshnessChip(cs, promises[cs.Name])
 		// The age column carried one em dash for three different things —
 		// never read, read but carrying no stamp, and a clock this host
 		// cannot subtract with. Each now says which, because "—" in a
@@ -341,7 +342,7 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 	body.WriteString(`<footer>Served by this host's own collator. It answers ` +
 		`whether or not a hub is reachable, which is why it exists.</footer>`)
 
-	return wrapWithNav("This host", navRail(st, states, ""), body.String()), nil
+	return wrapWithNav("This host", navRail(st, states, "", promises), body.String()), nil
 }
 
 func registerPage(mux *http.ServeMux, st *store.Store, now func() float64, bootID string) {
@@ -422,7 +423,7 @@ func serveHTMLWith(w http.ResponseWriter, out string, script bool) {
 // shared by the host table and the navigation rail. Two copies is how
 // it comes back: the first version applied downgrades after a `current`
 // default, so a collection nothing had ever read rendered as healthy.
-func freshnessChip(cs store.CollectionState) string {
+func freshnessChip(cs store.CollectionState, fv FreshnessVerdict) string {
 	// ONE decision, and `never read` dominates.
 	//
 	// This began as `current` with downgrades applied after, which is
@@ -454,6 +455,17 @@ func freshnessChip(cs store.CollectionState) string {
 		freshness = chip("absent here", "muted")
 	case cs.Stale:
 		freshness = chip("stale"+reason, "warn")
+	case fv.State == "overdue":
+		// The founding failure's fix: a promise-breaking age must never
+		// wear the current chip. The detail travels on the title so the
+		// row stays scannable and the sentence is one hover away.
+		freshness = fmt.Sprintf(
+			`<span class="chip warn" title="%s">overdue</span>`, esc(fv.Detail))
+	case fv.State == "unverifiable":
+		// "Cannot check the promise" and "promise kept" must never share
+		// a chip — unverifiable is its own state, muted not green.
+		freshness = fmt.Sprintf(
+			`<span class="chip muted" title="%s">unverifiable</span>`, esc(fv.Detail))
 	default:
 		freshness = chip("current", "ok")
 	}

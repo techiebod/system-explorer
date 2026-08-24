@@ -55,6 +55,12 @@ type collectionView struct {
 	// member a reader cannot tell "the interface is not on this host"
 	// from "the interface is here and holds nothing".
 	Decline *declineView `json:"decline,omitempty"`
+	// The §15 promise check, absent where it does not apply (never-read,
+	// declined). `overdue` here is the honest signal the checkpoint wire
+	// cannot yet carry — its freshness and stale_reason enums are closed,
+	// register row 41.
+	Freshness       string `json:"freshness,omitempty"`
+	FreshnessDetail string `json:"freshness_detail,omitempty"`
 }
 
 type declineView struct {
@@ -135,7 +141,7 @@ func NewHandlerWithReverse(st *store.Store, now func() float64, bootID string,
 		writeJSON(w, map[string]bool{"ok": true})
 	})
 
-	registerStatus(mux, st)
+	registerStatus(mux, st, now, bootID)
 	registerViews(mux)
 	registerDictionary(mux, st)
 
@@ -147,6 +153,7 @@ func NewHandlerWithReverse(st *store.Store, now func() float64, bootID string,
 		}
 		// An empty authority serves an empty list, not null: the shape of
 		// "nothing yet" and the shape of "several" must be the same shape.
+		promises := freshnessMap(st, states, now(), bootID)
 		views := make([]collectionView, 0, len(states))
 		for _, cs := range states {
 			v := collectionView{
@@ -158,6 +165,10 @@ func NewHandlerWithReverse(st *store.Store, now func() float64, bootID string,
 				Stale:             cs.Stale,
 				StaleReason:       cs.StaleReason,
 				AdvisoryCostCPUMs: cs.CostCPUMs,
+			}
+			if fv, ok := promises[cs.Name]; ok {
+				v.Freshness = fv.State
+				v.FreshnessDetail = fv.Detail
 			}
 			if cs.Decline != nil {
 				v.Decline = &declineView{Reason: cs.Decline.Reason,

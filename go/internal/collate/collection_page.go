@@ -54,6 +54,7 @@ func collectionPage(st *store.Store, name, sortBy, facet, attention, dir string,
 		return "", http.StatusNotFound, nil
 	}
 
+	promises := freshnessMap(st, states, now(), bootID)
 	document, err := st.DeclarationFor(name)
 	if err != nil {
 		return "", http.StatusInternalServerError, err
@@ -119,13 +120,13 @@ func collectionPage(st *store.Store, name, sortBy, facet, attention, dir string,
 		if !declined {
 			body.WriteString(neverReadPanel())
 		}
-		return wrapWithNav(name+" · never read", navRail(st, states, name), body.String()), http.StatusOK, nil
+		return wrapWithNav(name+" · never read", navRail(st, states, name, promises), body.String()), http.StatusOK, nil
 	case len(rows) == 0 && !declined:
 		body.WriteString(`<section class="panel empty-state"><h2>Nothing here</h2>` +
 			`<p>This collection was read and holds no objects. The interface ` +
 			`answered; it had nothing to report. That is a measured emptiness, ` +
 			`not a collection that could not be reached.</p></section>`)
-		return wrapWithNav(name, navRail(st, states, name), body.String()), http.StatusOK, nil
+		return wrapWithNav(name, navRail(st, states, name, promises), body.String()), http.StatusOK, nil
 	case len(rows) == 0 && declined:
 		// Declined, and nothing stands behind it. Said explicitly: the
 		// alternative is a page that ends after the decline panel, and a
@@ -135,7 +136,7 @@ func collectionPage(st *store.Store, name, sortBy, facet, attention, dir string,
 			`so there is nothing to show beneath the decline. What was true ` +
 			`before is not known here — which is different from knowing it was ` +
 			`empty.</p></section>`)
-		return wrapWithNav(name, navRail(st, states, name), body.String()), http.StatusOK, nil
+		return wrapWithNav(name, navRail(st, states, name, promises), body.String()), http.StatusOK, nil
 	}
 
 	groups, err := HideGroupsFor(document, name)
@@ -152,7 +153,7 @@ func collectionPage(st *store.Store, name, sortBy, facet, attention, dir string,
 	// is what most of them are.
 	parentOf, nestedBy := parentsFrom(st, name)
 
-	body.WriteString(freshnessNote(self, now, bootID))
+	body.WriteString(freshnessNote(self, promises[name], now, bootID))
 	// Which rules cannot be decided from the row's own facts. Computed
 	// once, stated on every clean mark, rather than a claim the page
 	// cannot support.
@@ -163,7 +164,7 @@ func collectionPage(st *store.Store, name, sortBy, facet, attention, dir string,
 	body.WriteString(objectsTable(name, render, rows, could, groups, worst,
 		parentOf, nestedBy, sortBy, facet, attention, descending, undecidable))
 	// The script rides only where there are rows to narrow.
-	return wrapWith(name, navRail(st, states, name), body.String(), true),
+	return wrapWith(name, navRail(st, states, name, promises), body.String(), true),
 		http.StatusOK, nil
 }
 
@@ -257,7 +258,15 @@ func declinePanel(d *store.Decline, everApplied bool, rows int) string {
 		esc(d.Reason), esc(sentence), detail, stands, when)
 }
 
-func freshnessNote(cs *store.CollectionState, now func() float64, bootID string) string {
+func freshnessNote(cs *store.CollectionState, fv FreshnessVerdict,
+	now func() float64, bootID string) string {
+	if fv.State == "overdue" {
+		// §15's promise, broken and SAID — before the table, once, in the
+		// same position the decline banner takes, because both mean "what
+		// follows is not the current state".
+		return fmt.Sprintf(
+			`<p class="stale-banner">Overdue: %s.</p>`, esc(fv.Detail))
+	}
 	if cs.Stale {
 		reason := ""
 		if cs.StaleReason != nil {

@@ -155,6 +155,16 @@ func WriteCheckpoint(w io.Writer, st *store.Store, id, host, bootID string, gap 
 			e.Freshness = "stale"
 			e.StaleReason = cs.StaleReason
 		}
+		// KNOWN BLINDNESS, stated (register rows 41, 45): a collection
+		// past its declared freshness — §15's `overdue` — is
+		// unrepresentable here. The contract's freshness member is a
+		// closed current|stale enum and stale_reason is the closed
+		// decline vocabulary, so an overdue collection ships as
+		// `current` to the hub and only the collator's own surfaces can
+		// say otherwise. Sending `stale` with a decline reason that
+		// never happened would trade one lie for another; the honest
+		// value inside this vocabulary is the wrong one, and the fix is
+		// row 41's contract batch, not a fudge here.
 		entries = append(entries, e)
 	}
 

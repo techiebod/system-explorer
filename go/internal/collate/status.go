@@ -27,6 +27,7 @@ package collate
 import (
 	"encoding/json"
 	"net/http"
+	"sort"
 
 	"github.com/techiebod/system-explorer/go/internal/store"
 )
@@ -50,7 +51,12 @@ type statusEntry struct {
 }
 
 type statusView struct {
-	Worst       *string                `json:"worst"`
+	Worst *string `json:"worst"`
+	// Overdue names every collection past twice its declared freshness —
+	// §15's broken promise, at the roll-up, so "what needs attention"
+	// includes the questions nobody is answering anymore. Not folded into
+	// Worst: worst is the rulebook's, and this is the scheduler's.
+	Overdue     []string               `json:"overdue"`
 	Attention   int                    `json:"attention"`
 	Unjudged    []string               `json:"unjudged"`
 	Collections map[string]statusEntry `json:"collections"`
@@ -76,7 +82,8 @@ func levelJSON(rank int) json.RawMessage {
 	return json.RawMessage(`"` + levelName(rank) + `"`)
 }
 
-func registerStatus(mux *http.ServeMux, st *store.Store) {
+func registerStatus(mux *http.ServeMux, st *store.Store,
+	now func() float64, bootID string) {
 	mux.HandleFunc("GET /v1/status", func(w http.ResponseWriter, r *http.Request) {
 		states, err := st.Collections()
 		if err != nil {
@@ -88,8 +95,19 @@ func registerStatus(mux *http.ServeMux, st *store.Store) {
 			// "nothing was judged" must be the same shape as their
 			// occupied counterparts.
 			Unjudged:    []string{},
+			Overdue:     []string{},
 			Collections: map[string]statusEntry{},
 		}
+		// §15's promise check joins the roll-up: an overdue collection is
+		// something needing attention even when no rule fired — ESPECIALLY
+		// then, since its rules are judging readings nobody is refreshing.
+		promises := freshnessMap(st, states, now(), bootID)
+		for name, fv := range promises {
+			if fv.State == "overdue" {
+				view.Overdue = append(view.Overdue, name)
+			}
+		}
+		sort.Strings(view.Overdue)
 		worstRank := 0
 		for _, cs := range states {
 			entry := statusEntry{
