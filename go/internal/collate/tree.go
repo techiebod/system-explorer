@@ -49,7 +49,7 @@ import (
 // DESIGN's rule is unchanged: two collections declaring one prefix
 // resolve to NEITHER, never to whichever was read last. What changes is
 // that the other forty-odd prefixes keep working.
-func collectionOfPrefix(st *store.Store) (map[string]string, []string, error) {
+func collectionOfPrefix(st *store.Store) (map[string]string, map[string][]string, error) {
 	documents, err := st.DeclarationDocuments()
 	if err != nil {
 		return nil, nil, err
@@ -64,8 +64,15 @@ func collectionOfPrefix(st *store.Store) (map[string]string, []string, error) {
 			prefixes[c.Name] = c.Prefix
 		}
 	}
-	owner, contested := prefixIndexTolerant(prefixes)
-	return owner, contested, nil
+	owner, contested, claimants := prefixIndexWithClaimants(prefixes)
+	// Only the CONTESTED prefixes' claimants travel: an uncontested
+	// prefix is already in `owner`, and carrying its single claimant too
+	// would be two answers to one question.
+	held := map[string][]string{}
+	for _, prefix := range contested {
+		held[prefix] = claimants[prefix]
+	}
+	return owner, held, nil
 }
 
 // targetLink mints the link to a relation's far end.
@@ -75,27 +82,38 @@ func collectionOfPrefix(st *store.Store) (map[string]string, []string, error) {
 // link implies there is something at the other end to open — which is
 // the claim the state exists to deny. The name is still shown: the
 // reader needs to know what was asserted even when nothing confirms it.
-func targetLink(owner map[string]string, contested []string,
+func targetLink(owner map[string]string, contested map[string][]string,
 	rel store.Relation) string {
+	// A CONTESTED prefix offers every claimant rather than nothing.
+	//
+	// `units` and `workloads` both declare `unit`, and both are right —
+	// one describes what a systemd unit is doing, the other what it is
+	// consuming, about the same objects. The page said "resolves to
+	// neither" and stopped, withholding two destinations it was holding
+	// and blanking every relation on the host. Offering both decides
+	// nothing: it hands the reader the claimants and lets them choose,
+	// which is what this file is allowed to do.
+	if holders := contested[rel.TargetKind]; len(holders) > 0 {
+		var links []string
+		for _, collection := range holders {
+			links = append(links, fmt.Sprintf(`<a href="%s">%s</a>`,
+				objectHref(collection, rel.TargetName), esc(collection)))
+		}
+		return fmt.Sprintf(
+			`%s <span class="faint">(%s describe this name — `+
+				`%s)</span>`,
+			esc(rel.TargetName),
+			esc(fmt.Sprintf("%d collections", len(holders))),
+			strings.Join(links, ", "))
+	}
 	if !rel.Resolved || rel.TargetID == "" {
+		// §13: an asserted relation carries a positive claim about what
+		// was NOT looked at, and a link implies there is something to
+		// open — the claim the state exists to deny.
 		return esc(rel.TargetName)
 	}
 	collection, known := owner[rel.TargetKind]
 	if !known {
-		// Stated rather than linked to a guess — and stated ACCURATELY.
-		// The two reasons are different problems for different people:
-		// nobody declaring the prefix is a gap, and two collections
-		// declaring it is a collision somebody must break. Saying "no
-		// collection declares it" about a prefix TWO collections declare
-		// sends the reader looking for the wrong thing.
-		for _, prefix := range contested {
-			if prefix == rel.TargetKind {
-				return fmt.Sprintf(
-					`%s <span class="faint">(more than one collection declares `+
-						`the prefix %s, so it resolves to neither)</span>`,
-					esc(rel.TargetName), esc(rel.TargetKind))
-			}
-		}
 		return fmt.Sprintf(
 			`%s <span class="faint">(no collection on this host declares `+
 				`the prefix %s)</span>`, esc(rel.TargetName), esc(rel.TargetKind))

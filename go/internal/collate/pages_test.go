@@ -715,14 +715,9 @@ func TestAPrefixTwoCollectionsClaimResolvesToNeither(t *testing.T) {
 	if _, claimed := owner["shared"]; claimed {
 		t.Fatalf("a contested prefix must resolve to neither: %v", owner)
 	}
-	found := false
-	for _, prefix := range contested {
-		if prefix == "shared" {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatalf("the contested prefix must be named: %v", contested)
+	if len(contested["shared"]) != 2 {
+		t.Fatalf("the contested prefix must name its claimants, so a page "+
+			"can offer both rather than withholding them: %v", contested)
 	}
 }
 

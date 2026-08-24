@@ -273,18 +273,28 @@ func TestOneContestedPrefixDoesNotBlankEveryLink(t *testing.T) {
 		t.Fatalf("one clash must not cost every other prefix its links: %s",
 			linked)
 	}
-	// The contested one resolves to neither, and says WHICH problem it is.
+	// A contested prefix OFFERS EVERY CLAIMANT. `units` and `workloads`
+	// both declare `unit` and both are right — one describes what a unit
+	// is doing, the other what it is consuming, about the same objects.
+	// Saying "resolves to neither" and stopping withholds two
+	// destinations the page is holding.
 	blocked := targetLink(owner, contested, store.Relation{
-		Resolved: true, TargetID: "unit:cron.service",
-		TargetKind: "unit", TargetName: "cron.service"})
-	if strings.Contains(blocked, "<a ") {
-		t.Fatalf("a contested prefix must not be resolved to a guess: %s",
-			blocked)
+		Resolved: false, TargetID: "", TargetKind: "unit",
+		TargetName: "cron.service"})
+	for _, want := range []string{
+		objectHref("units", "cron.service"),
+		objectHref("workloads", "cron.service"),
+	} {
+		if !strings.Contains(blocked, want) {
+			t.Fatalf("every claimant must be offered: %s missing from %s",
+				want, blocked)
+		}
 	}
-	if !strings.Contains(blocked, "more than one collection declares") {
-		t.Fatalf("saying \"no collection declares it\" about a prefix TWO "+
-			"collections declare sends the reader after the wrong thing: %s",
-			blocked)
+	// It offers them; it does not CHOOSE. Neither claimant is presented
+	// as the answer.
+	if strings.Contains(blocked, ">cron.service</a>") {
+		t.Fatalf("the target must not be linked as though one claimant "+
+			"were the answer: %s", blocked)
 	}
 	// And a genuinely unclaimed prefix keeps its own, different message.
 	unknown := targetLink(owner, contested, store.Relation{

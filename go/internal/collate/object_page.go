@@ -279,7 +279,7 @@ func relationsSection(st *store.Store, collection string, row *store.ObjectRow) 
 // in CLASS and in WORDS, because a class alone is a stylesheet away from
 // being nothing at all — and this is the exact rendering whose collapse
 // §28 calls the founding failure re-entering through layer 6.
-func relationItem(owner map[string]string, contested []string,
+func relationItem(owner map[string]string, contested map[string][]string,
 	rel store.Relation) string {
 	// CROSS-SUBSYSTEM, which is an acceptance item: a zpool device links
 	// through to its hardware disk, a veth to its container. The target

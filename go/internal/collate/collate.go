@@ -539,23 +539,42 @@ func hostPrefixes(st *store.Store, prefixes map[string]string) error {
 // resolve today". Two questions, two answers, and folding them would
 // make the strict caller tolerant by accident.
 func prefixIndexTolerant(prefixes map[string]string) (map[string]string, []string) {
-	owner := map[string]string{}
-	clash := map[string]bool{}
+	owner, contested, _ := prefixIndexWithClaimants(prefixes)
+	return owner, contested
+}
+
+// prefixIndexWithClaimants also returns WHO claims each contested
+// prefix.
+//
+// Knowing the claimants is what turns a refusal into something a reader
+// can act on. `units` and `workloads` both declare `unit` and BOTH ARE
+// RIGHT: units describes what each systemd unit is doing, workloads what
+// it is consuming, about the same objects. That is one object described
+// by two collections, not a mistake to rename away — and a page that
+// says "resolves to neither" and stops has withheld two perfectly good
+// destinations it is holding.
+func prefixIndexWithClaimants(prefixes map[string]string) (
+	map[string]string, []string, map[string][]string) {
+	claimants := map[string][]string{}
 	for collection, prefix := range prefixes {
 		if prefix == "" {
 			continue
 		}
-		if held, seen := owner[prefix]; seen && held != collection {
-			clash[prefix] = true
+		claimants[prefix] = append(claimants[prefix], collection)
+	}
+	owner := map[string]string{}
+	var contested []string
+	for prefix, holders := range claimants {
+		sort.Strings(holders)
+		if len(holders) == 1 {
+			owner[prefix] = holders[0]
 			continue
 		}
-		owner[prefix] = collection
-	}
-	var contested []string
-	for prefix := range clash {
-		delete(owner, prefix)
+		// Resolves to NEITHER, per DESIGN — never to whichever was read
+		// last. The claimants are carried so a surface can offer both
+		// rather than pretending it knows nothing.
 		contested = append(contested, prefix)
 	}
 	sort.Strings(contested)
-	return owner, contested
+	return owner, contested, claimants
 }
