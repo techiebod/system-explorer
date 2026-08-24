@@ -95,7 +95,7 @@ func TestEveryLinkOnEveryPageResolves(t *testing.T) {
 			len(seen), seen)
 	}
 	for _, want := range []string{
-		"/collections/mounts", "/collections/mounts/objects/boot%2Fefi",
+		"/collections/mounts", "/collections/mounts/object?name=boot%2Fefi",
 	} {
 		if !seen[want] {
 			t.Fatalf("%s was never reached: %v", want, seen)
@@ -118,6 +118,49 @@ func TestAnObjectNameWithAnyShapeIsReachable(t *testing.T) {
 		}
 		if !strings.Contains(markup(rr.Body.String()), esc(name)) {
 			t.Errorf("%q resolved to a page that is not it", name)
+		}
+	}
+}
+
+func TestTheRootMountIsReachable(t *testing.T) {
+	// The most important mount on every host is named "/". Go's ServeMux
+	// refuses a path segment that decodes to exactly "/", so
+	// percent-escaping got `/boot/efi` through and could not get `/`
+	// through at all — its neighbours worked and it 404'd. A special
+	// case for that one name would fix the instance and leave the class,
+	// so the name moved out of the path entirely.
+	st := openStore(t)
+	mustIssue(t, st, "mounts", "sha256:m",
+		`{"schema":"se.declaration/1","collector":"storage","collections":[{
+		  "name":"mounts","freshness":"1h","prefix":"mount","answer":["Source"],
+		  "facts":{"Source":{"type":"string","temperament":"configuration"}}}]}`)
+	// The real shapes from a live host, root first.
+	objects := []store.Object{
+		{ID: "mount:/", Name: "/", Type: "mount",
+			Facts: json.RawMessage(`{"Source":"/dev/vda1"}`), At: 10},
+		{ID: "mount://boot/efi", Name: "/boot/efi", Type: "mount",
+			Facts: json.RawMessage(`{"Source":"/dev/vda15"}`), At: 10},
+	}
+	if _, err := st.ApplyCommit("mounts", store.HostNative, 1, "b1", fakeBootID,
+		objects); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewHandler(st, func() float64 { return 26.0 }, fakeBootID)
+	for _, name := range []string{"/", "/boot/efi"} {
+		rr := get(t, handler, objectHref("mounts", name))
+		if rr.Code != http.StatusOK {
+			t.Fatalf("mount %q -> %s -> %d", name, objectHref("mounts", name), rr.Code)
+		}
+	}
+	// And the crawl reaches them from the table, which is the only route
+	// a person has.
+	page := markup(get(t, handler, "/collections/mounts").Body.String())
+	for _, m := range hrefRE.FindAllStringSubmatch(page, -1) {
+		if !strings.HasPrefix(m[1], "/collections/mounts/object") {
+			continue
+		}
+		if rr := get(t, handler, m[1]); rr.Code != http.StatusOK {
+			t.Fatalf("a row links to %s which answers %d", m[1], rr.Code)
 		}
 	}
 }

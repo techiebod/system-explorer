@@ -88,7 +88,7 @@ func TestARowRendersAbsentAsAbsentAndNotAsBlank(t *testing.T) {
 	// SpareCount is absent on this object. On the OBJECT page — where
 	// every fact appears — it must render as an em dash, muted, never as
 	// an empty cell and never as zero.
-	out := htmlOf(t, pagesStore(t), "/collections/pools/objects/tank")
+	out := htmlOf(t, pagesStore(t), "/collections/pools/object?name=tank")
 	i := strings.Index(out, "SpareCount")
 	if i < 0 {
 		t.Fatal("an absent fact must still appear: it is a measured negative")
@@ -240,10 +240,10 @@ func TestTheDrillIsAnchorsAllTheWayDown(t *testing.T) {
 		t.Fatalf("the host page drills into a collection: %s", host)
 	}
 	collection := htmlOf(t, st, "/collections/pools")
-	if !strings.Contains(collection, `href="/collections/pools/objects/tank"`) {
+	if !strings.Contains(collection, `href="/collections/pools/object?name=tank"`) {
 		t.Fatalf("a row drills into its object: %s", collection)
 	}
-	object := htmlOf(t, st, "/collections/pools/objects/tank")
+	object := htmlOf(t, st, "/collections/pools/object?name=tank")
 	if !strings.Contains(object,
 		`href="/v1/collections/pools/objects/tank/evidence"`) {
 		t.Fatalf("evidence is one step from any fact: %s", object)
@@ -260,7 +260,7 @@ func TestEveryPageCarriesTheNoScriptPolicy(t *testing.T) {
 	st := pagesStore(t)
 	h := NewHandler(st, func() float64 { return 26.0 }, fakeBootID)
 	for _, path := range []string{"/", "/collections/pools",
-		"/collections/pools/objects/tank"} {
+		"/collections/pools/object?name=tank"} {
 		rr := get(t, h, path)
 		policy := rr.Header().Get("Content-Security-Policy")
 		if !strings.Contains(policy, "default-src 'none'") {
@@ -289,7 +289,7 @@ func TestAPercentageOnARowCarriesItsDenominator(t *testing.T) {
 func TestAFactsSentenceComesFromTheDeclaration(t *testing.T) {
 	// A glossary in the renderer would be a fourth copy of what the
 	// producer already said — the failure §27 records three times.
-	out := htmlOf(t, pagesStore(t), "/collections/pools/objects/tank")
+	out := htmlOf(t, pagesStore(t), "/collections/pools/object?name=tank")
 	if !strings.Contains(out, "ZFS&#39;s own verdict on the pool.") &&
 		!strings.Contains(out, "ZFS's own verdict on the pool.") {
 		t.Fatalf("the declaration's sentence must reach the page: %s", visible(out))
@@ -635,7 +635,7 @@ func TestACrossSubsystemTargetResolvesThroughTheProducersPrefixes(t *testing.T) 
 	linked := targetLink(owner, store.Relation{
 		Resolved: true, TargetID: "block-device:sda", TargetKind: "block-device",
 		TargetName: "sda"})
-	if !strings.Contains(linked, `href="/collections/block-devices/objects/sda"`) {
+	if !strings.Contains(linked, `href="/collections/block-devices/object?name=sda"`) {
 		t.Fatalf("the link crosses into the target's own collection: %s", linked)
 	}
 }
@@ -714,7 +714,7 @@ func TestTheIdentityChainPutsEveryNameOnOnePage(t *testing.T) {
 		objects); err != nil {
 		t.Fatal(err)
 	}
-	out := htmlOf(t, st, "/collections/disks/objects/sda")
+	out := htmlOf(t, st, "/collections/disks/object?name=sda")
 	for _, name := range []string{
 		"sda", "/dev/disk/by-id/ata-Samsung_SSD_870_S5", "0x5002538f31a1b2c3",
 	} {

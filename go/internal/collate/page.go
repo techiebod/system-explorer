@@ -67,8 +67,23 @@ func collectionHref(collection string) string {
 	return "/collections/" + esc(url.PathEscape(collection))
 }
 
+// An object's name goes in a QUERY PARAMETER, not a path segment.
+//
+// Go's ServeMux refuses a segment that decodes to exactly "/" — verified
+// against net/http — and the root mount is named "/". Percent-escaping
+// gets `/boot/efi` through and cannot get `/` through at all, so the
+// most important mount on every host was unreachable while its
+// neighbours worked. A special case for that one name is the subset-
+// guard shape: it fixes the instance and leaves the class.
+//
+// Object names are arbitrary producer text — mount points, dataset
+// paths, unit names with @ and \x2d, container names — and arbitrary
+// text belongs in a query parameter, which has no reserved structure to
+// collide with. One form for every name, provably total, rather than a
+// pretty form that works for most.
 func objectHref(collection, object string) string {
-	return collectionHref(collection) + "/objects/" + esc(url.PathEscape(object))
+	return collectionHref(collection) + "/object?name=" +
+		esc(url.QueryEscape(object))
 }
 
 func chip(text, kind string) string {
@@ -317,10 +332,10 @@ func registerPage(mux *http.ServeMux, st *store.Store, now func() float64, bootI
 		}
 		serveHTML(w, out)
 	})
-	mux.HandleFunc("GET /collections/{name}/objects/{object}",
+	mux.HandleFunc("GET /collections/{name}/object",
 		func(w http.ResponseWriter, r *http.Request) {
 			out, code, err := objectPage(st, r.PathValue("name"),
-				r.PathValue("object"), now, bootID)
+				r.URL.Query().Get("name"), now, bootID)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
