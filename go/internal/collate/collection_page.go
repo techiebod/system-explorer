@@ -34,7 +34,7 @@ import (
 	"github.com/techiebod/system-explorer/go/internal/store"
 )
 
-func collectionPage(st *store.Store, name, sortBy, facet string,
+func collectionPage(st *store.Store, name, sortBy, facet, attention string,
 	now func() float64, bootID string) (string, int, error) {
 	states, err := st.Collections()
 	if err != nil {
@@ -150,7 +150,7 @@ func collectionPage(st *store.Store, name, sortBy, facet string,
 
 	body.WriteString(freshnessNote(self, now, bootID))
 	body.WriteString(objectsTable(name, render, rows, could, groups, worst,
-		parentOf, nestedBy, sortBy, facet))
+		parentOf, nestedBy, sortBy, facet, attention))
 	return wrapWithNav(name, navRail(st, states, name), body.String()), http.StatusOK, nil
 }
 
@@ -406,7 +406,7 @@ func parentsFrom(st *store.Store, collection string) (map[string]string, string)
 func objectsTable(collection string, render *CollectionRender,
 	rows []store.ObjectRow, could map[string]map[string]store.Unobserved,
 	groups []HideGroup, worst map[string]string,
-	parentOf map[string]string, nestedBy, sortBy, facet string) string {
+	parentOf map[string]string, nestedBy, sortBy, facet, attention string) string {
 	// Columns come from the producer's `answer`, in the producer's order.
 	var columns []string
 	if render != nil {
@@ -499,6 +499,24 @@ func objectsTable(collection string, render *CollectionRender,
 			`rather than dropped: a row omitted because its shape surprised ` +
 			`the renderer is a row nobody can find.</p>`)
 	}
+	// THE VERDICT FACET. The levels come from the rulebook via
+	// worstPerObject, which this page has already computed before drawing
+	// anything — so this narrows by what the PRODUCER judged, and decides
+	// nothing itself. It is the one control a person reaches for on a
+	// 300-row table: show me the rows something is wrong with.
+	b.WriteString(attentionControls(collection, rows, order, worst, attention,
+		facet, sortBy))
+	if attention != "" {
+		rank := map[string]int{"critical": 0, "warn": 1, "info": 2}
+		want, known := rank[attention]
+		var kept []int
+		for _, i := range order {
+			if got, fired := rank[worst[rows[i].ID]]; known && fired && got <= want {
+				kept = append(kept, i)
+			}
+		}
+		order = kept
+	}
 	b.WriteString(facetControls(collection, rows, order, facet, sortBy))
 	// Applied AFTER the counts are taken, so a facet chip's number keeps
 	// answering "what this facet holds" rather than "what is showing" —
@@ -555,10 +573,20 @@ func objectsTable(collection string, render *CollectionRender,
 		if current {
 			aria = ` aria-sort="ascending"`
 		}
+		// The column's DECLARED type rides on the cell, so the stylesheet
+		// can size a state column narrow and let prose take the slack.
+		// The renderer is not deciding anything: it is passing through
+		// what the producer said this fact is.
+		kind := ""
+		if render != nil {
+			if decl, ok := render.Facts[name]; ok && decl.Type != "" {
+				kind = " t-" + decl.Type
+			}
+		}
 		b.WriteString(fmt.Sprintf(
-			`<th%s%s><a class="%s" href="%s">%s%s</a></th>`,
-			title, aria, cls, esc(query(collection, target, facetParam(facet))),
-			esc(name), mark))
+			`<th%s%s class="%s"><a class="%s" href="%s">%s%s</a></th>`,
+			title, aria, strings.TrimSpace(kind), cls,
+			esc(query(collection, target, facetParam(facet))), esc(name), mark))
 	}
 	b.WriteString(`</tr></thead><tbody>`)
 
@@ -607,8 +635,14 @@ func objectsTable(collection string, render *CollectionRender,
 			indent, objectHref(collection, row.Name), esc(row.Name),
 			scopeMark(row.Scope)))
 		for _, name := range columns {
-			b.WriteString("<td>" + cellFor(render, name, facts, absent,
-				could[row.ID], false) + "</td>")
+			kind := ""
+			if render != nil {
+				if decl, ok := render.Facts[name]; ok && decl.Type != "" {
+					kind = ` class="t-` + esc(decl.Type) + `"`
+				}
+			}
+			b.WriteString("<td" + kind + ">" + cellFor(render, name, facts,
+				absent, could[row.ID], false) + "</td>")
 		}
 		b.WriteString(`</tr>`)
 	}
@@ -911,4 +945,59 @@ func uniformlyUnstated(columns []string, render *CollectionRender,
 		}
 	}
 	return out
+}
+
+// attentionControls narrows to rows the rulebook judged at a level or
+// worse. `worst` is the producer's verdict per object, already computed.
+//
+// The counts describe what each level HOLDS, exactly as the facet and
+// hide-group counts do, so they do not move when one is chosen.
+func attentionControls(collection string, rows []store.ObjectRow, order []int,
+	worst map[string]string, chosen, facet, sortBy string) string {
+	held := map[string]int{}
+	for _, i := range order {
+		switch worst[rows[i].ID] {
+		case "critical":
+			held["critical"]++
+			held["warn"]++
+			held["info"]++
+		case "warn":
+			held["warn"]++
+			held["info"]++
+		case "info":
+			held["info"]++
+		}
+	}
+	if held["info"] == 0 && chosen == "" {
+		// Nothing fired anywhere: a control that can only ever return
+		// everything is a control that does nothing, and it still costs a
+		// reader the moment they spend deciding it is not for them.
+		return ""
+	}
+	link := func(level string) string {
+		return query(collection, attentionParam(level), facetParam(facet),
+			sortParam(sortBy))
+	}
+	var b strings.Builder
+	b.WriteString(`<div class="facets attention">`)
+	b.WriteString(facetChip(link(""), "everything", len(order), chosen == ""))
+	for _, level := range []string{"critical", "warn", "info"} {
+		if held[level] == 0 {
+			continue
+		}
+		label := level + " or worse"
+		if level == "critical" {
+			label = "critical"
+		}
+		b.WriteString(facetChip(link(level), label, held[level], chosen == level))
+	}
+	b.WriteString(`</div>`)
+	return b.String()
+}
+
+func attentionParam(level string) string {
+	if level == "" {
+		return ""
+	}
+	return "attention=" + url.QueryEscape(level)
 }

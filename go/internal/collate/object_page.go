@@ -129,11 +129,32 @@ func factsSection(render *CollectionRender, facts map[string]any,
 	for name := range could {
 		names[name] = true
 	}
+	// THE PRODUCER'S OWN RANKING FIRST. Every fact is kept — the object
+	// density carries everything, and dropping one would make a fact
+	// nobody can ask about — but alphabetical order over thirty facts
+	// buries the four the producer chose for the row among facts it
+	// deliberately left off.
+	//
+	// `answer` is that ranking and it already exists. This adds none of
+	// its own: what is not in `answer` follows, alphabetically, under a
+	// divider that says which half you are reading.
+	onRow := map[string]bool{}
 	var ordered []string
-	for name := range names {
-		ordered = append(ordered, name)
+	if render != nil {
+		for _, name := range render.Answer {
+			if names[name] {
+				ordered = append(ordered, name)
+				onRow[name] = true
+			}
+		}
 	}
-	sort.Strings(ordered)
+	var rest []string
+	for name := range names {
+		if !onRow[name] {
+			rest = append(rest, name)
+		}
+	}
+	sort.Strings(rest)
 
 	var b strings.Builder
 	b.WriteString(`<details open class="panel"><summary><h2>Facts</h2></summary>` +
@@ -146,12 +167,37 @@ func factsSection(render *CollectionRender, facts map[string]any,
 					esc(decl.Sentence))
 			}
 		}
-		b.WriteString(fmt.Sprintf(
-			`<tr><th class="factname">%s</th><td>%s%s</td></tr>`,
-			esc(name), cellFor(render, name, facts, absent, could, true), sentence))
+		b.WriteString(factRow(render, name, facts, absent, could, sentence))
+	}
+	if len(ordered) > 0 && len(rest) > 0 {
+		b.WriteString(`<tr class="fact-divider"><th colspan="2">` +
+			`not on the row — the producer publishes these and did not ` +
+			`choose them for the table</th></tr>`)
+	}
+	for _, name := range rest {
+		sentence := ""
+		if render != nil {
+			if decl, ok := render.Facts[name]; ok && decl.Sentence != "" {
+				sentence = fmt.Sprintf(`<div class="sentence">%s</div>`,
+					esc(decl.Sentence))
+			}
+		}
+		b.WriteString(factRow(render, name, facts, absent, could, sentence))
 	}
 	b.WriteString(`</tbody></table></div></details>`)
 	return b.String()
+}
+
+// factRow is one fact: name, value, and the producer's sentence — laid
+// out in three columns rather than value-with-prose-beneath, so a reader
+// can run their eye down the values without stepping over paragraphs.
+func factRow(render *CollectionRender, name string, facts map[string]any,
+	absent map[string]bool, could map[string]store.Unobserved,
+	sentence string) string {
+	return fmt.Sprintf(
+		`<tr><th class="factname">%s</th><td class="factvalue">%s</td>`+
+			`<td class="factsentence">%s</td></tr>`,
+		esc(name), cellFor(render, name, facts, absent, could, true), sentence)
 }
 
 func opinionsSection(st *store.Store, document, collection string,

@@ -1498,3 +1498,74 @@ func mustObjects(t *testing.T, st *store.Store, collection string) []store.Objec
 	}
 	return rows
 }
+
+func TestTheAttentionFacetNarrowsByTheRulebooksVerdict(t *testing.T) {
+	// The one control a person reaches for on a 300-row table: show me
+	// the rows something is wrong with. The levels come from the rulebook
+	// via worstPerObject, already computed before the table is drawn, so
+	// this narrows by what the PRODUCER judged and decides nothing.
+	st := openStore(t)
+	mustIssue(t, st, "units", "sha256:u", hidingDecl)
+	objects := []store.Object{
+		{ID: "unit:ok1", Name: "ok1",
+			Facts: json.RawMessage(`{"ActiveState":"active"}`), At: 10},
+		{ID: "unit:ok2", Name: "ok2",
+			Facts: json.RawMessage(`{"ActiveState":"active"}`), At: 10},
+		{ID: "unit:bad", Name: "bad",
+			Facts: json.RawMessage(`{"ActiveState":"failed"}`), At: 10},
+	}
+	if _, err := st.ApplyCommit("units", store.HostNative, 1, "b1", fakeBootID,
+		objects); err != nil {
+		t.Fatal(err)
+	}
+	all := markup(htmlOf(t, st, "/collections/units"))
+	if !strings.Contains(all, "critical") {
+		t.Fatalf("the control appears where something fired: %s", visible(all))
+	}
+	narrowed := markup(htmlOf(t, st, "/collections/units?attention=critical"))
+	if !strings.Contains(narrowed, ">bad<") {
+		t.Fatalf("the failing row survives: %s", visible(narrowed))
+	}
+	for _, clean := range []string{">ok1<", ">ok2<"} {
+		if strings.Contains(narrowed, clean) {
+			t.Fatalf("%s is not critical and must be narrowed away: %s",
+				clean, visible(narrowed))
+		}
+	}
+	// `warn or worse` INCLUDES critical — a level filter that excluded
+	// worse things than the one asked for would hide the emergency while
+	// showing the warning.
+	warnish := markup(htmlOf(t, st, "/collections/units?attention=warn"))
+	if !strings.Contains(warnish, ">bad<") {
+		t.Fatalf("warn-or-worse must include critical: %s", visible(warnish))
+	}
+}
+
+func TestTheAttentionControlIsAbsentWhereNothingFired(t *testing.T) {
+	// A control that can only ever return everything does nothing, and
+	// still costs a reader the moment they spend deciding it is not for
+	// them.
+	out := markup(htmlOf(t, pagesStore(t), "/collections/pools"))
+	if strings.Contains(out, `class="facets attention"`) {
+		t.Fatalf("nothing fired here: %s", visible(out))
+	}
+}
+
+func TestTheObjectPageLeadsWithTheProducersOwnRanking(t *testing.T) {
+	// Alphabetical order over thirty facts buries the four the producer
+	// chose for the row among the facts it deliberately left off.
+	out := markup(htmlOf(t, pagesStore(t), "/collections/pools/object?name=tank"))
+	health := strings.Index(out, "Health")
+	spare := strings.Index(out, "SpareCount")
+	if health < 0 || spare < 0 {
+		t.Fatalf("every fact is kept: %s", visible(out))
+	}
+	if health > spare {
+		t.Fatal("an `answer` fact must precede one the producer left off " +
+			"the row — this is the producer's ranking, not a new one")
+	}
+	if !strings.Contains(out, "not on the row") {
+		t.Fatalf("and the divider says which half you are reading: %s",
+			visible(out))
+	}
+}
