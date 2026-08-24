@@ -84,6 +84,38 @@ func targetLink(owner map[string]string, rel store.Relation) string {
 		objectHref(collection, rel.TargetName), esc(rel.TargetName))
 }
 
+// inboundItem draws an edge pointing AT this object, from the far end's
+// point of view: the SOURCE is what the reader wants to reach, and the
+// wording is reversed so the sentence still reads outward from the page
+// they are on.
+//
+// The observability states mean the same thing in this direction and are
+// drawn the same way — an asserted inbound edge is still a positive
+// claim about something nobody looked at, and must not be mistaken for a
+// confirmed one just because it arrived from elsewhere.
+func inboundItem(owner map[string]string, rel store.Relation) string {
+	// The link goes to the SOURCE, which lives in the collection that
+	// asserted the edge — not in this object's own.
+	source := esc(rel.SourceName)
+	if rel.Collection != "" && rel.SourceName != "" {
+		source = fmt.Sprintf(`<a href="%s">%s</a>`,
+			objectHref(rel.Collection, rel.SourceName), esc(rel.SourceName))
+	}
+	state, words := "asserted", "the far end has never been read — claimed "+
+		"from "+esc(rel.Vantage)+" alone"
+	switch rel.Observability {
+	case store.Confirmed:
+		state, words = "confirmed", "both ends read"
+	case store.Contradicted:
+		state, words = "contradicted", "the two ends disagree — read from "+
+			esc(rel.Vantage)
+	}
+	return fmt.Sprintf(
+		`<li class="rel %s">%s <span class="rel-type">%s</span> this `+
+			`<span class="rel-state">%s</span></li>`,
+		state, source, esc(rel.Type), words)
+}
+
 // nameFamilies renders every name a collector published for an object.
 //
 // The identity-chain acceptance item: one disk reachable from its

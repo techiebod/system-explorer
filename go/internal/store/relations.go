@@ -99,6 +99,57 @@ type Relation struct {
 	Resolved      bool
 	Facts         json.RawMessage
 	Observability Observability
+	// Collection is the one that ASSERTED this edge, which is not
+	// necessarily either end's own: a disk's `backs` edge to an array is
+	// stored under block-devices, so the arrays page could never reach it
+	// by looking in its own collection. Needed to mint a link back to the
+	// source of an inbound edge.
+	Collection string
+}
+
+// RelationsTouching is every edge with this object at EITHER end, across
+// EVERY collection.
+//
+// The object page read Relations(collection) and matched only the
+// SOURCE, so an edge was visible from one end and one collection only.
+// An md array's page said "This object asserts no relations" while every
+// member device asserted `member-of` pointing straight at it — the edges
+// existed, were resolved, and were unreachable from the end a person was
+// standing on.
+//
+// Both directions matter and they answer different questions: "what is
+// this made of" is outbound, "what depends on this" is inbound, and the
+// second is the one you want before unplugging something.
+func (s *Store) RelationsTouching(objectID, name string) (out, in []Relation, err error) {
+	rows, err := s.db.Query(`
+		SELECT key, source_id, source_name, type, vantage, target_kind,
+		       target_name, COALESCE(target_id, ''), resolved,
+		       COALESCE(facts, ''), observability, collection
+		FROM relations
+		WHERE source_id = ? OR source_name = ? OR target_id = ? OR target_name = ?
+		ORDER BY collection, key`, objectID, name, objectID, name)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var r Relation
+		var resolved int
+		var facts string
+		if err := rows.Scan(&r.Key, &r.SourceID, &r.SourceName, &r.Type,
+			&r.Vantage, &r.TargetKind, &r.TargetName, &r.TargetID, &resolved,
+			&facts, &r.Observability, &r.Collection); err != nil {
+			return nil, nil, err
+		}
+		r.Resolved = resolved != 0
+		r.Facts = json.RawMessage(facts)
+		if r.SourceID == objectID || r.SourceName == name {
+			out = append(out, r)
+		} else {
+			in = append(in, r)
+		}
+	}
+	return out, in, rows.Err()
 }
 
 // RelationKey is the identity of an assembled relation: the source object's

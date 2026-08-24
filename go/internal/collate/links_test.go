@@ -164,3 +164,73 @@ func TestTheRootMountIsReachable(t *testing.T) {
 		}
 	}
 }
+
+func TestAnObjectShowsEdgesPointingAtItAsWellAsFromIt(t *testing.T) {
+	// The owner's words: "most relationships don't appear to be shown."
+	// They were all there. relationsSection read Relations(collection)
+	// and matched only the SOURCE, so an edge was visible from one end
+	// and one collection only — an md array's page read "This object
+	// asserts no relations" while every member device asserted
+	// `member-of` pointing straight at it.
+	st := openStore(t)
+	mustIssue(t, st, "arrays", "sha256:a",
+		`{"schema":"se.declaration/1","collector":"storage","collections":[{
+		  "name":"arrays","freshness":"1h","prefix":"array","answer":[],
+		  "facts":{}}]}`)
+	if _, err := st.ApplyCommit("arrays", store.HostNative, 1, "b1", fakeBootID,
+		[]store.Object{{ID: "array:md126", Name: "md126", Type: "raid1",
+			Facts: json.RawMessage(`{}`), At: 10}}); err != nil {
+		t.Fatal(err)
+	}
+	// The edge is asserted BY block-devices, ABOUT the array — a
+	// different collection at each end, which is the ordinary shape.
+	mustIssue(t, st, "block-devices", "sha256:b",
+		`{"schema":"se.declaration/1","collector":"storage","collections":[{
+		  "name":"block-devices","freshness":"1h","prefix":"block-device",
+		  "answer":[],"facts":{},
+		  "relations":[{"type":"member-of","kind":"array"}]}]}`)
+	if _, err := st.ApplyCommit("block-devices", store.HostNative, 1, "b2",
+		fakeBootID, []store.Object{{ID: "block-device:loop2", Name: "loop2",
+			Type: "disk", Facts: json.RawMessage(`{}`), At: 10}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.ApplyAssertions("block-devices", store.HostNative,
+		[]store.Assertion{{
+			Collection: "block-devices", SourceName: "loop2", Type: "member-of",
+			Vantage: "block-devices", TargetKind: "array", TargetName: "md126",
+		}},
+		map[string]store.RelationType{"member-of": {}},
+		func(kind, name string) (string, bool) { return "array:" + name, true },
+		func(string, string, string) (json.RawMessage, bool) { return nil, false },
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	handler := NewHandler(st, func() float64 { return 26.0 }, fakeBootID)
+	// The ARRAY's page — the end that asserts nothing — must show it.
+	page := markup(get(t, handler, objectHref("arrays", "md126")).Body.String())
+	if strings.Contains(page, "Nothing asserts an edge") {
+		t.Fatalf("the array's page denies an edge that points straight at "+
+			"it: %s", visible(page))
+	}
+	if !strings.Contains(page, "loop2") {
+		t.Fatalf("the member device must be named on the array's page: %s",
+			visible(page))
+	}
+	// And it must be FOLLOWABLE, to the collection that holds the source
+	// rather than to this object's own.
+	if !strings.Contains(page, objectHref("block-devices", "loop2")) {
+		t.Fatalf("an inbound edge must link to its source, in the source's "+
+			"own collection: %s", page)
+	}
+	// The disk's page still shows the outbound edge.
+	disk := markup(get(t, handler, objectHref("block-devices", "loop2")).Body.String())
+	if !strings.Contains(disk, "md126") {
+		t.Fatalf("the outbound direction must not be lost: %s", visible(disk))
+	}
+	// The two directions are DISTINGUISHED — "what is this made of" and
+	// "what depends on this" are different questions.
+	if !strings.Contains(page, "from elsewhere") {
+		t.Fatalf("an inbound edge is labelled as such: %s", visible(page))
+	}
+}

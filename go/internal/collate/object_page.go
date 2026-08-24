@@ -219,29 +219,51 @@ func relationsSection(st *store.Store, collection string, row *store.ObjectRow) 
 	if err != nil {
 		owner = map[string]string{}
 	}
-	all, err := st.Relations(collection)
+	// BOTH DIRECTIONS, ACROSS EVERY COLLECTION.
+	//
+	// This read Relations(collection) and matched only the SOURCE, so an
+	// edge was visible from one end and one collection only. An md
+	// array's page read "This object asserts no relations" while every
+	// member device asserted `member-of` pointing at it, and a disk's
+	// `backs` edge lives in block-devices where the arrays page could
+	// never see it. The owner's words were "most relationships don't
+	// appear to be shown"; they were all there and reachable from one
+	// side.
+	//
+	// The two are kept apart rather than merged, because they answer
+	// different questions: outbound is "what is this made of", inbound is
+	// "what depends on this" — and the second is the one you want before
+	// unplugging anything.
+	out, in, err := st.RelationsTouching(row.ID, row.Name)
 	if err != nil {
 		return `<details class="panel"><summary><h2>Relations</h2></summary>` +
 			`<p class="faint">The relation store could not be read, so no ` +
 			`claim is made about this object's edges either way.</p></details>`
 	}
-	var mine []store.Relation
-	for _, rel := range all {
-		if rel.SourceID == row.ID || rel.SourceName == row.Name {
-			mine = append(mine, rel)
-		}
-	}
-	if len(mine) == 0 {
+	if len(out) == 0 && len(in) == 0 {
 		return `<details class="panel"><summary><h2>Relations</h2></summary>` +
-			`<p class="dim">This object asserts no relations.</p></details>`
+			`<p class="dim">Nothing asserts an edge to or from this object. ` +
+			`That is a statement about what the collectors declared, not ` +
+			`about what the system does.</p></details>`
 	}
 	var b strings.Builder
-	b.WriteString(`<details open class="panel"><summary><h2>Relations</h2></summary>` +
-		`<ul class="relations">`)
-	for _, rel := range mine {
-		b.WriteString(relationItem(owner, rel))
+	b.WriteString(`<details open class="panel"><summary><h2>Relations</h2></summary>`)
+	if len(out) > 0 {
+		b.WriteString(`<p class="dim">This object asserts:</p><ul class="relations">`)
+		for _, rel := range out {
+			b.WriteString(relationItem(owner, rel))
+		}
+		b.WriteString(`</ul>`)
 	}
-	b.WriteString(`</ul></details>`)
+	if len(in) > 0 {
+		b.WriteString(`<p class="dim">Asserted about this object, from ` +
+			`elsewhere:</p><ul class="relations">`)
+		for _, rel := range in {
+			b.WriteString(inboundItem(owner, rel))
+		}
+		b.WriteString(`</ul>`)
+	}
+	b.WriteString(`</details>`)
 	return b.String()
 }
 
