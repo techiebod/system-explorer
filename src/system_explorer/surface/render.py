@@ -62,8 +62,15 @@ def _opinion_row(opinion: Any) -> str:
     # Grounds beside level, never folded into it: `threshold` says the
     # number is ours, and a reader deciding whether to act needs to know
     # that before they read the sentence.
+    # THE HOST, on an estate page. This table sorted BY host and never
+    # showed it, so a `critical` on the estate could not be attributed to
+    # a machine — the reader is told something is wrong and not where —
+    # and two hosts with the same condition rendered as duplicate rows
+    # with no way to tell them apart. It is the first column because on
+    # an estate page "which machine" is the question before "what".
     return (
         "<tr>"
+        f'<td><span class="ident">{_e(getattr(opinion, "host", ""))}</span></td>'
         f"<td>{_chip(level, level)}</td>"
         f'<td><span class="grounds {_e(grounds)}">{_e(grounds)}</span></td>'
         f'<td><span class="ident">{_e(getattr(opinion, "object_id", ""))}</span></td>'
@@ -94,7 +101,7 @@ def opinions_panel(held: Iterable[Any]) -> str:
     body = "".join(_opinion_row(o) for o in rows)
     return (
         '<section class="panel"><h2>Opinions</h2><div class="scroll"><table>'
-        "<thead><tr><th>level</th><th>grounds</th><th>object</th>"
+        "<thead><tr><th>host</th><th>level</th><th>grounds</th><th>object</th>"
         "<th>says</th><th>cites</th></tr></thead>"
         f"<tbody>{body}</tbody></table></div></section>"
     )
@@ -196,7 +203,7 @@ def answer_panel(answer: Mapping[str, Any]) -> str:
     )
 
 
-def index_panel(rows: Iterable[Any]) -> str:
+def index_panel(rows: Iterable[Any], collections: Iterable[Any] = ()) -> str:
     """Host and collection, with counts and a link into each.
 
     A flat table of every object in the estate is not a page. Measured on
@@ -204,27 +211,75 @@ def index_panel(rows: Iterable[Any]) -> str:
     and half a megabyte of HTML, which renders and cannot be read. The
     estate scale answers *where should I look*; the collection page
     answers *what is there*. Splitting them is what makes either legible.
+
+    **Driven by what each host REPORTED, not by the objects it published.**
+    This counted objects, so a collection with none — declined, absent,
+    never read, or read and genuinely empty — produced no entry and was
+    absent from the estate view. Measured on the lab 2026-08-24: 29 of
+    lab-a's 52 collections were invisible from the hub, and they were
+    precisely the ones not answering. Absence rendering as non-existence,
+    at estate scale, on the page whose job is to say where to look.
+
+    `collections` is optional so a caller with only rows still gets the
+    old counting behaviour rather than an empty table — but the estate
+    page passes it, and the difference is 29 rows.
     """
     counts: dict[tuple[str, str], int] = {}
     for row in rows:
         for member in row.members:
             counts[(member.host, member.collection)] = (
                 counts.get((member.host, member.collection), 0) + 1)
-    body = "".join(
-        f'<tr><td class="ident">{_e(host)}</td>'
-        f'<td><a href="/hosts/{_e(host)}/collections/{_e(collection)}">'
-        f'{_e(collection)}</a></td>'
-        f'<td class="num">{count}</td></tr>'
-        for (host, collection), count in sorted(counts.items())
-    )
+
+    reported = list(collections)
+    if reported:
+        body = "".join(_index_row(entry) for entry in sorted(
+            reported, key=lambda e: (e["host"], e["collection"])))
+    else:
+        body = "".join(
+            f'<tr><td class="ident">{_e(host)}</td>'
+            f'<td><a href="/hosts/{_e(host)}/collections/{_e(collection)}">'
+            f'{_e(collection)}</a></td>'
+            f'<td class="num">{count}</td><td></td><td></td></tr>'
+            for (host, collection), count in sorted(counts.items())
+        )
     if not body:
         return ('<section class="panel"><h2>Collections</h2>'
                 '<p class="dim">No host has promoted a collection yet. The reach '
                 'above says whether that is because nobody has called in.</p></section>')
     return (
         '<section class="panel"><h2>Collections</h2><div class="scroll"><table>'
-        "<thead><tr><th>host</th><th>collection</th><th>objects</th></tr></thead>"
+        "<thead><tr><th>host</th><th>collection</th><th>objects</th>"
+        "<th>state</th><th>host last spoke</th></tr></thead>"
         f"<tbody>{body}</tbody></table></div></section>"
+    )
+
+
+def _index_row(entry: Mapping[str, Any]) -> str:
+    host = entry.get("host", "")
+    name = entry.get("collection", "")
+    generation = entry.get("generation", 0)
+    # An object count is a MEASUREMENT only where something applied.
+    if generation == 0:
+        objects = '<span class="state-unstated">not counted</span>'
+        state = _chip("never read", "muted")
+    else:
+        objects = f'{entry.get("objects", 0)}'
+        reason = entry.get("stale_reason")
+        if reason:
+            state = _chip(f"stale · {reason}", "warn")
+        else:
+            state = _chip(str(entry.get("freshness") or "current"), "ok")
+    # A host that is dark is serving LAST-KNOWN state, and the row says so
+    # rather than presenting it as current.
+    told = entry.get("told_at") or "never"
+    if entry.get("reach") != "connected":
+        told = f'{told} · {entry.get("reach")}'
+    return (
+        f'<tr><td class="ident">{_e(host)}</td>'
+        f'<td><a href="/hosts/{_e(host)}/collections/{_e(name)}">{_e(name)}</a></td>'
+        f'<td class="num">{objects}</td>'
+        f"<td>{state}</td>"
+        f'<td class="faint">{_e(told)}</td></tr>'
     )
 
 
@@ -280,7 +335,7 @@ def estate_page(view: Any, answer: Mapping[str, Any], held: Iterable[Any]) -> st
         + answer_panel(answer)
         + reach_panel(view.reach, view.coverage)
         + opinions_panel(held)
-        + index_panel(view.rows)
+        + index_panel(view.rows, getattr(view, "collections", ()))
         + "<footer>Server-rendered from the declarations each host published. "
           "Nothing on this page was decided by the page.</footer>",
     )

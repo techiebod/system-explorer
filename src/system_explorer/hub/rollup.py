@@ -81,6 +81,12 @@ class EstateView:
     rows: tuple[EstateRow, ...]
     reach: Mapping[str, Reach]
     coverage: Coverage
+    #: Every collection every host reported, INCLUDING those holding no
+    #: objects. The index was built by counting objects, so a declined,
+    #: absent or never-read collection produced no row and disappeared
+    #: from the estate — 29 of 52 on one lab host, and exactly the ones
+    #: worth seeing.
+    collections: tuple[dict, ...] = ()
 
     def row(self, id: str) -> EstateRow | None:
         for row in self.rows:
@@ -209,7 +215,8 @@ def assemble(
         sources_readable=tuple(sorted(sources_readable)),
         sources_unreadable=tuple(sorted(sources_unreadable)),
     )
-    return EstateView(rows=rows, reach=estate.reaches(), coverage=coverage)
+    return EstateView(rows=rows, reach=estate.reaches(), coverage=coverage,
+                      collections=estate.collection_states())
 
 
 @dataclass(frozen=True)

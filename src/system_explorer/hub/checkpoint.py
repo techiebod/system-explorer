@@ -382,6 +382,45 @@ class Estate:
     def hosts(self) -> tuple[str, ...]:
         return tuple(sorted(self._hosts))
 
+    def collection_states(self) -> tuple[dict, ...]:
+        """Every collection every host has told this hub about.
+
+        Built from what each host DECLARED it has, not from the objects it
+        published. The estate's Collections index counted objects, so a
+        collection with none — declined, absent, never read, or read and
+        genuinely empty — produced no entry and vanished from the estate
+        view entirely. Measured on the lab 2026-08-24: 29 of lab-a's 52
+        collections were invisible from the hub, and they were precisely
+        the ones not answering. Absence rendering as non-existence, at
+        estate scale.
+
+        `told_at` rides along because an estate page that shows a host's
+        collections without saying when it last spoke is presenting
+        last-known state as current.
+        """
+        out: list[dict] = []
+        for host in self.hosts():
+            record = self._hosts.get(host)
+            snapshot = record.snapshot if record else None
+            if snapshot is None:
+                # A host that has never completed a checkpoint here. Its
+                # absence from this list would be indistinguishable from a
+                # host with no collections, so it is carried with no
+                # collections and its reach says why.
+                continue
+            for name, collection in sorted(snapshot.collections.items()):
+                out.append({
+                    "host": host,
+                    "collection": name,
+                    "generation": collection.generation,
+                    "objects": len(collection.objects),
+                    "freshness": collection.freshness,
+                    "stale_reason": collection.stale_reason,
+                    "told_at": record.told_at if record else None,
+                    "reach": self.reach(host).value,
+                })
+        return tuple(out)
+
     def reaches(self) -> dict[str, Reach]:
         """Every known host and its state — the input a roll-up's `reach`
         is built from, and the reason an answer can say what it could not

@@ -98,3 +98,82 @@ def test_an_empty_structured_value_is_measured_emptiness():
     out = render._as_read([])
     assert out.strip() != ""
     assert "none" in out
+
+
+def test_the_estate_index_shows_collections_that_hold_nothing():
+    """The index counted OBJECTS, so a collection with none vanished.
+
+    Measured on the lab 2026-08-24: 29 of lab-a's 52 collections were
+    invisible from the estate page, and they were precisely the ones not
+    answering — declined, absent, never read. Absence rendering as
+    non-existence, at estate scale, on the page whose job is to say where
+    to look.
+    """
+    reported = [
+        {"host": "lab-a", "collection": "units", "generation": 5, "objects": 300,
+         "freshness": "current", "stale_reason": None,
+         "told_at": "2026-08-24T07:00:00Z", "reach": "connected"},
+        {"host": "lab-a", "collection": "apps", "generation": 0, "objects": 0,
+         "freshness": "current", "stale_reason": "unavailable",
+         "told_at": "2026-08-24T07:00:00Z", "reach": "connected"},
+        {"host": "lab-b", "collection": "pools", "generation": 3, "objects": 0,
+         "freshness": "stale", "stale_reason": "unavailable",
+         "told_at": "2026-08-24T06:00:00Z", "reach": "dark"},
+    ]
+    html = render.index_panel([], reported)
+    for name in ("units", "apps", "pools"):
+        assert f">{name}</a>" in html, (
+            f"{name} is missing from the estate index: a collection holding "
+            f"no objects is still a collection, and the ones holding none "
+            f"are the ones worth seeing")
+
+
+def test_a_never_read_collection_is_not_given_a_measured_count():
+    reported = [{"host": "h", "collection": "c", "generation": 0, "objects": 0,
+                 "freshness": "current", "stale_reason": None,
+                 "told_at": None, "reach": "connected"}]
+    html = render.index_panel([], reported)
+    assert "not counted" in html, html
+    assert "never read" in html, html
+    assert '<td class="num">0</td>' not in html, (
+        "a bare 0 for a collection nobody counted is byte-identical to one "
+        "read and holding nothing")
+
+
+def test_a_dark_hosts_row_says_the_reading_is_not_current():
+    """The estate served dark hosts' last-known counts as if current.
+
+    A row from a host that is not answering must carry that on the row —
+    the reader is looking at what was true when it last spoke, and
+    nothing on the page said so.
+    """
+    reported = [{"host": "h", "collection": "c", "generation": 3, "objects": 7,
+                 "freshness": "current", "stale_reason": None,
+                 "told_at": "2026-08-24T06:00:00Z", "reach": "dark"}]
+    html = render.index_panel([], reported)
+    assert "dark" in html, html
+    assert "2026-08-24T06:00:00Z" in html, (
+        "and when it last spoke, or last-known reads as current")
+
+
+def test_an_opinion_row_names_its_host():
+    """The estate opinions table sorted BY host and never showed it.
+
+    A `critical` on the estate could not be attributed to a machine — the
+    reader is told something is wrong and not where — and two hosts with
+    the same condition rendered as duplicate rows.
+    """
+    class _O:
+        level = "critical"
+        grounds = "interface"
+        host = "lab-b"
+        object_id = "unit:x"
+        key = "unit-health"
+        sentence = "systemd reports this unit failed."
+        cites = ("ActiveState",)
+
+    html = render.opinions_panel([_O()])
+    assert "<th>host</th>" in html, html
+    assert "lab-b" in html, (
+        "the host must be ON the row: an estate page answers 'which "
+        "machine' before it answers 'what'")
