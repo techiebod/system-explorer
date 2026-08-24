@@ -1634,3 +1634,59 @@ func TestACollectionWhoseRulesAllFitTheRowKeepsItsPlainMark(t *testing.T) {
 		t.Fatalf("and must not be hedged: %s", visible(out))
 	}
 }
+
+func TestADeclarationThatDescribesNoneOfTheDataSaysSo(t *testing.T) {
+	// Three collection NAMES are claimed by two collectors each —
+	// `overview` by system and traefik, `daemon` by kea and unbound,
+	// `instance` by bazarr and paperless. The store keys a collection by
+	// name, so the declaration is whoever issued last and the objects are
+	// whoever applied. Measured live: `overview` held one object carrying
+	// BootedAt, CpuCount and LoadAvg1, under traefik's Version /
+	// RoutersTotal / ServicesTotal columns, every one "not stated" — the
+	// host's headline page asking another collector's questions.
+	//
+	// The renderer cannot pick the right declaration. It CAN notice that
+	// the two do not describe the same thing.
+	const traefikish = `{"schema":"se.declaration/1","collector":"traefik",
+	  "collections":[{"name":"overview","freshness":"1h","prefix":"tf",
+	  "answer":["RoutersTotal","ServicesTotal"],
+	  "facts":{"RoutersTotal":{"type":"integer","unit":"count","temperament":"gauge"},
+	           "ServicesTotal":{"type":"integer","unit":"count","temperament":"gauge"}}}]}`
+	st := openStore(t)
+	mustIssue(t, st, "overview", "sha256:tf", traefikish)
+	// The objects that actually applied are the SYSTEM collector's.
+	if _, err := st.ApplyCommit("overview", store.HostNative, 1, "b1", fakeBootID,
+		[]store.Object{{ID: "overview:host", Name: "host",
+			Facts: json.RawMessage(`{"LoadAvg1":0.4,"CpuCount":4}`), At: 10}}); err != nil {
+		t.Fatal(err)
+	}
+	out := markup(htmlOf(t, st, "/collections/overview"))
+	if !strings.Contains(out, "does not describe these objects") {
+		t.Fatalf("a declaration describing none of the data must say so: %s",
+			visible(out))
+	}
+	// And it must NOT blame the producer for staying silent, which is
+	// what "stated no value" says and is the wrong party.
+	if strings.Contains(out, "stated no value") {
+		t.Fatalf("this is a naming collision, not a producer omission: %s",
+			visible(out))
+	}
+}
+
+func TestAPartlyDescribedCollectionIsNotCalledAMismatch(t *testing.T) {
+	// A producer that simply omits some facts has OVERLAP. Only "not one
+	// fact they carry appears in it" is a collision, and widening that
+	// would start calling ordinary sparseness a naming clash.
+	render := &CollectionRender{
+		Answer: []string{"Health"},
+		Facts:  map[string]FactDecl{"Health": {Type: "enum"}},
+	}
+	overlap := []store.ObjectRow{{Facts: json.RawMessage(`{"Health":"ONLINE","Extra":1}`)}}
+	if declarationMismatch(render, overlap) {
+		t.Fatal("a partly-described collection is not a mismatch")
+	}
+	none := []store.ObjectRow{{Facts: json.RawMessage(`{"Totally":"other"}`)}}
+	if !declarationMismatch(render, none) {
+		t.Fatal("and one describing nothing is")
+	}
+}

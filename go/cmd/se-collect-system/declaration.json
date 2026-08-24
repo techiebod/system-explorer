@@ -387,6 +387,7 @@
       "facts": {
         "UptimeSeconds": {
           "type": "integer",
+          "unit": "seconds",
           "temperament": "counter",
           "kind": "observed",
           "discloses": "nothing",
@@ -444,6 +445,7 @@
         },
         "MemTotalBytes": {
           "type": "integer",
+          "unit": "bytes",
           "temperament": "configuration",
           "kind": "observed",
           "discloses": "nothing",
@@ -451,6 +453,7 @@
         },
         "MemAvailableBytes": {
           "type": "integer",
+          "unit": "bytes",
           "temperament": "gauge",
           "kind": "observed",
           "discloses": "nothing",
@@ -458,6 +461,7 @@
         },
         "MemUsedBytes": {
           "type": "integer",
+          "unit": "bytes",
           "temperament": "gauge",
           "kind": "derived",
           "discloses": "nothing",
@@ -469,6 +473,7 @@
         },
         "MemUsedPercent": {
           "type": "integer",
+          "unit": "percent",
           "temperament": "gauge",
           "kind": "derived",
           "discloses": "nothing",
@@ -481,6 +486,7 @@
         },
         "MemUsedPercentAdjusted": {
           "type": "integer",
+          "unit": "percent",
           "temperament": "gauge",
           "kind": "derived",
           "discloses": "nothing",
@@ -494,6 +500,7 @@
         },
         "SwapTotalBytes": {
           "type": "integer",
+          "unit": "bytes",
           "temperament": "configuration",
           "kind": "observed",
           "discloses": "nothing",
@@ -501,6 +508,7 @@
         },
         "SwapUsedBytes": {
           "type": "integer",
+          "unit": "bytes",
           "temperament": "gauge",
           "kind": "derived",
           "discloses": "nothing",
@@ -511,6 +519,7 @@
         },
         "SwapUsedPercent": {
           "type": "integer",
+          "unit": "percent",
           "temperament": "gauge",
           "kind": "derived",
           "discloses": "nothing",
@@ -523,6 +532,7 @@
         },
         "ArcSizeBytes": {
           "type": "integer",
+          "unit": "bytes",
           "temperament": "gauge",
           "kind": "observed",
           "discloses": "nothing",
@@ -530,6 +540,7 @@
         },
         "ArcTargetBytes": {
           "type": "integer",
+          "unit": "bytes",
           "temperament": "gauge",
           "kind": "observed",
           "discloses": "nothing",
@@ -1011,6 +1022,7 @@
         },
         "BootTimeoutSeconds": {
           "type": "integer",
+          "unit": "seconds",
           "temperament": "configuration",
           "kind": "observed",
           "discloses": "nothing",

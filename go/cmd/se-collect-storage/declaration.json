@@ -586,6 +586,7 @@
       "facts": {
         "UsedBytes": {
           "type": "integer",
+          "unit": "bytes",
           "temperament": "gauge",
           "kind": "observed",
           "discloses": "nothing",
@@ -594,11 +595,12 @@
         },
         "AvailBytes": {
           "type": "integer",
+          "unit": "bytes",
           "temperament": "gauge",
           "kind": "observed",
           "discloses": "nothing",
           "from": "/datasets/*/properties/available",
-          "sentence": "Bytes this dataset could still grow into — bounded by its quota where one is set, else by the pool."
+          "sentence": "Bytes this dataset could still grow into \u2014 bounded by its quota where one is set, else by the pool."
         },
         "UsePercent": {
           "type": "integer",
@@ -610,15 +612,16 @@
           ],
           "discloses": "nothing",
           "from": "/datasets/*/properties",
-          "sentence": "Share of what this dataset could grow into, quota- or pool-bounded — the same gauge the mounts carry, so the two pages read alike."
+          "sentence": "Share of what this dataset could grow into, quota- or pool-bounded \u2014 the same gauge the mounts carry, so the two pages read alike."
         },
         "SnapshotUsedBytes": {
           "type": "integer",
+          "unit": "bytes",
           "temperament": "gauge",
           "kind": "observed",
           "discloses": "nothing",
           "from": "/datasets/*/properties/usedbysnapshots",
-          "sentence": "Bytes held only by snapshots — space a destroy of live data would not return."
+          "sentence": "Bytes held only by snapshots \u2014 space a destroy of live data would not return."
         },
         "SnapshotsLookup": {
           "type": "string",
@@ -645,7 +648,7 @@
           "kind": "observed",
           "discloses": "content",
           "from": "/datasets/*/properties/mountpoint/source",
-          "sentence": "Where the mountpoint setting comes from: local, default, or inherited — naming the ancestor it inherits from, because that is where an operator changes it."
+          "sentence": "Where the mountpoint setting comes from: local, default, or inherited \u2014 naming the ancestor it inherits from, because that is where an operator changes it."
         },
         "CanMount": {
           "type": "string",
@@ -677,7 +680,7 @@
           "kind": "observed",
           "discloses": "nothing",
           "from": "/datasets/*/properties/readonly",
-          "sentence": "The stored readonly property. Absent where the agent's own sandbox masks it — see ReadOnlyUnobservable."
+          "sentence": "The stored readonly property. Absent where the agent's own sandbox masks it \u2014 see ReadOnlyUnobservable."
         },
         "ReadOnlySource": {
           "type": "string",
@@ -696,7 +699,7 @@
           ],
           "discloses": "nothing",
           "from": "/datasets/*/properties/readonly/source",
-          "sentence": "Present where the stored readonly property cannot be read truthfully: libzfs derives it from the QUERYING process's mount table, so under ProtectSystem=strict every mounted dataset reported the sandbox's read-only view while PID 1's table said rw — 21 rows across two hosts, every one wrong (2026-08-10 audit). The dataset's mount row carries the host's live state."
+          "sentence": "Present where the stored readonly property cannot be read truthfully: libzfs derives it from the QUERYING process's mount table, so under ProtectSystem=strict every mounted dataset reported the sandbox's read-only view while PID 1's table said rw \u2014 21 rows across two hosts, every one wrong (2026-08-10 audit). The dataset's mount row carries the host's live state."
         }
       },
       "rules": [
@@ -741,7 +744,7 @@
           ]
         }
       ],
-      "redaction_exemption": "dataset names, mountpoints and property sources are operator-chosen words and are declared content above — the corpus scrub substitutes them through one context. Byte counts, switch positions and source types are zfs's own vocabulary, and no property this collection reads can carry a credential.",
+      "redaction_exemption": "dataset names, mountpoints and property sources are operator-chosen words and are declared content above \u2014 the corpus scrub substitutes them through one context. Byte counts, switch positions and source types are zfs's own vocabulary, and no property this collection reads can carry a credential.",
       "reference_commands": [
         {
           "purpose": "the dataset inventory these rows carry, by hand",
@@ -800,7 +803,7 @@
           ],
           "discloses": "nothing",
           "from": "/sys/block/*/md/{array_state,sync_action}",
-          "sentence": "The state an operator means: the sync action while one runs, else the array state — because array_state stays `clean` during a resync, tracking only superblock dirtiness."
+          "sentence": "The state an operator means: the sync action while one runs, else the array state \u2014 because array_state stays `clean` during a resync, tracking only superblock dirtiness."
         },
         "Level": {
           "type": "string",
@@ -824,7 +827,7 @@
           "kind": "observed",
           "discloses": "nothing",
           "from": "/sys/block/*/md/degraded",
-          "sentence": "How many member devices are missing or failed — the kernel's own count, and the array-degraded rule's whole reading."
+          "sentence": "How many member devices are missing or failed \u2014 the kernel's own count, and the array-degraded rule's whole reading."
         },
         "RaidDisks": {
           "type": "integer",
@@ -848,7 +851,7 @@
           "kind": "observed",
           "discloses": "identity",
           "from": "/sys/block/*/md/uuid",
-          "sentence": "The array's uuid — the identity that survives a rename and the value udev mints md-uuid-… by-id links from, so it correlates an array across captures and is declared the identity it is."
+          "sentence": "The array's uuid \u2014 the identity that survives a rename and the value udev mints md-uuid-\u2026 by-id links from, so it correlates an array across captures and is declared the identity it is."
         },
         "SyncAction": {
           "type": "string",
@@ -856,7 +859,7 @@
           "kind": "observed",
           "discloses": "nothing",
           "from": "/sys/block/*/md/sync_action",
-          "sentence": "What the sync thread is doing — idle, resync, recover, check, repair, reshape. The array-sync rules read it: recover warns because redundancy is not established until it finishes; the rest inform."
+          "sentence": "What the sync thread is doing \u2014 idle, resync, recover, check, repair, reshape. The array-sync rules read it: recover warns because redundancy is not established until it finishes; the rest inform."
         },
         "SyncPercent": {
           "type": "number",
@@ -867,10 +870,11 @@
           ],
           "discloses": "nothing",
           "from": "/sys/block/*/md/sync_completed",
-          "sentence": "Progress of the running sync, one decimal, from the kernel's done/total sector pair. Absent while idle — sync_completed spells `none`, which is not a number and not zero progress."
+          "sentence": "Progress of the running sync, one decimal, from the kernel's done/total sector pair. Absent while idle \u2014 sync_completed spells `none`, which is not a number and not zero progress."
         },
         "SizeBytes": {
           "type": "integer",
+          "unit": "bytes",
           "temperament": "configuration",
           "kind": "derived",
           "derived_from": [
@@ -886,7 +890,7 @@
           "kind": "observed",
           "discloses": "identity",
           "from": "/sys/block/*/md/dev-*",
-          "sentence": "Every member device: the block device it is, its state, its slot, and its error counter — each attribute sysfs did not yield left off the member rather than carried as null."
+          "sentence": "Every member device: the block device it is, its state, its slot, and its error counter \u2014 each attribute sysfs did not yield left off the member rather than carried as null."
         },
         "MembersWithErrors": {
           "type": "list",
@@ -897,7 +901,7 @@
           ],
           "discloses": "identity",
           "from": "/sys/block/*/md/dev-*/errors",
-          "sentence": "The members whose error counters are non-zero. Minted because a rule condition names one fact and a literal — a predicate inside a list of objects is not something the closed vocabulary can say — and [] is a reading: every counter was read and none was set."
+          "sentence": "The members whose error counters are non-zero. Minted because a rule condition names one fact and a literal \u2014 a predicate inside a list of objects is not something the closed vocabulary can say \u2014 and [] is a reading: every counter was read and none was set."
         }
       },
       "rules": [
@@ -964,7 +968,7 @@
           ]
         }
       ],
-      "redaction_exemption": "kernel states, counts, levels and sector sizes, identical on every machine running that layout. The two identity carriers — the array uuid, and the member device references — are declared so on their facts and handled by disclosure policy; no attribute this walk reads is operator-chosen text or a credential.",
+      "redaction_exemption": "kernel states, counts, levels and sector sizes, identical on every machine running that layout. The two identity carriers \u2014 the array uuid, and the member device references \u2014 are declared so on their facts and handled by disclosure policy; no attribute this walk reads is operator-chosen text or a credential.",
       "reference_commands": [
         {
           "purpose": "the arrays and their members, by hand",
@@ -1040,6 +1044,7 @@
         },
         "SizeBytes": {
           "type": "integer",
+          "unit": "bytes",
           "temperament": "gauge",
           "kind": "observed",
           "discloses": "nothing",
@@ -1047,6 +1052,7 @@
         },
         "UsedBytes": {
           "type": "integer",
+          "unit": "bytes",
           "temperament": "gauge",
           "kind": "observed",
           "discloses": "nothing",
@@ -1054,6 +1060,7 @@
         },
         "AvailBytes": {
           "type": "integer",
+          "unit": "bytes",
           "temperament": "gauge",
           "kind": "observed",
           "discloses": "nothing",
@@ -1061,6 +1068,7 @@
         },
         "UsePercent": {
           "type": "integer",
+          "unit": "percent",
           "temperament": "gauge",
           "kind": "observed",
           "discloses": "nothing",

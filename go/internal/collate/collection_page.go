@@ -671,7 +671,15 @@ func objectsTable(collection string, render *CollectionRender,
 	// column would hide a fact the producer's own `answer` list asks for.
 	// What is added is the summary a reader would otherwise derive by
 	// scrolling.
-	if unstated := uniformlyUnstated(columns, render, rows, could); len(unstated) > 0 {
+	if declarationMismatch(render, rows) {
+		b.WriteString(`<p class="stale-banner">The declaration this page is ` +
+			`drawn from does not describe these objects: not one fact they ` +
+			`carry appears in it. Three collection names are claimed by two ` +
+			`collectors each, and a store keyed by name keeps one ` +
+			`declaration — so the columns above are another collector's ` +
+			`questions asked of this one's answers. The objects are real; ` +
+			`the columns are not theirs.</p>`)
+	} else if unstated := uniformlyUnstated(columns, render, rows, could); len(unstated) > 0 {
 		b.WriteString(fmt.Sprintf(
 			`<p class="dim">The producer stated no value for %s on any of `+
 				`these %d rows, and did not declare it absent either — so the `+
@@ -1066,4 +1074,48 @@ func attentionParam(level string) string {
 		return ""
 	}
 	return "attention=" + url.QueryEscape(level)
+}
+
+// declarationMismatch reports when a collection's DECLARATION does not
+// describe the objects it holds.
+//
+// Three collection NAMES are claimed by two collectors each — `overview`
+// by system and traefik, `daemon` by kea and unbound, `instance` by
+// bazarr and paperless — and the store keys a collection by name, so the
+// declaration is whichever collector issued generations last while the
+// objects are whoever applied. Measured on a live host 2026-08-24:
+// `overview` held one object carrying BootedAt, CpuCount, LoadAvg1 and
+// twenty more, under traefik's five columns — Version, RoutersTotal,
+// ServicesTotal — every one of them "not stated". The host's headline
+// page, rendering another collector's questions over this one's answers.
+//
+// The renderer cannot pick the right declaration: it has one, and no
+// grounds to prefer another. What it CAN do is notice that the
+// declaration and the data do not describe the same thing, and say so —
+// rather than reporting the producer "stated no value", which blames the
+// wrong party and reads as a gap in collection instead of a collision in
+// naming.
+func declarationMismatch(render *CollectionRender, rows []store.ObjectRow) bool {
+	if render == nil || len(render.Answer) == 0 || len(rows) == 0 {
+		return false
+	}
+	described, undescribed := 0, 0
+	for _, row := range rows {
+		var facts map[string]any
+		if json.Unmarshal(row.Facts, &facts) != nil {
+			continue
+		}
+		for name := range facts {
+			if _, known := render.Facts[name]; known {
+				described++
+			} else {
+				undescribed++
+			}
+		}
+	}
+	// NOTHING the objects carry is described, and they do carry
+	// something. A collection whose producer simply omitted a few facts
+	// has some overlap; none at all means these are not the same
+	// collection's facts.
+	return described == 0 && undescribed > 0
 }

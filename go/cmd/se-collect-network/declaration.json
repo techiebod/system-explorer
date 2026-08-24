@@ -28,7 +28,7 @@
       "ms": 10000
     },
     "resolve": {
-      "question": "What does this host's own resolver say for this name — or, given an address, which names point back at it?",
+      "question": "What does this host's own resolver say for this name \u2014 or, given an address, which names point back at it?",
       "input": "a hostname, or an IP address for a reverse lookup; Result carries systemd-resolved's failure text verbatim, because busctl surfaces the daemon's message and not the D-Bus error name",
       "example": "host.example.internal",
       "bytes": 65536,
@@ -77,7 +77,7 @@
           "kind": "observed",
           "discloses": "content",
           "from": "/Self/HostName, /Peer/*/HostName",
-          "sentence": "The node's self-reported display name — free text in every sense, which is why it is a fact and never the row's identity: a stock Mac calls itself \"Henry's MacBook Pro\", with the space and the typographic apostrophe."
+          "sentence": "The node's self-reported display name \u2014 free text in every sense, which is why it is a fact and never the row's identity: a stock Mac calls itself \"Henry's MacBook Pro\", with the space and the typographic apostrophe."
         },
         "DNSName": {
           "type": "string",
@@ -85,7 +85,7 @@
           "kind": "observed",
           "discloses": "location",
           "from": "/Self/DNSName, /Peer/*/DNSName",
-          "sentence": "The tailnet's own canonical machine name, whose first label is the row's identity — the name `tailscale status` itself prints."
+          "sentence": "The tailnet's own canonical machine name, whose first label is the row's identity \u2014 the name `tailscale status` itself prints."
         },
         "TailscaleIPs": {
           "type": "list",
@@ -117,7 +117,7 @@
           "kind": "observed",
           "discloses": "nothing",
           "from": "/Peer/*/LastSeen",
-          "sentence": "When the tailnet last saw this peer. Go stamps `never` as the year-one zero time, which is absence here — passed through raw it reads as two millennia of staleness (audit 2026-08-10)."
+          "sentence": "When the tailnet last saw this peer. Go stamps `never` as the year-one zero time, which is absence here \u2014 passed through raw it reads as two millennia of staleness (audit 2026-08-10)."
         },
         "Relay": {
           "type": "string",
@@ -137,6 +137,7 @@
         },
         "RxBytes": {
           "type": "integer",
+          "unit": "bytes",
           "temperament": "counter",
           "kind": "observed",
           "discloses": "nothing",
@@ -145,6 +146,7 @@
         },
         "TxBytes": {
           "type": "integer",
+          "unit": "bytes",
           "temperament": "counter",
           "kind": "observed",
           "discloses": "nothing",
@@ -173,7 +175,7 @@
           "kind": "observed",
           "discloses": "nothing",
           "from": "/Self/KeyExpiry",
-          "sentence": "When this node's key expires, normalised to seconds UTC. A tagged node's key does not expire: the field is absent or Go's zero time, and either way this is absent — never a verdict."
+          "sentence": "When this node's key expires, normalised to seconds UTC. A tagged node's key does not expire: the field is absent or Go's zero time, and either way this is absent \u2014 never a verdict."
         },
         "KeyExpiryDays": {
           "type": "integer",
@@ -200,7 +202,7 @@
           "kind": "observed",
           "discloses": "nothing",
           "from": "/BackendState",
-          "sentence": "The daemon's own state word — Running is the healthy one. Only the self row carries it, which is what keeps the offline rule from judging peers: whether a PEER should be online is expected-state territory, not this collection's."
+          "sentence": "The daemon's own state word \u2014 Running is the healthy one. Only the self row carries it, which is what keeps the offline rule from judging peers: whether a PEER should be online is expected-state territory, not this collection's."
         },
         "Health": {
           "type": "list",
@@ -208,7 +210,7 @@
           "kind": "observed",
           "discloses": "content",
           "from": "/Health",
-          "sentence": "The daemon's own health messages, verbatim, present only when it says something. tailscaled uses these for advisories too, which is why their presence informs rather than warns — the messages themselves are the substance."
+          "sentence": "The daemon's own health messages, verbatim, present only when it says something. tailscaled uses these for advisories too, which is why their presence informs rather than warns \u2014 the messages themselves are the substance."
         },
         "PrimaryRoutes": {
           "type": "list",
@@ -216,7 +218,7 @@
           "kind": "observed",
           "discloses": "location",
           "from": "/Self/PrimaryRoutes, /Peer/*/PrimaryRoutes",
-          "sentence": "The subnet routes this node is primary for. If the advertisement lapses the fact disappears — exactly the goes-dark change an expected-state check needs to see (audit 2026-08-10)."
+          "sentence": "The subnet routes this node is primary for. If the advertisement lapses the fact disappears \u2014 exactly the goes-dark change an expected-state check needs to see (audit 2026-08-10)."
         },
         "TailscaleSnapshotAt": {
           "type": "timestamp",
@@ -224,10 +226,11 @@
           "kind": "observed",
           "discloses": "nothing",
           "from": "the snapshot file's own mtime",
-          "sentence": "When the root collector wrote the snapshot these facts came from — the SMART contract exactly: the facts are only as fresh as the file."
+          "sentence": "When the root collector wrote the snapshot these facts came from \u2014 the SMART contract exactly: the facts are only as fresh as the file."
         },
         "TailscaleSnapshotAgeSeconds": {
           "type": "integer",
+          "unit": "seconds",
           "temperament": "gauge",
           "kind": "derived",
           "derived_from": [
@@ -337,7 +340,7 @@
           ]
         }
       ],
-      "redaction_exemption": "the tailnet names, addresses, relays and routes are declared location or content fact by fact and handled by disclosure policy — the corpus stages a crafted snapshot, so nothing here is a real tailnet's identity. Counters, states and booleans are the daemon's own vocabulary; no key material of any kind appears in `tailscale status` output.",
+      "redaction_exemption": "the tailnet names, addresses, relays and routes are declared location or content fact by fact and handled by disclosure policy \u2014 the corpus stages a crafted snapshot, so nothing here is a real tailnet's identity. Counters, states and booleans are the daemon's own vocabulary; no key material of any kind appears in `tailscale status` output.",
       "reference_commands": [
         {
           "purpose": "the snapshot this collection reads, as the collector takes it",
@@ -406,7 +409,7 @@
           "kind": "observed",
           "discloses": "nothing",
           "from": "/proc/net/{tcp,tcp6,udp,udp6}",
-          "sentence": "The port this row is about — the number an operator arrives asking after, which is why it is the row rather than a column on a rule."
+          "sentence": "The port this row is about \u2014 the number an operator arrives asking after, which is why it is the row rather than a column on a rule."
         },
         "Scope": {
           "type": "enum",
@@ -445,7 +448,7 @@
           ],
           "discloses": "content",
           "from": "/nftables/*/rule",
-          "sentence": "The source constraints of admitting rules that were rendered in full — where traffic can reach this port from, by rules this observer understood completely. A clause it could not read contributes nothing here, so this is a lower bound and can only ever under-claim."
+          "sentence": "The source constraints of admitting rules that were rendered in full \u2014 where traffic can reach this port from, by rules this observer understood completely. A clause it could not read contributes nothing here, so this is a lower bound and can only ever under-claim."
         },
         "AdmittedFromPossible": {
           "type": "list",
@@ -456,7 +459,7 @@
           ],
           "discloses": "content",
           "from": "/nftables/*/rule",
-          "sentence": "The same computation with every unreadable clause treated as matching — an upper bound. Where this is wider than the certain answer, the difference is the part of the ruleset this observer cannot interpret rather than a property of the firewall."
+          "sentence": "The same computation with every unreadable clause treated as matching \u2014 an upper bound. Where this is wider than the certain answer, the difference is the part of the ruleset this observer cannot interpret rather than a property of the firewall."
         },
         "ClosureGap": {
           "type": "boolean",
@@ -479,7 +482,7 @@
           ],
           "discloses": "content",
           "from": "/nftables/*/rule",
-          "sentence": "The handles of the rules whose unreadable clauses opened the gap — where to look to close it by hand."
+          "sentence": "The handles of the rules whose unreadable clauses opened the gap \u2014 where to look to close it by hand."
         },
         "PathCoverage": {
           "type": "string",
@@ -493,7 +496,7 @@
           "sentence": "Which packet paths this row accounts for. Input only: a published container port is translated in prerouting and admitted in forward and is not covered, so an empty admitting list is not a statement that nothing can reach the port. Stated on every row rather than once, because a consumer holding one object must be able to see it. Shadowing is not resolved and connection tracking is not modelled: rules are listed in evaluation order, and an earlier drop that would pre-empt a later accept is shown rather than applied."
         }
       },
-      "redaction_exemption": "addresses a socket is bound to and rendered rule text — interface names, subnets and ports somebody chose, declared location and content above; the corpus scrub substitutes them. No credential appears in a ruleset this collection can render, and a rule comment is not read at all.",
+      "redaction_exemption": "addresses a socket is bound to and rendered rule text \u2014 interface names, subnets and ports somebody chose, declared location and content above; the corpus scrub substitutes them. No credential appears in a ruleset this collection can render, and a rule comment is not read at all.",
       "reference_commands": [
         {
           "purpose": "the sockets these rows join, by hand",
@@ -581,7 +584,7 @@
           "kind": "observed",
           "discloses": "nothing",
           "from": "/nftables/*/rule",
-          "sentence": "How many rules the table holds — COUNTED, never read. No fact on this row says what any rule matches or permits, so a ruleset that admits one port from one interface and one that admits everything are indistinguishable here: deleting the single rule that admits sshd moves this from 25 to 24 and changes nothing else on this page. The rules themselves are the nft-rules collection and this collection's evidence."
+          "sentence": "How many rules the table holds \u2014 COUNTED, never read. No fact on this row says what any rule matches or permits, so a ruleset that admits one port from one interface and one that admits everything are indistinguishable here: deleting the single rule that admits sshd moves this from 25 to 24 and changes nothing else on this page. The rules themselves are the nft-rules collection and this collection's evidence."
         }
       },
       "redaction_exemption": "a family, a count, and a list of chain names with their policies. Table and chain names are distribution conventions or operator-chosen words and are declared content; no rule body and no comment is read by this collection at all.",
@@ -595,7 +598,7 @@
           ]
         },
         {
-          "purpose": "the full ruleset — every match, port, interface and verdict these rows deliberately do not read",
+          "purpose": "the full ruleset \u2014 every match, port, interface and verdict these rows deliberately do not read",
           "argv": [
             "nft",
             "list",
