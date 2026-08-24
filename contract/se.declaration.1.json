@@ -879,7 +879,7 @@
         "when"
       ],
       "additionalProperties": false,
-      "description": "One group of rows a surface may hide by default, as DATA. Which rows are ordinarily uninteresting is the PRODUCER's judgement \u2014 a renderer deciding it would be a copy of the producer's knowledge (DESIGN 27), which is what the shipping UI's hand-kept table of predicates was. `when` is the same condition vocabulary the rule tables use, so there is one condition language and not two that drift. A row the rulebook called CRITICAL is never suppressed whatever this matches, and that exemption is enforced by the surface rather than restated in every group here: 'the default view never swallows a failure' is the promise the whole mechanism rests on, and a promise each group had to remember is one an added group will forget.",
+      "description": "One group of rows a surface may hide by default, as DATA. Which rows are ordinarily uninteresting is the PRODUCER's judgement \u2014 a renderer deciding it would be a copy of the producer's knowledge (DESIGN 27), which is what the shipping UI's hand-kept table of predicates was. `when` is the same condition vocabulary the rule tables use, so there is one condition language and not two that drift. A row the rulebook called CRITICAL is never suppressed whatever this matches, and that exemption is enforced by the surface rather than restated in every group here: 'the default view never swallows a failure' is the promise the whole mechanism rests on, and a promise each group had to remember is one an added group will forget. A group matches when its `object_type`, if declared, matches AND its `when` holds. Groups are offered in declaration order and a row joins the FIRST it matches, so the more specific group is declared first.",
       "properties": {
         "key": {
           "type": "string",
@@ -894,6 +894,11 @@
         "when": {
           "$ref": "#/$defs/condition",
           "description": "Which rows this group holds. A condition that cannot be evaluated leaves rows VISIBLE: the failure mode of a missing group is a longer page, and of a broken one hiding rows anyway is a suppressed fault."
+        },
+        "object_type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Narrow this group to objects of one declared TYPE, in addition to `when`. Kept HERE rather than added to the condition vocabulary, which is closed on purpose and whose stated invariant is that every leaf names a fact: widening it would widen the JUDGING path too, and an expression language that can grow becomes a plugin-supplied evaluator by increments. A hide group is display only \u2014 it changes what is shown and never what anything means \u2014 so a narrowing that lives on the group rather than in the condition costs the rule tables nothing."
         }
       }
     }

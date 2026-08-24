@@ -277,3 +277,46 @@ func TestTheInactiveGroupNeverSwallowsAUnitThatDoesNotExist(t *testing.T) {
 		t.Fatalf("a critical row was hidden by %q", got)
 	}
 }
+
+func TestTheKindGroupsNarrowToUnitsThisHostActuallyHas(t *testing.T) {
+	// app.js's argument, carried: `LoadState === "loaded"` narrows each
+	// kind group to units this host actually has, because "a not-found
+	// unit is the opposite statement — something here declares a
+	// dependency on a unit that is NOT installed — and no argument about
+	// what a kind of unit DOES covers that". For `.device` that is not
+	// hypothetical: the kind's resting state is `activating` forever.
+	raw, err := os.ReadFile("../../cmd/se-collect-units/declaration.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	groups, err := HideGroupsFor(string(raw), "units")
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded := map[string]any{"ActiveState": "active", "LoadState": "loaded"}
+	ghost := map[string]any{"ActiveState": "inactive", "LoadState": "not-found"}
+
+	if got := assignTyped(groups, loaded, "device", ""); got != "device" {
+		t.Fatalf("a real device unit is what the group is for: %q", got)
+	}
+	if got := assignTyped(groups, ghost, "device", ""); got != "" {
+		t.Fatalf("a device unit that is NOT INSTALLED was hidden by %q — no "+
+			"argument about what a kind of unit does covers a unit that is "+
+			"not there", got)
+	}
+	// A service is in none of the kind groups, whatever its state.
+	if got := assignTyped(groups, loaded, "service", ""); got != "" {
+		t.Fatalf("a running service belongs to no group here: %q", got)
+	}
+	// Critical is exempt from every group, as always.
+	if got := assignTyped(groups, loaded, "device", "critical"); got != "" {
+		t.Fatalf("a critical row was hidden by %q", got)
+	}
+	// The more specific group wins: an INACTIVE device joins `device`,
+	// not `inactive`, because it is declared first and a row joins the
+	// first group it matches.
+	inactiveDevice := map[string]any{"ActiveState": "inactive", "LoadState": "loaded"}
+	if got := assignTyped(groups, inactiveDevice, "device", ""); got != "device" {
+		t.Fatalf("declaration order decides, and device is declared first: %q", got)
+	}
+}

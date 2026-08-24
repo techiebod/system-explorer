@@ -52,6 +52,13 @@ type HideGroup struct {
 	Key   string          `json:"key"`
 	Label string          `json:"label"`
 	When  json.RawMessage `json:"when"`
+	// ObjectType narrows the group to one declared object type, in
+	// addition to `when`. It lives here rather than in the condition
+	// vocabulary, which is closed on purpose and whose stated invariant
+	// is that every leaf names a FACT — widening it would widen the
+	// judging path too. A hide group is display only, so a narrowing
+	// that lives on the group costs the rule tables nothing.
+	ObjectType string `json:"object_type"`
 }
 
 // HideGroupsFor reads a collection's declared groups. A collection
@@ -83,10 +90,20 @@ func HideGroupsFor(document, collection string) ([]HideGroup, error) {
 // free, because nothing whose ActiveState is `inactive` is a failed unit,
 // and a group matching on KIND has no such luck.
 func assign(groups []HideGroup, facts map[string]any, worst string) string {
+	return assignTyped(groups, facts, "", worst)
+}
+
+// assignTyped is assign with the object's declared TYPE available, which
+// is what a kind group narrows on.
+func assignTyped(groups []HideGroup, facts map[string]any,
+	objectType, worst string) string {
 	if worst == "critical" {
 		return ""
 	}
 	for _, group := range groups {
+		if group.ObjectType != "" && group.ObjectType != objectType {
+			continue
+		}
 		if len(group.When) == 0 {
 			continue
 		}

@@ -446,6 +446,24 @@
       ],
       "hide_groups": [
         {
+          "key": "device",
+          "label": "device units",
+          "object_type": "device",
+          "when": {
+            "fact": "LoadState",
+            "equals": "loaded"
+          }
+        },
+        {
+          "key": "target",
+          "label": "target units",
+          "object_type": "target",
+          "when": {
+            "fact": "LoadState",
+            "equals": "loaded"
+          }
+        },
+        {
           "key": "inactive",
           "label": "inactive",
           "when": {

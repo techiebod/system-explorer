@@ -448,7 +448,7 @@ func objectsTable(collection string, render *CollectionRender,
 		if json.Unmarshal(row.Facts, &facts) != nil {
 			facts = map[string]any{}
 		}
-		assigned[i] = assign(groups, facts, worst[row.ID])
+		assigned[i] = assignTyped(groups, facts, row.Type, worst[row.ID])
 	}
 
 	// The display order, and the depth each row is drawn at.
