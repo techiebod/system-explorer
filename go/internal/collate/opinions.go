@@ -416,3 +416,52 @@ func SecretFacts(document, collection string) (map[string]bool, error) {
 	}
 	return nil, nil
 }
+
+// ConditionFacts is every fact name a condition tests, at any depth.
+//
+// Needed because a rule may cite a fact the ROW DENSITY does not carry,
+// and a surface that says "every rule was evaluated and none fired" when
+// one of them could not be evaluated is asserting a check it never made.
+// `units` is the worked example: restart-churn tests NRestarts, which the
+// declaration deliberately keeps off the row — "fetching it for every
+// unit would turn one bus call into hundreds" — so at row density that
+// rule is undecidable, and `match` reports a missing fact as false.
+func ConditionFacts(raw json.RawMessage) []string {
+	seen := map[string]bool{}
+	collectConditionFacts(raw, seen)
+	var out []string
+	for name := range seen {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func collectConditionFacts(raw json.RawMessage, seen map[string]bool) {
+	if len(raw) == 0 {
+		return
+	}
+	var node map[string]json.RawMessage
+	if json.Unmarshal(raw, &node) != nil {
+		return
+	}
+	for _, nested := range []string{"all", "any"} {
+		if list, ok := node[nested]; ok {
+			var items []json.RawMessage
+			if json.Unmarshal(list, &items) == nil {
+				for _, item := range items {
+					collectConditionFacts(item, seen)
+				}
+			}
+		}
+	}
+	if inner, ok := node["not"]; ok {
+		collectConditionFacts(inner, seen)
+	}
+	if raw, ok := node["fact"]; ok {
+		var name string
+		if json.Unmarshal(raw, &name) == nil && name != "" {
+			seen[name] = true
+		}
+	}
+}

@@ -420,3 +420,9 @@ tr.fact-divider th {
   text-align: left;
 }
 .facets.attention { margin-bottom: .2rem; }
+
+/* A clean mark that had to qualify itself: some rule could not be
+   decided from this row's facts. Distinct from the unqualified one,
+   because "nothing fired" and "nothing that could run fired" are
+   different claims. */
+.mark-clean.partial { border-bottom: 1px dotted var(--border-2); }

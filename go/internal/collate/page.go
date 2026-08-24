@@ -98,7 +98,14 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 	var body strings.Builder
 	body.WriteString("<h1>This host</h1>")
 
-	body.WriteString(`<section class="panel"><h2>Collections</h2><div class="scroll"><table>` +
+	// The collections table and the ATTENTION summary are built into
+	// their own buffers so the summary can be assembled after it — it
+	// needs the opinions — and rendered BEFORE it. A 52-row inventory
+	// is not the answer to "what is wrong with this host", and at 3am
+	// that is the question being asked.
+	var table, attention strings.Builder
+
+	table.WriteString(`<section class="panel"><h2>Collections</h2><div class="scroll"><table>` +
 		"<thead><tr><th>collection</th><th>generation</th><th>objects</th>" +
 		"<th>freshness</th><th>age</th></tr></thead><tbody>")
 	for _, cs := range states {
@@ -137,14 +144,14 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 		// every step an <a href>, because a link is what the platform
 		// does best and a hand-rolled navigation would be this
 		// repository maintaining what the browser already maintains.
-		body.WriteString(fmt.Sprintf(
+		table.WriteString(fmt.Sprintf(
 			`<tr><td class="ident"><a href="%s">%s</a></td>`+
 				`<td class="num">%d</td><td class="num">%s</td>`+
 				`<td>%s</td><td>%s</td></tr>`,
 			collectionHref(cs.Name), esc(cs.Name), cs.Generation, objects,
 			freshness, age))
 	}
-	body.WriteString("</tbody></table></div></section>")
+	table.WriteString("</tbody></table></div></section>")
 
 	// Opinions, from each collection's declared rule table. A collection
 	// whose declaration this store cannot produce is reported as
@@ -223,7 +230,7 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 		return order[fired[i].Level] < order[fired[j].Level]
 	})
 
-	body.WriteString(`<section class="panel"><h2>Opinions</h2>`)
+	attention.WriteString(`<section class="panel"><h2>Opinions</h2>`)
 	if len(fired) == 0 {
 		// QUALIFIED, always. "No opinion fired" is only good news over the
 		// collections that were actually judged, and saying it plainly
@@ -233,36 +240,36 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 		// is a complete judging. They are not subtracted here.
 		judged := len(states) - len(unjudged) - len(neverRead)
 		if len(unjudged)+len(neverRead) == 0 {
-			body.WriteString(fmt.Sprintf(
+			attention.WriteString(fmt.Sprintf(
 				`<p class="dim">No opinion fired on this host's own facts, `+
 					`across all %d collections.</p>`, judged))
 		} else {
-			body.WriteString(fmt.Sprintf(
+			attention.WriteString(fmt.Sprintf(
 				`<p class="dim">No opinion fired on the %d of %d collections `+
 					`that were judged. That is not a verdict on the other %d — `+
 					`see below.</p>`,
 				judged, len(states), len(unjudged)+len(neverRead)))
 		}
 	} else {
-		body.WriteString(`<div class="scroll"><table><thead><tr><th>level</th>` +
+		attention.WriteString(`<div class="scroll"><table><thead><tr><th>level</th>` +
 			"<th>grounds</th><th>object</th><th>says</th><th>cites</th></tr></thead><tbody>")
 		for _, o := range fired {
-			body.WriteString(fmt.Sprintf(
+			attention.WriteString(fmt.Sprintf(
 				`<tr><td>%s</td><td><span class="grounds %s">%s</span></td>`+
 					`<td class="ident">%s</td><td>%s</td><td class="faint">%s</td></tr>`,
 				chip(o.Level, o.Level), esc(o.Grounds), esc(o.Grounds),
 				esc(o.Object), esc(o.Sentence), esc(strings.Join(o.Cites, ", "))))
 		}
-		body.WriteString("</tbody></table></div>")
+		attention.WriteString("</tbody></table></div>")
 	}
 	if len(unjudged) > 0 {
-		body.WriteString(fmt.Sprintf(
+		attention.WriteString(fmt.Sprintf(
 			`<p class="faint">Not judged, because no rule table could be read for: %s. `+
 				`That is a statement about the declaration, not about the host.</p>`,
 			esc(strings.Join(unjudged, ", "))))
 	}
 	if len(unruled) > 0 {
-		body.WriteString(fmt.Sprintf(
+		attention.WriteString(fmt.Sprintf(
 			`<p class="faint">%d collections declare no rules at all, so `+
 				`nothing was ever going to fire for them: %s. That is their `+
 				`producer's choice, not a fault here — but it does mean this `+
@@ -270,14 +277,17 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 			len(unruled), esc(strings.Join(unruled, ", "))))
 	}
 	if len(neverRead) > 0 {
-		body.WriteString(fmt.Sprintf(
+		attention.WriteString(fmt.Sprintf(
 			`<p class="faint">Nothing has ever applied for %d of these `+
 				`collections, so no opinion could be formed about them at all: `+
 				`%s. Each one's own page says whether it declined and why.</p>`,
 			len(neverRead), esc(strings.Join(neverRead, ", "))))
 	}
-	body.WriteString("</section>")
+	attention.WriteString("</section>")
 
+	// Attention first, then the inventory.
+	body.WriteString(attention.String())
+	body.WriteString(table.String())
 	body.WriteString(`<footer>Served by this host's own collator. It answers ` +
 		`whether or not a hub is reachable, which is why it exists.</footer>`)
 

@@ -1569,3 +1569,68 @@ func TestTheObjectPageLeadsWithTheProducersOwnRanking(t *testing.T) {
 			visible(out))
 	}
 }
+
+func TestTheCleanMarkDoesNotClaimAChecksItNeverMade(t *testing.T) {
+	// `severityMark` said "every rule this collection declares was
+	// evaluated against this object and none fired" — 302 times on the
+	// units page. restart-churn tests NRestarts, which the declaration
+	// deliberately keeps OFF the row ("fetching it for every unit would
+	// turn one bus call into hundreds"), so at row density that rule is
+	// undecidable and `match` reports its missing fact as false. The
+	// producer is right; the page was wrong to claim the rulebook had
+	// cleared the row.
+	const decl = `{"schema":"se.declaration/1","collector":"t","collections":[{
+	  "name":"units","freshness":"1h","prefix":"unit","answer":["ActiveState"],
+	  "facts":{"ActiveState":{"type":"enum","values":["active","failed"],
+	                          "temperament":"state"},
+	           "NRestarts":{"type":"integer","unit":"count","temperament":"counter"}},
+	  "rules":[{"key":"unit-health","level":"critical","grounds":"interface",
+	            "when":{"fact":"ActiveState","equals":"failed"},
+	            "sentence":"systemd reports this unit failed.","cites":["ActiveState"]},
+	           {"key":"restart-churn","level":"warn","grounds":"threshold",
+	            "when":{"fact":"NRestarts","at_least":3},
+	            "sentence":"This unit keeps restarting.","cites":["NRestarts"]}]}]}`
+	st := openStore(t)
+	mustIssue(t, st, "units", "sha256:u", decl)
+	if _, err := st.ApplyCommit("units", store.HostNative, 1, "b1", fakeBootID,
+		[]store.Object{{ID: "unit:a", Name: "a",
+			Facts: json.RawMessage(`{"ActiveState":"active"}`), At: 10}}); err != nil {
+		t.Fatal(err)
+	}
+	out := markup(htmlOf(t, st, "/collections/units"))
+	if strings.Contains(out, "every rule this collection declares was evaluated") {
+		t.Fatalf("the page asserts a check it structurally cannot make: %s", out)
+	}
+	if !strings.Contains(out, "restart-churn") {
+		t.Fatalf("the rule that could not run must be NAMED, or the reader "+
+			"cannot tell which question went unasked: %s", out)
+	}
+
+	// The mechanism itself, directly: a rule citing only row facts is
+	// decidable and must not be listed.
+	rules, err := RulesFor(decl, "units")
+	if err != nil {
+		t.Fatal(err)
+	}
+	render, err := RenderFor(decl, "units")
+	if err != nil {
+		t.Fatal(err)
+	}
+	held := undecidableAtRowDensity(rules, render)
+	if len(held) != 1 || held[0] != "restart-churn" {
+		t.Fatalf("only the rule whose fact is off the row: %v", held)
+	}
+}
+
+func TestACollectionWhoseRulesAllFitTheRowKeepsItsPlainMark(t *testing.T) {
+	// The qualification must not spread to pages that do not need it: a
+	// collection every rule of which cites row facts has genuinely had
+	// every rule evaluated, and hedging there would be its own dishonesty.
+	out := markup(htmlOf(t, hidingStore(t), "/collections/units"))
+	if !strings.Contains(out, "every rule this collection declares was evaluated") {
+		t.Fatalf("an unhedged claim is right where it is true: %s", visible(out))
+	}
+	if strings.Contains(out, "ok*") {
+		t.Fatalf("and must not be hedged: %s", visible(out))
+	}
+}

@@ -149,8 +149,15 @@ func collectionPage(st *store.Store, name, sortBy, facet, attention string,
 	parentOf, nestedBy := parentsFrom(st, name)
 
 	body.WriteString(freshnessNote(self, now, bootID))
+	// Which rules cannot be decided from the row's own facts. Computed
+	// once, stated on every clean mark, rather than a claim the page
+	// cannot support.
+	var undecidable []string
+	if rules, err := RulesFor(document, name); err == nil && rules != nil {
+		undecidable = undecidableAtRowDensity(rules, render)
+	}
 	body.WriteString(objectsTable(name, render, rows, could, groups, worst,
-		parentOf, nestedBy, sortBy, facet, attention))
+		parentOf, nestedBy, sortBy, facet, attention, undecidable))
 	return wrapWithNav(name, navRail(st, states, name), body.String()), http.StatusOK, nil
 }
 
@@ -406,7 +413,8 @@ func parentsFrom(st *store.Store, collection string) (map[string]string, string)
 func objectsTable(collection string, render *CollectionRender,
 	rows []store.ObjectRow, could map[string]map[string]store.Unobserved,
 	groups []HideGroup, worst map[string]string,
-	parentOf map[string]string, nestedBy, sortBy, facet, attention string) string {
+	parentOf map[string]string, nestedBy, sortBy, facet, attention string,
+	undecidable []string) string {
 	// Columns come from the producer's `answer`, in the producer's order.
 	var columns []string
 	if render != nil {
@@ -629,7 +637,8 @@ func objectsTable(collection string, render *CollectionRender,
 		} else if nestedBy != "" && len(parentOf) > 0 && !sorted && !narrowed {
 			indent = ` aria-level="1"`
 		}
-		b.WriteString("<td>" + severityMark(worst[row.ID]) + "</td>")
+		b.WriteString("<td>" + severityMarkWith(worst[row.ID], undecidable) +
+			"</td>")
 		b.WriteString(fmt.Sprintf(
 			`<td class="ident"%s><a href="%s">%s</a>%s</td>`,
 			indent, objectHref(collection, row.Name), esc(row.Name),
@@ -821,6 +830,63 @@ func sortedOrder(rows []store.ObjectRow, render *CollectionRender, by string) []
 // The last two are the pair that must not collapse. A blank cell for
 // both is the neutrality SPEC §8 forbids, and it is the same defect as
 // the blank cell for `absent` one density down.
+// undecidableAtRowDensity names the declared rules that CANNOT be
+// evaluated from the facts a row carries, because they test a fact the
+// producer deliberately kept off the row.
+//
+// `units` is the worked example: restart-churn tests NRestarts, and the
+// declaration says NRestarts is "deliberately not a row fact — fetching
+// it for every unit would turn one bus call into hundreds". So at row
+// density that rule is UNDECIDABLE, `match` reports its missing fact as
+// false, and nothing fires. The producer is right; the page was wrong to
+// then claim every rule had been evaluated.
+func undecidableAtRowDensity(rules []Rule, render *CollectionRender) []string {
+	if render == nil || len(render.Answer) == 0 {
+		return nil
+	}
+	onRow := map[string]bool{}
+	for _, name := range render.Answer {
+		onRow[name] = true
+	}
+	var out []string
+	for _, rule := range rules {
+		for _, fact := range ConditionFacts(rule.When) {
+			if !onRow[fact] {
+				out = append(out, rule.Key)
+				break
+			}
+		}
+	}
+	return out
+}
+
+// severityMark is the row's verdict, and its whole job is that ABSENCE OF
+// A VERDICT DOES NOT RENDER AS A GOOD ONE.
+//
+// `held` names the rules that could not be evaluated at this density. The
+// clean mark USED TO SAY "every rule this collection declares was
+// evaluated against this object and none fired" — 302 times on the units
+// page, where restart-churn structurally cannot run. A page asserting a
+// check it never made is the same defect as absence rendering as health,
+// one level up: the reader is told the rulebook cleared this row.
+func severityMarkWith(level string, held []string) string {
+	if level == "critical" || level == "warn" || level == "info" {
+		return chip(level, level)
+	}
+	if level == Unjudged {
+		return severityMark(level)
+	}
+	if len(held) == 0 {
+		return severityMark(level)
+	}
+	return fmt.Sprintf(
+		`<span class="mark-clean partial" title="the rules that could be `+
+			`evaluated from this row ran, and none fired. %d could not: %s — `+
+			`each tests a fact the producer keeps off the row, so it is `+
+			`undecidable here and is judged on the object page">ok*</span>`,
+		len(held), esc(strings.Join(held, ", ")))
+}
+
 func severityMark(level string) string {
 	switch level {
 	case "critical", "warn", "info":
