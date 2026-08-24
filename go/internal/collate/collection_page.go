@@ -170,16 +170,34 @@ func neverReadPanel() string {
 func declinePanel(d *store.Decline, everApplied bool, rows int) string {
 	// Each reason says a different thing about the host, so each gets its
 	// own sentence rather than one template with the word swapped in.
+	// Each sentence says WHAT THE REASON MEANS and stops there. The
+	// detail beneath says what happened, and this must not contradict it.
+	//
+	// `unavailable` read "This is an incident, not a configuration" — and
+	// DESIGN §2256 rules the exact opposite: a configuration gap declines
+	// `unavailable`, never `absent`, because "`unavailable` already means
+	// could-not-read, which is exactly what 'nobody told this process
+	// where to look' is". A fifth reason `unconfigured` was considered
+	// and rejected. So the page asserted an incident directly above the
+	// collector's own words "no servarr api configured for this process",
+	// diagnosing past a closed vocabulary and contradicting a ruling. That
+	// is §27's forbidden move — a renderer deciding what something means
+	// — committed in prose rather than in code, which is the form it is
+	// hardest to notice.
 	says := map[string]string{
 		"absent": "This interface is not on this host. Nothing is wrong: the " +
 			"question does not apply here, which is different from a question " +
 			"whose answer happens to be empty.",
 		"unauthorised": "The collector was refused permission to read this. " +
-			"The host may well have plenty to report; nobody here can see it.",
-		"unavailable": "The interface is on this host and did not answer. " +
-			"This is an incident, not a configuration.",
-		"unsupported": "The interface exists but this collector cannot read " +
-			"this shape of it.",
+			"The host may well have plenty to report; nobody here can see it — " +
+			"which is a deployment problem, not a fault in what is being read.",
+		"unavailable": "The collector could not get a reading. That covers a " +
+			"service that did not answer AND one nobody told this collector " +
+			"how to reach — the detail below says which, and this page does " +
+			"not guess.",
+		"unsupported": "The interface is here and this collector cannot read " +
+			"this shape of it, which usually means the interface has moved on. " +
+			"That is for whoever maintains the collector.",
 	}
 	sentence := says[d.Reason]
 	if sentence == "" {

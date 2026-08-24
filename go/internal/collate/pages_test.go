@@ -190,8 +190,18 @@ func TestADeclineStatesItsReasonInsteadOfShowingAnEmptyTable(t *testing.T) {
 	if !strings.Contains(out, "the zfs module is not loaded") {
 		t.Fatal("the detail is the half a person acts on and must reach the page")
 	}
-	if !strings.Contains(out, "incident") {
-		t.Fatalf("unavailable is an incident, not a configuration: %s", visible(out))
+	// This asserted `strings.Contains(out, "incident")` — pinning the
+	// renderer's own over-claim in place. DESIGN §2256 rules that a
+	// configuration gap declines `unavailable`, so "an incident, not a
+	// configuration" was wrong, and a test demanding it made the defect
+	// harder to remove than to keep. What actually matters is that the
+	// page states the reason and the detail INSTEAD of an empty table.
+	if !strings.Contains(out, "could not get a reading") {
+		t.Fatalf("the decline states what its reason means: %s", visible(out))
+	}
+	if strings.Contains(out, "<tbody>") {
+		t.Fatalf("and states it instead of showing an empty table: %s",
+			visible(out))
 	}
 }
 
@@ -1361,5 +1371,41 @@ func TestADeclaredDenominatorIsHonouredEvenWithoutAUnit(t *testing.T) {
 		false)
 	if !strings.Contains(withUnit, "25%") {
 		t.Fatalf("a declared percent keeps its sign: %s", withUnit)
+	}
+}
+
+func TestADeclineSentenceDoesNotDiagnosePastItsVocabulary(t *testing.T) {
+	// The page read "This is an incident, not a configuration" for
+	// `unavailable`, directly above the collector's own detail "no
+	// servarr api configured for this process". DESIGN §2256 rules the
+	// opposite outright: a configuration gap declines `unavailable`,
+	// never `absent`, because "unavailable already means could-not-read,
+	// which is exactly what 'nobody told this process where to look' is",
+	// and a fifth reason `unconfigured` was considered and rejected.
+	//
+	// So the renderer asserted a diagnosis the closed vocabulary does not
+	// carry, and contradicted both a ruling and the detail on the same
+	// page. §27's forbidden move committed in prose, which is the form it
+	// is hardest to notice.
+	st := openStore(t)
+	mustIssue(t, st, "pools", "sha256:p", pagesDecl)
+	if err := st.MarkStaleWith("pools", "unavailable",
+		"no servarr api configured for this process"); err != nil {
+		t.Fatal(err)
+	}
+	page := visible(markup(htmlOf(t, st, "/collections/pools")))
+	if strings.Contains(page, "not a configuration") {
+		t.Fatalf("the page diagnosed past its vocabulary and contradicted "+
+			"the detail beneath it: %s", page)
+	}
+	// The detail must still be shown — it is the half that says which.
+	if !strings.Contains(page, "no servarr api configured") {
+		t.Fatalf("the collector's own words must reach the reader: %s", page)
+	}
+	// And the sentence must name both readings rather than picking one.
+	if !strings.Contains(page, "did not answer") ||
+		!strings.Contains(page, "how to reach") {
+		t.Fatalf("`unavailable` covers both a service that did not answer and "+
+			"one nobody told the collector how to reach: %s", page)
 	}
 }
