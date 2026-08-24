@@ -24,6 +24,7 @@ package collate
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/techiebod/system-explorer/go/internal/store"
@@ -120,6 +121,185 @@ func targetLink(owner map[string]string, contested map[string][]string,
 	}
 	return fmt.Sprintf(`<a href="%s">%s</a>`,
 		objectHref(collection, rel.TargetName), esc(rel.TargetName))
+}
+
+// relationGroups renders edges grouped, because the state sentence is
+// the same for every member and 181 copies of it is not information.
+//
+// A slice's page carried 181 inbound `member-of` edges, each its own
+// list item repeating the same twelve words — "the far end has never
+// been read, claimed from units alone". §28 is right that an asserted
+// relation must carry its OWN WORDS and not a tooltip or a footnote, and
+// the words describe a STATE, so the honest fix is to say them once on
+// the container every member sits inside rather than to abbreviate them
+// or drop them.
+//
+// **Nothing is elided.** Every target is present, as a link where the
+// far end resolves. There is no "and 170 more": a page that cannot show
+// its own data is not shorter, it is incomplete, and `curl` gets the
+// whole document either way because <details> content is in the markup
+// open or closed.
+//
+// The group key is (type, observability, vantage) within a direction.
+// Observability is IN THE KEY so two states can never share a container
+// — an asserted edge and a confirmed one must not sit under one heading
+// whatever else they have in common.
+func relationGroups(owner map[string]string, contested map[string][]string,
+	rels []store.Relation, inbound bool) string {
+	if len(rels) == 0 {
+		return ""
+	}
+	type key struct{ relType, observability, vantage string }
+	order := []key{}
+	members := map[key][]store.Relation{}
+	for _, rel := range rels {
+		k := key{rel.Type, string(rel.Observability), rel.Vantage}
+		if _, seen := members[k]; !seen {
+			order = append(order, k)
+		}
+		members[k] = append(members[k], rel)
+	}
+	// Contradicted, then asserted, then confirmed — §13's own ordering of
+	// how much each state should worry a reader, not a ranking invented
+	// here.
+	rank := map[string]int{
+		string(store.Contradicted): 0,
+		string(store.Asserted):     1,
+		string(store.Confirmed):    2,
+	}
+	sort.SliceStable(order, func(i, j int) bool {
+		a, b := order[i], order[j]
+		if rank[a.observability] != rank[b.observability] {
+			return rank[a.observability] < rank[b.observability]
+		}
+		return a.relType < b.relType
+	})
+
+	var b strings.Builder
+	if inbound {
+		b.WriteString(`<p class="dim">Asserted about this object, from elsewhere:</p>`)
+	} else {
+		b.WriteString(`<p class="dim">This object asserts:</p>`)
+	}
+	for _, k := range order {
+		group := members[k]
+		state, words := relationWords(store.Observability(k.observability),
+			k.vantage, inbound)
+		// The collection the far ends live in, named only when it is
+		// uniform — a mixed group would be a claim the group cannot make.
+		where := ""
+		if uniform := uniformCollection(group, inbound); uniform != "" {
+			where = ` in <span class="ident">` + esc(uniform) + `</span>`
+		}
+		// Open where a reader can take it in; closed above that, with the
+		// count and the state visible in the summary either way.
+		open := ""
+		if len(group) <= 25 {
+			open = " open"
+		}
+		verb := "assert"
+		if !inbound {
+			verb = "→"
+		}
+		b.WriteString(fmt.Sprintf(
+			`<details%s class="rel-group %s"><summary><span class="num">%d</span> `+
+				`<span class="rel-type">%s</span>%s <span class="rel-state">%s</span>`+
+				`</summary>`,
+			open, state, len(group), esc(k.relType), where, words))
+		b.WriteString(relationBodies(owner, contested, group, inbound))
+		b.WriteString(`</details>`)
+		_ = verb
+	}
+	return b.String()
+}
+
+// relationWords is the state's sentence, in the direction being read.
+func relationWords(o store.Observability, vantage string, inbound bool) (string, string) {
+	switch o {
+	case store.Confirmed:
+		return "confirmed", "both ends read"
+	case store.Contradicted:
+		return "contradicted", "the two ends disagree — read from " + esc(vantage)
+	}
+	if inbound {
+		return "asserted", "this end has never been read — claimed from " +
+			esc(vantage) + " alone"
+	}
+	return "asserted", "the far end has never been read — claimed from " +
+		esc(vantage) + " alone"
+}
+
+// uniformCollection is where every far end in a group lives, or "" when
+// they differ. Named only when uniform: a mixed group naming one of them
+// would be a claim about edges that do not hold it.
+func uniformCollection(group []store.Relation, inbound bool) string {
+	seen := ""
+	for _, rel := range group {
+		where := rel.TargetKind
+		if inbound {
+			where = rel.Collection
+		}
+		if seen == "" {
+			seen = where
+			continue
+		}
+		if seen != where {
+			return ""
+		}
+	}
+	return seen
+}
+
+// relationBodies renders a group's members: chips where the edge carries
+// no facts, a table where it does.
+//
+// A relation type that CARRIES FACTS cannot collapse to a chip — the
+// facts are the reason the edge was worth asserting — so those become a
+// nested table, one row per edge, inside the same container.
+func relationBodies(owner map[string]string, contested map[string][]string,
+	group []store.Relation, inbound bool) string {
+	carries := false
+	for _, rel := range group {
+		if len(rel.Facts) > 2 { // more than "{}"
+			carries = true
+			break
+		}
+	}
+	var b strings.Builder
+	if !carries {
+		b.WriteString(`<div class="chips rel-members">`)
+		for _, rel := range group {
+			b.WriteString(`<span class="chip item">` +
+				relationEnd(owner, contested, rel, inbound) + `</span>`)
+		}
+		b.WriteString(`</div>`)
+		return b.String()
+	}
+	b.WriteString(`<div class="scroll"><table class="nested"><thead><tr>` +
+		`<th>end</th><th>facts</th></tr></thead><tbody>`)
+	for _, rel := range group {
+		facts := ""
+		if len(rel.Facts) > 2 {
+			facts = esc(string(rel.Facts))
+		}
+		b.WriteString(`<tr><td>` + relationEnd(owner, contested, rel, inbound) +
+			`</td><td class="faint">` + facts + `</td></tr>`)
+	}
+	b.WriteString(`</tbody></table></div>`)
+	return b.String()
+}
+
+// relationEnd is the far end of one edge, as a link where it resolves.
+func relationEnd(owner map[string]string, contested map[string][]string,
+	rel store.Relation, inbound bool) string {
+	if !inbound {
+		return targetLink(owner, contested, rel)
+	}
+	if rel.Collection == "" || rel.SourceName == "" {
+		return esc(rel.SourceName)
+	}
+	return fmt.Sprintf(`<a href="%s">%s</a>`,
+		objectHref(rel.Collection, rel.SourceName), esc(rel.SourceName))
 }
 
 // inboundItem draws an edge pointing AT this object, from the far end's

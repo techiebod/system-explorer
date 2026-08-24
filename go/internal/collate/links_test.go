@@ -2,6 +2,7 @@ package collate
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -302,5 +303,87 @@ func TestOneContestedPrefixDoesNotBlankEveryLink(t *testing.T) {
 		TargetName: "x"})
 	if !strings.Contains(unknown, "no collection on this host declares") {
 		t.Fatalf("%s", unknown)
+	}
+}
+
+func TestManyEdgesOfOneKindSayTheirStateOnceNotOncePerEdge(t *testing.T) {
+	// A slice's page carried 181 inbound `member-of` edges, each its own
+	// list item repeating the same twelve words. §28 is right that an
+	// asserted relation must carry its OWN WORDS rather than a tooltip —
+	// and the words describe a STATE, so saying them once on the
+	// container every member sits inside is the honest fix, not
+	// abbreviating them and not dropping them.
+	st := openStore(t)
+	mustIssue(t, st, "units", "sha256:u",
+		`{"schema":"se.declaration/1","collector":"units","collections":[{
+		  "name":"units","freshness":"1h","prefix":"unit","answer":[],
+		  "facts":{},"relations":[{"type":"member-of","kind":"unit"}]}]}`)
+	objects := []store.Object{{ID: "unit:a.slice", Name: "a.slice",
+		Type: "slice", Facts: json.RawMessage(`{}`), At: 10}}
+	var assertions []store.Assertion
+	for i := 0; i < 40; i++ {
+		name := fmt.Sprintf("child%02d.service", i)
+		objects = append(objects, store.Object{ID: "unit:" + name, Name: name,
+			Type: "service", Facts: json.RawMessage(`{}`), At: 10})
+		assertions = append(assertions, store.Assertion{
+			Collection: "units", SourceName: name, Type: "member-of",
+			Vantage: "units", TargetKind: "unit", TargetName: "a.slice"})
+	}
+	if _, err := st.ApplyCommit("units", store.HostNative, 1, "b1", fakeBootID,
+		objects); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.ApplyAssertions("units", store.HostNative, assertions,
+		map[string]store.RelationType{"member-of": {}},
+		func(kind, name string) (string, bool) { return "unit:" + name, true },
+		func(string, string, string) (json.RawMessage, bool) { return nil, false },
+	); err != nil {
+		t.Fatal(err)
+	}
+	page := markup(get(t, NewHandler(st, func() float64 { return 26.0 }, fakeBootID),
+		objectHref("units", "a.slice")).Body.String())
+
+	// The state sentence appears ONCE for the group, not forty times.
+	const sentence = "has never been read"
+	if n := strings.Count(page, sentence); n != 1 {
+		t.Fatalf("the state sentence appears %d times; it describes the "+
+			"group, so it belongs on the group", n)
+	}
+	// And the count is there, so a reader knows the size without counting.
+	if !strings.Contains(page, `<span class="num">40</span>`) {
+		t.Fatalf("the group carries its count: %s", visible(page))
+	}
+	// NOTHING IS ELIDED: every one of the forty is present and linked.
+	for i := 0; i < 40; i++ {
+		name := fmt.Sprintf("child%02d.service", i)
+		if !strings.Contains(page, objectHref("units", name)) {
+			t.Fatalf("%s was elided — a page that cannot show its own data "+
+				"is not shorter, it is incomplete", name)
+		}
+	}
+	if strings.Contains(page, "more") && strings.Contains(page, "…") {
+		t.Fatalf("no truncation marker may appear: %s", visible(page))
+	}
+}
+
+func TestTwoObservabilityStatesNeverShareAGroup(t *testing.T) {
+	// Observability is IN the group key. An asserted edge and a confirmed
+	// one must not sit under one heading whatever else they share — the
+	// heading carries the state sentence, and one sentence cannot be true
+	// of both.
+	rels := []store.Relation{
+		{Type: "member-of", Observability: store.Asserted, Vantage: "units",
+			TargetName: "a", Collection: "units", SourceName: "a"},
+		{Type: "member-of", Observability: store.Confirmed, Vantage: "units",
+			TargetName: "b", Collection: "units", SourceName: "b"},
+	}
+	out := relationGroups(map[string]string{}, nil, rels, true)
+	if strings.Count(out, "<details") != 2 {
+		t.Fatalf("two states, two groups: %s", out)
+	}
+	// Contradicted before asserted before confirmed — §13's own ordering
+	// of how much each should worry a reader.
+	if strings.Index(out, "never been read") > strings.Index(out, "both ends read") {
+		t.Fatalf("asserted must precede confirmed: %s", visible(out))
 	}
 }

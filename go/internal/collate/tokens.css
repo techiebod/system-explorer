@@ -348,3 +348,18 @@ main { padding: 1rem 1.25rem; min-width: 0; }
   .rail { position: static; height: auto; border-right: 0;
           border-bottom: 1px solid var(--border); }
 }
+
+/* A relation group: the state sentence once, on the container every
+   member sits inside, with the state's own form carried by the border so
+   a member is visibly inside its state even when the summary has
+   scrolled away. */
+details.rel-group { margin: .35rem 0; padding-left: .6rem; }
+details.rel-group > summary { cursor: pointer; padding: .15rem 0; }
+details.rel-group.confirmed { border-left: 3px solid var(--ok); }
+details.rel-group.asserted { border-left: 3px dashed var(--warn); }
+details.rel-group.contradicted { border-left: 3px double var(--crit); }
+details.rel-group.asserted > summary .rel-state { color: var(--warn); }
+details.rel-group.contradicted > summary .rel-state { color: var(--crit); }
+details.rel-group.confirmed > summary .rel-state { color: var(--text-faint); }
+.rel-members { margin: .3rem 0 .5rem; }
+.rel-members .chip { font-family: var(--mono, ui-monospace, monospace); }

@@ -256,21 +256,8 @@ func relationsSection(st *store.Store, collection string, row *store.ObjectRow) 
 	}
 	var b strings.Builder
 	b.WriteString(`<details open class="panel"><summary><h2>Relations</h2></summary>`)
-	if len(out) > 0 {
-		b.WriteString(`<p class="dim">This object asserts:</p><ul class="relations">`)
-		for _, rel := range out {
-			b.WriteString(relationItem(owner, contested, rel))
-		}
-		b.WriteString(`</ul>`)
-	}
-	if len(in) > 0 {
-		b.WriteString(`<p class="dim">Asserted about this object, from ` +
-			`elsewhere:</p><ul class="relations">`)
-		for _, rel := range in {
-			b.WriteString(inboundItem(owner, rel))
-		}
-		b.WriteString(`</ul>`)
-	}
+	b.WriteString(relationGroups(owner, contested, out, false))
+	b.WriteString(relationGroups(owner, contested, in, true))
 	b.WriteString(`</details>`)
 	return b.String()
 }
