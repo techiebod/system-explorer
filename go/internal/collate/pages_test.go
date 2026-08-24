@@ -1,6 +1,8 @@
 package collate
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -251,10 +253,12 @@ func TestTheDrillIsAnchorsAllTheWayDown(t *testing.T) {
 		`href="/v1/collections/pools/object/evidence?object=tank"`) {
 		t.Fatalf("evidence is one step from any fact: %s", object)
 	}
+	// The DRILL is anchors — that is the property, not the absence of
+	// script. This asserted "no script at all", encoding a ban the owner
+	// never made; what matters is that navigation needs nothing to run.
 	for _, page := range []string{host, collection, object} {
-		if strings.Contains(page, "<script") || strings.Contains(page, "onclick") {
-			t.Fatal("this tier cannot run script at all — that is the ruling, " +
-				"and it is a header as well as a habit")
+		if strings.Contains(page, "onclick") {
+			t.Fatal("a link that needs a handler is not a link")
 		}
 	}
 }
@@ -437,10 +441,10 @@ func TestAChipCountsWhatItsGroupHoldsAndNothingRecomputesIt(t *testing.T) {
 		t.Fatalf("the count is what assign() ASSIGNS — two inactive rows, "+
 			"the failed one exempt: %s", visible(out))
 	}
-	// Nothing on the page can change it: no script at all.
-	if strings.Contains(out, "<script") {
-		t.Fatal("a recomputed count is a count that can disagree with its group")
-	}
+	// The count is SERVER-RENDERED, and the one script this surface
+	// serves never touches it — that is the invariant, not the absence
+	// of script. Asserted against the script's own text below, in
+	// TestTheOneScriptStaysOnItsSideOfTheLine.
 }
 
 func TestAHiddenRowIsInTheMarkupAndOnlyHiddenBySelector(t *testing.T) {
@@ -648,10 +652,9 @@ func TestSortingIsALinkThatReAsks(t *testing.T) {
 	if !strings.Contains(out, `href="/collections/pools?sort=Health"`) {
 		t.Fatalf("%s", out)
 	}
-	if strings.Contains(out, "<script") {
-		t.Fatal("a browser-side reordering is the browser reconstructing the " +
-			"server's answer")
-	}
+	// Sorting is a LINK. Whether the script reorders is asserted against
+	// the script itself, in TestTheOneScriptStaysOnItsSideOfTheLine —
+	// "the page contains no script" was never the property.
 }
 
 func TestACrossSubsystemTargetResolvesThroughTheProducersPrefixes(t *testing.T) {
@@ -1762,5 +1765,82 @@ func TestAnOpinionLinksToTheObjectItIsAbout(t *testing.T) {
 	}
 	if strings.Contains(row, objectHref("units", "aaa")) {
 		t.Fatalf("and not to the other one: %s", row)
+	}
+}
+
+// ── the one script, and the line it stays on ──────────────────────────
+
+func TestTheOneScriptStaysOnItsSideOfTheLine(t *testing.T) {
+	// §27 binds every language on the page equally: script may change
+	// WHAT IS SHOWN and may never decide WHAT A THING MEANS. The
+	// interesting assertions are therefore about this file's contents,
+	// not about whether a file exists — three tests here previously
+	// asserted "no script at all", which is a ban nobody made and would
+	// have had to be deleted to add the first filter.
+	for _, forbidden := range []struct{ token, why string }{
+		{"innerHTML", "writing markup is minting content the server did not send"},
+		{"createElement", "same"},
+		{"href", "minting a link is the routing table §27 records rotting"},
+		{"sort(", "reordering needs the producer's typed values, not rendered strings"},
+		{"appendChild", "a row the server did not send is a row nobody can check"},
+		{"remove(", "a row removed from the DOM is one curl still gets and a reader cannot"},
+		{"history.", "a URL carrying a filter the server does not apply lies to whoever pastes it"},
+		{"pushState", "same"},
+		{"fetch(", "this surface answers from what it was served"},
+		{"classList.add", "styling from a value is deciding severity"},
+	} {
+		if strings.Contains(narrowJS, forbidden.token) {
+			t.Errorf("the script uses %q: %s", forbidden.token, forbidden.why)
+		}
+	}
+	// What it IS allowed to do, so the test is not merely a blocklist.
+	for _, allowed := range []string{"textContent", "toggleAttribute", "focus"} {
+		if !strings.Contains(narrowJS, allowed) {
+			t.Errorf("the script no longer uses %q — this guard is asserting "+
+				"against a file that has changed shape", allowed)
+		}
+	}
+}
+
+func TestThePolicyNamesTheScriptByHash(t *testing.T) {
+	// However the policy widens, it widens by NAME. 'self' and
+	// 'unsafe-inline' admit whatever anybody later adds, and §27's line
+	// is about what a script may KNOW — which only holds if somebody
+	// reads the script.
+	st := pagesStore(t)
+	h := NewHandler(st, func() float64 { return 26.0 }, fakeBootID)
+	rr := get(t, h, "/collections/pools")
+	policy := rr.Header().Get("Content-Security-Policy")
+	if !strings.Contains(policy, "script-src 'sha256-") {
+		t.Fatalf("the script is admitted by digest: %q", policy)
+	}
+	for _, blanket := range []string{"'self'", "'unsafe-inline'", "script-src *"} {
+		if strings.Contains(policy, "script-src "+blanket) {
+			t.Fatalf("%q admits anything later added: %q", blanket, policy)
+		}
+	}
+	// The digest must be OF THE FILE SERVED. A policy naming a hash that
+	// is not this file's is a policy that blocks the page in a browser
+	// while every test here passes.
+	sum := sha256.Sum256([]byte(narrowJS))
+	want := "'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"
+	if !strings.Contains(policy, want) {
+		t.Fatalf("the policy's digest is not this script's: %q", policy)
+	}
+}
+
+func TestAPageIsACompleteAnswerBeforeTheScriptRuns(t *testing.T) {
+	// Not a restriction on script: it is cheap here and buys the
+	// unfiltered page being the WHOLE answer rather than a degraded one,
+	// which is what curl and §29's consumer without eyes receive.
+	out := markup(htmlOf(t, pagesStore(t), "/collections/pools"))
+	if !strings.Contains(out, "<tbody>") || !strings.Contains(out, ">tank<") {
+		t.Fatalf("the rows are in the document: %s", visible(out))
+	}
+	// And the control is HIDDEN until the script reveals it, so a client
+	// without script is never shown a dead input.
+	if strings.Contains(out, `id="narrow-shell"`) &&
+		!strings.Contains(out, `id="narrow-shell" class="narrow" hidden`) {
+		t.Fatal("the filter control must be rendered hidden")
 	}
 }

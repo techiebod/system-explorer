@@ -158,7 +158,9 @@ func collectionPage(st *store.Store, name, sortBy, facet, attention string,
 	}
 	body.WriteString(objectsTable(name, render, rows, could, groups, worst,
 		parentOf, nestedBy, sortBy, facet, attention, undecidable))
-	return wrapWithNav(name, navRail(st, states, name), body.String()), http.StatusOK, nil
+	// The script rides only where there are rows to narrow.
+	return wrapWith(name, navRail(st, states, name), body.String(), true),
+		http.StatusOK, nil
 }
 
 // neverReadPanel is for a collection that has never applied AND has not
@@ -538,6 +540,17 @@ func objectsTable(collection string, render *CollectionRender,
 		}
 		order = kept
 	}
+	// The typed filter's control, rendered HIDDEN. The script's first act
+	// is to reveal it, so a client without script is never shown a dead
+	// input and the unfiltered page stays the whole answer.
+	if len(order) > 12 {
+		b.WriteString(`<div id="narrow-shell" class="narrow" hidden>` +
+			`<label for="narrow">narrow</label>` +
+			`<input id="narrow" type="search" autocomplete="off" ` +
+			`placeholder="type to narrow these rows (press /)">` +
+			`<span id="narrow-status" class="dim" role="status" ` +
+			`aria-live="polite"></span></div>`)
+	}
 	b.WriteString(hideControls(Chips(groups, assigned)))
 	b.WriteString(`<div class="scroll"><table>`)
 	// The verdict column had an EMPTY <th>. A screen reader announces
@@ -782,11 +795,25 @@ func wrap(title, body string) string {
 // consumer does not read this surface at all, it reads /v1, so the curl
 // cost is the only one.
 func wrapWithNav(title, rail, body string) string {
+	return wrapWith(title, rail, body, false)
+}
+
+// wrapWith puts the rail on every page, and the one script on the pages
+// that have rows to narrow.
+//
+// The script goes LAST and deferred: the page is a complete answer
+// before it runs, which is what `curl` and §29's consumer without eyes
+// receive, and is why granting the exception costs nothing.
+func wrapWith(title, rail, body string, script bool) string {
+	tail := ""
+	if script {
+		tail = "<script>" + narrowJS + "</script>"
+	}
 	return "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">" +
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
 		"<title>" + esc(title) + "</title><style>" + tokensCSS +
 		"</style></head><body>" + rail + "<main id=\"main\">" + body +
-		"</main></body></html>\n"
+		"</main>" + tail + "</body></html>\n"
 }
 
 // sortedOrder ranks rows by one fact's rendered VALUE.

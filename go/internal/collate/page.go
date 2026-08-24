@@ -26,7 +26,9 @@
 package collate
 
 import (
+	"crypto/sha256"
 	_ "embed"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -40,6 +42,21 @@ import (
 
 //go:embed tokens.css
 var tokensCSS string
+
+//go:embed narrow.js
+var narrowJS string
+
+// narrowHash is the CSP source expression for the one script this
+// surface serves, computed from the embedded bytes at start-up.
+//
+// The policy and the file cannot drift, because the policy IS the file's
+// digest. `'self'` or `'unsafe-inline'` would admit whatever anybody
+// later adds; a hash admits exactly one reviewed file, and §27's line is
+// about what a script may KNOW, which only holds if somebody reads it.
+var narrowHash = func() string {
+	sum := sha256.Sum256([]byte(narrowJS))
+	return "'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"
+}()
 
 func esc(v any) string {
 	if v == nil {
@@ -328,6 +345,8 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 }
 
 func registerPage(mux *http.ServeMux, st *store.Store, now func() float64, bootID string) {
+	// The collection page is the one that carries the filter, so it is
+	// the one whose policy names the script.
 	mux.HandleFunc("GET /collections/{name}", func(w http.ResponseWriter, r *http.Request) {
 		out, code, err := collectionPage(st, r.PathValue("name"),
 			r.URL.Query().Get("sort"), r.URL.Query().Get("facet"),
@@ -340,7 +359,7 @@ func registerPage(mux *http.ServeMux, st *store.Store, now func() float64, bootI
 			http.NotFound(w, r)
 			return
 		}
-		serveHTML(w, out)
+		serveHTMLWith(w, out, true)
 	})
 	mux.HandleFunc("GET /collections/{name}/object",
 		func(w http.ResponseWriter, r *http.Request) {
@@ -385,9 +404,16 @@ func registerPage(mux *http.ServeMux, st *store.Store, now func() float64, bootI
 // naming that file's hash — never `'self'` and never `'unsafe-inline'`,
 // which admit whatever anybody later adds.
 func serveHTML(w http.ResponseWriter, out string) {
+	serveHTMLWith(w, out, false)
+}
+
+func serveHTMLWith(w http.ResponseWriter, out string, script bool) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Content-Security-Policy",
-		"default-src 'none'; style-src 'unsafe-inline'")
+	policy := "default-src 'none'; style-src 'unsafe-inline'"
+	if script {
+		policy += "; script-src " + narrowHash
+	}
+	w.Header().Set("Content-Security-Policy", policy)
 	fmt.Fprint(w, out)
 }
 

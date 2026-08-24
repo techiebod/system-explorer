@@ -426,3 +426,16 @@ tr.fact-divider th {
    because "nothing fired" and "nothing that could run fired" are
    different claims. */
 .mark-clean.partial { border-bottom: 1px dotted var(--border-2); }
+
+/* The typed filter. Rendered hidden and revealed by the script, so a
+   client without script is never shown a dead control. */
+.narrow { display: flex; align-items: baseline; gap: .5rem; margin: .5rem 0; }
+.narrow label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+                color: var(--text-faint); }
+.narrow input {
+  flex: 0 1 22rem; padding: .2rem .4rem; font-size: 12px;
+  background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--border-2); border-radius: 3px;
+}
+.narrow input:focus-visible { outline: 2px solid var(--text-dim); outline-offset: 1px; }
+tr[data-narrowed] { display: none; }
