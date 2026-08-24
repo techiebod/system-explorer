@@ -201,7 +201,9 @@ def test_an_undeclared_revision_reaches_no_answer() -> None:
 
 
 def test_a_dark_contributor_moves_freshness_and_not_coverage() -> None:
-    """Three axes, not two. A host that told us and then went dark has
+    """PROVISIONAL, not a design ruling (register row 48): §25 does not
+    say where darkness lands. This pins the current choice so it cannot
+    drift silently — it does not settle it. A host that told us and then went dark has
     covered its share of the question — its reading stands — and what
     changed is that nobody is confirming it any more."""
     answer_live, estate, intent, _ = build(

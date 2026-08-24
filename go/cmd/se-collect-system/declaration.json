@@ -251,7 +251,7 @@
           "kind": "observed",
           "discloses": "nothing",
           "from": "/data/0/TimeUSec/data",
-          "sentence": "The wall clock at acquisition, UTC, seconds precision. A gauge: two correct readings differ by however long passed between them, and a hub compares wall readings across hosts to observe skew (DESIGN 09)."
+          "sentence": "The wall clock at acquisition, UTC, seconds precision. A gauge: two correct readings differ by however long passed between them. The hub compares THIS host's reading against the hub's own clock on arrival and keeps the offset on that edge \u2014 never host against host, which multiplies every pair's error and is the comparison DESIGN 09 exists to prohibit. Corrected 2026-08-24: the previous sentence taught the prohibited model."
         },
         "CurrentNTPServer": {
           "type": "string",

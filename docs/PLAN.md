@@ -30,6 +30,17 @@ This plan executes [The Observation Model](DESIGN.md) and its Appendix C. The mo
 >
 > Not a test the fixed code passes — a demonstration that the unfixed code fails, executed. Round two found the round-one repair pinned by tests that stayed green with their fixes reverted: a check written to catch a known defect catches that defect and generalises to nothing. So every guard lands with its reversion run and shown red, an adversary's passing-wrong subject joins the suite as a permanent fixture, and a challenger-vs-reference mismatch is an adjudication, never a verdict — the reference has to be able to lose.
 
+> **8 · A gate clause is proven on the wire — ruled by the owner, 2026-08-24**
+>
+> A clause of the form *X works across tiers* is proven by cross-process
+> evidence — real processes, the real wire, observed from outside — and never
+> by an in-process unit test, however faithful. Paid for three times before it
+> was written: the §13 hub half read green over code reachable only from a
+> test that built its inputs in-process; §23's coverage read green over
+> constant empty tuples; and the identity layer sat unbuilt behind gates that
+> judged what unit tests could see. The conformance suite keeps its unit
+> tests; a GATE cites only wire evidence.
+
 > **7 · Two rules added 2026-08-21, each paid for**
 >
 > **A completeness guard derives its work list from the reference, never from the port.** Rule 4 named the old agent the reference and the guards did not obey it: the comparator's `SERVES` table, the replay seam and gate 3's census were all shaped by what the port implemented, so three lists agreed with each other and eighteen collections, three verbs and six API routes sat behind green reports. Deny-by-default over the reference side, with explicit ruled exclusions, is the only shape that cannot do this.
@@ -359,7 +370,7 @@ Both new guards were reverted and the reversions executed. One did not fail, and
 > · **item 9** — green. `unswept`, `connected` and `dark` are distinguishable, the freeze holds with six separately-stated blindnesses, and a dark host keeps its last promoted state.
 > · **item 10** — green. NAT-mode dial direction stated per pair and refused when both sides agree, one hop holding by capability, a forwarded request refused by name, and protocol and semantic versions checked beside the intent hash.
 > · **item 1's hub half** — green, at gate 4's own wording: two instances, identical native names, two collators, four rows that stay four and are distinguishable by id alone.
-> · **item 6's hub half** — green. `resolved-later` across two collators, with the key unchanged through the upgrade.
+> · **item 6's hub half** — ~~green~~ **CORRECTED 2026-08-24: the clause was not met and the record said it was.** The checkpoint contract cannot carry a relation, so no assertion from any collator has ever reached the hub on the wire; `hub/relations.py retest()` is reachable only from `conformance/test_hub_relations.py`, which constructs `Assertion` dataclasses in-process — "two collators" never happened. A green clause standing in front of unwired code is the exact mechanism that hid the identity layer, here in the gate record itself. The estate half of §13 is owed at register row 42, blocked on the checkpoint-contract evolution (row 41). Gate 4's other clauses stand as measured; this one is reopened.
 > · **item 7's roll-up half** — green. An undeclared fact reaches no roll-up and no basis, and is named rather than dropped silently.
 > · **the checkpoint crash suite** — green at all three boundaries, judged against `boundaries.json` rather than against restated expectations, with recovery asserted too — a hub that refused everything would otherwise pass all three.
 > · **the intent declaration validates a stanza this repository's schema does not enumerate** — green, and protection is the worked example of it.

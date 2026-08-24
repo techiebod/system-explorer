@@ -403,10 +403,14 @@ class Estate:
             record = self._hosts.get(host)
             snapshot = record.snapshot if record else None
             if snapshot is None:
-                # A host that has never completed a checkpoint here. Its
-                # absence from this list would be indistinguishable from a
-                # host with no collections, so it is carried with no
-                # collections and its reach says why.
+                # A host that has never completed a checkpoint here is
+                # SKIPPED — the next statement is `continue`, so it is NOT
+                # in this list. The comment here previously claimed it was
+                # "carried with no collections", directly above the line
+                # that disproves it (corrected 2026-08-24). Its absence is
+                # stated per host by `reach` on the estate page; whether to
+                # carry a row here instead is owed with the estate-wire
+                # work, register row 41.
                 continue
             for name, collection in sorted(snapshot.collections.items()):
                 out.append({

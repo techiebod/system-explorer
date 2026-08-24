@@ -274,14 +274,23 @@ in
         socketConfig = {
           Accept = true;
           # DESIGN 18: 0600, owned by the collator's user — connect() on an
-          # AF_UNIX socket needs write permission on the inode, so this IS
-          # the access control, stated rather than defaulted.
+          # AF_UNIX socket needs write permission on the inode. That is the
+          # inode half of the access control; §18's OTHER half — the
+          # collector verifying its peer's credentials (SO_PEERCRED) — is
+          # NOT built anywhere (register row 46). A previous version of
+          # this comment called the mode the whole of the access control;
+          # corrected 2026-08-24.
           SocketUser = "system-explorer";
           SocketGroup = "system-explorer";
           SocketMode = "0600";
           # The default 64 would allow 64 x 32M of collector scopes —
           # the single-ceiling failure DESIGN 06 rejects, re-created by a
-          # default. The collator is single-flight per collector.
+          # default. NOTE: the collator is NOT single-flight per collector
+          # — no serialisation exists in the verb path and this unit
+          # itself allows 4 concurrent instances; §19's verb time bounds
+          # are declared and unenforced too. Both owed at register row 46.
+          # A previous version asserted single-flight as fact; corrected
+          # 2026-08-24.
           MaxConnections = 4;
           Slice = "system-explorer.slice";
         };

@@ -2,7 +2,11 @@
 
 **Findings, never facts.** A fact has no lifecycle and would flap; a
 finding has one by design. This surface projects the findings registry
-and the estate roll-up and nothing else.
+ONLY. §30's host roll-up entity and problem-domain entities are NOT
+built, and `acknowledged` is hardcoded false rather than read from the
+transitions log, so an automation watching it re-alerts on acknowledged
+findings — both owed at register row 47. This docstring previously
+claimed the roll-up was projected too; corrected 2026-08-24.
 
 **Publish-only, into a broker somebody else owns.** The broker is never
 the transport between tiers: a retained message is a stored observation

@@ -17,7 +17,12 @@
 //   - **A counter's companion rate gauge does not exist.** §28 says a
 //     counter renders as its declared companion rate and the raw counter
 //     only on an object page. No declaration in the tree ships such a
-//     member — 32 facts are counters and the word appears once, in prose.
+//     member — 32 facts are counters, zero declare one. CORRECTED
+//     2026-08-24: the contract DOES define `rate_companion`
+//     (se.declaration.1.json) — a previous version of this comment said
+//     the member existed only in prose. So the gap is twofold: no
+//     collector declares it, and FactDecl below cannot read it — a
+//     declared companion would be silently ignored. Register row 45.
 //     So a counter renders as its raw value MARKED CUMULATIVE. The
 //     renderer must not compute the rate: the window belongs to the
 //     producer (§12), and a rate this file invented would be exactly the

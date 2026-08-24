@@ -702,7 +702,13 @@ REGISTER: tuple[Row, ...] = (
         "founding failure the persistence exists to prevent. What the probe "
         "cannot see: transitions and acknowledgement are NOT here — they "
         "arrive with row 19's posture ruling — and no daemon wires the "
-        "store path yet, which is deployment's."),
+        "store path yet, which is deployment's." 
+        "AMENDED 2026-08-24 by the design-conformance audit: contributors "
+        "carry host, collection and generation — three of §06's four "
+        "members. The ARRIVAL stamp is not persisted, so a restarted hub "
+        "cannot say when the evidence behind a frozen finding arrived and "
+        "dark renders since-unknown. Owed at row 44; this row stays built "
+        "for the three members it does deliver."),
     Row(19, "acknowledgement — appended/attributed/reversible, write posture",
         "built", "R3e",
         lambda: (_in_file("src/system_explorer/hub/writes.py", "TRANSITIONS_PATH")
@@ -1223,4 +1229,164 @@ REGISTER: tuple[Row, ...] = (
         "key a collection by (collector, name) — and it is the same shape "
         "as the `unit` prefix clash one level up: there the kind resolves "
         "to neither, here the name resolves to whoever was last."),
+    Row(40, "the record-correction sweep — false greens and lying comments "
+        "removed",
+        "built", "R-remediation",
+        None,
+        "no probe: a correction to prose is proven by reading it. Done "
+        "2026-08-24 on the owner's instruction, from the design-conformance "
+        "audit (57 verified misses, 11 roots). Corrected: PLAN's \"item 6's "
+        "hub half — green\" (the checkpoint contract cannot carry a "
+        "relation; the clause's evidence was in-process); resolution.py's "
+        "four-member docstring over a three-member dataclass; "
+        "checkpoint.py's carried-host comment above the `continue` that "
+        "disproves it; mqtt.py claiming a roll-up it does not project; the "
+        "nix socket comments asserting single-flight and mode-as-whole-"
+        "access-control; answer.py presenting the three-axes derivation as "
+        "settled; widgets.go claiming rate_companion exists only in prose "
+        "(the contract defines it); and the CurrentTime sentence teaching "
+        "the host-to-host comparison §09 prohibits. Standing rule 8 "
+        "recorded: a gate clause is proven on the wire."),
+    Row(41, "the estate wire is frozen at declarations plus one checkpoint",
+        "owed", "R-remediation, owner ruling first",
+        None,
+        "§06: after the checkpoint comes 'the ordinary stream', and "
+        "evidence/object/lookup ride back down the host-opened connection. "
+        "Neither exists: the collator dials, sends, closes, sleeps 30s; the "
+        "hub refuses post-checkpoint records as 'stream-unimplemented'; the "
+        "route table serves no evidence route, so the rewrite hub "
+        "structurally cannot serve get_evidence estate-wide while the "
+        "shipping hub can. The fix is ONE deliberate contract evolution "
+        "batching every member the other roots queue: relation assertions "
+        "with `at`, evidence digests (or an omit-and-state ruling replacing "
+        "answer.py's sha256:0), the opinion threshold member, stale_reason "
+        "widening, truncation reason, withdrawn marker, and grounds gaining "
+        "intent-relative. Rule once, not seven times."),
+    Row(42, "§13's estate half — no relation ever reaches the hub",
+        "owed", "R-remediation, blocked on row 41",
+        None,
+        "every asserted relation is meant to be re-tested at the hub "
+        "against intent's objects and other hosts' names, its resolution "
+        "upgraded on a match. hub/relations.py retest() exists and is "
+        "reachable only from a test that builds Assertion objects "
+        "in-process; the wire cannot carry one. PLAN's gate-4 clause "
+        "claiming this green was corrected 2026-08-24 (rule 8). ALSO "
+        "batch-scoped at the collator: the inverse index sees one batch, so "
+        "a confirming assertion from another collector can never match — "
+        "one confirmed_by pair exists fleet-wide and a live host shows "
+        "zero confirmed edges. Do not wire hub confirmation before the "
+        "age-spread bound exists (row 44), or a dead checkpoint confirms "
+        "live assertions indefinitely."),
+    Row(43, "intent is a document, not an authority",
+        "owed", "R-remediation",
+        None,
+        "membership is judged from SE_DECLARED_HOSTS while intent's copy "
+        "drives only rendering — two authorities that can fork silently, "
+        "invisible to federation's hash defence. Every 'should' member "
+        "(expected_units, expected_disks, machine_ids, reachability, "
+        "review_by) has zero consumers; §17's intent-relative opinion "
+        "class — 'the missing half of the founding failure' — is "
+        "unrepresentable while grounds is a closed interface|threshold "
+        "enum (widening rides row 41's batch); Law 5's "
+        "nothing-is-comparing-this-host sentence is missing on both "
+        "surfaces. Buildable now except the enum: delete "
+        "SE_DECLARED_HOSTS, one authority; add the Law 5 sentences."),
+    Row(44, "the cross-host time model has no operating half",
+        "owed", "R-remediation",
+        None,
+        "nothing stamps an arrival: session.py's clock parameter has no "
+        "caller on the real path, so told_at is None for every promote the "
+        "product can perform; finding contributors drop the arrival member "
+        "§06 pays for (row 18 amended); the CurrentTime fact is "
+        "published and read by nothing, so no offset edge exists; and "
+        "retention deletes on wall arithmetic with no plausibility guard "
+        "against a clock step. All buildable now: wire the clock at the "
+        "listener, persist arrival on contributors, read CurrentTime into "
+        "an offset edge on arrival, guard retention."),
+    Row(45, "the acquisition economy is declare-only",
+        "owed", "R-remediation — freshness verdict building first in the units slice",
+        None,
+        "every economic number has a producer and no consuming tier. "
+        "FRESHNESS: sole consumer is run.go's sleep — nothing compares age "
+        "to the declared promise, so a dead collector renders `current` "
+        "forever on every tier (the founding failure, live; §15: 'a "
+        "collection past its declared freshness produces a finding that "
+        "names the reason'). Being built first in the units slice. COST: "
+        "emitted per commit, recorded, read by no scheduling. CEILINGS: "
+        "declared everywhere, enforced nowhere, contradicted by an "
+        "undeclared 4 MiB whole-batch cap that VOIDS rather than ends "
+        "without commit — owner ruling owed. PERISHABILITY: declared, "
+        "drives nothing. RATE COMPANIONS: contract member exists, zero "
+        "declarers, FactDecl cannot read it. WATCHES (§06/§31): "
+        "unbuilt; §05 caps the stakes — defer POST-CUT by ruling, in "
+        "writing, rather than by omission."),
+    Row(46, "the capture boundary trusts one side",
+        "owed", "R-remediation",
+        None,
+        "§18/§19 assign each duty to the party that can hold it; "
+        "only the other party's half was built. No collector verifies its "
+        "peer's credentials (SO_PEERCRED appears nowhere; the socket mode "
+        "comment called the inode the whole access control — corrected); "
+        "the collator forwards caller-supplied names to collectors "
+        "unchecked against the published set; verbs run 4-way concurrent "
+        "and time-unbounded under a comment asserting single-flight "
+        "(corrected); declared per-verb ms bounds are enforced by nobody; "
+        "the canary sweep skips the evidence channel. All buildable now, "
+        "no rulings."),
+    Row(47, "the attention loop admits only collator opinions",
+        "owed", "R-remediation",
+        None,
+        "the estate question's verdict cannot become a finding, resolve, "
+        "or be acknowledged; mqtt.py projects findings only while its "
+        "docstring claimed the roll-up too (corrected), and hardcodes "
+        "acknowledged:false so automations re-alert on acknowledged "
+        "findings; the hub serves facts with no dictionary route, so the "
+        "consumer without eyes gets bare counters. Buildable now, "
+        "hub-local."),
+    Row(48, "the answer's basis members are placeholders, and the "
+        "three-axes derivation is unruled",
+        "owed", "R-remediation, owner ruling",
+        None,
+        "answer.py hardcodes evidence_digest sha256:0 (the checkpoint "
+        "carries no digest to quote — transport half rides row 41), puts "
+        "the estate ROW id in the batch member, fills dark[].since with "
+        "the literal 'unknown' (the stamp is row 44's), and computes "
+        "epistemic=complete for a dark host whose reading survives — a "
+        "derivation its docstring presented as a settled three-axes ruling "
+        "§25 never made (marked provisional 2026-08-24). The ruling "
+        "owed: does darkness land in freshness alone, or make coverage "
+        "partial?"),
+    Row(49, "discovery is schema-only, and its absence is marked complete",
+        "owed", "R-remediation",
+        None,
+        "no collection declares `discovers`; candidates fold from constant "
+        "empty tuples with no store, so a vanished candidate leaves no "
+        "trace and a forgotten host can NEVER appear in "
+        "discovered-not-declared — the first founding failure rebuilt, "
+        "behind a green gate. The coverage claim carries no provenance or "
+        "review age; list_hosts hides the claim behind a second tool. "
+        "Buildable now except the independence policy values, which are "
+        "intent's and the owner's."),
+    Row(50, "boundary transitions take the bluntest path",
+        "owed", "R-remediation",
+        None,
+        "one bad collection rejects the whole live batch for most shapes "
+        "(the design's per-collection blast radius is implemented for "
+        "exactly one); a mid-run declaration upgrade judges the batch "
+        "against the superseded document it just refetched and discarded "
+        "— §26's own definition of silently changing what a number "
+        "means, and the refetch fix is small and urgent; withdrawal is "
+        "unrepresentable (member rides row 41); a skew-refused fact's "
+        "value is dropped with only its name surviving."),
+    Row(51, "scope has no instruments",
+        "owed", "R-remediation, two owner rulings",
+        None,
+        "§15's promotion lint (inputs all exist in declarations), "
+        "§20's skip ledger (shape needs a ruling), and the stated "
+        "deletion were specified and never built, while scope drifted as "
+        "predicted — including a logs collector rebuilding the "
+        "journal-entries subsystem §14 retires. Ruling owed: delete "
+        "the logs collector and build §14's unit-attached gauge, or "
+        "overturn §14 in writing. The current state — both — is not "
+        "a ruling."),
 )

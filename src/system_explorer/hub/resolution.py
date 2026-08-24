@@ -16,8 +16,14 @@ and stopped, and only the second is evidence about the host. Both freeze,
 and they freeze for different stated reasons, because an operator reading
 a frozen finding needs to know which silence they are looking at.
 
-**A finding remembers every input that produced it** — each contributing
-host, collection, generation and arrival — rather than a single batch id.
+**A finding remembers most of what produced it** — each contributing
+host, collection and generation; three of §06's four members. **The
+arrival stamp is NOT carried** (register row 44): §06 pays for it in so
+many words — "each finding persists the batch generation and arrival
+stamp that derived it, so a restarted hub can say which it is" — and
+until it lands, every dark host renders since-unknown. This docstring
+previously quoted the four-element list verbatim above a three-element
+dataclass; corrected 2026-08-24.
 One generation cannot say whether the two other collections that fed a
 cross-host answer have come back yet, and a finding that cannot enumerate
 its own contributors cannot tell "all my evidence returned and the

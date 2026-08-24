@@ -11,7 +11,13 @@ The derivation is §24's revision comparison: every host's deployment
 revision, held against each other. It is a hub derivation for the reason
 every hub derivation is one — no tier below can see a second host.
 
-**Health, knowledge and currency are three axes, not two.** `verdict`
+**Health, knowledge and currency as three axes is this module's
+PROVISIONAL derivation, not a design ruling.** §25 does not define where
+a dark host's contribution lands; routing darkness to `freshness` while
+`epistemic` stays `complete` is a choice made here, awaiting an owner
+ruling (register row 48) — a dark host's surviving reading arguably makes
+coverage PARTIAL, not merely stale. Marked 2026-08-24; the previous text
+presented the choice as settled. `verdict`
 says what the evidence says about the system; `epistemic` says how much
 of the question the evidence covered; `freshness` says whether it is
 still being said. A host that told us and then went dark has covered its
