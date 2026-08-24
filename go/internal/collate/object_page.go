@@ -223,9 +223,9 @@ func opinionsSection(st *store.Store, document, collection string,
 func relationsSection(st *store.Store, collection string, row *store.ObjectRow) string {
 	// A contested prefix returns an error and no index, so every target
 	// degrades to a stated non-link rather than to a guess.
-	owner, err := collectionOfPrefix(st)
+	owner, contested, err := collectionOfPrefix(st)
 	if err != nil {
-		owner = map[string]string{}
+		owner, contested = map[string]string{}, nil
 	}
 	// BOTH DIRECTIONS, ACROSS EVERY COLLECTION.
 	//
@@ -259,7 +259,7 @@ func relationsSection(st *store.Store, collection string, row *store.ObjectRow) 
 	if len(out) > 0 {
 		b.WriteString(`<p class="dim">This object asserts:</p><ul class="relations">`)
 		for _, rel := range out {
-			b.WriteString(relationItem(owner, rel))
+			b.WriteString(relationItem(owner, contested, rel))
 		}
 		b.WriteString(`</ul>`)
 	}
@@ -279,13 +279,14 @@ func relationsSection(st *store.Store, collection string, row *store.ObjectRow) 
 // in CLASS and in WORDS, because a class alone is a stylesheet away from
 // being nothing at all — and this is the exact rendering whose collapse
 // §28 calls the founding failure re-entering through layer 6.
-func relationItem(owner map[string]string, rel store.Relation) string {
+func relationItem(owner map[string]string, contested []string,
+	rel store.Relation) string {
 	// CROSS-SUBSYSTEM, which is an acceptance item: a zpool device links
 	// through to its hardware disk, a veth to its container. The target
 	// almost never lives in the source's own collection, so the link is
 	// resolved through the prefix index assembled from every declaration
 	// this host holds — the producers' knowledge, read, not copied.
-	link := targetLink(owner, rel)
+	link := targetLink(owner, contested, rel)
 	switch rel.Observability {
 	case store.Confirmed:
 		return fmt.Sprintf(

@@ -234,3 +234,63 @@ func TestAnObjectShowsEdgesPointingAtItAsWellAsFromIt(t *testing.T) {
 		t.Fatalf("an inbound edge is labelled as such: %s", visible(page))
 	}
 }
+
+func TestOneContestedPrefixDoesNotBlankEveryLink(t *testing.T) {
+	// The estate's own declarations contain a clash: `units` and
+	// `workloads` both declare the prefix `unit`. collectionOfPrefix used
+	// store.PrefixIndex, which refuses the WHOLE index when any prefix is
+	// contested — so on every host running both collectors, every
+	// relation target on every object page rendered as dead text, and the
+	// page blamed a prefix that was very often not the one in question.
+	//
+	// It is the same defect the apply path had and the same fix: one bad
+	// thing must not cost the host its other facts.
+	// Driven through collectionOfPrefix with a REAL store carrying the
+	// clash. The first version of this test called prefixIndexTolerant
+	// directly — the helper, not the caller — so planting the strict
+	// index back into collectionOfPrefix changed nothing and the test
+	// stayed green. A guard must test its subject, not a copy of it.
+	st := openStore(t)
+	mustIssue(t, st, "units", "sha256:u",
+		`{"schema":"se.declaration/1","collector":"units","collections":[{
+		  "name":"units","freshness":"1h","prefix":"unit","facts":{}}]}`)
+	mustIssue(t, st, "workloads", "sha256:w",
+		`{"schema":"se.declaration/1","collector":"resources","collections":[{
+		  "name":"workloads","freshness":"1h","prefix":"unit","facts":{}}]}`)
+	mustIssue(t, st, "block-devices", "sha256:b",
+		`{"schema":"se.declaration/1","collector":"storage","collections":[{
+		  "name":"block-devices","freshness":"1h","prefix":"block-device",
+		  "facts":{}}]}`)
+	owner, contested, err := collectionOfPrefix(st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The uncontested prefixes still resolve, which is the whole point.
+	linked := targetLink(owner, contested, store.Relation{
+		Resolved: true, TargetID: "block-device:sda",
+		TargetKind: "block-device", TargetName: "sda"})
+	if !strings.Contains(linked, "<a ") {
+		t.Fatalf("one clash must not cost every other prefix its links: %s",
+			linked)
+	}
+	// The contested one resolves to neither, and says WHICH problem it is.
+	blocked := targetLink(owner, contested, store.Relation{
+		Resolved: true, TargetID: "unit:cron.service",
+		TargetKind: "unit", TargetName: "cron.service"})
+	if strings.Contains(blocked, "<a ") {
+		t.Fatalf("a contested prefix must not be resolved to a guess: %s",
+			blocked)
+	}
+	if !strings.Contains(blocked, "more than one collection declares") {
+		t.Fatalf("saying \"no collection declares it\" about a prefix TWO "+
+			"collections declare sends the reader after the wrong thing: %s",
+			blocked)
+	}
+	// And a genuinely unclaimed prefix keeps its own, different message.
+	unknown := targetLink(owner, contested, store.Relation{
+		Resolved: true, TargetID: "mystery:x", TargetKind: "mystery",
+		TargetName: "x"})
+	if !strings.Contains(unknown, "no collection on this host declares") {
+		t.Fatalf("%s", unknown)
+	}
+}

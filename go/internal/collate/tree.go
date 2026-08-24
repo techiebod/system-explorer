@@ -31,20 +31,28 @@ import (
 )
 
 // collectionOfPrefix maps an object-id prefix to the collection that
-// declared it, from every declaration this host holds.
+// declared it, and names any prefix that is contested.
 //
-// The index itself is `store.PrefixIndex`, which the resolver already
-// uses — ONE spelling of "which collection owns this prefix", not a
-// second that can drift from it. It REFUSES a prefix two collections
-// declare rather than picking one; a contested prefix therefore yields
-// no index at all, and every link on the page degrades to a stated
-// non-link. That is the right direction: the collator declines to decide
-// which collection owns it, and a renderer quietly picking one would be
-// re-deciding what the collator refused.
-func collectionOfPrefix(st *store.Store) (map[string]string, error) {
+// **A CONTESTED PREFIX COSTS ITS OWN KIND AND NOTHING ELSE.** This used
+// `store.PrefixIndex`, which refuses the WHOLE INDEX when any prefix is
+// declared twice — and the estate's own declarations contain such a
+// clash: `units` and `workloads` both declare `unit`. So on every host
+// running both collectors, EVERY relation target on EVERY object page
+// rendered as dead text, and the page blamed a prefix that was very
+// often not the one in question.
+//
+// It is the same defect the apply path had, fixed there on 2026-08-23
+// with the same words — one bad thing must not cost the host its other
+// facts — and left here. `prefixIndexTolerant` is that fix; this now
+// calls it rather than keeping a second, stricter opinion.
+//
+// DESIGN's rule is unchanged: two collections declaring one prefix
+// resolve to NEITHER, never to whichever was read last. What changes is
+// that the other forty-odd prefixes keep working.
+func collectionOfPrefix(st *store.Store) (map[string]string, []string, error) {
 	documents, err := st.DeclarationDocuments()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	prefixes := map[string]string{}
 	for _, document := range documents {
@@ -56,7 +64,8 @@ func collectionOfPrefix(st *store.Store) (map[string]string, error) {
 			prefixes[c.Name] = c.Prefix
 		}
 	}
-	return store.PrefixIndex(prefixes)
+	owner, contested := prefixIndexTolerant(prefixes)
+	return owner, contested, nil
 }
 
 // targetLink mints the link to a relation's far end.
@@ -66,16 +75,27 @@ func collectionOfPrefix(st *store.Store) (map[string]string, error) {
 // link implies there is something at the other end to open — which is
 // the claim the state exists to deny. The name is still shown: the
 // reader needs to know what was asserted even when nothing confirms it.
-func targetLink(owner map[string]string, rel store.Relation) string {
+func targetLink(owner map[string]string, contested []string,
+	rel store.Relation) string {
 	if !rel.Resolved || rel.TargetID == "" {
 		return esc(rel.TargetName)
 	}
 	collection, known := owner[rel.TargetKind]
 	if !known {
-		// The kind names no prefix any declaration on this host claims,
-		// or two claim it. Stated rather than linked to a guess: a dead
-		// link is what the browser's routing table produced for the whole
-		// application tier, and nobody noticed for as long as it existed.
+		// Stated rather than linked to a guess — and stated ACCURATELY.
+		// The two reasons are different problems for different people:
+		// nobody declaring the prefix is a gap, and two collections
+		// declaring it is a collision somebody must break. Saying "no
+		// collection declares it" about a prefix TWO collections declare
+		// sends the reader looking for the wrong thing.
+		for _, prefix := range contested {
+			if prefix == rel.TargetKind {
+				return fmt.Sprintf(
+					`%s <span class="faint">(more than one collection declares `+
+						`the prefix %s, so it resolves to neither)</span>`,
+					esc(rel.TargetName), esc(rel.TargetKind))
+			}
+		}
 		return fmt.Sprintf(
 			`%s <span class="faint">(no collection on this host declares `+
 				`the prefix %s)</span>`, esc(rel.TargetName), esc(rel.TargetKind))
