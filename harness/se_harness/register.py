@@ -243,9 +243,20 @@ def comparator_work(
 # never that the phase was still open.
 ANSWER_RULINGS: dict[str, str] = {
     "units/units": "ruled: additive — the reference's three columns survive "
-                   "verbatim and in order, and the port appends "
-                   "MissingRequirements, dependency health the old UI only "
-                   "surfaced on the object page.",
+                   "verbatim and in order, and the port adds two. "
+                   "MissingRequirements is dependency health the old UI only "
+                   "surfaced on the object page. LoadState was added "
+                   "2026-08-24 after the sysadmin review: systemd lists a "
+                   "unit whose file is NOT INSTALLED because something "
+                   "references it, and reports it inactive — so with "
+                   "LoadState off the row, 18 such units on a live host "
+                   "rendered exactly like ordinary stopped services, same "
+                   "columns and the same `ok` verdict, with no way to tell "
+                   "'switched off' from 'does not exist'. It sits between "
+                   "SubState and Description so the narrow state columns "
+                   "stay adjacent for scanning, and it costs the collector "
+                   "nothing: it arrives in the same ListUnits reply that "
+                   "already carries ActiveState.",
     "network/nft-chains": "ruled: at the R3d nft retrofit — the preset's own "
                           "argument (one chain name in ip and ip6 is two "
                           "chains) is answered by the row's NAME, which since "

@@ -22,6 +22,7 @@
       "answer": [
         "ActiveState",
         "SubState",
+        "LoadState",
         "Description",
         "MissingRequirements"
       ],
@@ -441,6 +442,24 @@
         {
           "path": "/org.freedesktop.systemd1.Service/data/0/PassEnvironment",
           "discloses": "secret"
+        }
+      ],
+      "hide_groups": [
+        {
+          "key": "inactive",
+          "label": "inactive",
+          "when": {
+            "all": [
+              {
+                "fact": "ActiveState",
+                "equals": "inactive"
+              },
+              {
+                "fact": "LoadState",
+                "equals": "loaded"
+              }
+            ]
+          }
         }
       ]
     }

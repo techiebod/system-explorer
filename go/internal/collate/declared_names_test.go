@@ -197,3 +197,83 @@ type failingReverse struct{ stubReverse }
 func (failingReverse) Evidence(context.Context, string, string, map[string]bool) ([]byte, error) {
 	return nil, errors.New("dial unix /etc/secret-path: connection refused")
 }
+
+func TestAUnitWhoseFileDoesNotExistIsDistinguishableOnItsRow(t *testing.T) {
+	// systemd lists a unit whose file is NOT INSTALLED, because something
+	// references it, and reports it inactive/dead. With LoadState off the
+	// row, 19 such units on a live host rendered exactly like ordinary
+	// stopped services — same two state columns, same `ok` verdict, no
+	// way to tell "this is switched off" from "this does not exist".
+	// That is the founding failure on the busiest page in the product.
+	//
+	// Driven from the REAL declaration so it cannot drift: this is a
+	// statement about what `units` ships, not about a fixture.
+	raw, err := os.ReadFile("../../cmd/se-collect-units/declaration.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	render, err := RenderFor(string(raw), "units")
+	if err != nil || render == nil {
+		t.Fatalf("units must describe itself: %v", err)
+	}
+	if !slices.Contains(render.Answer, "LoadState") {
+		t.Fatal("LoadState is not on the row, so a unit whose file does not " +
+			"exist is indistinguishable from one that is merely stopped")
+	}
+	// It arrives in the same reply that already carries ActiveState, so
+	// this costs the collector nothing.
+	if _, declared := render.Facts["LoadState"]; !declared {
+		t.Fatal("and it must be declared, or the renderer cannot draw it")
+	}
+	// The reference's three columns survive, in their order — the
+	// comparator ruling for units/units is `additive`.
+	var at = -1
+	for _, name := range []string{"ActiveState", "SubState", "Description"} {
+		i := slices.Index(render.Answer, name)
+		if i < 0 {
+			t.Fatalf("%s left the answer list: %v", name, render.Answer)
+		}
+		if i < at {
+			t.Fatalf("the reference's columns must keep their order: %v",
+				render.Answer)
+		}
+		at = i
+	}
+}
+
+func TestTheInactiveGroupNeverSwallowsAUnitThatDoesNotExist(t *testing.T) {
+	// systemd reports a unit whose file is not installed as INACTIVE, so
+	// an unnarrowed inactive group hides it. app.js accepted that and
+	// said so — "in practice the inactive group claims it and one chip
+	// brings it back". Here it would take back, in the same breath, the
+	// fix that put LoadState on the row to make those 18 rows visible.
+	//
+	// Driven from the REAL declaration: a statement about what units ships.
+	raw, err := os.ReadFile("../../cmd/se-collect-units/declaration.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	groups, err := HideGroupsFor(string(raw), "units")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(groups) == 0 {
+		t.Fatal("units declares no hide group, so its 300 rows all show")
+	}
+	stopped := map[string]any{"ActiveState": "inactive", "LoadState": "loaded"}
+	ghost := map[string]any{"ActiveState": "inactive", "LoadState": "not-found"}
+	failed := map[string]any{"ActiveState": "failed", "LoadState": "loaded"}
+
+	if assign(groups, stopped, "") == "" {
+		t.Fatal("a genuinely stopped unit is what the group is for")
+	}
+	if got := assign(groups, ghost, ""); got != "" {
+		t.Fatalf("a unit whose file does not exist was hidden by %q — the "+
+			"rows LoadState was added to surface", got)
+	}
+	// The standing invariant: critical is never suppressed, whatever a
+	// group matches on.
+	if got := assign(groups, failed, "critical"); got != "" {
+		t.Fatalf("a critical row was hidden by %q", got)
+	}
+}

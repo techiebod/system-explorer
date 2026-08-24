@@ -67,17 +67,38 @@
     "lookups": {
       "type": "object",
       "minProperties": 1,
-      "description": "The collector's lookup palette: every parameterised read-only question its `lookup` verb answers (DESIGN 18). Collector-level, not per-collection, because a lookup name is the collector's own vocabulary — `route-get`, `resolve`, `snapshots-of` — and the palette doubles as usage documentation: question, expected input and a worked example are how a UI and an agent alike learn what can be asked. Bounds ride each entry exactly as the per-collection verbs member carries them: single-flight, and a response that hits its bound says so on the payload.",
+      "description": "The collector's lookup palette: every parameterised read-only question its `lookup` verb answers (DESIGN 18). Collector-level, not per-collection, because a lookup name is the collector's own vocabulary \u2014 `route-get`, `resolve`, `snapshots-of` \u2014 and the palette doubles as usage documentation: question, expected input and a worked example are how a UI and an agent alike learn what can be asked. Bounds ride each entry exactly as the per-collection verbs member carries them: single-flight, and a response that hits its bound says so on the payload.",
       "additionalProperties": {
         "type": "object",
-        "required": ["question", "input", "example", "bytes", "ms"],
+        "required": [
+          "question",
+          "input",
+          "example",
+          "bytes",
+          "ms"
+        ],
         "additionalProperties": false,
         "properties": {
-          "question": { "type": "string", "minLength": 1 },
-          "input": { "type": "string", "minLength": 1 },
-          "example": { "type": "string", "minLength": 1 },
-          "bytes": { "type": "integer", "minimum": 1 },
-          "ms": { "type": "integer", "minimum": 1 }
+          "question": {
+            "type": "string",
+            "minLength": 1
+          },
+          "input": {
+            "type": "string",
+            "minLength": 1
+          },
+          "example": {
+            "type": "string",
+            "minLength": 1
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "ms": {
+            "type": "integer",
+            "minimum": 1
+          }
         }
       }
     },
@@ -188,7 +209,7 @@
         },
         "reference_residue": {
           "type": "array",
-          "description": "Reference opinion keys this collection's rule table does NOT carry under that name, each with the reason. Required wherever the port's table is smaller than the rulebook it was written from, and checked deny-by-default against the reference — which is DESIGN 17's third property, the one that makes the named-evaluator seam a mechanism rather than an escape hatch: a reader asking why a rule table is smaller than a rulebook gets an answer from the declaration instead of inferring one from silence. Added 2026-08-23, the day an audit found that property asserted in DESIGN, in a code comment and in a test comment, and implemented nowhere — a present-tense claim naming no guard, false on the day it was written. Two dispositions matter and both are stated in the reason: a key the table genuinely does not decide, and a key decided under a DIFFERENT name. The second is not cosmetic: a rule key is part of a finding's identity and renaming one resets a lifecycle, so a rename that nothing records is a lifecycle reset nobody can find.",
+          "description": "Reference opinion keys this collection's rule table does NOT carry under that name, each with the reason. Required wherever the port's table is smaller than the rulebook it was written from, and checked deny-by-default against the reference \u2014 which is DESIGN 17's third property, the one that makes the named-evaluator seam a mechanism rather than an escape hatch: a reader asking why a rule table is smaller than a rulebook gets an answer from the declaration instead of inferring one from silence. Added 2026-08-23, the day an audit found that property asserted in DESIGN, in a code comment and in a test comment, and implemented nowhere \u2014 a present-tense claim naming no guard, false on the day it was written. Two dispositions matter and both are stated in the reason: a key the table genuinely does not decide, and a key decided under a DIFFERENT name. The second is not cosmetic: a rule key is part of a finding's identity and renaming one resets a lifecycle, so a rename that nothing records is a lifecycle reset nobody can find.",
           "items": {
             "type": "object",
             "required": [
@@ -402,6 +423,13 @@
               "$ref": "#/$defs/verb_bounds"
             }
           }
+        },
+        "hide_groups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/hide_group"
+          },
+          "description": "Groups of rows a surface may hide by default, in the order they are offered. Optional: a collection declaring none shows every row, which is the safe direction."
         }
       },
       "oneOf": [
@@ -816,7 +844,7 @@
             "type": "string",
             "minLength": 1
           },
-          "description": "The object TYPES this rule judges, where a collection publishes rows of more than one shape. Absent means every row, which is the ordinary case. Added 2026-08-23 after a measured defect nothing else catches: resources/workloads publishes slices and workloads in one collection, the reference dispatches on row shape and calls slice_opinions OR workload_opinions and never both, and the port — one rule table per collection with no way to name a shape — fired the workload stall rules on slice rows. That restored the operator report of 2026-08-13 verbatim, a slice at 56.35% listed beneath the container scope at 65.27% that explains it, one stall reported twice with the culprit's name removed the second time; and at warn rather than the info the reference suppresses entirely, so it reached the findings surface and the estate roll-up. Every host under I/O load has -.slice and system.slice above the bar, so it fired routinely rather than in a corner. It clears appendix A's budget by naming a defect it alone catches: a collection whose rows have two shapes cannot otherwise be judged correctly by a table addressed to the collection."
+          "description": "The object TYPES this rule judges, where a collection publishes rows of more than one shape. Absent means every row, which is the ordinary case. Added 2026-08-23 after a measured defect nothing else catches: resources/workloads publishes slices and workloads in one collection, the reference dispatches on row shape and calls slice_opinions OR workload_opinions and never both, and the port \u2014 one rule table per collection with no way to name a shape \u2014 fired the workload stall rules on slice rows. That restored the operator report of 2026-08-13 verbatim, a slice at 56.35% listed beneath the container scope at 65.27% that explains it, one stall reported twice with the culprit's name removed the second time; and at warn rather than the info the reference suppresses entirely, so it reached the findings surface and the estate roll-up. Every host under I/O load has -.slice and system.slice above the bar, so it fired routinely rather than in a corner. It clears appendix A's budget by naming a defect it alone catches: a collection whose rows have two shapes cannot otherwise be judged correctly by a table addressed to the collection."
         },
         "evaluator": {
           "type": "string",
@@ -840,6 +868,32 @@
         "ms": {
           "type": "integer",
           "minimum": 1
+        }
+      }
+    },
+    "hide_group": {
+      "type": "object",
+      "required": [
+        "key",
+        "label",
+        "when"
+      ],
+      "additionalProperties": false,
+      "description": "One group of rows a surface may hide by default, as DATA. Which rows are ordinarily uninteresting is the PRODUCER's judgement \u2014 a renderer deciding it would be a copy of the producer's knowledge (DESIGN 27), which is what the shipping UI's hand-kept table of predicates was. `when` is the same condition vocabulary the rule tables use, so there is one condition language and not two that drift. A row the rulebook called CRITICAL is never suppressed whatever this matches, and that exemption is enforced by the surface rather than restated in every group here: 'the default view never swallows a failure' is the promise the whole mechanism rests on, and a promise each group had to remember is one an added group will forget.",
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable identifier for the group, used to key the control that reveals it. Not shown to a reader."
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What the chip says. The count beside it answers what this group HOLDS, never what is currently hidden, so it does not change when the chip is pressed."
+        },
+        "when": {
+          "$ref": "#/$defs/condition",
+          "description": "Which rows this group holds. A condition that cannot be evaluated leaves rows VISIBLE: the failure mode of a missing group is a longer page, and of a broken one hiding rows anyway is a suppressed fault."
         }
       }
     }
