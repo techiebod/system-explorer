@@ -302,8 +302,27 @@ func relationsSection(st *store.Store, collection string, row *store.ObjectRow) 
 	}
 	var b strings.Builder
 	b.WriteString(`<details open class="panel"><summary><h2>Relations</h2></summary>`)
-	b.WriteString(relationGroups(owner, contested, out, false))
-	b.WriteString(relationGroups(owner, contested, in, true))
+	// A tiny per-request cache: an object page asks about a handful of
+	// (collection, name) pairs, and asking the store twice for the same
+	// one is the only cost worth avoiding here.
+	held := map[[2]string]bool{}
+	holds := func(collection, name string) bool {
+		key := [2]string{collection, name}
+		if got, asked := held[key]; asked {
+			return got
+		}
+		got, err := st.HoldsObject(collection, name)
+		if err != nil {
+			// Could not ask. OFFER the claimant rather than silently
+			// dropping it: a link that might work beats a destination
+			// withheld because a query failed.
+			got = true
+		}
+		held[key] = got
+		return got
+	}
+	b.WriteString(relationGroups(owner, contested, holds, out, false))
+	b.WriteString(relationGroups(owner, contested, holds, in, true))
 	b.WriteString(`</details>`)
 	return b.String()
 }
@@ -319,7 +338,7 @@ func relationItem(owner map[string]string, contested map[string][]string,
 	// almost never lives in the source's own collection, so the link is
 	// resolved through the prefix index assembled from every declaration
 	// this host holds — the producers' knowledge, read, not copied.
-	link := targetLink(owner, contested, rel)
+	link := targetLink(owner, contested, nil, rel)
 	switch rel.Observability {
 	case store.Confirmed:
 		return fmt.Sprintf(
@@ -352,11 +371,11 @@ func evidenceSection(collection, object string) string {
 		`<details class="panel"><summary><h2>Evidence</h2></summary>`+
 			`<p>The raw native document this object's facts were read from, `+
 			`captured fresh when you ask for it and stored nowhere: `+
-			`<a href="/v1%s/objects/%s/evidence">fetch it</a>.</p>`+
+			`<a href="/v1%s/object/evidence?object=%s">fetch it</a>.</p>`+
 			`<p class="faint">Evidence is checkable, not infallible. It is `+
 			`captured now, so it may show a system that has changed since the `+
 			`fact was read; it can be truncated by a limit; and it inherits `+
 			`whatever the source itself gets wrong. What it offers is that it `+
 			`is the only thing here that is not our interpretation.</p></details>`,
-		collectionHref(collection), esc(url.PathEscape(object)))
+		collectionHref(collection), esc(url.QueryEscape(object)))
 }

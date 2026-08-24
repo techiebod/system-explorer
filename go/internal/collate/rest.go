@@ -420,6 +420,19 @@ func NewHandlerWithReverse(st *store.Store, now func() float64, bootID string,
 		return func(w http.ResponseWriter, r *http.Request) {
 			name := r.PathValue("name")
 			token := r.PathValue("object")
+			// An object name in the PATH cannot express every name. Go's
+			// ServeMux refuses a segment that decodes to exactly "/", and
+			// the root mount is named "/" — so its evidence and its
+			// object verb were unreachable here while every other mount's
+			// worked, and the object page linked to a 404.
+			//
+			// `?object=` is ADDITIVE: the path form is unchanged and
+			// every existing caller is unaffected. A query parameter has
+			// no reserved structure to collide with, so this form is
+			// total where the path form is not.
+			if token == "" {
+				token = r.URL.Query().Get("object")
+			}
 			if verb == wire.VerbLookup {
 				token = r.URL.Query().Get("input")
 				if token == "" {
@@ -542,6 +555,10 @@ func NewHandlerWithReverse(st *store.Store, now func() float64, bootID string,
 			_, _ = w.Write(raw)
 		}
 	}
+	// The query forms, for names the path cannot carry.
+	mux.HandleFunc("GET /v1/collections/{name}/object", serveVerb(wire.VerbObject))
+	mux.HandleFunc("GET /v1/collections/{name}/object/evidence",
+		serveVerb(wire.VerbEvidence))
 	mux.HandleFunc("GET /v1/collections/{name}/objects/{object}",
 		serveVerb(wire.VerbObject))
 	mux.HandleFunc("GET /v1/collections/{name}/objects/{object}/evidence",

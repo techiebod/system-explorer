@@ -1,9 +1,11 @@
 package collate
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"testing"
@@ -267,7 +269,7 @@ func TestOneContestedPrefixDoesNotBlankEveryLink(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The uncontested prefixes still resolve, which is the whole point.
-	linked := targetLink(owner, contested, store.Relation{
+	linked := targetLink(owner, contested, nil, store.Relation{
 		Resolved: true, TargetID: "block-device:sda",
 		TargetKind: "block-device", TargetName: "sda"})
 	if !strings.Contains(linked, "<a ") {
@@ -279,7 +281,7 @@ func TestOneContestedPrefixDoesNotBlankEveryLink(t *testing.T) {
 	// is doing, the other what it is consuming, about the same objects.
 	// Saying "resolves to neither" and stopping withholds two
 	// destinations the page is holding.
-	blocked := targetLink(owner, contested, store.Relation{
+	blocked := targetLink(owner, contested, nil, store.Relation{
 		Resolved: false, TargetID: "", TargetKind: "unit",
 		TargetName: "cron.service"})
 	for _, want := range []string{
@@ -298,7 +300,7 @@ func TestOneContestedPrefixDoesNotBlankEveryLink(t *testing.T) {
 			"were the answer: %s", blocked)
 	}
 	// And a genuinely unclaimed prefix keeps its own, different message.
-	unknown := targetLink(owner, contested, store.Relation{
+	unknown := targetLink(owner, contested, nil, store.Relation{
 		Resolved: true, TargetID: "mystery:x", TargetKind: "mystery",
 		TargetName: "x"})
 	if !strings.Contains(unknown, "no collection on this host declares") {
@@ -377,7 +379,7 @@ func TestTwoObservabilityStatesNeverShareAGroup(t *testing.T) {
 		{Type: "member-of", Observability: store.Confirmed, Vantage: "units",
 			TargetName: "b", Collection: "units", SourceName: "b"},
 	}
-	out := relationGroups(map[string]string{}, nil, rels, true)
+	out := relationGroups(map[string]string{}, nil, nil, rels, true)
 	if strings.Count(out, "<details") != 2 {
 		t.Fatalf("two states, two groups: %s", out)
 	}
@@ -385,5 +387,91 @@ func TestTwoObservabilityStatesNeverShareAGroup(t *testing.T) {
 	// of how much each should worry a reader.
 	if strings.Index(out, "never been read") > strings.Index(out, "both ends read") {
 		t.Fatalf("asserted must precede confirmed: %s", visible(out))
+	}
+}
+
+func TestAContestedPrefixOffersOnlyClaimantsThatHoldTheName(t *testing.T) {
+	// Offering a choice is right; offering one that goes nowhere is the
+	// dead-link failure this whole line of work exists to end. Measured
+	// on a live host: `unit` is claimed by both `units` and `workloads`,
+	// so a slice's page offered both, and the `workloads` half 404'd for
+	// every slice that collection does not track.
+	contested := map[string][]string{"unit": {"units", "workloads"}}
+	rel := store.Relation{Type: "member-of", TargetKind: "unit",
+		TargetName: "system-sshd.slice", Vantage: "units"}
+
+	holds := func(collection, name string) bool { return collection == "units" }
+	out := targetLink(map[string]string{}, contested, holds, rel)
+	if !strings.Contains(out, objectHref("units", "system-sshd.slice")) {
+		t.Fatalf("the claimant that holds it is offered: %s", out)
+	}
+	if strings.Contains(out, objectHref("workloads", "system-sshd.slice")) {
+		t.Fatalf("the claimant that does not is a 404 and must not be "+
+			"offered: %s", out)
+	}
+
+	// When NO claimant holds it, that is stated — a bare name with no
+	// explanation reads as an ordinary unresolved edge when the cause is
+	// a clash.
+	none := targetLink(map[string]string{}, contested,
+		func(string, string) bool { return false }, rel)
+	if !strings.Contains(none, "none of them holds this name") {
+		t.Fatalf("%s", none)
+	}
+
+	// A store that cannot answer OFFERS the claimant: a link that might
+	// work beats a destination withheld because a query failed.
+	unknown := targetLink(map[string]string{}, contested, nil, rel)
+	if !strings.Contains(unknown, objectHref("workloads", "system-sshd.slice")) {
+		t.Fatalf("an unanswerable check must not withhold: %s", unknown)
+	}
+}
+
+// recordingReverse remembers which object name it was asked for, so a
+// test can assert the NAME arrived — not merely that the route answered.
+type recordingReverse struct {
+	stubReverse
+	asked *[]string
+}
+
+func (r recordingReverse) Evidence(_ context.Context, _, name string,
+	_ map[string]bool) ([]byte, error) {
+	*r.asked = append(*r.asked, name)
+	return []byte("{}\n"), nil
+}
+
+func (r recordingReverse) Object(_ context.Context, _, name string,
+	_ map[string]bool) ([]byte, error) {
+	*r.asked = append(*r.asked, name)
+	return []byte("{}\n"), nil
+}
+
+func TestEvidenceIsReachableForAnyObjectName(t *testing.T) {
+	// The root mount is named "/". Go's ServeMux refuses a path segment
+	// decoding to exactly that, so `/v1/.../objects/%2F/evidence` 404'd
+	// while every other mount's worked — and the object page linked
+	// straight at it. The query form is ADDITIVE: the path form is
+	// unchanged and every existing caller is unaffected.
+	//
+	// The assertion is that the NAME ARRIVES, not that the route answers.
+	// The first version checked only for a 404, and a plant that dropped
+	// the query parameter still answered 200 — with an empty object name,
+	// which is a worse failure than the one being fixed.
+	st := slashyStore(t)
+	var asked []string
+	handler := NewHandlerWithReverse(st, func() float64 { return 26.0 },
+		fakeBootID, map[string]Reverse{"mounts": recordingReverse{asked: &asked}})
+	for _, name := range []string{"/", "boot/efi", "odd name", "100%"} {
+		asked = nil
+		path := "/v1/collections/mounts/object/evidence?object=" +
+			url.QueryEscape(name)
+		rr := get(t, handler, path)
+		if rr.Code == http.StatusNotFound {
+			t.Errorf("%q unreachable via %s", name, path)
+			continue
+		}
+		if len(asked) != 1 || asked[0] != name {
+			t.Errorf("%q: the collector was asked for %v", name, asked)
+		}
 	}
 }

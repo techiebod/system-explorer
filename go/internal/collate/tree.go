@@ -84,7 +84,7 @@ func collectionOfPrefix(st *store.Store) (map[string]string, map[string][]string
 // the claim the state exists to deny. The name is still shown: the
 // reader needs to know what was asserted even when nothing confirms it.
 func targetLink(owner map[string]string, contested map[string][]string,
-	rel store.Relation) string {
+	holds func(collection, name string) bool, rel store.Relation) string {
 	// A CONTESTED prefix offers every claimant rather than nothing.
 	//
 	// `units` and `workloads` both declare `unit`, and both are right —
@@ -95,10 +95,30 @@ func targetLink(owner map[string]string, contested map[string][]string,
 	// nothing: it hands the reader the claimants and lets them choose,
 	// which is what this file is allowed to do.
 	if holders := contested[rel.TargetKind]; len(holders) > 0 {
+		// Only a claimant that ACTUALLY HOLDS the name is offered. A
+		// claimant that does not is a dead link, measured on a live host:
+		// `unit` is claimed by both `units` and `workloads`, so a slice's
+		// page offered both and the `workloads` half 404'd for every
+		// slice that collection does not track. Offering a choice is
+		// right; offering one that goes nowhere is the dead-link failure
+		// this whole line of work exists to end.
 		var links []string
 		for _, collection := range holders {
+			if holds != nil && !holds(collection, rel.TargetName) {
+				continue
+			}
 			links = append(links, fmt.Sprintf(`<a href="%s">%s</a>`,
 				objectHref(collection, rel.TargetName), esc(collection)))
+		}
+		if len(links) == 0 {
+			// Every claimant contested the prefix and none holds the
+			// name. Stated, because a bare name with no explanation reads
+			// as an ordinary unresolved edge when the cause is a clash.
+			return fmt.Sprintf(
+				`%s <span class="faint">(the prefix %s is claimed by %s, and `+
+					`none of them holds this name)</span>`,
+				esc(rel.TargetName), esc(rel.TargetKind),
+				esc(strings.Join(holders, " and ")))
 		}
 		return fmt.Sprintf(
 			`%s <span class="faint">(%s describe this name — `+
@@ -145,6 +165,7 @@ func targetLink(owner map[string]string, contested map[string][]string,
 // — an asserted edge and a confirmed one must not sit under one heading
 // whatever else they have in common.
 func relationGroups(owner map[string]string, contested map[string][]string,
+	holds func(collection, name string) bool,
 	rels []store.Relation, inbound bool) string {
 	if len(rels) == 0 {
 		return ""
@@ -206,7 +227,7 @@ func relationGroups(owner map[string]string, contested map[string][]string,
 				`<span class="rel-type">%s</span>%s <span class="rel-state">%s</span>`+
 				`</summary>`,
 			open, state, len(group), esc(k.relType), where, words))
-		b.WriteString(relationBodies(owner, contested, group, inbound))
+		b.WriteString(relationBodies(owner, contested, holds, group, inbound))
 		b.WriteString(`</details>`)
 		_ = verb
 	}
@@ -257,6 +278,7 @@ func uniformCollection(group []store.Relation, inbound bool) string {
 // facts are the reason the edge was worth asserting — so those become a
 // nested table, one row per edge, inside the same container.
 func relationBodies(owner map[string]string, contested map[string][]string,
+	holds func(collection, name string) bool,
 	group []store.Relation, inbound bool) string {
 	carries := false
 	for _, rel := range group {
@@ -270,7 +292,7 @@ func relationBodies(owner map[string]string, contested map[string][]string,
 		b.WriteString(`<div class="chips rel-members">`)
 		for _, rel := range group {
 			b.WriteString(`<span class="chip item">` +
-				relationEnd(owner, contested, rel, inbound) + `</span>`)
+				relationEnd(owner, contested, holds, rel, inbound) + `</span>`)
 		}
 		b.WriteString(`</div>`)
 		return b.String()
@@ -282,7 +304,7 @@ func relationBodies(owner map[string]string, contested map[string][]string,
 		if len(rel.Facts) > 2 {
 			facts = esc(string(rel.Facts))
 		}
-		b.WriteString(`<tr><td>` + relationEnd(owner, contested, rel, inbound) +
+		b.WriteString(`<tr><td>` + relationEnd(owner, contested, holds, rel, inbound) +
 			`</td><td class="faint">` + facts + `</td></tr>`)
 	}
 	b.WriteString(`</tbody></table></div>`)
@@ -291,9 +313,10 @@ func relationBodies(owner map[string]string, contested map[string][]string,
 
 // relationEnd is the far end of one edge, as a link where it resolves.
 func relationEnd(owner map[string]string, contested map[string][]string,
+	holds func(collection, name string) bool,
 	rel store.Relation, inbound bool) string {
 	if !inbound {
-		return targetLink(owner, contested, rel)
+		return targetLink(owner, contested, holds, rel)
 	}
 	if rel.Collection == "" || rel.SourceName == "" {
 		return esc(rel.SourceName)

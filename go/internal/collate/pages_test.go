@@ -244,8 +244,11 @@ func TestTheDrillIsAnchorsAllTheWayDown(t *testing.T) {
 		t.Fatalf("a row drills into its object: %s", collection)
 	}
 	object := htmlOf(t, st, "/collections/pools/object?name=tank")
+	// The QUERY form: an object name in the path cannot express every
+	// name (Go's mux refuses a segment decoding to "/", and the root
+	// mount is named "/"), so the page links to the form that is total.
 	if !strings.Contains(object,
-		`href="/v1/collections/pools/objects/tank/evidence"`) {
+		`href="/v1/collections/pools/object/evidence?object=tank"`) {
 		t.Fatalf("evidence is one step from any fact: %s", object)
 	}
 	for _, page := range []string{host, collection, object} {
@@ -657,7 +660,7 @@ func TestACrossSubsystemTargetResolvesThroughTheProducersPrefixes(t *testing.T) 
 	// lives is read from the declarations this host holds — never from a
 	// routing table here, which is §27's first rotted copy.
 	owner := map[string]string{"block-device": "block-devices"}
-	linked := targetLink(owner, nil, store.Relation{
+	linked := targetLink(owner, nil, nil, store.Relation{
 		Resolved: true, TargetID: "block-device:sda", TargetKind: "block-device",
 		TargetName: "sda"})
 	if !strings.Contains(linked, `href="/collections/block-devices/object?name=sda"`) {
@@ -669,7 +672,7 @@ func TestAnUnresolvedTargetIsNotALink(t *testing.T) {
 	// §13: an asserted relation carries a positive claim about what was
 	// NOT looked at, and a link implies there is something to open —
 	// which is the claim the state exists to deny.
-	out := targetLink(map[string]string{"repository": "repos"}, nil, store.Relation{
+	out := targetLink(map[string]string{"repository": "repos"}, nil, nil, store.Relation{
 		Resolved: false, TargetKind: "repository", TargetName: "offsite-vault"})
 	if strings.Contains(out, "<a ") {
 		t.Fatalf("an unread far end is not a link: %s", out)
@@ -682,7 +685,7 @@ func TestAnUnresolvedTargetIsNotALink(t *testing.T) {
 func TestATargetWhoseKindNoDeclarationClaimsIsStatedNotGuessed(t *testing.T) {
 	// A dead link is what the browser's routing table produced for the
 	// whole application tier, and nobody noticed for as long as it existed.
-	out := targetLink(map[string]string{}, nil, store.Relation{
+	out := targetLink(map[string]string{}, nil, nil, store.Relation{
 		Resolved: true, TargetID: "x:1", TargetKind: "mystery", TargetName: "x"})
 	if strings.Contains(out, "<a ") {
 		t.Fatalf("a guess is worse than a statement: %s", out)

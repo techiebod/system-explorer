@@ -935,6 +935,25 @@ func (s *Store) DeclineFor(collection string) (Decline, error) {
 	return d, nil
 }
 
+// HoldsObject reports whether a collection holds an object of this name.
+//
+// Needed because a CONTESTED PREFIX offers every claimant collection as
+// a destination, and a claimant that does not hold the name is a dead
+// link — measured on a live host: `unit` is claimed by both `units` and
+// `workloads`, so a slice's page offered both, and the `workloads` half
+// 404'd for every slice that collection does not track. Offering a
+// choice is right; offering one that goes nowhere is the dead-link
+// failure the prefix work exists to end.
+func (s *Store) HoldsObject(collection, name string) (bool, error) {
+	var n int
+	if err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM objects WHERE collection = ? AND name = ?`,
+		collection, name).Scan(&n); err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
 // HasCollection reports whether the authority knows the name at all —
 // the 404 boundary for the read API.
 func (s *Store) HasCollection(name string) (bool, error) {
