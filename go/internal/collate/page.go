@@ -167,7 +167,9 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 			objects = `<span class="state-unstated">not counted</span>`
 		}
 		// The drill starts here: row → collection → object → evidence,
-		// every step an <a href> and no script anywhere in it.
+		// every step an <a href>, because a link is what the platform
+		// does best and a hand-rolled navigation would be this
+		// repository maintaining what the browser already maintains.
 		body.WriteString(fmt.Sprintf(
 			`<tr><td class="ident"><a href="%s">%s</a></td>`+
 				`<td class="num">%d</td><td class="num">%s</td>`+
@@ -363,11 +365,17 @@ func registerPage(mux *http.ServeMux, st *store.Store, now func() float64, bootI
 // serveHTML is the one place this tier's pages are sent, so the policy is
 // a property of the SURFACE rather than of whoever remembered it.
 //
-// §28's ruling: the collator's host page keeps the absolute header and
-// gets no typed filter. It is the page that must answer when everything
-// else is down, and the property that it cannot execute anything is worth
-// more there than incremental narrowing. A host page that needs a filter
-// is a host page with too much on it.
+// **This policy is a FACT about what the pages currently contain, not a
+// ruling that they may never contain script.** These pages ship no
+// script today, so the header says so exactly — a policy wider than the
+// page needs is a policy that permits what nobody reviewed.
+//
+// The owner's ruling is to prefer modern HTML and CSS over hand-rolled
+// JavaScript, and to have clear patterns; it is not a ban, and an
+// earlier reading of §28 that made it one was wrong. When a script does
+// earn its place here, this line widens deliberately with a `script-src`
+// naming that file's hash — never `'self'` and never `'unsafe-inline'`,
+// which admit whatever anybody later adds.
 func serveHTML(w http.ResponseWriter, out string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Security-Policy",

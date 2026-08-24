@@ -256,21 +256,46 @@ func TestTheDrillIsAnchorsAllTheWayDown(t *testing.T) {
 	}
 }
 
-func TestEveryPageCarriesTheNoScriptPolicy(t *testing.T) {
+func TestThePolicyMatchesWhatThePageActuallyContains(t *testing.T) {
+	// This asserted that the tier may NEVER carry script — encoding a
+	// ruling the owner did not make. What was ruled is to prefer modern
+	// HTML and CSS over hand-rolled JavaScript, and to have clear
+	// patterns; a test forbidding script outright made a preference into
+	// a wall and would have had to be deleted to add the first filter.
+	//
+	// What is worth guarding is the pair staying HONEST: a policy wider
+	// than the page needs permits what nobody reviewed, and a policy
+	// narrower than the page needs breaks it silently in a browser while
+	// every test here passes.
 	st := pagesStore(t)
 	h := NewHandler(st, func() float64 { return 26.0 }, fakeBootID)
 	for _, path := range []string{"/", "/collections/pools",
 		"/collections/pools/object?name=tank"} {
 		rr := get(t, h, path)
 		policy := rr.Header().Get("Content-Security-Policy")
-		if !strings.Contains(policy, "default-src 'none'") {
-			t.Fatalf("%s: the collator's pages must answer when everything "+
-				"else is down, and not being able to execute anything is "+
-				"worth more there than any narrowing: %q", path, policy)
+		if policy == "" {
+			t.Fatalf("%s: no policy at all", path)
 		}
-		if strings.Contains(policy, "script-src") {
-			t.Fatalf("%s: the one script exception is the HUB's to spend, "+
-				"never this tier's: %q", path, policy)
+		hasScript := strings.Contains(markup(rr.Body.String()), "<script")
+		allowsScript := strings.Contains(policy, "script-src")
+		if hasScript && !allowsScript {
+			t.Fatalf("%s: the page carries script the policy forbids, so it "+
+				"is dead in a browser and alive in this test: %q", path, policy)
+		}
+		if !hasScript && allowsScript {
+			t.Fatalf("%s: the policy admits script the page does not carry, "+
+				"which permits whatever anybody later adds: %q", path, policy)
+		}
+		// However it widens, it widens by NAME. 'self' and
+		// 'unsafe-inline' admit every future file rather than one
+		// reviewed one — and §27's line is about what script may KNOW,
+		// which only holds if somebody reads the script.
+		for _, blanket := range []string{"script-src 'self'",
+			"script-src 'unsafe-inline'", "script-src *"} {
+			if strings.Contains(policy, blanket) {
+				t.Fatalf("%s: %q admits anything later added: %q",
+					path, blanket, policy)
+			}
 		}
 	}
 }

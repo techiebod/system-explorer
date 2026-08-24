@@ -12,9 +12,12 @@
 // its own words on the row: not a tooltip, not a footnote.
 //
 // **Every section is a <details>.** §28's interaction table gives
-// expansion to the platform, so opening a section runs no script and
-// works with script disabled — which is what makes the page a complete
-// answer rather than a shell that fills itself in.
+// expansion to the platform because the platform does it well, not
+// because script is rationed: the browser maintains open/closed state,
+// keyboard access and the accessibility tree here, and a hand-rolled
+// version would be this repository maintaining all three. The page is a
+// complete answer before anything runs, which is what `curl` and §29's
+// consumer without eyes receive.
 package collate
 
 import (

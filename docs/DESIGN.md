@@ -1823,22 +1823,25 @@ Proposed 2026-08-23, at the owner's direction that the HTML-first preference in 
 | a value that must never be clipped | `overflow-wrap`, and no ellipsis on load-bearing text | none |
 | keyboard: move through rows, open one | native focus order, rows that are links, `:focus-visible` | none |
 | sort a column | a link that re-asks with the sort named | none |
-| **narrow by typed text** | **nothing native exists** | **yes, and only this** |
+| **narrow by typed text** | nothing native does this | **yes** — the clearest case for script |
 | freshness | a server-rendered age and a re-ask link | none by default |
 
 Four patterns follow, and they are the ones to abide by:
 
 1. **If the answer is already on the page, revealing it is a selector.** Every show/hide on this surface — hide groups, facets, trees, object sections — is state the browser already models. Reaching for script there replaces a mechanism the platform maintains with one this repository maintains.
 2. **If the control needs something the page does not hold, it re-asks.** Sorting and paging are the server's answers, not the browser's reconstruction of them.
-3. **Typed narrowing is the single exception, and it is bounded**: it may read the rendered text of rows and set their visibility. It may not read a fact's declaration, compute a severity, mint a link, or format a value.
-4. **Every page is a complete answer with script disabled.** Which is what makes the exception safe to grant: the unfiltered page is not a degraded page, it is the whole answer, and `curl` and §29's consumer without eyes get exactly what a browser gets.
+3. **Where script runs, it is bounded by §27, not by a quota**: it may read the rendered text of rows and set their visibility. It may not read a fact's declaration, compute a severity, mint a link, or format a value — that is the producer's knowledge, and a second copy of it in the browser is the failure §27 records three times.
+4. **A page is a complete answer before script runs.** Not as a restriction on script but because it is cheap here and buys two things outright: the unfiltered page is the whole answer rather than a degraded one, and `curl` and §29's consumer without eyes get exactly what a browser gets.
 
-**And rule 4 is already a HEADER, not a habit.** Both tiers serve `default-src 'none'; style-src 'unsafe-inline'` — `page.go` at the collator, `http.py` at the hub — so script cannot run on either surface today whatever a template contains. That is a stronger guarantee than a pattern somebody has to remember, and it changes where the one exception can land:
+**What the owner ruled, in their words:** the HTML-first preference is *"to encourage more modern html/css usage over js which is hand-rolled"*, and *"we need clear patterns we abide to"*. That is a direction about how to build, and a request for a table somebody can follow. **It is not a budget and it is not a ban** — script is not rationed here, and no count of scripts is a measure of anything.
 
-- **The collator's host page keeps the absolute header and gets no typed filter.** It is the page that must answer when everything else is down, and the property that it cannot execute anything is worth more there than incremental narrowing. A host page that needs a filter is a host page with too much on it.
-- **The hub's surface is where the exception may be spent**, and spending it means naming the script in the policy — a `script-src` with the one hash — rather than widening the header to `'self'` or `'unsafe-inline'`. A relaxation that admits any script admits the three copies §27 records as having rotted; a hash admits exactly one reviewed file.
+The line that IS absolute comes from §27 and applies to every language on the page equally: **script may change what is shown; it may never decide what a thing means.** A filter that hides rows holds no knowledge. A renderer that maps a prefix to a route, a level to a colour, or a suffix to a unit holds a second copy of the producer's knowledge, and that is forbidden whether it is written in JavaScript, in CSS, or in a template.
 
-So the boundary is not "JavaScript is discouraged". It is: **one tier cannot run script at all, and the other names the single script it runs.** That is checkable by reading two headers, which is what makes it a pattern rather than an intention.
+**So the pattern is: reach for the platform first, and reach for script when the platform does not do the job well.** The table above is that pattern — `<details>` for disclosure, `:has()` and sibling selectors for reveal, `popover` and anchor positioning for a hover detail, native focus order for the keyboard — because those are maintained by the browser and this repository does not have to keep them working. Where the platform has no answer, or a bad one, script is the right tool and the only question is the §27 line.
+
+**Two properties are worth keeping where they are cheap, and neither is a rule that rations script.** A page that is a complete answer before script runs serves `curl` and §29's consumer without eyes for free. And a page that renders its state from the server rather than recomputing it in the browser cannot drift from what the server said. Both are reasons to prefer the server; neither is a reason to refuse a filter.
+
+**What the headers do today is a FACT, not a ruling.** Both tiers serve `default-src 'none'; style-src 'unsafe-inline'` — `page.go` at the collator, `http.py` at the hub — so nothing executes on either surface as it stands. Introducing script therefore means widening that policy deliberately, and the narrow way is a `script-src` naming a hash rather than `'self'` or `'unsafe-inline'`: one reviewed file, admitted by name. That is a deployment decision to take when the first script lands, not a reason not to land one.
 
 **One invariant stops being a matter of care.** `app.js` requires that the number beside a hide-group chip must not change when the chip is pressed — the count answers *what this group holds*, not *what is currently hidden* — and it holds that by computing counts from what the hide rules assign rather than from what is displayed. Server-rendered counts toggled by CSS cannot violate it: nothing recomputes, so there is nothing to get wrong.
 
