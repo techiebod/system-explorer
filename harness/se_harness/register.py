@@ -1177,4 +1177,29 @@ REGISTER: tuple[Row, ...] = (
         "column a 120-character cursor, syslog priority a bare integer, "
         "the host page opening with an inventory instead of a verdict, "
         "and no way to sort or filter by verdict at all."),
+    Row(39, "three collection NAMES are claimed by two collectors each, and "
+        "the store keys a collection by name",
+        "owed", "R5",
+        None,
+        "no probe: the collision is in the producers' declarations, and a "
+        "grep for a name proves nothing about which collector owns it. "
+        "`overview` is declared by system AND traefik, `daemon` by kea and "
+        "unbound, `instance` by bazarr and paperless. A collection row "
+        "holds ONE declaration digest, stamped by whichever collector "
+        "issued generations last, while its objects belong to whoever "
+        "applied — so one row can hold two collectors' work. Measured on a "
+        "live host 2026-08-24: `overview` held one object carrying "
+        "BootedAt, CpuCount, LoadAvg1 and twenty more, rendered under "
+        "traefik's five columns (Version, RoutersTotal, ServicesTotal, "
+        "RoutersErrors, MiddlewaresErrors), every one of them `not "
+        "stated`. That is the HOST'S HEADLINE PAGE asking another "
+        "collector's questions of this one's answers — and judged by that "
+        "collector's rules, prefix and verbs too. The renderer's half is "
+        "done and is all it can honestly do: a page whose declaration "
+        "describes NOT ONE fact its objects carry says so, rather than "
+        "reporting that the producer 'stated no value', which blames the "
+        "wrong party. The fix is a ruling — rename one of each pair, or "
+        "key a collection by (collector, name) — and it is the same shape "
+        "as the `unit` prefix clash one level up: there the kind resolves "
+        "to neither, here the name resolves to whoever was last."),
 )

@@ -519,6 +519,7 @@ Every known miss, each owned or ruled. A row neither built, owned nor ruled is a
 | 36 | the R4 audit's residue | owed: hub answer defects, two producer gaps, and product questions — each needs a ruling or a producer change | R5 |
 | 37 | the sysadmin/UI review — 106 confirmed findings | the rail, both-direction relations, every link resolving, one prefix clash no longer blanking the host | R4 |
 | 38 | that review's residue | owed: one data-model ruling (two collections sharing a prefix), producer facts (`LoadState`, hide groups, storage containment), and density | R5 |
+| 39 | three collection NAMES claimed by two collectors each | owed: `overview` (system + traefik), `daemon` (kea + unbound), `instance` (bazarr + paperless). One row, one declaration digest, two collectors' work — the host's headline page rendered another collector's columns over its own data | R5 |
 
 #### R1 — structure on the wire (small) — **GATE R1 OPEN, 2026-08-21**
 
