@@ -794,6 +794,7 @@
       "freshness": "5m",
       "perishability": "reconstructible",
       "answer": [
+        "Position",
         "Rendered",
         "Verdict",
         "JumpTarget",
@@ -1021,8 +1022,10 @@
       "freshness": "60s",
       "perishability": "sampled",
       "answer": [
+        "Table",
         "Gateway",
         "Device",
+        "Metric",
         "Protocol",
         "Scope",
         "Family"

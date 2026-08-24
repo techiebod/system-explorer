@@ -242,6 +242,27 @@ def comparator_work(
 # class. The guard that let it through asserted a phase was NAMED and
 # never that the phase was still open.
 ANSWER_RULINGS: dict[str, str] = {
+    "network/routes": "ruled: additive, at the 2026-08-24 sysadmin review, "
+                      "and argued from the producer's own sentences rather "
+                      "than from taste. The reference's five columns survive "
+                      "verbatim and in order; Table and Metric join them. "
+                      "The collection's question is 'where does this host "
+                      "send traffic, IN EVERY TABLE THE KERNEL CONSULTS', "
+                      "and a page that never names the table cannot answer "
+                      "it: `local` and `main` holding the same prefix behave "
+                      "completely differently. Table's own declared sentence "
+                      "says 'iproute2 omits it for main; naming it beats an "
+                      "absence a reader has to know the default of', which "
+                      "is the argument for a column, not against one. Metric "
+                      "'decides between same-prefix routes within one "
+                      "table', so without it two rows that differ only in "
+                      "which one wins render identically. Table is FIRST "
+                      "because it scopes everything to its right. "
+                      "Destination is deliberately NOT added: the row's own "
+                      "name is `default dev ens2 via 192.168.122.1`, so a "
+                      "Destination column would respell the identifier — the "
+                      "same argument that keeps Family/Table/Name off "
+                      "nft-chains.",
     "units/units": "ruled: additive — the reference's three columns survive "
                    "verbatim and in order, and the port adds two. "
                    "MissingRequirements is dependency health the old UI only "
