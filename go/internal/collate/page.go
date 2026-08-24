@@ -63,39 +63,77 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 		"<thead><tr><th>collection</th><th>generation</th><th>objects</th>" +
 		"<th>freshness</th><th>age</th></tr></thead><tbody>")
 	for _, cs := range states {
-		freshness := chip("current", "ok")
-		if cs.Decline != nil && cs.Decline.Reason == "absent" {
+		// ONE decision, and `never read` dominates.
+		//
+		// This began as `current` with downgrades applied after, which is
+		// absence rendering as health on the first page anyone opens: a
+		// collection issued and never applied, carrying no decline, read
+		// as `current`. And a never-read collection that HAD declined read
+		// as `stale · unavailable` — stale means a reading older than its
+		// declared freshness, and there has never been a reading. Both
+		// were on the shipped index; the second was photographed.
+		//
+		// Generation 0 is the dominant fact because it changes what every
+		// other column means: an object count of 0 is not a measurement,
+		// and an age of — is not a fresh reading.
+		var freshness string
+		reason := ""
+		if cs.StaleReason != nil {
+			reason = " · " + *cs.StaleReason
+		}
+		switch {
+		case cs.Generation == 0:
+			// Not `current`, not `stale`, not `absent here`. Nothing was
+			// ever read, and if a decline says why, the collection's own
+			// page carries it.
+			freshness = chip("never read", "muted")
+		case cs.Decline != nil && cs.Decline.Reason == "absent":
 			// Absent COMMITS, so it is neither stale nor an incident —
 			// and with 0 objects its row was indistinguishable from a
 			// collection that answered and holds nothing.
 			freshness = chip("absent here", "muted")
-		}
-		if cs.Stale {
-			reason := ""
-			if cs.StaleReason != nil {
-				reason = " · " + *cs.StaleReason
-			}
+		case cs.Stale:
 			freshness = chip("stale"+reason, "warn")
+		default:
+			freshness = chip("current", "ok")
 		}
-		age := `<span class="faint">—</span>`
-		if cs.OldestAt != nil {
-			if cs.BootID == nil || !strings.EqualFold(*cs.BootID, bootID) {
-				// Stated, never subtracted through: a monotonic reading
-				// means nothing outside the boot that produced it.
-				age = `<span class="faint">another boot</span>`
-			} else if d := now() - *cs.OldestAt; d >= 0 {
+		// The age column carried one em dash for three different things —
+		// never read, read but carrying no stamp, and a clock this host
+		// cannot subtract with. Each now says which, because "—" in a
+		// freshness column is read as "fine, just quiet".
+		age := `<span class="faint">no reading</span>`
+		switch {
+		case cs.Generation == 0:
+			age = `<span class="faint">never read</span>`
+		case cs.OldestAt == nil:
+			age = `<span class="faint">applied, no stamp</span>`
+		case cs.BootID == nil || !strings.EqualFold(*cs.BootID, bootID):
+			// Stated, never subtracted through: a monotonic reading
+			// means nothing outside the boot that produced it.
+			age = `<span class="faint">another boot</span>`
+		default:
+			if d := now() - *cs.OldestAt; d >= 0 {
 				age = fmt.Sprintf(`<span class="num">%.0fs</span>`, d)
 			} else {
 				age = `<span class="faint">clock domain mismatch</span>`
 			}
 		}
+		// A never-read collection's object count is NOT a measurement, and
+		// a bare 0 is byte-identical to a collection that was read and
+		// genuinely holds nothing — two of the four empty states collapsed
+		// on the index, one page above where the collection pages take
+		// care to separate them.
+		objects := fmt.Sprintf("%d", cs.ObjectCount)
+		if cs.Generation == 0 {
+			objects = `<span class="state-unstated">not counted</span>`
+		}
 		// The drill starts here: row → collection → object → evidence,
 		// every step an <a href> and no script anywhere in it.
 		body.WriteString(fmt.Sprintf(
 			`<tr><td class="ident"><a href="/collections/%s">%s</a></td>`+
-				`<td class="num">%d</td><td class="num">%d</td>`+
+				`<td class="num">%d</td><td class="num">%s</td>`+
 				`<td>%s</td><td>%s</td></tr>`,
-			esc(cs.Name), esc(cs.Name), cs.Generation, cs.ObjectCount, freshness, age))
+			esc(cs.Name), esc(cs.Name), cs.Generation, objects, freshness, age))
 	}
 	body.WriteString("</tbody></table></div></section>")
 
@@ -105,8 +143,22 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 	// render the same.
 	var fired []Opinion
 	var unjudged []string
+	var neverRead []string
 	for _, cs := range states {
 		if cs.Generation == 0 {
+			// NOT `continue`. Skipping these silently dropped 18 of 52
+			// collections out of the roll-up — neither judged nor listed
+			// as unjudged — and the section then read "No opinion fired on
+			// this host's own facts", which is health asserted over an
+			// estate a third of which had never been read. That is the
+			// founding failure inside the summary whose whole job is to
+			// prevent it.
+			//
+			// Kept separate from `unjudged`: no rule table readable is a
+			// statement about the declaration, and never read is a
+			// statement about the collection. Different problems, different
+			// people to go and see.
+			neverRead = append(neverRead, cs.Name)
 			continue
 		}
 		document, err := st.DeclarationFor(cs.Name)
@@ -151,7 +203,22 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 
 	body.WriteString(`<section class="panel"><h2>Opinions</h2>`)
 	if len(fired) == 0 {
-		body.WriteString(`<p class="dim">No opinion fired on this host's own facts.</p>`)
+		// QUALIFIED, always. "No opinion fired" is only good news over the
+		// collections that were actually judged, and saying it plainly
+		// while a third of the host was never read is the sentence this
+		// product exists to refuse.
+		judged := len(states) - len(unjudged) - len(neverRead)
+		if len(unjudged)+len(neverRead) == 0 {
+			body.WriteString(fmt.Sprintf(
+				`<p class="dim">No opinion fired on this host's own facts, `+
+					`across all %d collections.</p>`, judged))
+		} else {
+			body.WriteString(fmt.Sprintf(
+				`<p class="dim">No opinion fired on the %d of %d collections `+
+					`that were judged. That is not a verdict on the other %d — `+
+					`see below.</p>`,
+				judged, len(states), len(unjudged)+len(neverRead)))
+		}
 	} else {
 		body.WriteString(`<div class="scroll"><table><thead><tr><th>level</th>` +
 			"<th>grounds</th><th>object</th><th>says</th><th>cites</th></tr></thead><tbody>")
@@ -169,6 +236,13 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 			`<p class="faint">Not judged, because no rule table could be read for: %s. `+
 				`That is a statement about the declaration, not about the host.</p>`,
 			esc(strings.Join(unjudged, ", "))))
+	}
+	if len(neverRead) > 0 {
+		body.WriteString(fmt.Sprintf(
+			`<p class="faint">Nothing has ever applied for %d of these `+
+				`collections, so no opinion could be formed about them at all: `+
+				`%s. Each one's own page says whether it declined and why.</p>`,
+			len(neverRead), esc(strings.Join(neverRead, ", "))))
 	}
 	body.WriteString("</section>")
 

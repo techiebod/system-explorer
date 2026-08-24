@@ -27,6 +27,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -69,28 +70,18 @@ func collectionPage(st *store.Store, name, sortBy, facet string,
 			esc(render.Question)))
 	}
 
-	// The decline comes FIRST and replaces the table. Rendering a decline
-	// as an empty table is the collapse this page exists to undo.
-	if self.Decline != nil && self.Decline.Reason != "" {
-		body.WriteString(declinePanel(self.Decline))
-		if self.Decline.Reason != "absent" {
-			// The three non-absent declines leave PRIOR objects standing,
-			// marked stale — they established nothing, so what was true
-			// before is still the last thing known.
-			body.WriteString(`<p class="dim">What follows is the last reading ` +
-				`that did apply, which this decline did not replace.</p>`)
-		}
-	}
-
-	if self.Generation == 0 {
-		body.WriteString(`<section class="panel empty-state"><h2>Never read</h2>` +
-			`<p>A generation was issued for this collection and nothing has ` +
-			`ever applied. That is not an empty answer — there is no ` +
-			`baseline here to compare against, and diffing against nothing ` +
-			`would report every object as newly added.</p></section>`)
-		return wrap(name+" · never read", body.String()), http.StatusOK, nil
-	}
-
+	// EVERYTHING IS READ BEFORE ANYTHING IS SAID.
+	//
+	// The first version of this function wrote the decline's prose, then
+	// discovered whether anything had ever applied, then wrote about that
+	// too — so a collection that declined and had NEVER applied rendered
+	// "What follows is the last reading that did apply" immediately above
+	// a panel headed "Never read". Two branches each narrating the same
+	// question, and the page contradicted itself on 18 of 52 collections.
+	// Found by a person clicking a link, which no assertion here had done.
+	//
+	// The rule that prevents the shape recurring: gather the state, decide
+	// ONCE what this collection's situation is, then write one statement.
 	rows, err := st.Objects(name)
 	if err != nil {
 		return "", http.StatusInternalServerError, err
@@ -108,11 +99,38 @@ func collectionPage(st *store.Store, name, sortBy, facet string,
 		could[u.Object][u.Fact] = u
 	}
 
-	if len(rows) == 0 && (self.Decline == nil || self.Decline.Reason == "") {
+	declined := self.Decline != nil && self.Decline.Reason != ""
+	everApplied := self.Generation > 0
+	if declined {
+		body.WriteString(declinePanel(self.Decline, everApplied, len(rows)))
+	}
+
+	switch {
+	case !everApplied:
+		// Never read. A DECLINE ALREADY SAYS THIS, so no second panel is
+		// emitted when one is present: the first draft printed both and
+		// told the reader "nothing has ever applied" three times over two
+		// panels. One situation, one statement — the decline panel
+		// carries the baseline consequence itself.
+		if !declined {
+			body.WriteString(neverReadPanel())
+		}
+		return wrap(name+" · never read", body.String()), http.StatusOK, nil
+	case len(rows) == 0 && !declined:
 		body.WriteString(`<section class="panel empty-state"><h2>Nothing here</h2>` +
 			`<p>This collection was read and holds no objects. The interface ` +
 			`answered; it had nothing to report. That is a measured emptiness, ` +
 			`not a collection that could not be reached.</p></section>`)
+		return wrap(name, body.String()), http.StatusOK, nil
+	case len(rows) == 0 && declined:
+		// Declined, and nothing stands behind it. Said explicitly: the
+		// alternative is a page that ends after the decline panel, and a
+		// reader cannot tell that from a page whose table failed to render.
+		body.WriteString(`<section class="panel empty-state"><h2>Nothing to ` +
+			`fall back on</h2><p>No earlier reading of this collection is held, ` +
+			`so there is nothing to show beneath the decline. What was true ` +
+			`before is not known here — which is different from knowing it was ` +
+			`empty.</p></section>`)
 		return wrap(name, body.String()), http.StatusOK, nil
 	}
 
@@ -136,7 +154,20 @@ func collectionPage(st *store.Store, name, sortBy, facet string,
 	return wrap(name, body.String()), http.StatusOK, nil
 }
 
-func declinePanel(d *store.Decline) string {
+// neverReadPanel is for a collection that has never applied AND has not
+// said why. Where a decline says why, that panel carries this and this
+// one is not emitted.
+func neverReadPanel() string {
+	return `<section class="panel empty-state"><h2>Never read</h2>` +
+		`<p>A generation was issued for this collection and nothing has ` +
+		`ever applied, and no decline says why — so this is a collection ` +
+		`that was asked for and has not answered either way. That is not ` +
+		`an empty answer: there is no baseline here to compare against, ` +
+		`and diffing against nothing would report every object as newly ` +
+		`added.</p></section>`
+}
+
+func declinePanel(d *store.Decline, everApplied bool, rows int) string {
 	// Each reason says a different thing about the host, so each gets its
 	// own sentence rather than one template with the word swapped in.
 	says := map[string]string{
@@ -164,9 +195,35 @@ func declinePanel(d *store.Decline) string {
 	if d.At != "" {
 		when = fmt.Sprintf(`<p class="faint">Stated at %s.</p>`, esc(d.At))
 	}
+	// What STANDS behind the decline, said here because this is where the
+	// reader asks it. The three non-absent declines establish nothing, so
+	// whatever applied before is still the last thing known — but only if
+	// something did. Saying "what follows is the last reading that did
+	// apply" above a page that has never had one is the contradiction this
+	// argument exists to prevent, and it shipped.
+	stands := ""
+	if d.Reason != "absent" {
+		switch {
+		case !everApplied:
+			// This carries the never-read panel's whole meaning, including
+			// the baseline consequence, so that panel is not also emitted.
+			stands = `<p class="dim">Nothing has ever applied for this ` +
+				`collection, so there is no earlier reading standing behind ` +
+				`this decline — and no baseline for change tracking: a ` +
+				`question reaching before the first reading has no answer ` +
+				`here rather than an empty one.</p>`
+		case rows > 0:
+			stands = `<p class="dim">The rows below are the last reading that ` +
+				`did apply. This decline did not replace them, so they are the ` +
+				`last thing known — not the current state.</p>`
+		default:
+			stands = `<p class="dim">An earlier reading applied but holds no ` +
+				`objects, so there is nothing to show beneath this decline.</p>`
+		}
+	}
 	return fmt.Sprintf(
-		`<section class="panel declined"><h2>Declined: %s</h2><p>%s</p>%s%s</section>`,
-		esc(d.Reason), esc(sentence), detail, when)
+		`<section class="panel declined"><h2>Declined: %s</h2><p>%s</p>%s%s%s</section>`,
+		esc(d.Reason), esc(sentence), detail, stands, when)
 }
 
 func freshnessNote(cs *store.CollectionState, now func() float64, bootID string) string {
@@ -263,6 +320,45 @@ func worstPerObject(st *store.Store, document, collection string,
 	return out
 }
 
+// query builds a collection URL from the parameters that survive a click.
+//
+// ONE builder, used by every control on the page. The facet links carried
+// the sort forward and the sort links did not carry the facet, so
+// choosing a column silently un-narrowed the page — which is precisely
+// what happens when two places each assemble the same URL. A control that
+// discards another control's state is worse than no control, because the
+// reader cannot see what they lost.
+//
+// Values are URL-escaped: a fact name and an object type are producer
+// text, and a `&` in either would rewrite the query somebody clicked.
+func query(collection string, params ...string) string {
+	var kept []string
+	for _, p := range params {
+		if p != "" {
+			kept = append(kept, p)
+		}
+	}
+	base := "/collections/" + url.PathEscape(collection)
+	if len(kept) == 0 {
+		return base
+	}
+	return base + "?" + strings.Join(kept, "&")
+}
+
+func facetParam(facet string) string {
+	if facet == "" {
+		return ""
+	}
+	return "facet=" + url.QueryEscape(facet)
+}
+
+func sortParam(sortBy string) string {
+	if sortBy == "" {
+		return ""
+	}
+	return "sort=" + url.QueryEscape(sortBy)
+}
+
 // parentsFrom reads the nesting edges a collection asserted: child name
 // → parent name, and the relation type that produced them.
 //
@@ -329,11 +425,19 @@ func objectsTable(collection string, render *CollectionRender,
 
 	// The display order, and the depth each row is drawn at.
 	//
-	// INDENTATION IS DISABLED UNDER SORT. Indentation claims a parent is
-	// directly above its child; once the rows are reordered that claim is
-	// false, and a tree drawn over a reordered list tells the reader
-	// something the data does not say. So a sorted table is flat, and the
-	// page says why rather than silently dropping the shape.
+	// INDENTATION IS DISABLED UNDER SORT **AND UNDER A FACET**. Indentation
+	// claims a parent is directly above its child. Reordering makes that
+	// false, which the sort branch always handled — but FILTERING makes it
+	// false in a worse way, and that shipped: a facet removes rows without
+	// touching the depths computed over the whole set, so a child stayed
+	// indented under a parent the facet had just deleted. The page then
+	// draws a hierarchy whose parent is not on it, which is a stronger
+	// false claim than a reordered tree: the reader looks for the row
+	// above and it is not there.
+	//
+	// Both are the same rule — a tree may only be drawn over the set it
+	// was computed for — so they share one condition rather than two that
+	// can drift apart.
 	order := make([]int, len(rows))
 	for i := range rows {
 		order[i] = i
@@ -341,22 +445,31 @@ func objectsTable(collection string, render *CollectionRender,
 	depth := map[int]int{}
 	cyclic := false
 	sorted := sortBy != ""
+	narrowed := facet != ""
 	if sorted {
 		order = sortedOrder(rows, render, sortBy)
-	} else if nestedBy != "" && len(parentOf) > 0 {
+	} else if !narrowed && nestedBy != "" && len(parentOf) > 0 {
 		order, depth, cyclic = nest(rows, parentOf)
 	}
 
 	var b strings.Builder
 	b.WriteString(`<section class="panel">`)
 	if nestedBy != "" && len(parentOf) > 0 {
-		if sorted {
+		switch {
+		case sorted:
 			b.WriteString(fmt.Sprintf(
 				`<p class="dim">Sorted by %s, so the <code>%s</code> tree is `+
 					`not drawn: indentation would claim a parent sits directly `+
 					`above its child, which a reordered list does not say.</p>`,
 				esc(sortBy), esc(nestedBy)))
-		} else {
+		case narrowed:
+			b.WriteString(fmt.Sprintf(
+				`<p class="dim">Narrowed to <code>%s</code>, so the <code>%s</code> `+
+					`tree is not drawn: this page no longer holds every parent, `+
+					`and indenting a row under one that is not here would draw a `+
+					`hierarchy you cannot follow.</p>`,
+				esc(facet), esc(nestedBy)))
+		default:
 			b.WriteString(fmt.Sprintf(
 				`<p class="dim">Nested by <code>%s</code>, as this collection `+
 					`asserted it.</p>`, esc(nestedBy)))
@@ -398,9 +511,32 @@ func objectsTable(collection string, render *CollectionRender,
 		// browser: pattern 2 of §28's table — if the control needs
 		// something the page does not hold, it re-asks. The server's
 		// answer is the answer.
+		//
+		// It CARRIES THE FACET. The facet links already carried the sort,
+		// and this side did not, so choosing a column silently threw the
+		// reader's narrowing away and returned them to all 508 rows. A
+		// control that discards another control's state is worse than no
+		// control: the reader does not know what they lost.
+		//
+		// The CURRENT column is marked and its link CLEARS the sort, which
+		// is also the only way back to the tree — before this, a sorted
+		// page told the reader its tree was not drawn and offered no route
+		// to the page where it is.
+		current := name == sortBy
+		mark, cls, target := "", "sort", "sort="+name
+		if current {
+			mark = ` <span class="sorted-mark" aria-hidden="true">▾</span>`
+			cls = "sort current"
+			target = ""
+		}
+		aria := ""
+		if current {
+			aria = ` aria-sort="ascending"`
+		}
 		b.WriteString(fmt.Sprintf(
-			`<th%s><a class="sort" href="/collections/%s?sort=%s">%s</a></th>`,
-			title, esc(collection), esc(name), esc(name)))
+			`<th%s%s><a class="%s" href="%s">%s%s</a></th>`,
+			title, aria, cls, esc(query(collection, target, facetParam(facet))),
+			esc(name), mark))
 	}
 	b.WriteString(`</tr></thead><tbody>`)
 
@@ -635,21 +771,8 @@ func facetControls(collection string, rows []store.ObjectRow, order []int,
 		return ""
 	}
 	sortStrings(types)
-	keep := func(facet string) string {
-		q := "?"
-		if facet != "" {
-			q += "facet=" + facet
-		}
-		if sortBy != "" {
-			if q != "?" {
-				q += "&"
-			}
-			q += "sort=" + sortBy
-		}
-		if q == "?" {
-			q = ""
-		}
-		return "/collections/" + collection + q
+	keep := func(chosen string) string {
+		return query(collection, facetParam(chosen), sortParam(sortBy))
 	}
 	var b strings.Builder
 	b.WriteString(`<div class="facets">`)

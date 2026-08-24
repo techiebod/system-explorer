@@ -263,3 +263,9 @@ dl.names dd { margin: 0; }
    nothing at all, and wearing the same mark would put words in its
    mouth. */
 .state-unstated { color: var(--text-faint); font-size: 11.5px; font-style: italic; }
+
+/* The sorted column is announced as well as marked: a reader who cannot
+   see the caret still needs to know which column ordered the page. Its
+   own link clears the sort, which is the only route back to the tree. */
+a.sort.current { font-weight: 600; color: var(--text); }
+.sorted-mark { color: var(--text-dim); }

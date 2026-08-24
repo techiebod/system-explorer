@@ -2,7 +2,9 @@ package collate
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -858,5 +860,451 @@ func TestAPageNarrowedToNothingSaysWhichControlDidIt(t *testing.T) {
 		t.Fatalf("the collection is not empty — the facet is, and the page "+
 			"must say so rather than reading as an empty collection: %s",
 			visible(out))
+	}
+}
+
+// ── page-level COHERENCE, which is what every test above missed ───────
+//
+// Each assertion in this file checked that a page contained the right
+// sentence. None checked that it did not ALSO contain a contradictory
+// one. So 18 of 52 collection pages shipped saying "What follows is the
+// last reading that did apply, which this decline did not replace"
+// directly above a panel headed "Never read" — found by a person
+// clicking a link.
+//
+// The general rule these encode: a page states one situation. Two
+// branches each narrating the same question is the defect, and the test
+// for it is mutual exclusion, not presence.
+
+// theSevenStates is every situation a collection page can be in. Named
+// exhaustively rather than sampled, because the defect lived in the ONE
+// combination no test constructed: declined AND never applied.
+type pageState struct {
+	name       string
+	generation bool // has anything ever applied
+	decline    string
+	objects    int
+}
+
+func buildState(t *testing.T, s pageState) string {
+	t.Helper()
+	st := openStore(t)
+	mustIssue(t, st, "pools", "sha256:p", pagesDecl)
+	if s.generation {
+		objects := []store.Object{}
+		for i := 0; i < s.objects; i++ {
+			objects = append(objects, store.Object{
+				ID: fmt.Sprintf("pool:tank%d", i), Name: fmt.Sprintf("tank%d", i),
+				Type: "pool", Facts: json.RawMessage(`{"Health":"ONLINE"}`), At: 10,
+			})
+		}
+		if _, err := st.ApplyCommit("pools", store.HostNative, 1, "b1",
+			fakeBootID, objects); err != nil {
+			t.Fatal(err)
+		}
+	}
+	switch s.decline {
+	case "":
+	case "absent":
+		if err := st.RecordAbsent("pools", "no zpool here"); err != nil {
+			t.Fatal(err)
+		}
+	default:
+		if err := st.MarkStaleWith("pools", s.decline, "the detail"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return htmlOf(t, st, "/collections/pools")
+}
+
+func TestNoCollectionPageContradictsItself(t *testing.T) {
+	// The pairs that cannot both be true on one page. Each is a claim
+	// about the SAME question — what, if anything, has ever applied —
+	// and a page asserting both has told the reader two things.
+	contradictions := [][2]string{
+		{"Never read", "the last reading that did apply"},
+		{"Never read", "The rows below are the last reading"},
+		{"Nothing here", "Declined:"},
+		{"Never read", "Nothing here"},
+		{"Never read", "Nothing to fall back on"},
+		{"Nothing here", "Nothing to fall back on"},
+	}
+	states := []pageState{
+		{"never read, no decline", false, "", 0},
+		{"never read, unavailable", false, "unavailable", 0},
+		{"never read, unauthorised", false, "unauthorised", 0},
+		{"never read, unsupported", false, "unsupported", 0},
+		{"never read, absent", false, "absent", 0},
+		{"applied, no decline, empty", true, "", 0},
+		{"applied, no decline, rows", true, "", 2},
+		{"applied, absent", true, "absent", 0},
+		{"applied, unavailable, rows stand", true, "unavailable", 2},
+		{"applied, unavailable, nothing stands", true, "unavailable", 0},
+		{"applied, unauthorised, rows stand", true, "unauthorised", 2},
+	}
+	for _, s := range states {
+		page := markup(buildState(t, s))
+		for _, pair := range contradictions {
+			if strings.Contains(page, pair[0]) && strings.Contains(page, pair[1]) {
+				t.Errorf("%s: the page says both %q and %q — two branches "+
+					"narrating the same question, which is how 18 pages "+
+					"shipped contradicting themselves", s.name, pair[0], pair[1])
+			}
+		}
+		// And every state says SOMETHING: a page that renders neither a
+		// table nor an explanation is worse than either. A declined
+		// never-read page explains itself through the decline panel
+		// alone, which is why "Declined:" counts here.
+		if !strings.Contains(page, "<tbody>") &&
+			!strings.Contains(page, "Never read") &&
+			!strings.Contains(page, "Nothing here") &&
+			!strings.Contains(page, "Nothing to fall back on") &&
+			!strings.Contains(page, "Declined:") {
+			t.Errorf("%s: the page explains nothing: %s", s.name, visible(page))
+		}
+	}
+}
+
+func TestADeclineWithNothingBehindItSaysSo(t *testing.T) {
+	// The specific shape that shipped. A decline on a collection that has
+	// never applied must say there is no earlier reading — not promise
+	// one below.
+	page := markup(buildState(t, pageState{"", false, "unavailable", 0}))
+	if !strings.Contains(page, "no earlier reading standing behind") {
+		t.Fatalf("a decline over nothing must say so: %s", visible(page))
+	}
+	if strings.Contains(page, "rows below") {
+		t.Fatalf("and must not promise rows that do not exist: %s", visible(page))
+	}
+}
+
+func TestADeclineOverPriorRowsSaysTheyAreTheLastThingKnown(t *testing.T) {
+	// The other direction, which is the case the original sentence was
+	// written for and got right.
+	page := markup(buildState(t, pageState{"", true, "unavailable", 2}))
+	if !strings.Contains(page, "The rows below are the last reading") {
+		t.Fatalf("%s", visible(page))
+	}
+	if !strings.Contains(page, "not the current state") {
+		t.Fatal("and a reader must be told these are not current, or a stale " +
+			"reading is read as a live one")
+	}
+	if !strings.Contains(page, "<tbody>") {
+		t.Fatal("the rows must actually be there")
+	}
+}
+
+// ── the index's own honesty ───────────────────────────────────────────
+
+func TestTheIndexNeverCallsANeverReadCollectionCurrentOrStale(t *testing.T) {
+	// The chip began as `current` with downgrades applied after it, so a
+	// collection issued and never applied read as CURRENT — absence
+	// rendering as health on the first page anyone opens. And a
+	// never-read collection that had declined read `stale · unavailable`,
+	// when stale means a reading older than its freshness and there has
+	// never been a reading.
+	for _, decline := range []string{"", "unavailable", "unauthorised", "absent"} {
+		st := openStore(t)
+		mustIssue(t, st, "pools", "sha256:p", pagesDecl)
+		switch decline {
+		case "":
+		case "absent":
+			if err := st.RecordAbsent("pools", "not here"); err != nil {
+				t.Fatal(err)
+			}
+		default:
+			if err := st.MarkStaleWith("pools", decline, "d"); err != nil {
+				t.Fatal(err)
+			}
+		}
+		row := markup(htmlOf(t, st, "/"))
+		if !strings.Contains(row, "never read") {
+			t.Fatalf("decline=%q: a collection nothing ever applied for must "+
+				"say so on the index: %s", decline, visible(row))
+		}
+		for _, wrong := range []string{">current<", ">stale", ">absent here<"} {
+			if strings.Contains(row, wrong) {
+				t.Fatalf("decline=%q: the index called a never-read collection "+
+					"%q: %s", decline, wrong, visible(row))
+			}
+		}
+	}
+}
+
+func TestTheIndexStillDistinguishesTheStatesThatHaveBeenRead(t *testing.T) {
+	// The fix must not flatten everything into `never read`: a collection
+	// that HAS applied keeps its own chip.
+	fresh := markup(htmlOf(t, pagesStore(t), "/"))
+	if !strings.Contains(fresh, ">current<") {
+		t.Fatalf("an applied, undeclined collection is current: %s", visible(fresh))
+	}
+	st := pagesStore(t)
+	if err := st.RecordAbsent("pools", "not here"); err != nil {
+		t.Fatal(err)
+	}
+	if absent := markup(htmlOf(t, st, "/")); !strings.Contains(absent, "absent here") {
+		t.Fatalf("an applied, absent-declined collection says so: %s",
+			visible(absent))
+	}
+	st2 := pagesStore(t)
+	if err := st2.MarkStaleWith("pools", "unavailable", "d"); err != nil {
+		t.Fatal(err)
+	}
+	if stale := markup(htmlOf(t, st2, "/")); !strings.Contains(stale, ">stale") {
+		t.Fatalf("an applied, stale collection says so: %s", visible(stale))
+	}
+}
+
+func TestAFacetDropsTheTreeToo(t *testing.T) {
+	// Found by an independent reviewer reading the REAL rendered pages:
+	// a facet removed rows without touching the depths computed over the
+	// whole set, so a child stayed indented under a parent the facet had
+	// just deleted. That is a worse false claim than a reordered tree —
+	// the reader looks for the row above and it is not there.
+	//
+	// The case must KEEP the child and REMOVE the parent, which needs two
+	// different object types. My first version facetted on a type nothing
+	// carried, so the page rendered no rows at all and had no depth to
+	// lose — it passed with the defect fully present.
+	st := openStore(t)
+	mustIssue(t, st, "units", "sha256:t", treeDecl)
+	objects := []store.Object{
+		{ID: "unit:a.slice", Name: "a.slice", Type: "slice",
+			Facts: json.RawMessage(`{"ActiveState":"active"}`), At: 10},
+		{ID: "unit:child.service", Name: "child.service", Type: "service",
+			Facts: json.RawMessage(`{"ActiveState":"active"}`), At: 10},
+		{ID: "unit:other.service", Name: "other.service", Type: "service",
+			Facts: json.RawMessage(`{"ActiveState":"active"}`), At: 10},
+	}
+	if _, err := st.ApplyCommit("units", store.HostNative, 1, "b1", fakeBootID,
+		objects); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.ApplyAssertions("units", store.HostNative,
+		[]store.Assertion{{
+			Collection: "units", SourceName: "child.service", Type: "member-of",
+			Vantage: "units", TargetKind: "unit", TargetName: "a.slice",
+		}},
+		map[string]store.RelationType{"member-of": {}},
+		func(kind, name string) (string, bool) { return "unit:" + name, true },
+		func(string, string, string) (json.RawMessage, bool) { return nil, false },
+	); err != nil {
+		t.Fatal(err)
+	}
+	nested := markup(htmlOf(t, st, "/collections/units"))
+	if !strings.Contains(nested, "--depth:") {
+		t.Fatalf("the unnarrowed page draws its tree: %s", visible(nested))
+	}
+	// `service` keeps the child and REMOVES its parent, which is a slice.
+	narrowed := markup(htmlOf(t, st, "/collections/units?facet=service"))
+	if !strings.Contains(narrowed, "child.service") {
+		t.Fatalf("the facet must keep the child, or this proves nothing: %s",
+			visible(narrowed))
+	}
+	if strings.Contains(narrowed, "a.slice") {
+		t.Fatalf("and must remove its parent: %s", visible(narrowed))
+	}
+	if strings.Contains(narrowed, "--depth:") {
+		t.Fatalf("a narrowed page must not indent a row under a parent it "+
+			"removed — the reader looks for the row above and it is not "+
+			"there: %s", visible(narrowed))
+	}
+	if !strings.Contains(narrowed, "no longer holds every parent") {
+		t.Fatalf("and the page says why, rather than silently flattening: %s",
+			visible(narrowed))
+	}
+}
+
+// ── controls must not discard each other's state ──────────────────────
+
+func TestEveryControlCarriesEveryOtherControlsState(t *testing.T) {
+	// The facet links carried the sort forward and the sort links did not
+	// carry the facet, so choosing a column silently un-narrowed the page
+	// from 118 rows back to 508. A control that discards another
+	// control's state is worse than no control: the reader cannot see
+	// what they lost. Both now go through one URL builder.
+	st := typedStore(t)
+	// With a facet active, every sort link must keep it.
+	page := markup(htmlOf(t, st, "/collections/things?facet=service"))
+	for _, link := range sortLinks(page) {
+		if !strings.Contains(link, "facet=service") {
+			t.Fatalf("a sort link dropped the active facet: %q", link)
+		}
+	}
+	// With a sort active, every facet link must keep it.
+	page = markup(htmlOf(t, st, "/collections/things?sort=State"))
+	for _, link := range facetLinks(page) {
+		if !strings.Contains(link, "sort=State") {
+			t.Fatalf("a facet link dropped the active sort: %q", link)
+		}
+	}
+}
+
+func TestTheSortedColumnIsMarkedAndClearsTheSort(t *testing.T) {
+	// Before this, a sorted page told the reader its tree was not drawn
+	// and offered no route back to the page where it is — and no column
+	// showed which one was sorted, so the head looked identical to an
+	// unsorted table.
+	page := markup(htmlOf(t, typedStore(t), "/collections/things?sort=State"))
+	if !strings.Contains(page, `aria-sort=`) {
+		t.Fatalf("the sorted column is announced: %s", page)
+	}
+	if !strings.Contains(page, "sorted-mark") {
+		t.Fatalf("and marked visually: %s", page)
+	}
+	// The current column's own link clears the sort — the way back.
+	if !strings.Contains(page, `class="sort current" href="/collections/things"`) {
+		t.Fatalf("the sorted column links back to the unsorted page, which is "+
+			"the only route back to the tree: %s", page)
+	}
+}
+
+func typedStore(t *testing.T) *store.Store {
+	t.Helper()
+	st := openStore(t)
+	mustIssue(t, st, "things", "sha256:th",
+		`{"schema":"se.declaration/1","collector":"t","collections":[{
+		  "name":"things","freshness":"1h","prefix":"thing","answer":["State"],
+		  "facts":{"State":{"type":"string","temperament":"state"}}}]}`)
+	objects := []store.Object{
+		{ID: "thing:a", Name: "a", Type: "mount",
+			Facts: json.RawMessage(`{"State":"x"}`), At: 10},
+		{ID: "thing:b", Name: "b", Type: "service",
+			Facts: json.RawMessage(`{"State":"y"}`), At: 10},
+	}
+	if _, err := st.ApplyCommit("things", store.HostNative, 1, "b1", fakeBootID,
+		objects); err != nil {
+		t.Fatal(err)
+	}
+	return st
+}
+
+func sortLinks(page string) []string {
+	var out []string
+	for _, m := range hrefs(page) {
+		if strings.Contains(m, "sort=") {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+func facetLinks(page string) []string {
+	var out []string
+	for _, m := range hrefs(page) {
+		if strings.Contains(m, "facet=") {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// ── the roll-up must not report health over what it never read ────────
+
+func TestTheOpinionRollUpNeverReportsHealthOverUnreadCollections(t *testing.T) {
+	// The roll-up skipped generation-0 collections with a bare `continue`,
+	// so 18 of 52 vanished from it entirely — neither judged nor listed —
+	// and the section read "No opinion fired on this host's own facts".
+	// Health asserted over an estate a third of which had never been read,
+	// inside the summary whose whole job is to prevent exactly that.
+	st := openStore(t)
+	mustIssue(t, st, "pools", "sha256:p", pagesDecl) // never applied
+	mustIssue(t, st, "other", "sha256:o", otherDecl) // never applied
+	page := markup(htmlOf(t, st, "/"))
+	if strings.Contains(page, "No opinion fired on this host's own facts.") {
+		t.Fatalf("the roll-up reported health over collections it never "+
+			"read: %s", visible(page))
+	}
+	if !strings.Contains(page, "Nothing has ever applied for") {
+		t.Fatalf("the never-read collections must be NAMED in the roll-up, "+
+			"not dropped from it: %s", visible(page))
+	}
+	for _, name := range []string{"pools", "other"} {
+		if !strings.Contains(page, name) {
+			t.Fatalf("%s is missing from the roll-up entirely: %s", name,
+				visible(page))
+		}
+	}
+}
+
+func TestAFullyJudgedHostStillSaysSoPlainly(t *testing.T) {
+	// The fix must not make a clean host sound uncertain: where every
+	// collection was judged, the summary says so without hedging.
+	// Every collection judged, every rule evaluated, nothing fired — the
+	// only state in which an unqualified "no opinion fired" is honest.
+	st := openStore(t)
+	mustIssue(t, st, "units", "sha256:u", hidingDecl)
+	objects := []store.Object{
+		{ID: "unit:a", Name: "a",
+			Facts: json.RawMessage(`{"ActiveState":"active"}`), At: 10},
+	}
+	if _, err := st.ApplyCommit("units", store.HostNative, 1, "b1", fakeBootID,
+		objects); err != nil {
+		t.Fatal(err)
+	}
+	page := markup(htmlOf(t, st, "/"))
+	if !strings.Contains(page, "across all") {
+		t.Fatalf("a fully judged host gets an unqualified answer: %s",
+			visible(page))
+	}
+	if strings.Contains(page, "That is not a verdict on the other") {
+		t.Fatalf("and is not hedged when there is nothing to hedge: %s",
+			visible(page))
+	}
+}
+
+const otherDecl = `{"schema":"se.declaration/1","collector":"o","collections":[{
+  "name":"other","freshness":"1h","prefix":"other","answer":[],"facts":{}}]}`
+
+var hrefRe = regexp.MustCompile(`href="([^"]*)"`)
+
+func hrefs(page string) []string {
+	var out []string
+	for _, m := range hrefRe.FindAllStringSubmatch(page, -1) {
+		out = append(out, m[1])
+	}
+	return out
+}
+
+func TestTheIndexDoesNotPrintMeasurementsItNeverTook(t *testing.T) {
+	// A never-read collection's object count is not a measurement, and a
+	// bare 0 is byte-identical to a collection that WAS read and holds
+	// nothing — two of the four empty states collapsed on the index, one
+	// page above where the collection pages take care to separate them.
+	// The age column had the same defect three ways over: never read,
+	// applied-with-no-stamp and a clock that cannot be subtracted all
+	// rendered one em dash, which in a freshness column reads as "fine".
+	st := openStore(t)
+	mustIssue(t, st, "pools", "sha256:p", pagesDecl)
+	never := markup(htmlOf(t, st, "/"))
+	// The PAIRED form: generation 0 followed by an objects cell of 0.
+	// Asserting on `<td class="num">0</td>` alone caught the generation
+	// cell, which is legitimately 0 — a guard matching the wrong column
+	// and passing for the wrong reason.
+	if strings.Contains(never, `<td class="num">0</td><td class="num">0</td>`) {
+		t.Fatalf("a bare 0 for a collection nobody counted: %s", visible(never))
+	}
+	if !strings.Contains(never, "not counted") {
+		t.Fatalf("it must say the count was never taken: %s", visible(never))
+	}
+	if !strings.Contains(never, ">never read<") {
+		t.Fatalf("and the age column must say which kind of nothing it is, "+
+			"not an em dash that reads as fine: %s", visible(never))
+	}
+
+	// The other direction: a collection READ and holding nothing prints a
+	// real zero, because that one IS a measurement.
+	st2 := openStore(t)
+	mustIssue(t, st2, "pools", "sha256:p", pagesDecl)
+	if _, err := st2.ApplyCommit("pools", store.HostNative, 1, "b1", fakeBootID,
+		nil); err != nil {
+		t.Fatal(err)
+	}
+	measured := markup(htmlOf(t, st2, "/"))
+	if !strings.Contains(measured, `<td class="num">1</td><td class="num">0</td>`) {
+		t.Fatalf("a measured zero is a zero: %s", visible(measured))
+	}
+	if strings.Contains(measured, "not counted") {
+		t.Fatalf("and must not be hedged: %s", visible(measured))
 	}
 }
