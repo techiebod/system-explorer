@@ -1690,3 +1690,74 @@ func TestAPartlyDescribedCollectionIsNotCalledAMismatch(t *testing.T) {
 		t.Fatal("and one describing nothing is")
 	}
 }
+
+func TestTheOpinionsListIsFollowable(t *testing.T) {
+	// The one list of problems on the host page was dead text: a reader
+	// saw "unit:bad failed" and had to go find it by hand, on the page
+	// whose whole job is to say where to look.
+	st := openStore(t)
+	mustIssue(t, st, "units", "sha256:u", hidingDecl)
+	if _, err := st.ApplyCommit("units", store.HostNative, 1, "b1", fakeBootID,
+		[]store.Object{
+			{ID: "unit:fine", Name: "fine",
+				Facts: json.RawMessage(`{"ActiveState":"active"}`), At: 10},
+			{ID: "unit:bad", Name: "bad",
+				Facts: json.RawMessage(`{"ActiveState":"failed"}`), At: 10},
+		}); err != nil {
+		t.Fatal(err)
+	}
+	out := markup(htmlOf(t, st, "/"))
+	if !strings.Contains(out, objectHref("units", "bad")) {
+		t.Fatalf("the failing object must be reachable from the roll-up: %s",
+			visible(out))
+	}
+}
+
+const twoRuleDecl = `{"schema":"se.declaration/1","collector":"t","collections":[{
+  "name":"units","freshness":"1h","prefix":"unit","answer":["ActiveState"],
+  "facts":{"ActiveState":{"type":"enum","values":["active","inactive","failed"],
+                          "temperament":"state"}},
+  "rules":[{"key":"unit-health","level":"critical","grounds":"interface",
+            "when":{"fact":"ActiveState","equals":"failed"},
+            "sentence":"systemd reports this unit failed.","cites":["ActiveState"]},
+           {"key":"unit-idle","level":"info","grounds":"threshold",
+            "when":{"fact":"ActiveState","equals":"inactive"},
+            "sentence":"This unit is not running.","cites":["ActiveState"]}]}]}`
+
+func TestAnOpinionLinksToTheObjectItIsAbout(t *testing.T) {
+	// `from` is parallel to `fired` and they are sorted TOGETHER. Sorting
+	// one without the other links every row to the wrong object, which is
+	// worse than not linking at all because it is confident: a reader
+	// clicks the critical row and lands on a healthy one.
+	//
+	// TWO opinions at DIFFERENT levels are required to test this at all —
+	// with one, sorting cannot mismatch and the plant sails through. The
+	// first version of this test had exactly that hole.
+	st := openStore(t)
+	mustIssue(t, st, "units", "sha256:two", twoRuleDecl)
+	if _, err := st.ApplyCommit("units", store.HostNative, 1, "b1", fakeBootID,
+		[]store.Object{
+			// `aaa` is applied FIRST and judged `info`; `zzz` second and
+			// `critical`. Sorting by level reverses them, so an unsorted
+			// `from` pairs the critical row with aaa.
+			{ID: "unit:aaa", Name: "aaa",
+				Facts: json.RawMessage(`{"ActiveState":"inactive"}`), At: 10},
+			{ID: "unit:zzz", Name: "zzz",
+				Facts: json.RawMessage(`{"ActiveState":"failed"}`), At: 10},
+		}); err != nil {
+		t.Fatal(err)
+	}
+	out := markup(htmlOf(t, st, "/"))
+	i := strings.Index(out, "chip critical")
+	if i < 0 {
+		t.Fatalf("the critical row must be there: %s", visible(out))
+	}
+	row := out[i:min(i+400, len(out))]
+	if !strings.Contains(row, objectHref("units", "zzz")) {
+		t.Fatalf("the critical row must link to the object it is ABOUT, "+
+			"not to whichever was judged first: %s", row)
+	}
+	if strings.Contains(row, objectHref("units", "aaa")) {
+		t.Fatalf("and not to the other one: %s", row)
+	}
+}

@@ -157,6 +157,8 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 	// whose declaration this store cannot produce is reported as
 	// unjudged rather than as clean — unobservable and healthy must not
 	// render the same.
+	type opinionSource struct{ collection, object string }
+	var from []opinionSource
 	var fired []Opinion
 	var unjudged []string
 	var unruled []string
@@ -222,13 +224,39 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 				scope := o.Scope
 				instance = &scope
 			}
-			fired = append(fired, JudgeShaped(rules, o.ID, instance, o.Type, facts)...)
+			produced := JudgeShaped(rules, o.ID, instance, o.Type, facts)
+			for range produced {
+				// Which collection and object each opinion came from, so
+				// the one list of problems on this page can be FOLLOWED.
+				// It was dead text: a reader saw "unit:foo failed" and had
+				// to go find it by hand, on the page whose whole job is to
+				// say where to look.
+				from = append(from, opinionSource{
+					collection: cs.Name, object: o.Name})
+			}
+			fired = append(fired, produced...)
 		}
 	}
+	// Sorted TOGETHER: `from` is parallel to `fired`, and sorting one
+	// without the other would link every row to the wrong object — a
+	// worse failure than not linking at all, because it is confident.
 	order := map[string]int{"critical": 0, "warn": 1, "info": 2}
-	sort.SliceStable(fired, func(i, j int) bool {
-		return order[fired[i].Level] < order[fired[j].Level]
+	rank := make([]int, len(fired))
+	for i := range rank {
+		rank[i] = i
+	}
+	sort.SliceStable(rank, func(i, j int) bool {
+		return order[fired[rank[i]].Level] < order[fired[rank[j]].Level]
 	})
+	sortedFired := make([]Opinion, len(fired))
+	sortedFrom := make([]opinionSource, len(from))
+	for at, i := range rank {
+		sortedFired[at] = fired[i]
+		if i < len(from) {
+			sortedFrom[at] = from[i]
+		}
+	}
+	fired, from = sortedFired, sortedFrom
 
 	attention.WriteString(`<section class="panel"><h2>Opinions</h2>`)
 	if len(fired) == 0 {
@@ -253,12 +281,17 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 	} else {
 		attention.WriteString(`<div class="scroll"><table><thead><tr><th>level</th>` +
 			"<th>grounds</th><th>object</th><th>says</th><th>cites</th></tr></thead><tbody>")
-		for _, o := range fired {
+		for i, o := range fired {
+			object := esc(o.Object)
+			if i < len(from) && from[i].collection != "" {
+				object = fmt.Sprintf(`<a href="%s">%s</a>`,
+					objectHref(from[i].collection, from[i].object), esc(o.Object))
+			}
 			attention.WriteString(fmt.Sprintf(
 				`<tr><td>%s</td><td><span class="grounds %s">%s</span></td>`+
 					`<td class="ident">%s</td><td>%s</td><td class="faint">%s</td></tr>`,
 				chip(o.Level, o.Level), esc(o.Grounds), esc(o.Grounds),
-				esc(o.Object), esc(o.Sentence), esc(strings.Join(o.Cites, ", "))))
+				object, esc(o.Sentence), esc(strings.Join(o.Cites, ", "))))
 		}
 		attention.WriteString("</tbody></table></div>")
 	}
