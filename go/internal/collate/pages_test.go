@@ -1308,3 +1308,58 @@ func TestTheIndexDoesNotPrintMeasurementsItNeverTook(t *testing.T) {
 		t.Fatalf("and must not be hedged: %s", visible(measured))
 	}
 }
+
+func TestDeclaringNoRulesIsNotAnUnreadableDeclaration(t *testing.T) {
+	// "Not judged, because no rule table could be read for: …" was
+	// printed for 14 collections whose declarations are perfectly
+	// readable and simply declare no rules. That sends a reader to debug
+	// a declaration with nothing wrong with it, and it buries the
+	// collections where the sentence is true.
+	st := openStore(t)
+	mustIssue(t, st, "pools", "sha256:p", pagesDecl) // readable, no rules
+	if _, err := st.ApplyCommit("pools", store.HostNative, 1, "b1", fakeBootID,
+		[]store.Object{{ID: "pool:t", Name: "t", Type: "pool",
+			Facts: json.RawMessage(`{"Health":"ONLINE"}`), At: 10}}); err != nil {
+		t.Fatal(err)
+	}
+	page := markup(htmlOf(t, st, "/"))
+	if strings.Contains(page, "no rule table could be read") {
+		t.Fatalf("a readable declaration that declares no rules is not an "+
+			"unreadable one: %s", visible(page))
+	}
+	if !strings.Contains(page, "declare no rules at all") {
+		t.Fatalf("and the state is stated rather than dropped: %s", visible(page))
+	}
+}
+
+func TestADeclaredDenominatorIsHonouredEvenWithoutAUnit(t *testing.T) {
+	// Three facts in the tree — MemUsedPercent and both UsePercents —
+	// declare a denominator and NO unit, and rendered as bare integers
+	// with the denominator dropped: "a number pretending to be an
+	// answer". Keying the rule on `unit: percent` honoured only the
+	// declarations that happened to be complete.
+	decl := FactDecl{Type: "integer", Temperament: "gauge",
+		Denominator: "MemTotalBytes"}
+	out := Cell(decl, 25.0, StateValue, "",
+		Siblings{
+			Values: map[string]any{"MemTotalBytes": 8589934592.0},
+			Decls:  map[string]FactDecl{"MemTotalBytes": {Type: "integer", Unit: "bytes"}},
+		}, false)
+	if !strings.Contains(out, "of 8 GiB") {
+		t.Fatalf("the declared denominator must reach the reader: %s", out)
+	}
+	// But NO invented percent sign: the name ends in "Percent" and
+	// inferring from that is the unit guesser §27 records.
+	if strings.Contains(visible(out), "%") {
+		t.Fatalf("a unit was invented from nothing: %s", out)
+	}
+	// And where the unit IS declared, the sign appears.
+	withUnit := Cell(FactDecl{Type: "integer", Unit: "percent",
+		Denominator: "SizeBytes"}, 25.0, StateValue, "",
+		Siblings{Values: map[string]any{"SizeBytes": 1024.0},
+			Decls: map[string]FactDecl{"SizeBytes": {Type: "integer", Unit: "bytes"}}},
+		false)
+	if !strings.Contains(withUnit, "25%") {
+		t.Fatalf("a declared percent keeps its sign: %s", withUnit)
+	}
+}

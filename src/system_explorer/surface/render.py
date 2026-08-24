@@ -100,10 +100,31 @@ def opinions_panel(held: Iterable[Any]) -> str:
     )
 
 
+#: Reach is a CLOSED enum (hub/checkpoint.py: unswept | connected | dark)
+#: and each member means something different, so each gets its own mark.
+#:
+#: This was `"ok" if state == "connected" else "warn"`, which is a
+#: two-entry severity table in a renderer — the thing DESIGN §27 forbids,
+#: and it collapsed the two states that matter most: `unswept` means this
+#: hub has never swept the host, and `dark` means it swept and got
+#: nothing. One is a gap in our looking, the other is a fault on the
+#: estate, and rendering both as `warn` is absence and failure wearing one
+#: face on the page that exists to tell them apart.
+#:
+#: A member not in this table renders UNSTYLED rather than being lumped in
+#: with the nearest one — a newer hub's vocabulary is shown, never
+#: guessed at.
+_REACH_MARK = {
+    "connected": "ok",
+    "dark": "critical",
+    "unswept": "muted",
+}
+
+
 def reach_panel(reach: Mapping[str, Any], coverage: Any) -> str:
     chips = "".join(
         _chip(f"{host} · {getattr(state, 'value', state)}",
-              "ok" if getattr(state, "value", state) == "connected" else "warn")
+              _REACH_MARK.get(getattr(state, "value", state), ""))
         for host, state in sorted(reach.items())
     )
     def _list(label: str, values: Iterable[str]) -> str:
@@ -128,13 +149,35 @@ def reach_panel(reach: Mapping[str, Any], coverage: Any) -> str:
     )
 
 
+def _as_read(value: Any) -> str:
+    """One basis element's value, as a reader should see it.
+
+    A list arrived here and was rendered with Python's repr, so the estate
+    page carried the literal text `[&#x27;lab-a&#x27;, &#x27;lab-b&#x27;]`
+    — a language's internal notation shown to an operator, and the same
+    class of defect as comma-joining a structured value: the reader has to
+    decode our data structure instead of reading their estate.
+    """
+    if isinstance(value, (list, tuple)):
+        if not value:
+            # Measured emptiness, not a missing value.
+            return '<span class="empty-list">none</span>'
+        return '<span class="chips">' + "".join(
+            f'<span class="chip item">{_e(v)}</span>' for v in value) + "</span>"
+    if isinstance(value, Mapping):
+        return '<span class="chips">' + "".join(
+            f'<span class="chip item">{_e(k)}={_e(v)}</span>'
+            for k, v in sorted(value.items())) + "</span>"
+    return _e(value)
+
+
 def answer_panel(answer: Mapping[str, Any]) -> str:
     basis = "".join(
         "<tr>"
         f'<td>{_chip(_e(element.get("kind")))}</td>'
         f'<td class="ident">{_e(element.get("origin"))}</td>'
         f"<td>{_e(element.get('claim'))}</td>"
-        f'<td class="faint">{_e(element.get("value_as_read"))}</td>'
+        f'<td class="faint">{_as_read(element.get("value_as_read"))}</td>'
         "</tr>"
         for element in answer.get("basis", ())
     )

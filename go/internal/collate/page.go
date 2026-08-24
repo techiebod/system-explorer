@@ -143,6 +143,7 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 	// render the same.
 	var fired []Opinion
 	var unjudged []string
+	var unruled []string
 	var neverRead []string
 	for _, cs := range states {
 		if cs.Generation == 0 {
@@ -166,8 +167,20 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 			return "", err
 		}
 		rules, err := RulesFor(document, cs.Name)
-		if err != nil || rules == nil {
+		switch {
+		case err != nil || document == "":
+			// The declaration could not be read. A real problem, and the
+			// only case that belongs under "no rule table could be read".
 			unjudged = append(unjudged, cs.Name)
+			continue
+		case rules == nil:
+			// The declaration was read fine and this collection simply
+			// DECLARES NO RULES — which is ordinary, and was reported as
+			// "no rule table could be read for" on 14 collections whose
+			// declarations are perfectly readable. That sends a reader to
+			// debug a declaration that has nothing wrong with it, and it
+			// buries the collections where the message is true.
+			unruled = append(unruled, cs.Name)
 			continue
 		}
 		rows, err := st.Objects(cs.Name)
@@ -207,6 +220,8 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 		// collections that were actually judged, and saying it plainly
 		// while a third of the host was never read is the sentence this
 		// product exists to refuse.
+		// `unruled` collections ARE judged — by an empty rule table, which
+		// is a complete judging. They are not subtracted here.
 		judged := len(states) - len(unjudged) - len(neverRead)
 		if len(unjudged)+len(neverRead) == 0 {
 			body.WriteString(fmt.Sprintf(
@@ -236,6 +251,14 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 			`<p class="faint">Not judged, because no rule table could be read for: %s. `+
 				`That is a statement about the declaration, not about the host.</p>`,
 			esc(strings.Join(unjudged, ", "))))
+	}
+	if len(unruled) > 0 {
+		body.WriteString(fmt.Sprintf(
+			`<p class="faint">%d collections declare no rules at all, so `+
+				`nothing was ever going to fire for them: %s. That is their `+
+				`producer's choice, not a fault here — but it does mean this `+
+				`page says nothing about them either way.</p>`,
+			len(unruled), esc(strings.Join(unruled, ", "))))
 	}
 	if len(neverRead) > 0 {
 		body.WriteString(fmt.Sprintf(

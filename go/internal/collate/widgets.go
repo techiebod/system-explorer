@@ -316,10 +316,25 @@ func numeric(decl FactDecl, value any, sib Siblings) string {
 				`%s</span>`, figure)
 	}
 
-	if decl.Unit == "percent" {
-		// A percentage with no denominator is a number pretending to be
-		// an answer. The denominator is NAMED by the declaration, so this
-		// file looks it up rather than guessing which sibling it is.
+	// A DECLARED DENOMINATOR is what makes a figure a proportion, and it
+	// is keyed on here rather than on `unit: percent`.
+	//
+	// This tested the unit alone, and three facts in the tree — including
+	// MemUsedPercent and both UsePercents — declare a denominator and no
+	// unit at all. They rendered as bare integers with the denominator
+	// silently dropped, which §28 calls "a number pretending to be an
+	// answer". Keying on the unit meant honouring only the declarations
+	// that happened to be complete.
+	//
+	// The `%` is still added ONLY where the unit says percent: the name
+	// ends in "Percent" and inferring from that is the unit guesser §27
+	// records, which did not know `Usec` and is the reason this file
+	// exists. So an underdeclared fact renders as "25 of 8 GiB" — the
+	// figure in whatever unit was declared, beside what it is a
+	// proportion OF — which is an answer, where a bare 25 is not.
+	if decl.Unit == "percent" || decl.Denominator != "" {
+		// The denominator is NAMED by the declaration, so this file looks
+		// it up rather than guessing which sibling it is.
 		if decl.Denominator != "" {
 			if against, ok := number(sib.Values[decl.Denominator]); ok {
 				// In the DENOMINATOR'S own unit, read off its own
