@@ -3,6 +3,73 @@
 Guidance for AI coding agents installing or working on System Explorer.
 Humans: start with [README.md](README.md).
 
+## The model — reason THROUGH this, not merely near it
+
+Every concept-level mistake of 2026-08-24 was made by an agent operating in
+the code's vocabulary while the design's sat unread; each violated one line
+of the glossary below, and each felt like a small local choice at the moment
+it was made. So the model lives here, in the file every session loads, and
+three working rules make it load-bearing:
+
+1. **The trigger rule.** Any change that touches an **id, a name, a key, a
+   prefix, a collection name, or any merge/split of objects** is an ontology
+   decision wearing a small one's clothes. Before making it, quote the
+   glossary line(s) it operates under — in the commit message. No quote, no
+   change.
+2. **State it back first.** A conceptual move — anything that decides what a
+   thing IS — gets a two-sentence model reading to the owner BEFORE work
+   builds on it. Every correction this week cost the owner one sentence;
+   spent after artifacts instead of before, each cost hours of rework.
+3. **The design is edited by the owner only.** Agents propose design changes
+   as diffs to the adjudication queue; they never write into DESIGN.md. A
+   ruling was once invented and written in — it governed real work before it
+   was caught.
+
+**Ratified by the owner, 2026-08-24, in the owner's own words** (from the
+corrections that forced this section into existence):
+
+- *"Isn't this the confusion between identity and an observation? Multiple
+  collectors will observe attributes and potentially different aliases of
+  the same identity."* — Two collections observing one thing yield
+  **observations to join through identity**, never two objects and never a
+  rename.
+- *"Overview is not an identity. Overview is a view on an identity's
+  attributes."* — A collection is a **question asked of things** (§15). Its
+  objects are observations; the thing observed has exactly one identity per
+  scope (§10 layer 2), minted at one site — never from the question asked
+  about it.
+
+### The glossary (DESIGN §37, verbatim — the nouns you must think in)
+
+- **collector** — a program that reads one native interface, writes what it saw, and exits
+- **collator** — one service per host: schedules collectors, mints ids and relations, joins, judges, records, serves
+- **hub** — one service per site: holds intent, judges across hosts, projects
+- **object** — a thing with an id that survives re-observation
+- **relation** — an edge carrying facts of its own, assembled from directed assertions, keyed on source id, type, discriminator and target name; the assembly states whether it is confirmed, asserted or contradicted
+- **assertion** — one vantage's directed claim about a relation, carrying the names it saw. Stored beneath the assembly, never rendered as the relation
+- **name** — what a native interface called something. Observed, never minted
+- **id** — minted by a collator or a hub, carrying its scope — including the instance, where a collector fronts one of several
+- **fact** — a non-judgmental, provenance-bearing assertion about an object, carrying five axes
+- **kind** — observed, derived or declared — where the assertion came from
+- **temperament** — existence, configuration, state, counter or gauge — how a fact changes and whether anything can watch it
+- **type · unit** — the value's shape, and the dimension it is measured in
+- **origin** — which collector observed it, and which tier derived it
+- **batch** — one collect run, committed per collection. A committed collection is authoritative; an uncommitted one is authoritative for nothing
+- **generation** — a monotonic number the collator issues per collection, so an older commit arriving late is refused rather than applied
+- **name class** — stable or ephemeral. Only stable names may be joined through
+- **verdict** — what the evidence says about the system: healthy, degraded or critical
+- **epistemic status** — how much of the question the evidence covered: complete, partial, unknown or conflicted. Never merged with the verdict
+- **evidence** — the raw native payload a fact was read from, captured fresh on request, never stored — only digested
+- **opinion** — a levelled judgement over facts, naming the facts it read. Self-evident or intent-relative
+- **finding** — an opinion at warn or above, with a lifecycle across time
+- **declaration** — a collector's static account of what it serves and what it means
+- **corpus** — captured reference answers per native source, versioned and in variant states, that declarations are written against
+- **intent** — the estate's account of what should be true, held only by hubs
+- **coverage** — the identity lists an estate answer carries — declared, discovered-but-not-declared, unclassified — plus which discovery sources were readable. Host reachability travels in reach
+- **reach** — what an answer consulted, what declined, and what was dark
+- **problem domain** — a question, as an object: answer, verdict, basis, reach
+- **projection** — a selection and shaping of the graph for an audience; a screen is an instance
+
 > **Read this before writing any code.** A three-tier rewrite — collector,
 > collator, hub — is under way in `go/`, `harness/` and `contract/`.
 > **[docs/DESIGN.md](docs/DESIGN.md) is the record of intent and outranks every
