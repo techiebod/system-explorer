@@ -102,40 +102,7 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 		"<thead><tr><th>collection</th><th>generation</th><th>objects</th>" +
 		"<th>freshness</th><th>age</th></tr></thead><tbody>")
 	for _, cs := range states {
-		// ONE decision, and `never read` dominates.
-		//
-		// This began as `current` with downgrades applied after, which is
-		// absence rendering as health on the first page anyone opens: a
-		// collection issued and never applied, carrying no decline, read
-		// as `current`. And a never-read collection that HAD declined read
-		// as `stale · unavailable` — stale means a reading older than its
-		// declared freshness, and there has never been a reading. Both
-		// were on the shipped index; the second was photographed.
-		//
-		// Generation 0 is the dominant fact because it changes what every
-		// other column means: an object count of 0 is not a measurement,
-		// and an age of — is not a fresh reading.
-		var freshness string
-		reason := ""
-		if cs.StaleReason != nil {
-			reason = " · " + *cs.StaleReason
-		}
-		switch {
-		case cs.Generation == 0:
-			// Not `current`, not `stale`, not `absent here`. Nothing was
-			// ever read, and if a decline says why, the collection's own
-			// page carries it.
-			freshness = chip("never read", "muted")
-		case cs.Decline != nil && cs.Decline.Reason == "absent":
-			// Absent COMMITS, so it is neither stale nor an incident —
-			// and with 0 objects its row was indistinguishable from a
-			// collection that answered and holds nothing.
-			freshness = chip("absent here", "muted")
-		case cs.Stale:
-			freshness = chip("stale"+reason, "warn")
-		default:
-			freshness = chip("current", "ok")
-		}
+		freshness := freshnessChip(cs)
 		// The age column carried one em dash for three different things —
 		// never read, read but carrying no stamp, and a clock this host
 		// cannot subtract with. Each now says which, because "—" in a
@@ -314,10 +281,7 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 	body.WriteString(`<footer>Served by this host's own collator. It answers ` +
 		`whether or not a hub is reachable, which is why it exists.</footer>`)
 
-	return "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">" +
-		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
-		"<title>This host</title><style>" + tokensCSS + "</style></head><body><main>" +
-		body.String() + "</main></body></html>\n", nil
+	return wrapWithNav("This host", navRail(st, states, ""), body.String()), nil
 }
 
 func registerPage(mux *http.ServeMux, st *store.Store, now func() float64, bootID string) {
@@ -381,4 +345,46 @@ func serveHTML(w http.ResponseWriter, out string) {
 	w.Header().Set("Content-Security-Policy",
 		"default-src 'none'; style-src 'unsafe-inline'")
 	fmt.Fprint(w, out)
+}
+
+// freshnessChip is the ONE decision about what state a collection is in,
+// shared by the host table and the navigation rail. Two copies is how
+// it comes back: the first version applied downgrades after a `current`
+// default, so a collection nothing had ever read rendered as healthy.
+func freshnessChip(cs store.CollectionState) string {
+	// ONE decision, and `never read` dominates.
+	//
+	// This began as `current` with downgrades applied after, which is
+	// absence rendering as health on the first page anyone opens: a
+	// collection issued and never applied, carrying no decline, read
+	// as `current`. And a never-read collection that HAD declined read
+	// as `stale · unavailable` — stale means a reading older than its
+	// declared freshness, and there has never been a reading. Both
+	// were on the shipped index; the second was photographed.
+	//
+	// Generation 0 is the dominant fact because it changes what every
+	// other column means: an object count of 0 is not a measurement,
+	// and an age of — is not a fresh reading.
+	var freshness string
+	reason := ""
+	if cs.StaleReason != nil {
+		reason = " · " + *cs.StaleReason
+	}
+	switch {
+	case cs.Generation == 0:
+		// Not `current`, not `stale`, not `absent here`. Nothing was
+		// ever read, and if a decline says why, the collection's own
+		// page carries it.
+		freshness = chip("never read", "muted")
+	case cs.Decline != nil && cs.Decline.Reason == "absent":
+		// Absent COMMITS, so it is neither stale nor an incident —
+		// and with 0 objects its row was indistinguishable from a
+		// collection that answered and holds nothing.
+		freshness = chip("absent here", "muted")
+	case cs.Stale:
+		freshness = chip("stale"+reason, "warn")
+	default:
+		freshness = chip("current", "ok")
+	}
+	return freshness
 }

@@ -115,13 +115,13 @@ func collectionPage(st *store.Store, name, sortBy, facet string,
 		if !declined {
 			body.WriteString(neverReadPanel())
 		}
-		return wrap(name+" · never read", body.String()), http.StatusOK, nil
+		return wrapWithNav(name+" · never read", navRail(st, states, name), body.String()), http.StatusOK, nil
 	case len(rows) == 0 && !declined:
 		body.WriteString(`<section class="panel empty-state"><h2>Nothing here</h2>` +
 			`<p>This collection was read and holds no objects. The interface ` +
 			`answered; it had nothing to report. That is a measured emptiness, ` +
 			`not a collection that could not be reached.</p></section>`)
-		return wrap(name, body.String()), http.StatusOK, nil
+		return wrapWithNav(name, navRail(st, states, name), body.String()), http.StatusOK, nil
 	case len(rows) == 0 && declined:
 		// Declined, and nothing stands behind it. Said explicitly: the
 		// alternative is a page that ends after the decline panel, and a
@@ -131,7 +131,7 @@ func collectionPage(st *store.Store, name, sortBy, facet string,
 			`so there is nothing to show beneath the decline. What was true ` +
 			`before is not known here — which is different from knowing it was ` +
 			`empty.</p></section>`)
-		return wrap(name, body.String()), http.StatusOK, nil
+		return wrapWithNav(name, navRail(st, states, name), body.String()), http.StatusOK, nil
 	}
 
 	groups, err := HideGroupsFor(document, name)
@@ -151,7 +151,7 @@ func collectionPage(st *store.Store, name, sortBy, facet string,
 	body.WriteString(freshnessNote(self, now, bootID))
 	body.WriteString(objectsTable(name, render, rows, could, groups, worst,
 		parentOf, nestedBy, sortBy, facet))
-	return wrap(name, body.String()), http.StatusOK, nil
+	return wrapWithNav(name, navRail(st, states, name), body.String()), http.StatusOK, nil
 }
 
 // neverReadPanel is for a collection that has never applied AND has not
@@ -721,10 +721,21 @@ func sortStrings(in []string) {
 }
 
 func wrap(title, body string) string {
+	return wrapWithNav(title, "", body)
+}
+
+// wrapWithNav puts the rail on every page.
+//
+// The rail comes FIRST in source order, behind a skip link. That costs
+// `curl` a prelude and buys correct keyboard order — and the MCP
+// consumer does not read this surface at all, it reads /v1, so the curl
+// cost is the only one.
+func wrapWithNav(title, rail, body string) string {
 	return "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">" +
 		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
 		"<title>" + esc(title) + "</title><style>" + tokensCSS +
-		"</style></head><body><main>" + body + "</main></body></html>\n"
+		"</style></head><body>" + rail + "<main id=\"main\">" + body +
+		"</main></body></html>\n"
 }
 
 // sortedOrder ranks rows by one fact's rendered VALUE.

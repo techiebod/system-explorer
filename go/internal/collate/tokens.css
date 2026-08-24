@@ -285,3 +285,66 @@ a.sort.current { font-weight: 600; color: var(--text); }
   position: absolute; width: 1px; height: 1px; overflow: hidden;
   clip-path: inset(50%); white-space: nowrap;
 }
+
+/* ── The navigation rail ────────────────────────────────────────────────
+   Present on every page, always fully expanded, scrolling independently
+   of the content. NOT a <details> tree: <details> state does not survive
+   navigation, so opening "network" and clicking `routes` would close it
+   again on arrival, and persisting that needs script plus storage plus a
+   flash of the wrong state — three mechanisms to buy back what a
+   scrolling rail gives for nothing. */
+body {
+  display: grid;
+  grid-template-columns: minmax(13rem, 15rem) 1fr;
+  align-items: start;
+}
+main { padding: 1rem 1.25rem; min-width: 0; }
+.rail {
+  position: sticky; top: 0; height: 100dvh; overflow-y: auto;
+  border-right: 1px solid var(--border); background: var(--panel);
+  padding: .6rem .5rem 2rem; font-size: 12px;
+}
+.rail-group { margin-top: .7rem; }
+.rail-group h2 {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--text-faint); margin: 0 0 .2rem .35rem; font-weight: 600;
+}
+.rail-group ul { list-style: none; margin: 0; padding: 0; }
+.rail-item { display: flex; align-items: baseline; gap: .3rem; }
+.rail-item a {
+  display: flex; flex: 1; gap: .4rem; align-items: baseline;
+  padding: .1rem .35rem; border-radius: 3px; text-decoration: none;
+  color: var(--text-dim); border-left: 2px solid transparent;
+  min-width: 0;
+}
+.rail-item a:hover { background: var(--panel-2); color: var(--text); }
+.rail-item.current a {
+  background: var(--panel-2); color: var(--text);
+  border-left-color: var(--text-dim);
+}
+.rail-name {
+  font-family: var(--mono, ui-monospace, monospace);
+  overflow-wrap: anywhere; flex: 1;
+}
+.rail-count { font-variant-numeric: tabular-nums; color: var(--text-faint); }
+.rail-none { color: var(--text-faint); }
+.rail-state .chip { border: 0; background: none; padding: 0; font-size: 10px; }
+.rail-home {
+  display: block; padding: .25rem .35rem; font-weight: 600;
+  color: var(--text); text-decoration: none; border-radius: 3px;
+}
+.rail-home.current, .rail-home:hover { background: var(--panel-2); }
+.skip {
+  position: absolute; left: -9999px;
+}
+.skip:focus {
+  position: static; display: block; padding: .3rem; background: var(--panel-2);
+}
+
+/* Below the fold on a narrow screen the rail moves above the content in
+   flow — no drawer, no hamburger, nothing to open. */
+@media (max-width: 60rem) {
+  body { grid-template-columns: 1fr; }
+  .rail { position: static; height: auto; border-right: 0;
+          border-bottom: 1px solid var(--border); }
+}

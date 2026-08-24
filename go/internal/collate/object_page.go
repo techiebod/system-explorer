@@ -101,7 +101,12 @@ func objectPage(st *store.Store, collection, object string, now func() float64,
 	body.WriteString(relationsSection(st, collection, self))
 	body.WriteString(evidenceSection(collection, self.Name))
 
-	return wrap(self.Name+" · "+collection, body.String()), http.StatusOK, nil
+	states, err := st.Collections()
+	if err != nil {
+		states = nil
+	}
+	return wrapWithNav(self.Name+" · "+collection,
+		navRail(st, states, collection), body.String()), http.StatusOK, nil
 }
 
 func factsSection(render *CollectionRender, facts map[string]any,
