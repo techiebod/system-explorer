@@ -31,6 +31,7 @@ import (
 	"fmt"
 	"html"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -45,6 +46,29 @@ func esc(v any) string {
 		return ""
 	}
 	return html.EscapeString(fmt.Sprintf("%v", v))
+}
+
+// collectionHref and objectHref are the ONLY places a link into this
+// surface is built.
+//
+// **An object name is not a URL path segment.** `esc()` is HTML escaping
+// and does nothing to a `/`, so a mount named `boot/efi` — and every ZFS
+// dataset, `tank/photos` — minted
+// `/collections/mounts/objects/boot/efi`, which Go's mux reads as two
+// segments and answers 404. Every mount below the root and every nested
+// dataset on the estate was unreachable from its own table, and the row
+// linked confidently to nothing. Found by the owner clicking a mount.
+//
+// `url.PathEscape` turns the slash into %2F, which the mux decodes back
+// to `boot/efi` in PathValue — verified against net/http rather than
+// assumed. The HTML escape still wraps it, because the result lands in
+// an attribute.
+func collectionHref(collection string) string {
+	return "/collections/" + esc(url.PathEscape(collection))
+}
+
+func objectHref(collection, object string) string {
+	return collectionHref(collection) + "/objects/" + esc(url.PathEscape(object))
 }
 
 func chip(text, kind string) string {
@@ -130,10 +154,11 @@ func hostPage(st *store.Store, now func() float64, bootID string) (string, error
 		// The drill starts here: row → collection → object → evidence,
 		// every step an <a href> and no script anywhere in it.
 		body.WriteString(fmt.Sprintf(
-			`<tr><td class="ident"><a href="/collections/%s">%s</a></td>`+
+			`<tr><td class="ident"><a href="%s">%s</a></td>`+
 				`<td class="num">%d</td><td class="num">%s</td>`+
 				`<td>%s</td><td>%s</td></tr>`,
-			esc(cs.Name), esc(cs.Name), cs.Generation, objects, freshness, age))
+			collectionHref(cs.Name), esc(cs.Name), cs.Generation, objects,
+			freshness, age))
 	}
 	body.WriteString("</tbody></table></div></section>")
 

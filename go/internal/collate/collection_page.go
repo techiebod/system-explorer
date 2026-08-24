@@ -603,8 +603,8 @@ func objectsTable(collection string, render *CollectionRender,
 		}
 		b.WriteString("<td>" + severityMark(worst[row.ID]) + "</td>")
 		b.WriteString(fmt.Sprintf(
-			`<td class="ident"%s><a href="/collections/%s/objects/%s">%s</a>%s</td>`,
-			indent, esc(collection), esc(row.Name), esc(row.Name),
+			`<td class="ident"%s><a href="%s">%s</a>%s</td>`,
+			indent, objectHref(collection, row.Name), esc(row.Name),
 			scopeMark(row.Scope)))
 		for _, name := range columns {
 			b.WriteString("<td>" + cellFor(render, name, facts, absent,

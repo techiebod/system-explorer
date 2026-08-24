@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -75,8 +76,8 @@ func objectPage(st *store.Store, collection, object string, now func() float64,
 	var body strings.Builder
 	body.WriteString(fmt.Sprintf(
 		`<p class="dim"><a href="/">this host</a> · `+
-			`<a href="/collections/%s">%s</a></p><h1>%s</h1>`,
-		esc(collection), esc(collection), esc(self.Name)))
+			`<a href="%s">%s</a></p><h1>%s</h1>`,
+		collectionHref(collection), esc(collection), esc(self.Name)))
 	if self.Type != "" {
 		body.WriteString(fmt.Sprintf(`<p class="dim">%s%s</p>`,
 			chip(self.Type, "type"), scopeMark(self.Scope)))
@@ -287,11 +288,11 @@ func evidenceSection(collection, object string) string {
 		`<details class="panel"><summary><h2>Evidence</h2></summary>`+
 			`<p>The raw native document this object's facts were read from, `+
 			`captured fresh when you ask for it and stored nowhere: `+
-			`<a href="/v1/collections/%s/objects/%s/evidence">fetch it</a>.</p>`+
+			`<a href="/v1%s/objects/%s/evidence">fetch it</a>.</p>`+
 			`<p class="faint">Evidence is checkable, not infallible. It is `+
 			`captured now, so it may show a system that has changed since the `+
 			`fact was read; it can be truncated by a limit; and it inherits `+
 			`whatever the source itself gets wrong. What it offers is that it `+
 			`is the only thing here that is not our interpretation.</p></details>`,
-		esc(collection), esc(object))
+		collectionHref(collection), esc(url.PathEscape(object)))
 }

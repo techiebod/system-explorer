@@ -80,8 +80,8 @@ func targetLink(owner map[string]string, rel store.Relation) string {
 			`%s <span class="faint">(no collection on this host declares `+
 				`the prefix %s)</span>`, esc(rel.TargetName), esc(rel.TargetKind))
 	}
-	return fmt.Sprintf(`<a href="/collections/%s/objects/%s">%s</a>`,
-		esc(collection), esc(rel.TargetName), esc(rel.TargetName))
+	return fmt.Sprintf(`<a href="%s">%s</a>`,
+		objectHref(collection, rel.TargetName), esc(rel.TargetName))
 }
 
 // nameFamilies renders every name a collector published for an object.
