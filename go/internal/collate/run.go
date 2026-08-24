@@ -176,25 +176,55 @@ func reverseFor(collectors []collectorConfig) map[string]Reverse {
 
 // declaredNames is every collection and every lookup a declaration
 // publishes — the names a reverse request may legitimately carry.
+//
+// **`lookups` is a MAP, name → question, and this parsed it as an array.**
+// json.Unmarshal fails on the whole document when one member has the
+// wrong shape, and the error branch returned nil — so a collector that
+// declares any lookup contributed NO names at all, and every collection
+// it serves became unroutable. Measured 2026-08-24: storage declares
+// `snapshots-of` and network declares `route-get`/`resolve`, so all
+// FOURTEEN of their collections — pools, block-devices, datasets,
+// arrays, mounts, links, routes, listening, resolver, tailscale,
+// port-exposure and the three nft tables — answered `evidence`, `object`
+// and `lookup` with "no collector on this host publishes it", on a host
+// where those collections were publishing objects on every sweep. The
+// biggest tables in the product, with their evidence link dead.
+//
+// The two ways it stayed invisible are both worth naming. The reverse
+// map is built ONCE at start-up, so nothing re-derives it and no sweep
+// could correct it. And the failure is a well-formed refusal served with
+// HTTP 200 — a sentence explaining that no collector serves the
+// collection — which reads exactly like a considered answer.
+//
+// So: the two members are parsed SEPARATELY. A malformed or unexpected
+// `lookups` now costs the lookups and not the collections, because one
+// member's shape must not decide another's fate.
 func declaredNames(raw []byte) []string {
-	var document struct {
+	var collections struct {
 		Collections []struct {
 			Name string `json:"name"`
 		} `json:"collections"`
-		Lookups []struct {
-			Name string `json:"name"`
-		} `json:"lookups"`
 	}
-	if err := json.Unmarshal(raw, &document); err != nil {
+	if err := json.Unmarshal(raw, &collections); err != nil {
 		return nil
 	}
-	names := make([]string, 0, len(document.Collections)+len(document.Lookups))
-	for _, c := range document.Collections {
+	names := make([]string, 0, len(collections.Collections)+2)
+	for _, c := range collections.Collections {
 		names = append(names, c.Name)
 	}
-	for _, l := range document.Lookups {
-		names = append(names, l.Name)
+
+	// The declared shape (PLAN, R3d): an optional root member mapping
+	// each lookup name to its question, input description, example and
+	// bounds. Decoded into a map so the KEYS are the names.
+	var lookups struct {
+		Lookups map[string]json.RawMessage `json:"lookups"`
 	}
+	if err := json.Unmarshal(raw, &lookups); err == nil {
+		for name := range lookups.Lookups {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
 	return names
 }
 

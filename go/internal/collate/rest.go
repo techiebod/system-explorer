@@ -453,6 +453,21 @@ func NewHandlerWithReverse(st *store.Store, now func() float64, bootID string,
 			// absence. Found by review the day the channel landed.
 			client, held := reverse[name]
 			if !held {
+				// **502, not 200.** This was served with a bare 200 and a
+				// sentence, which reads to every caller — curl, MCP, a
+				// browser, a monitor — as a considered answer. It is not:
+				// it means this collator cannot route the request at all.
+				// A parse bug made all fourteen of storage's and
+				// network's collections answer this way while publishing
+				// objects every sweep, and nothing anywhere went red,
+				// because a well-worded refusal at 200 is indistinguishable
+				// from a result.
+				//
+				// 502 rather than 404: the object may well exist, and the
+				// fault is between this collator and the collector that
+				// would know — a gateway problem, which is what 502 says.
+				// 404 would assert the object is not there.
+				w.WriteHeader(http.StatusBadGateway)
 				writeJSON(w, map[string]any{
 					"refused": "no-collector-serves-it",
 					"detail": "no collector on this host publishes " +

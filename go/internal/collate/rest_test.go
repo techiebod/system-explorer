@@ -742,8 +742,12 @@ func TestAVerbReachesTheCollectorThatServesTheCollection(t *testing.T) {
 func TestACollectionNoCollectorServesIsStatedNotGuessed(t *testing.T) {
 	var asked []string
 	got := get(t, routedHandler(t, &asked), "/v1/collections/nobody/objects/x")
-	if got.Code != 200 {
-		t.Fatalf("%d", got.Code)
+	// This demanded 200, pinning a refusal to a success status — and a
+	// well-worded refusal at 200 is indistinguishable from a result to
+	// curl, MCP, a browser or a monitor. It is how a parse bug left
+	// fourteen collections unroutable with nothing going red.
+	if got.Code != http.StatusBadGateway {
+		t.Fatalf("a refusal is not a success: %d", got.Code)
 	}
 	var answer map[string]any
 	if err := json.Unmarshal(got.Body.Bytes(), &answer); err != nil {
@@ -799,8 +803,19 @@ func TestTheReverseRoutesAreWiredByTheDaemon(t *testing.T) {
 }
 
 func TestReverseForKeysCollectionsAndLookupsAlike(t *testing.T) {
+	// THE SHAPE THE PRODUCT SHIPS. This wrote `"lookups":[{"name":...}]`
+	// — an array — which no declaration in the tree uses: the palette is
+	// a root member mapping each name to its question (PLAN, R3d). So the
+	// test fed the parser a document in the shape the parser expected and
+	// confirmed it agreed with itself, while every real declaration
+	// carrying a lookup failed to parse and took all of its collections'
+	// verbs down with it.
+	//
+	// A guard must test its subject, never a copy of it. The routability
+	// guard beside this one drives the REAL declarations for that reason.
 	names := declaredNames([]byte(`{"collections":[{"name":"links"},{"name":"routes"}],
-		"lookups":[{"name":"route-get"},{"name":"resolve"}]}`))
+		"lookups":{"route-get":{"question":"where would this go?"},
+		           "resolve":{"question":"what does this name answer?"}}}`))
 	want := map[string]bool{"links": true, "routes": true,
 		"route-get": true, "resolve": true}
 	if len(names) != len(want) {
