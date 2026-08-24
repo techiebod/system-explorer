@@ -510,7 +510,29 @@ func NewHandlerWithReverse(st *store.Store, now func() float64, bootID string,
 			if err != nil {
 				// The type, never the message: an error's text is where a
 				// path or a token reaches an unauthenticated channel.
-				http.Error(w, verb+" failed", http.StatusBadGateway)
+				//
+				// But it is RECORDED, which it was not. The refusal branch
+				// above writes to the rejections table precisely because
+				// "a refusal nobody can see is one nobody can act on", and
+				// this branch — every transport failure, every collector
+				// that died mid-answer — served a four-word string and
+				// kept no trace anywhere. An operator got "lookup failed"
+				// and had nothing to read next. Suppressing the text on an
+				// unauthenticated channel is the right call; suppressing
+				// it from the store as well is how a fault becomes
+				// unfindable.
+				_ = st.RecordRejection(name, "", "reverse-"+verb+"-failed",
+					err.Error())
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadGateway)
+				writeJSON(w, map[string]any{
+					"refused": verb + "-failed",
+					"detail": "the collector serving " + strconv.Quote(name) +
+						" did not answer this " + verb + ". The reason is " +
+						"recorded on this host rather than served here, " +
+						"because an error's text is where a path or a token " +
+						"reaches an unauthenticated channel.",
+				})
 				return
 			}
 			// The collector's own NDJSON, byte for byte. Re-encoding it

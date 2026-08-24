@@ -3,10 +3,12 @@ package collate
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -150,4 +152,48 @@ func (stubReverse) Evidence(context.Context, string, string, map[string]bool) ([
 
 func (stubReverse) Lookup(context.Context, string, string, map[string]bool) ([]byte, error) {
 	return nil, nil
+}
+
+func TestAFailedVerbIsRecordedEvenThoughItsTextIsNotServed(t *testing.T) {
+	// Suppressing an error's text on an unauthenticated channel is right:
+	// it is where a path or a token leaks. Suppressing it from the STORE
+	// as well is how a fault becomes unfindable — an operator got "lookup
+	// failed", four words, and nothing to read next.
+	//
+	// The refusal branch beside this one records for exactly this reason:
+	// "a refusal nobody can see is one nobody can act on."
+	st := seeded(t)
+	handler := NewHandlerWithReverse(st, func() float64 { return 26.0 },
+		fakeBootID, map[string]Reverse{"identity": failingReverse{}})
+	rr := get(t, handler, "/v1/collections/identity/objects/host1/evidence")
+	if rr.Code != http.StatusBadGateway {
+		t.Fatalf("a failed verb is not a success: %d", rr.Code)
+	}
+	if strings.Contains(rr.Body.String(), "/etc/secret-path") {
+		t.Fatalf("the error's text must not reach the wire: %s", rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "recorded on this host") {
+		t.Fatalf("and the caller is told where the reason went: %s",
+			rr.Body.String())
+	}
+	rejections, err := st.Rejections()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found bool
+	for _, r := range rejections {
+		if strings.Contains(r.Detail, "/etc/secret-path") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("the reason must be recorded, or a transport failure leaves " +
+			"no trace anywhere and the fault cannot be found")
+	}
+}
+
+type failingReverse struct{ stubReverse }
+
+func (failingReverse) Evidence(context.Context, string, string, map[string]bool) ([]byte, error) {
+	return nil, errors.New("dial unix /etc/secret-path: connection refused")
 }
