@@ -1059,4 +1059,57 @@ REGISTER: tuple[Row, ...] = (
         "exactly what the state is for. Owed to R5 with the producer, not "
         "fixed here, because emitting it changes what every units corpus "
         "expects."),
+    Row(35, "the R4 surface audit — 71 confirmed defects in the rendered "
+        "pages, found by looking at them",
+        "built", "R4",
+        lambda: _in_file("go/internal/collate/pages_test.go",
+                         "TestNoCollectionPageContradictsItself"),
+        "the probe asks for the COHERENCE guard, because that is the one "
+        "whose absence explains the rest. Every assertion in pages_test "
+        "checked that a page CONTAINED the right sentence; none checked "
+        "that it did not also contain a contradictory one. So 18 of 52 "
+        "collection pages shipped saying 'What follows is the last reading "
+        "that did apply' directly above a panel headed 'Never read', "
+        "through 5,300 green assertions, and were found by the owner "
+        "clicking a link. The guard now walks all eleven reachable state "
+        "combinations asserting MUTUAL EXCLUSION rather than presence. "
+        "An adversarial audit of the real rendered pages then found 82, of "
+        "which 71 verified. The pattern across them is one thing: absence "
+        "rendering as something else. The index chip DEFAULTED to "
+        "`current` and only downgraded, so a never-read collection read as "
+        "healthy; the opinion roll-up skipped generation-0 collections "
+        "with a bare `continue` and then said 'No opinion fired on this "
+        "host's own facts' over an estate a third of which was never read; "
+        "the estate index counted OBJECTS, so 29 of 52 collections per "
+        "host were invisible; the estate served dark hosts' last-known "
+        "counts with nothing marking them last-known; the opinions table "
+        "sorted by host and never showed it. Fourteen fixed here, each "
+        "planted. **What the probe cannot see, and it is the lesson**: "
+        "whether the pages are COHERENT to a reader, which no assertion "
+        "reached until one was written to — and the residue in row 36, "
+        "which is not small."),
+    Row(36, "the R4 audit's residue — confirmed defects not fixed",
+        "owed", "R5",
+        None,
+        "no probe: a list of open defects is not a property of the tree, "
+        "and a grep for any of them would pass on the comment that names "
+        "it. Confirmed by adversarial verification and left standing, each "
+        "for a reason. ON THE HUB, and needing changes to answer.py rather "
+        "than to a renderer: `evidence: current` is stamped on an answer "
+        "that says nothing could be read; a zero-coverage answer is given "
+        "a health verdict; the answer asserts each host has a booted "
+        "generation on hosts that have none; the reach the answer computed "
+        "is not rendered at all. PRODUCER GAPS, which are R5's by the same "
+        "argument as row 34: the `unobservable` state renders NOWHERE on "
+        "the whole surface because no collector emits one, so the fifth "
+        "render state is built and unexercised; and 18 units whose unit "
+        "file does not exist render identically to units that do, because "
+        "LoadState is not in `units`' answer list. PRODUCT questions, which "
+        "are judgement rather than defect: the journal page carries 11 "
+        "seconds of history with a 120-character cursor as its object "
+        "name and no unit attribution; the overview page asks whether "
+        "anything is stalling and shows no stall reading; nothing links to "
+        "an object except from its own collection's table. Recorded rather "
+        "than fixed because each needs a ruling or a producer change, and "
+        "quietly carrying them is what this row exists to prevent."),
 )
