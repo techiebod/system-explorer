@@ -1409,3 +1409,63 @@ func TestADeclineSentenceDoesNotDiagnosePastItsVocabulary(t *testing.T) {
 			"one nobody told the collector how to reach: %s", page)
 	}
 }
+
+func TestAColumnNothingEverStatedIsSummarisedOnce(t *testing.T) {
+	// units renders MissingRequirements — in its `answer`, so a column on
+	// every row — and the collector emits it only where non-empty and
+	// never declares it absent. 300 of 300 cells read "not stated": the
+	// table's only dependency column, carrying no information, scanned
+	// 300 times before a reader concludes it never says anything.
+	st := openStore(t)
+	mustIssue(t, st, "pools", "sha256:p", pagesDecl)
+	// SpareCount is declared and in no row's facts or absent list.
+	objects := []store.Object{
+		{ID: "pool:a", Name: "a", Type: "pool",
+			Facts: json.RawMessage(`{"Health":"ONLINE"}`), At: 10},
+		{ID: "pool:b", Name: "b", Type: "pool",
+			Facts: json.RawMessage(`{"Health":"ONLINE"}`), At: 10},
+	}
+	if _, err := st.ApplyCommit("pools", store.HostNative, 1, "b1", fakeBootID,
+		objects); err != nil {
+		t.Fatal(err)
+	}
+	unstated := uniformlyUnstated([]string{"Health", "CapacityPercent"},
+		&CollectionRender{Facts: map[string]FactDecl{
+			"Health": {Type: "enum"}, "CapacityPercent": {Type: "number"}}},
+		mustObjects(t, st, "pools"), nil)
+	if len(unstated) != 1 || unstated[0] != "CapacityPercent" {
+		t.Fatalf("only the column nothing ever stated: %v", unstated)
+	}
+
+	// A column with SOME values is NOT summarised: the subject is a
+	// column that cannot inform, not one that is merely sparse.
+	partial := []store.ObjectRow{
+		{ID: "pool:a", Facts: json.RawMessage(`{"Health":"ONLINE"}`)},
+		{ID: "pool:b", Facts: json.RawMessage(`{}`)},
+	}
+	if got := uniformlyUnstated([]string{"Health"},
+		&CollectionRender{Facts: map[string]FactDecl{"Health": {Type: "enum"}}},
+		partial, nil); len(got) != 0 {
+		t.Fatalf("a sparse column is not an empty one: %v", got)
+	}
+
+	// An ABSENT declaration counts as stated — the producer said
+	// something, which is the whole distinction.
+	declaredAbsent := []store.ObjectRow{
+		{ID: "pool:a", Facts: json.RawMessage(`{}`), Absent: []string{"Health"}},
+	}
+	if got := uniformlyUnstated([]string{"Health"},
+		&CollectionRender{Facts: map[string]FactDecl{"Health": {Type: "enum"}}},
+		declaredAbsent, nil); len(got) != 0 {
+		t.Fatalf("a declared absence IS a statement: %v", got)
+	}
+}
+
+func mustObjects(t *testing.T, st *store.Store, collection string) []store.ObjectRow {
+	t.Helper()
+	rows, err := st.Objects(collection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return rows
+}

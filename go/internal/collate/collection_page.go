@@ -514,7 +514,11 @@ func objectsTable(collection string, render *CollectionRender,
 	}
 	b.WriteString(hideControls(Chips(groups, assigned)))
 	b.WriteString(`<div class="scroll"><table>`)
-	b.WriteString(`<thead><tr><th></th><th>object</th>`)
+	// The verdict column had an EMPTY <th>. A screen reader announces
+	// "blank" for the column that carries every row's severity, and a
+	// sighted reader gets no clue what the marks mean either.
+	b.WriteString(`<thead><tr><th><span class="visually-hidden">verdict` +
+		`</span></th><th>object</th>`)
 	for _, name := range columns {
 		title := ""
 		if render != nil {
@@ -580,9 +584,22 @@ func objectsTable(collection string, render *CollectionRender,
 		// Depth is a style property because it is DATA — how deep this
 		// row sits is a fact of the producer's edges, not a class this
 		// file chose from a fixed set.
+		// Depth is a style property because it is DATA — how deep this
+		// row sits is a fact of the producer's edges, not a class this
+		// file chose from a fixed set.
+		//
+		// It also carries `aria-level`, because the CSS custom property
+		// was the ONLY encoding of the nesting: with the stylesheet
+		// unavailable the asserted hierarchy vanished entirely and the
+		// tree became a flat list with no indication it had ever been
+		// one. §28 requires a page to be a complete answer without
+		// script; a structure that exists only in a stylesheet fails the
+		// same test one layer over.
 		indent := ""
 		if d := depth[i]; d > 0 {
-			indent = fmt.Sprintf(` style="--depth:%d"`, d)
+			indent = fmt.Sprintf(` style="--depth:%d" aria-level="%d"`, d, d+1)
+		} else if nestedBy != "" && len(parentOf) > 0 && !sorted && !narrowed {
+			indent = ` aria-level="1"`
 		}
 		b.WriteString("<td>" + severityMark(worst[row.ID]) + "</td>")
 		b.WriteString(fmt.Sprintf(
@@ -596,6 +613,30 @@ func objectsTable(collection string, render *CollectionRender,
 		b.WriteString(`</tr>`)
 	}
 	b.WriteString(`</tbody></table></div>`)
+
+	// A column the producer stated for NO row is called out once, beneath
+	// the table, rather than left as N identical cells.
+	//
+	// `units` renders MissingRequirements — which is in its `answer`, so
+	// it is a column on every row — and the collector emits it only where
+	// non-empty and never declares it absent. 300 of 300 cells read "not
+	// stated": the table's only dependency column, carrying no
+	// information at all, and a reader scans it 300 times before
+	// concluding it never says anything.
+	//
+	// The cells STAY. Each one is the truth for its row, and removing the
+	// column would hide a fact the producer's own `answer` list asks for.
+	// What is added is the summary a reader would otherwise derive by
+	// scrolling.
+	if unstated := uniformlyUnstated(columns, render, rows, could); len(unstated) > 0 {
+		b.WriteString(fmt.Sprintf(
+			`<p class="dim">The producer stated no value for %s on any of `+
+				`these %d rows, and did not declare it absent either — so the `+
+				`column is empty of information rather than empty of things. `+
+				`It is here because the producer's own answer list asks for `+
+				`it.</p>`,
+			esc(strings.Join(unstated, ", ")), len(rows)))
+	}
 	// Narrowed to nothing, and WHICH control did it. app.js records the
 	// case: pick a facet, then hide the group that holds all of its rows,
 	// and "nothing matches" is a misleading answer — the rows are there,
@@ -815,4 +856,48 @@ func facetChip(href, label string, count int, current bool) string {
 	return fmt.Sprintf(
 		`<a class="%s" href="%s"%s>%s <span class="count">%d</span></a>`,
 		class, esc(href), aria, esc(label), count)
+}
+
+// uniformlyUnstated names the columns for which the producer stated
+// nothing on any row — neither a value nor an absence nor an
+// unobservable.
+//
+// A column with SOME values is not listed: the subject is a column that
+// cannot inform, not one that is merely sparse, and lowering the bar
+// would start summarising away real sparseness a reader should see.
+func uniformlyUnstated(columns []string, render *CollectionRender,
+	rows []store.ObjectRow, could map[string]map[string]store.Unobserved) []string {
+	if render == nil || len(rows) == 0 {
+		return nil
+	}
+	var out []string
+	for _, name := range columns {
+		if _, declared := render.Facts[name]; !declared {
+			continue
+		}
+		stated := false
+		for _, row := range rows {
+			var facts map[string]any
+			if json.Unmarshal(row.Facts, &facts) == nil {
+				if _, has := facts[name]; has {
+					stated = true
+				}
+			}
+			for _, absent := range row.Absent {
+				if absent == name {
+					stated = true
+				}
+			}
+			if _, unobserved := could[row.ID][name]; unobserved {
+				stated = true
+			}
+			if stated {
+				break
+			}
+		}
+		if !stated {
+			out = append(out, name)
+		}
+	}
+	return out
 }

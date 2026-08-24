@@ -152,7 +152,7 @@ func widget(decl FactDecl, value any, sib Siblings, object bool) string {
 	case "boolean":
 		return boolean(decl, value)
 	case "timestamp":
-		return timestamp(value, object)
+		return timestamp(value)
 	case "list":
 		return list(value, object)
 	case "object":
@@ -193,9 +193,12 @@ func boolean(decl FactDecl, value any) string {
 			`this boolean; the raw value is shown">%v</span>`, on)
 }
 
-func timestamp(value any, object bool) string {
-	// Relative age is the question people actually have; the absolute is
-	// reachable without script through a popover. Both on an object page.
+func timestamp(value any) string {
+	// **§28 asks for a relative age with the absolute on hover, and this
+	// delivers NEITHER.** Saying so here rather than leaving the comment
+	// describing a popover that was never written: the function had an
+	// `object` parameter whose two branches returned identical markup —
+	// dead code standing in for a promise, which reads as done.
 	//
 	// The AGE IS NOT COMPUTED HERE. A timestamp arrives as the producer's
 	// own string and this file has no clock it can honestly subtract with
@@ -203,11 +206,15 @@ func timestamp(value any, object bool) string {
 	// against the reading's clock domain. Rendering "3 days ago" from a
 	// stamp whose domain this file cannot check is the confident
 	// arithmetic §09 refuses.
+	// `datetime` so the value is machine-readable even though no age is
+	// drawn from it, and the reader is told plainly that the absolute is
+	// all there is rather than being left to wonder where the age went.
 	text := esc(scalar(value))
-	if object {
-		return fmt.Sprintf(`<time class="stamp">%s</time>`, text)
-	}
-	return fmt.Sprintf(`<time class="stamp">%s</time>`, text)
+	return fmt.Sprintf(
+		`<time class="stamp" datetime="%s" title="absolute only: this tier `+
+			`serves no relative age, because the clock domain a stamp `+
+			`belongs to is stated beside the table rather than assumed `+
+			`here">%s</time>`, text, text)
 }
 
 func list(value any, object bool) string {

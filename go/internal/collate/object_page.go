@@ -148,14 +148,25 @@ func factsSection(render *CollectionRender, facts map[string]any,
 func opinionsSection(st *store.Store, document, collection string,
 	row *store.ObjectRow, facts map[string]any) string {
 	rules, err := RulesFor(document, collection)
-	if err != nil || rules == nil {
-		// Unjudged, never "clean". A collection whose rule table cannot
-		// be read has had no opinion formed about it, and saying nothing
-		// fired would be reporting absence as health.
+	// THREE states, not two. This tested `err != nil || rules == nil` and
+	// reported both as "no rule table could be read" — the same
+	// conflation the host page carried, and just as wrong here: a
+	// collection that declares no rules has a perfectly readable
+	// declaration, and telling a reader otherwise sends them to debug it.
+	//
+	// Unjudged is never "clean" in either case: saying nothing fired
+	// would be reporting absence as health.
+	switch {
+	case err != nil || document == "":
 		return `<details class="panel"><summary><h2>Opinions</h2></summary>` +
 			`<p class="faint">No rule table could be read for this ` +
 			`collection, so nothing has judged this object. That is a ` +
 			`statement about the declaration, not about the object.</p></details>`
+	case rules == nil:
+		return `<details class="panel"><summary><h2>Opinions</h2></summary>` +
+			`<p class="faint">This collection declares no rules, so nothing ` +
+			`was ever going to be said about this object either way. Its ` +
+			`producer has published facts and no judgement of them.</p></details>`
 	}
 	secrets, err := SecretFacts(document, collection)
 	if err != nil {

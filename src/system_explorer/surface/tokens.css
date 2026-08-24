@@ -278,3 +278,10 @@ a.sort.current { font-weight: 600; color: var(--text); }
    looking and a fault on the estate are different things. */
 .chip.degraded { border-color: var(--warn); color: var(--warn); }
 .chip.healthy { border-color: var(--ok); color: var(--ok); }
+
+/* A label that is announced but not drawn — for a column whose header
+   would otherwise be an empty cell that a screen reader calls "blank". */
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
